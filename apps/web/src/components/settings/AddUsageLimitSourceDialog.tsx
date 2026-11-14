@@ -4,7 +4,7 @@ import type {
   UnifiedSettings,
   UsageLimitSourceConfig,
 } from "@t3tools/contracts";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { useUpdateEnvironmentSettings } from "../../hooks/useSettings";
 import { Button } from "../ui/button";
@@ -37,6 +37,7 @@ export function AddUsageLimitSourceDialog({
   readonly environmentLabel: string;
   readonly sources: UnifiedSettings["usageLimitSources"];
 }) {
+  const formId = useId();
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
   const [label, setLabel] = useState("");
   const [kind, setKind] = useState<UsageLimitSourceConfig["kind"]>("cpa-manager");
@@ -91,6 +92,7 @@ export function AddUsageLimitSourceDialog({
         </DialogHeader>
         <DialogPanel>
           <form
+            id={formId}
             className="grid gap-4"
             onSubmit={(event) => {
               event.preventDefault();
@@ -166,7 +168,7 @@ export function AddUsageLimitSourceDialog({
           >
             Cancel
           </Button>
-          <Button onClick={save} disabled={!canSave}>
+          <Button type="submit" form={formId} disabled={!canSave}>
             Add hub
           </Button>
         </DialogFooter>
