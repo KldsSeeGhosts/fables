@@ -125,6 +125,18 @@ export function WorkLogRow({
   );
 }
 
+/** Marks a label's first word ("Read", "Ran") so a theme can set it apart from the detail. */
+export function WorkVerbLabel({ text }: { text: string }) {
+  const space = text.indexOf(" ");
+  if (space <= 0) return <span data-work-verb="">{text}</span>;
+  return (
+    <>
+      <span data-work-verb="">{text.slice(0, space)}</span>
+      {text.slice(space)}
+    </>
+  );
+}
+
 const LIVE_EDGE_PX = 4;
 
 export function WorkLogDetails({
