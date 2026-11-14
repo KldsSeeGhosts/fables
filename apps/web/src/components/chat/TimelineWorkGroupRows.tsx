@@ -1,5 +1,5 @@
 import { TimelinePendingApprovalRow } from "./TimelinePendingApprovalRow";
-import { WorkLogButton, WorkLogList, WorkLogRow } from "./WorkLog";
+import { WorkLogButton, WorkLogList, WorkLogRow, WorkVerbLabel } from "./WorkLog";
 import type { WorktreeSetupSnapshot } from "@t3tools/contracts";
 import { type ToolActivityIcon } from "@t3tools/contracts";
 import {
@@ -548,7 +548,7 @@ function LiveActivityContent({
             active && "live-tool-shine",
           )}
         >
-          {label}
+          {typeof label === "string" ? <WorkVerbLabel text={label} /> : label}
         </span>
       }
       trailing={

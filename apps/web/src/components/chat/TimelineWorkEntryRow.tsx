@@ -1,5 +1,5 @@
 import { TimelinePendingApprovalRow } from "./TimelinePendingApprovalRow";
-import { WorkLogDetails, WorkLogRow } from "./WorkLog";
+import { WorkLogDetails, WorkLogRow, WorkVerbLabel } from "./WorkLog";
 import {
   getQuestionAnswerPreview,
   getQuestionAnswerText,
@@ -490,8 +490,10 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
                   environmentId={ctx.activeThreadEnvironmentId}
                   linked
                 />
-              ) : (
+              ) : questionHeading ? (
                 previewText
+              ) : (
+                <WorkVerbLabel text={previewText} />
               )}
             </span>
             {answerPreview ? (
