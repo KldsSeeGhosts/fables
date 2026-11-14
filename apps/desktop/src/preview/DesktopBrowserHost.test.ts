@@ -27,6 +27,11 @@ const decodeCdpMessage = Schema.decodeUnknownSync(
   ),
 );
 const key = { threadId: "thread-1", tabId: "tab-1" };
+
+/** A host whose client already draws `key` at full detail, so its screenshots go out at once. */
+const makeDrawnHost = Effect.tap(DesktopBrowserHost.make, (host) =>
+  Effect.sync(() => host.setCaptureDrawn(key, true)),
+);
 /** Sends a page command whose id the fake debugger records as it receives it. */
 const command = (
   host: DesktopBrowserHost.DesktopBrowserHost["Service"],
@@ -207,7 +212,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("announces tabs already attached to a backend that starts later", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       host.attach(key, makeDebuggee().tab);
 
       expect(yield* takeEvents(host, 1)).toEqual([{ type: "attached", ...key }]);
@@ -217,7 +222,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("announces a guest still loading its first page only once that page is up", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const loading = makeDebuggee({ loading: true });
       const other = { ...key, tabId: "tab-2" };
       const reader = yield* takeEvents(host, 3).pipe(Effect.forkScoped);
@@ -240,7 +245,7 @@ describe("DesktopBrowserHost", () => {
     "keeps a loading guest unannounced across a replaced navigation and a new backend",
     () =>
       Effect.gen(function* () {
-        const host = yield* DesktopBrowserHost.make;
+        const host = yield* makeDrawnHost;
         const loading = makeDebuggee({ loading: true });
         const other = { ...key, tabId: "tab-2" };
         host.attach(key, loading.tab);
@@ -262,7 +267,7 @@ describe("DesktopBrowserHost", () => {
     "announces a first page that never comes up, but never a tab closed or destroyed first",
     () =>
       Effect.gen(function* () {
-        const host = yield* DesktopBrowserHost.make;
+        const host = yield* makeDrawnHost;
         const closed = { ...key, tabId: "tab-2" };
         const destroyed = { ...key, tabId: "tab-3" };
         const destroyedGuest = makeDebuggee({ loading: true });
@@ -282,7 +287,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("re-sends shown to a backend that starts later and when a tab attaches again", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       host.attach(key, makeDebuggee().tab);
       host.setShown(key, true);
       const reader = yield* takeEvents(host, 5).pipe(Effect.forkScoped);
@@ -303,7 +308,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("replays an explicit hidden report before announcing another tab", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const other = { ...key, tabId: "tab-2" };
       host.setShown(key, false);
       host.attach(key, makeDebuggee().tab);
@@ -320,7 +325,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("drops replies from a relay the server released", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const reader = yield* takeEvents(host, 2).pipe(Effect.forkScoped);
@@ -348,7 +353,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("sends a page one screenshot at a time", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const replies = yield* watchReplies(host);
@@ -365,9 +370,38 @@ describe("DesktopBrowserHost", () => {
     }),
   );
 
+  it.effect(
+    "sends a screenshot once the client draws the guest at full detail, or soon after",
+    () =>
+      Effect.gen(function* () {
+        const host = yield* DesktopBrowserHost.make;
+        const debuggee = makeDebuggee();
+        host.attach(key, debuggee.tab);
+        const replies = yield* watchReplies(host);
+
+        yield* command(host, 1, "Page.captureScreenshot");
+        yield* settle;
+        expect(debuggee.sent).toEqual([]);
+        host.setCaptureDrawn(key, true);
+        yield* settle;
+        expect(debuggee.sent).toEqual([1]);
+        debuggee.releaseFirst();
+        expect(yield* Queue.take(replies)).toBe(1);
+
+        // A client that never draws, such as a hidden window, only delays the capture.
+        host.setCaptureDrawn(key, false);
+        yield* command(host, 2, "Page.captureScreenshot");
+        yield* settle;
+        expect(debuggee.sent).toEqual([1]);
+        yield* TestClock.adjust("1 second");
+        yield* settle;
+        expect(debuggee.sent).toEqual([1, 2]);
+      }).pipe(Effect.scoped),
+  );
+
   it.effect("stops waiting on a screenshot the page navigated away from", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const replies = yield* watchReplies(host);
@@ -392,7 +426,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("drops screenshots a released relay left waiting", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
 
@@ -412,7 +446,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("emulates focus while the server drives a guest, then lets a hidden one throttle", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
 
@@ -443,7 +477,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("keeps a guest focused while a command it is running is still pending", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const replies = yield* watchReplies(host);
@@ -464,7 +498,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("lets a guest throttle once Chromium can no longer answer its pending command", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
 
@@ -486,7 +520,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("keeps a guest focused for the screenshot a navigation lets start", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
 
@@ -502,7 +536,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("never sends a screenshot a navigation superseded while focus was changing", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee({ deferFocus: true });
       host.attach(key, debuggee.tab);
 
@@ -519,7 +553,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("keeps a guest focused when its turn starts after the agent's first command", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const turn = (active: boolean) =>
@@ -541,7 +575,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("lets a guest throttle through a turn that only sent it housekeeping", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       yield* host.handleCommandLine(
@@ -570,7 +604,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("keeps a guest the agent used focused through its turn's pauses", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const turn = (active: boolean) =>
@@ -598,7 +632,7 @@ describe("DesktopBrowserHost", () => {
     "ends a command's hold with the turn that sent it, even if Chromium never answers",
     () =>
       Effect.gen(function* () {
-        const host = yield* DesktopBrowserHost.make;
+        const host = yield* makeDrawnHost;
         const debuggee = makeDebuggee();
         host.attach(key, debuggee.tab);
         yield* host.handleCommandLine(
@@ -619,7 +653,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("ends the agent's own session's holds with its turn, but not a viewer's stream", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const replies = yield* watchReplies(host);
@@ -652,7 +686,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("paints for a screenshot queued behind one its viewer abandoned mid-capture", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const replies = yield* watchReplies(host);
@@ -690,7 +724,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("stops painting for a queued screenshot once its session detaches", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const replies = yield* watchReplies(host);
@@ -729,7 +763,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("never sends a screenshot whose session detached while focus was changing", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee({ deferFocus: true });
       host.attach(key, debuggee.tab);
       const replies = yield* watchReplies(host);
@@ -753,7 +787,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("holds no focus for a screenshot still queued when the agent's turn ends", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const painting = yield* watchPainting(host);
@@ -783,7 +817,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("lets a guest throttle when Chromium refuses a viewer's screencast", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee({ refuse: (method) => method === "Page.startScreencast" });
       host.attach(key, debuggee.tab);
       const replies = yield* watchReplies(host);
@@ -804,7 +838,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("lets a guest throttle after a person's input through a viewer that then closed", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const replies = yield* watchReplies(host);
@@ -833,7 +867,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("keeps a page's screencast when a child session's screencast is refused", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee({
         refuse: (method, sessionId) => method === "Page.startScreencast" && sessionId !== undefined,
       });
@@ -855,7 +889,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("ignores a screencast that arrives on a session after it detached", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const replies = yield* watchReplies(host);
@@ -881,7 +915,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("lets a guest throttle once the session waiting on its command detaches", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const replies = yield* watchReplies(host);
@@ -908,7 +942,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("never sends a screenshot queued by a session that has since detached", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const replies = yield* watchReplies(host);
@@ -939,7 +973,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("keeps a streamed guest focused until its screencast ends", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
 
@@ -968,7 +1002,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("keeps a guest focused while any of its screencasts runs", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const replies = yield* watchReplies(host);
@@ -1000,7 +1034,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("paints a hidden guest only while the screenshot it is taking is pending", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const painting = yield* watchPainting(host);
@@ -1026,7 +1060,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("stops painting for a screenshot Chromium never answers once its document goes", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const painting = yield* watchPainting(host);
@@ -1071,7 +1105,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("paints a streamed guest until its last screencast ends", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const replies = yield* watchReplies(host);
@@ -1306,7 +1340,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("saves a server tab's download under its CDP guid where the server asked", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
       const replies = yield* watchReplies(host);
@@ -1341,7 +1375,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("tells a download the person clicked from one the agent's input started", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       host.attach(key, debuggee.tab);
 
@@ -1405,7 +1439,7 @@ describe("DesktopBrowserHost", () => {
 
   it.effect("detaches only the tab whose CDP event is too large to relay", () =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const tabs = [makeDebuggee({ deferFocus: true }), makeDebuggee()];
       const send = vi.spyOn(tabs[0]!.tab.debugger, "sendCommand");
       const keys = [key, { threadId: "thread-2", tabId: "tab-2" }];

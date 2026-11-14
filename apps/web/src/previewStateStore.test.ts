@@ -172,6 +172,7 @@ describe("previewStateStore (single-tab)", () => {
     applyPreviewServerSnapshot(ref, snapshot);
     const overlay = {
       hasWebContents: true,
+      navStatus: { _tag: "Idle" as const },
       canGoBack: true,
       canGoForward: false,
       loading: false,
@@ -194,12 +195,30 @@ describe("previewStateStore (single-tab)", () => {
 
     applyPreviewDesktopState(ref, snapshot.tabId, overlay);
     applyPreviewDesktopState(ref, snapshot.tabId, { ...overlay, favicon: { ...overlay.favicon } });
+    applyPreviewDesktopState(ref, snapshot.tabId, overlay);
+    applyPreviewDesktopState(ref, snapshot.tabId, { ...overlay, favicon: { ...overlay.favicon } });
     expect(updateCount).toBe(1);
+
+    const loaded = {
+      ...overlay,
+      navStatus: { _tag: "Success" as const, url: "https://example.com/", title: "Example" },
+    };
+    applyPreviewDesktopState(ref, snapshot.tabId, loaded);
+    applyPreviewDesktopState(ref, snapshot.tabId, {
+      ...loaded,
+      navStatus: { ...loaded.navStatus },
+    });
+    applyPreviewDesktopState(ref, snapshot.tabId, {
+      ...loaded,
+      navStatus: { ...loaded.navStatus, url: "https://example.com/next" },
+    });
+    expect(updateCount).toBe(3);
+
     applyPreviewDesktopState(ref, snapshot.tabId, { ...overlay, capturing: true });
     expect(readThreadPreviewState(ref).desktopOverlay?.capturing).toBe(true);
     applyPreviewDesktopState(ref, snapshot.tabId, { ...overlay, capturing: false });
     expect(readThreadPreviewState(ref).desktopOverlay?.capturing).toBe(false);
-    expect(updateCount).toBe(3);
+    expect(updateCount).toBe(5);
     unsubscribe();
   });
 
@@ -210,6 +229,7 @@ describe("previewStateStore (single-tab)", () => {
     applyPreviewServerSnapshot(ref, second);
     applyPreviewDesktopState(ref, first.tabId, {
       hasWebContents: true,
+      navStatus: { _tag: "Idle" as const },
       canGoBack: true,
       canGoForward: false,
       loading: false,
@@ -239,6 +259,7 @@ describe("previewStateStore (single-tab)", () => {
     applyPreviewServerSnapshot(ref, active);
     applyPreviewDesktopState(ref, stale.tabId, {
       hasWebContents: true,
+      navStatus: { _tag: "Idle" as const },
       canGoBack: false,
       canGoForward: false,
       loading: false,
@@ -370,6 +391,7 @@ describe("previewStateStore (single-tab)", () => {
     beginPreviewSessionClose(ref, previous.tabId);
     applyPreviewDesktopState(ref, previous.tabId, {
       hasWebContents: true,
+      navStatus: { _tag: "Idle" as const },
       canGoBack: false,
       canGoForward: false,
       loading: false,
