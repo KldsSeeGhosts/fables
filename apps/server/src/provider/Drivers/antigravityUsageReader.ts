@@ -131,21 +131,23 @@ const MODEL_IDS: Record<number, string> = {
 
 // Effort and routing variants share the base model's price. Reseller entries can
 // disagree on tiers, so Gemini rate lookups name Google's own table entry.
-function withRateModel(record: UsageRecord): UsageRecord {
-  const base = record.model.replace(
-    /-(?:extra-low|low|medium|high|tiered|control|thinking|agent)$/,
-    "",
-  );
-  const baseModel = /^gemini-3-flash-(?:agent(?:-[ab])?|[ab])$/.test(record.model)
+export const antigravityRateModel = (model: string) => {
+  const base = model.replace(/-(?:extra-low|low|medium|high|tiered|control|thinking|agent)$/, "");
+  const baseModel = /^gemini-3-flash-(?:agent(?:-[ab])?|[ab])$/.test(model)
     ? "gemini-3.5-flash"
-    : record.model === "gemini-3.7-flash-safety-le"
+    : model === "gemini-3.7-flash-safety-le"
       ? "gemini-3.7-flash"
       : base === "gemini-3-flash"
         ? "gemini-3-flash-preview"
         : base;
-  if (baseModel.startsWith("gemini-")) return { ...record, rateModel: `gemini/${baseModel}` };
-  if (baseModel.startsWith("claude-")) return { ...record, rateModel: baseModel };
-  return baseModel === record.model ? record : { ...record, rateModel: baseModel };
+  return baseModel.startsWith("gemini-") ? `gemini/${baseModel}` : baseModel;
+};
+
+function withRateModel(record: UsageRecord): UsageRecord {
+  const rateModel = antigravityRateModel(record.model);
+  if (rateModel.startsWith("gemini/")) return { ...record, rateModel };
+  if (rateModel.startsWith("claude-")) return { ...record, rateModel };
+  return rateModel === record.model ? record : { ...record, rateModel };
 }
 
 function modelName(name: string): string {
