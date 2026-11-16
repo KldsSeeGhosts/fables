@@ -9,7 +9,7 @@ import {
   type ServerProviderSlashCommand,
   type ServerProviderUsageLimits,
 } from "@t3tools/contracts";
-import { createModelCapabilities } from "@t3tools/shared/model";
+import { createModelCapabilities, formatModelSlugName } from "@t3tools/shared/model";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -137,7 +137,7 @@ function buildAntigravityGatewayModels(
     return [
       {
         slug,
-        name: grouped ? variants[0]!.name : entry.name.trim() || entry.value,
+        name: grouped ? variants[0]!.name : antigravityDisplayName(entry),
         isCustom: false,
         ...(isCurrent ? { isDefault: true, aliases: [ANTIGRAVITY_DEFAULT_MODEL] } : {}),
         capabilities: grouped
@@ -171,9 +171,15 @@ function buildAntigravityGatewayModels(
   return models;
 }
 
+/** Some accounts name a model by its ID; show those like the others, e.g. "Gemini 4 Hydrogen". */
+function antigravityDisplayName(entry: { readonly value: string; readonly name: string }) {
+  const name = entry.name.trim();
+  return name && name !== entry.value ? name : formatModelSlugName(entry.value);
+}
+
 /**
  * The legacy list names one ID per family and level, such as `gemini-4-argon-high`. Offer each
- * family once, with the runtime's thinking option listing the levels that family has.
+ * family from the model option once, with the runtime's thinking option listing its levels.
  */
 function buildAntigravityFamilyModels(
   entries: ReadonlyArray<{ readonly value: string; readonly name: string }>,
@@ -181,23 +187,40 @@ function buildAntigravityFamilyModels(
   thinking: ThinkingConfig,
 ): ReadonlyArray<ServerProviderModel> {
   const currentFamily = modelConfig?.type === "select" ? modelConfig.currentValue : undefined;
+  const levelOptions = thinking.options.flatMap((entry) =>
+    "value" in entry ? [entry] : entry.options,
+  );
+  const levelNames = new Map(levelOptions.map((entry) => [entry.value, entry.name] as const));
+  const familyOptions =
+    modelConfig?.type === "select"
+      ? modelConfig.options.flatMap((entry) => ("value" in entry ? [entry] : entry.options))
+      : [];
   const families = new Map<string, { name: string; levels: string[] }>();
+  for (const option of familyOptions) {
+    if (option.value.trim() && !families.has(option.value)) {
+      families.set(option.value, { name: antigravityDisplayName(option), levels: [] });
+    }
+  }
+  const familyIds = [...families.keys()].toSorted((left, right) => right.length - left.length);
   for (const entry of entries) {
     if (!entry.value.trim()) continue;
     const variant = antigravityGatewayVariant(entry);
-    const family = variant?.family ?? entry.value;
+    const family =
+      variant?.family ??
+      familyIds.find(
+        (id) =>
+          entry.value.startsWith(`${id}-`) && levelNames.has(entry.value.slice(id.length + 1)),
+      ) ??
+      entry.value;
+    const level =
+      variant?.level ?? (family === entry.value ? undefined : entry.value.slice(family.length + 1));
     const group = families.get(family) ?? {
-      name: variant?.familyName ?? (entry.name.trim() || entry.value),
+      name: variant?.familyName ?? antigravityDisplayName(entry),
       levels: [],
     };
-    if (variant && !group.levels.includes(variant.level)) group.levels.push(variant.level);
+    if (level !== undefined && !group.levels.includes(level)) group.levels.push(level);
     families.set(family, group);
   }
-  const levelNames = new Map(
-    thinking.options
-      .flatMap((entry) => ("value" in entry ? [entry] : entry.options))
-      .map((entry) => [entry.value, entry.name] as const),
-  );
   return [...families].map(([family, group]): ServerProviderModel => {
     const levels = group.levels.toSorted(
       (left, right) => antigravityGatewayEffortRank(left) - antigravityGatewayEffortRank(right),
@@ -278,7 +301,7 @@ export function buildAntigravityModelsFromSession(
   return entries.flatMap((entry): ServerProviderModel[] => {
     if (!entry.value.trim() || seen.has(entry.value)) return [];
     seen.add(entry.value);
-    const baseName = entry.name.trim() ? entry.name : entry.value;
+    const baseName = antigravityDisplayName(entry);
     const name = names.has(baseName) ? `${baseName} (${entry.value})` : baseName;
     names.add(baseName);
     const observed =
