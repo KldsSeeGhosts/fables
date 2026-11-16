@@ -936,7 +936,8 @@ export const makeAcpAgentDriver = <Settings>(
       getSettings: snapshotSettings.getSettings,
       streamSettings: snapshotSettings.streamSettings,
       haveSettingsChanged: haveProviderSnapshotSettingsChanged,
-      initialSnapshot: () => checkReadiness,
+      // Inspection may fetch the registry when its disk cache is missing; creation must not wait on that.
+      initialSnapshot: () => buildInitialAcpRegistrySnapshot(readinessInput),
       checkProvider,
       enrichSnapshot: Effect.fn("enrichSnapshot")(function ({
         settings,
