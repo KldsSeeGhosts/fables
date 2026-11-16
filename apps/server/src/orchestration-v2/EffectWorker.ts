@@ -987,13 +987,12 @@ export const layerWithOptions = (
             ? yield* outbox
                 .fail({ effectId: effect.id, workerId, error })
                 .pipe(Effect.onError((cause) => terminalizeClaim(effect, cause)))
-            : nonRetryable ||
-                (effect.attemptCount >= maxAttempts &&
-                  (!ownsStartingRun(effect.request.type) || cannotSettleRun(exit.cause)))
+            : nonRetryable
               ? yield* outbox
                   .succeed({ effectId: effect.id, workerId })
                   .pipe(Effect.onError((cause) => terminalizeClaim(effect, cause)))
-              : effect.attemptCount >= maxAttempts
+              : effect.attemptCount >= maxAttempts &&
+                  (!ownsStartingRun(effect.request.type) || cannotSettleRun(exit.cause))
                 ? yield* outbox
                     .fail({ effectId: effect.id, workerId, error })
                     .pipe(Effect.onError((cause) => terminalizeClaim(effect, cause)))
