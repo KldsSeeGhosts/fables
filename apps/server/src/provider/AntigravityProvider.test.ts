@@ -225,7 +225,7 @@ describe("Antigravity model catalog", () => {
     );
   });
 
-  it("keeps combined IDs when the runtime splits model family and thinking level", () => {
+  it("offers each family once when the runtime splits model family and thinking level", () => {
     const models = buildAntigravityModelsFromSession({
       configOptions: [
         {
@@ -250,14 +250,26 @@ describe("Antigravity model catalog", () => {
         availableModels: [
           { modelId: "gemini-3.8-flash-medium", name: "Gemini 3.8 Flash (Medium)" },
           { modelId: "gemini-3.8-flash-low", name: "Gemini 3.8 Flash (Low)" },
+          { modelId: "gemini-3.1-pro-high", name: "Gemini 3.1 Pro (High)" },
+          { modelId: "gemini-3.1-pro-low", name: "Gemini 3.1 Pro (Low)" },
         ],
       },
     });
+    const levels = (slug: string) => {
+      const descriptor = models.find((model) => model.slug === slug)?.capabilities
+        ?.optionDescriptors?.[0];
+      return descriptor?.type === "select"
+        ? [descriptor.id, descriptor.currentValue, descriptor.options.map((option) => option.id)]
+        : undefined;
+    };
     expect(models.map((model) => [model.slug, model.name])).toEqual([
-      ["gemini-3.8-flash-medium", "Gemini 3.8 Flash (Medium)"],
-      ["gemini-3.8-flash-low", "Gemini 3.8 Flash (Low)"],
+      ["gemini-3.8-flash", "Gemini 3.8 Flash"],
+      ["gemini-3.1-pro", "Gemini 3.1 Pro"],
     ]);
-    expect(models.find((model) => model.isDefault)?.slug).toBe("gemini-3.8-flash-medium");
+    expect(levels("gemini-3.8-flash")).toEqual(["thinking_level", "medium", ["low", "medium"]]);
+    // Without Medium, a family that is not current defaults to its lowest level.
+    expect(levels("gemini-3.1-pro")).toEqual(["thinking_level", "low", ["low", "high"]]);
+    expect(models.find((model) => model.isDefault)?.slug).toBe("gemini-3.8-flash");
   });
 
   it("labels models that share a display name with their IDs", () => {
