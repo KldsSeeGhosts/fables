@@ -49,6 +49,7 @@ import {
   antigravityThinkingConfig,
   makeAntigravityAcpRuntime,
   type AntigravityAcpRuntimeInput,
+  antigravityGatewayFamilies,
 } from "../acp/AntigravityAcpSupport.ts";
 import type * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
 import type { ServerProviderDraft } from "@t3tools/provider-core/server/snapshotProbe";
@@ -151,6 +152,8 @@ export const AntigravityDriver: ProviderDriver<
       gatewayModels: settings.gatewayModels,
     };
     const authConfigIssue = antigravityAuthConfigIssue(auth);
+    const gatewayFamilies =
+      auth.authMethod === "gateway" ? antigravityGatewayFamilies(auth.gatewayModels) : undefined;
     const processEnvironment = yield* mergeProviderInstanceEnvironment(environment);
     const userHome = resolveAntigravityUserHome(
       yield* HostProcess.Platform,
@@ -443,6 +446,7 @@ export const AntigravityDriver: ProviderDriver<
       probeUsage: usage.probe,
       clearUsage: usage.clear,
       auth: { type: auth.authMethod, label: antigravityAuthLabel(auth.authMethod) },
+      ...(gatewayFamilies ? { gateway: { families: gatewayFamilies } } : {}),
       supportsTextGeneration: isAntigravityTextGenerationAvailable(profileDirectory).pipe(
         Effect.provideService(FileSystem.FileSystem, fileSystem),
         Effect.provideService(Path.Path, path),
@@ -459,7 +463,11 @@ export const AntigravityDriver: ProviderDriver<
           }),
       ),
     );
-    const defaultModel = currentCatalog.pipe(Effect.map((catalog) => catalog?.defaultChatModel));
+    // The manifest default names a Google model; a gateway's default is its first configured family.
+    const defaultModel =
+      gatewayFamilies && gatewayFamilies.length > 0
+        ? Effect.succeed<string | undefined>(gatewayFamilies[0])
+        : currentCatalog.pipe(Effect.map((catalog) => catalog?.defaultChatModel));
     const orchestrationAdapter = yield* makeAntigravityAdapterV2({
       instanceId,
       selfInvocation,

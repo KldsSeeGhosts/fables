@@ -279,6 +279,58 @@ describe("Antigravity model catalog", () => {
     ]);
   });
 
+  it("offers each configured gateway family once with its levels as Reasoning", () => {
+    const models = buildAntigravityModelsFromSession(
+      {
+        configOptions: [
+          {
+            ...modelConfig,
+            currentValue: "MODEL_PLACEHOLDER_M361",
+            options: [
+              { value: "MODEL_PLACEHOLDER_M361", name: "cursor/gpt-5.2-low-fast" },
+              { value: "MODEL_PLACEHOLDER_M348", name: "claude-fable-5-2" },
+              { value: "gemini-4-hydrogen", name: "Gemini 4 Hydrogen (Medium)" },
+              { value: "gemini-3.8-flash", name: "Gemini 3.8 Flash" },
+              { value: "gemini-4-argon", name: "Gemini 4 Argon (Medium)" },
+              { value: "gemini-4-argon-high", name: "Gemini 4 Argon (High)" },
+              { value: "gemini-4-hydrogen-xhigh", name: "Gemini 4 Hydrogen (XHigh)" },
+              { value: "gemini-4-argon-low", name: "Gemini 4 Argon (Low)" },
+              { value: "MODEL_PLACEHOLDER_M402", name: "claude-opus-5-5-high" },
+            ],
+          },
+        ],
+      },
+      new Map(),
+      {
+        families: [
+          "gemini-4-hydrogen",
+          "gemini-4-argon",
+          "gemini-3.8-flash",
+          "claude-opus-5-5-high",
+        ],
+      },
+    );
+    const levels = (slug: string) => {
+      const descriptor = models.find((model) => model.slug === slug)?.capabilities
+        ?.optionDescriptors?.[0];
+      return descriptor?.type === "select"
+        ? [descriptor.currentValue, descriptor.options.map((option) => option.id)]
+        : undefined;
+    };
+
+    expect(models.map((model) => [model.slug, model.name])).toEqual([
+      ["gemini-4-hydrogen", "Gemini 4 Hydrogen"],
+      ["gemini-3.8-flash", "Gemini 3.8 Flash"],
+      ["gemini-4-argon", "Gemini 4 Argon"],
+      ["MODEL_PLACEHOLDER_M402", "claude-opus-5-5-high"],
+    ]);
+    expect(levels("gemini-4-argon")).toEqual(["medium", ["low", "medium", "high"]]);
+    expect(levels("gemini-4-hydrogen")).toEqual(["medium", ["medium", "xhigh"]]);
+    expect(levels("gemini-3.8-flash")).toBeUndefined();
+    // The runtime's own default was filtered out, so the first configured model takes the alias.
+    expect(models.find((model) => model.isDefault)?.slug).toBe("gemini-4-hydrogen");
+  });
+
   it("offers each model the thinking levels it reported when selected", () => {
     const thinking = (currentValue: string) =>
       ({
