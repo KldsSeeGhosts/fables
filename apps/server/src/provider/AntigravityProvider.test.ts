@@ -231,7 +231,10 @@ describe("Antigravity model catalog", () => {
         {
           ...modelConfig,
           currentValue: "gemini-3.8-flash",
-          options: [{ value: "gemini-3.8-flash", name: "Gemini 3.8 Flash" }],
+          options: [
+            { value: "gemini-3.8-flash", name: "Gemini 3.8 Flash" },
+            { value: "gemini-4-hydrogen", name: "gemini-4-hydrogen" },
+          ],
         },
         {
           id: "thinking_level",
@@ -252,6 +255,9 @@ describe("Antigravity model catalog", () => {
           { modelId: "gemini-3.8-flash-low", name: "Gemini 3.8 Flash (Low)" },
           { modelId: "gemini-3.1-pro-high", name: "Gemini 3.1 Pro (High)" },
           { modelId: "gemini-3.1-pro-low", name: "Gemini 3.1 Pro (Low)" },
+          // Some accounts name a model by its ID.
+          { modelId: "gemini-4-hydrogen-low", name: "gemini-4-hydrogen-low" },
+          { modelId: "gemini-4-hydrogen-medium", name: "gemini-4-hydrogen-medium" },
         ],
       },
     });
@@ -264,8 +270,10 @@ describe("Antigravity model catalog", () => {
     };
     expect(models.map((model) => [model.slug, model.name])).toEqual([
       ["gemini-3.8-flash", "Gemini 3.8 Flash"],
+      ["gemini-4-hydrogen", "Gemini 4 Hydrogen"],
       ["gemini-3.1-pro", "Gemini 3.1 Pro"],
     ]);
+    expect(levels("gemini-4-hydrogen")).toEqual(["thinking_level", "medium", ["low", "medium"]]);
     expect(levels("gemini-3.8-flash")).toEqual(["thinking_level", "medium", ["low", "medium"]]);
     // Without Medium, a family that is not current defaults to its lowest level.
     expect(levels("gemini-3.1-pro")).toEqual(["thinking_level", "low", ["low", "high"]]);
