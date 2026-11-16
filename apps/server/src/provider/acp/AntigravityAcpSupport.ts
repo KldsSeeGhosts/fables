@@ -261,6 +261,73 @@ function splitAntigravityModel(
   return family ? { model: family, thinkingLevel: modelId.slice(family.length + 1) } : undefined;
 }
 
+export const ANTIGRAVITY_GATEWAY_EFFORT_OPTION_ID = "reasoningEffort";
+const ANTIGRAVITY_GATEWAY_EFFORT_LEVELS = ["minimal", "low", "medium", "high", "xhigh", "max"];
+const LEVEL_IN_NAME = /^(.+?) \((Minimal|Low|Medium|High|XHigh|Max)\)$/i;
+
+/** Model families named by the gateway setting; a `name(level)` entry names its family. */
+export function antigravityGatewayFamilies(gatewayModels: string): ReadonlyArray<string> {
+  const families = gatewayModels
+    .split(",")
+    .map((entry) => entry.trim().replace(/\([a-z]+\)$/i, ""))
+    .filter((entry) => entry.length > 0);
+  return [...new Set(families)];
+}
+
+/**
+ * In gateway mode the runtime lists one model ID per effort level, such as `gemini-4-argon-high`
+ * named "Gemini 4 Argon (High)", and sends that level as the request's reasoning effort.
+ */
+export function antigravityGatewayVariant(entry: {
+  readonly value: string;
+  readonly name: string;
+}) {
+  const match = LEVEL_IN_NAME.exec(entry.name.trim());
+  if (!match) return undefined;
+  const level = match[2]!.toLowerCase();
+  const family = entry.value.endsWith(`-${level}`)
+    ? entry.value.slice(0, -(level.length + 1))
+    : entry.value;
+  return { family, familyName: match[1]!, level };
+}
+
+export function antigravityGatewayEffortRank(level: string): number {
+  const rank = ANTIGRAVITY_GATEWAY_EFFORT_LEVELS.indexOf(level);
+  return rank === -1 ? ANTIGRAVITY_GATEWAY_EFFORT_LEVELS.length : rank;
+}
+
+/** Medium when offered, else the family's own ID, else its lowest level. */
+export function antigravityGatewayDefaultVariant<
+  T extends { readonly value: string; readonly level: string },
+>(family: string, variants: ReadonlyArray<T>): T | undefined {
+  return (
+    variants.find((variant) => variant.level === "medium") ??
+    variants.find((variant) => variant.value === family) ??
+    variants.toSorted(
+      (left, right) =>
+        antigravityGatewayEffortRank(left.level) - antigravityGatewayEffortRank(right.level),
+    )[0]
+  );
+}
+
+/** The listed model ID for a family and effort; other IDs pass through unchanged. */
+function antigravityGatewayModelForEffort(
+  configOptions: SessionConfigOptions,
+  model: string,
+  effort: string | undefined,
+): string {
+  const options = antigravityModelOptions(configOptions);
+  const variants = options.flatMap((option) => {
+    const variant = antigravityGatewayVariant(option);
+    return variant?.family === model ? [{ value: option.value, level: variant.level }] : [];
+  });
+  if (variants.length === 0) return model;
+  const chosen = variants.find((variant) => variant.level === effort);
+  if (chosen) return chosen.value;
+  if (options.some((option) => option.value === model)) return model;
+  return antigravityGatewayDefaultVariant(model, variants)?.value ?? model;
+}
+
 /**
  * Runtime 1.4 lists `gemini-3.8-flash` where 1.3 listed `gemini-3.8-flash-high`. The agent
  * still accepts the old IDs, so pass them through; the current model may have no thinking option.
@@ -298,14 +365,20 @@ export const applyAntigravityAcpModelSelection = Effect.fn("applyAntigravityAcpM
     >;
     readonly model: string | null | undefined;
     readonly defaultModel?: string | undefined;
+    /** Picks among a gateway family's per-level model IDs. */
+    readonly reasoningEffort?: string | undefined;
     readonly mapError: (cause: EffectAcpErrors.AcpError) => E;
   }): Effect.fn.Return<string | undefined, E> {
     const configOptions = yield* input.runtime.getConfigOptions;
     const current = currentAntigravityModel(configOptions);
+    const forEffort = (model: string | null | undefined) =>
+      model && model !== ANTIGRAVITY_DEFAULT_MODEL && !antigravityThinkingConfig(configOptions)
+        ? antigravityGatewayModelForEffort(configOptions, model, input.reasoningEffort)
+        : model;
     const resolved = resolveAntigravityModel({
       configOptions,
-      model: input.model,
-      defaultModel: input.defaultModel,
+      model: forEffort(input.model),
+      defaultModel: forEffort(input.defaultModel) ?? undefined,
     });
     const explicit = Boolean(input.model) && input.model !== ANTIGRAVITY_DEFAULT_MODEL;
     if (resolved === undefined || (!explicit && resolved === current)) return current;

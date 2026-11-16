@@ -5,6 +5,7 @@ import {
   type OrchestrationV2ProviderCapabilities,
   type ProviderSetupError,
 } from "@t3tools/contracts";
+import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import type { SelfInvocation } from "@t3tools/shared/nodeRuntime";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
@@ -20,6 +21,7 @@ import { PULL_REQUEST_LINKING_INSTRUCTIONS } from "@t3tools/provider-core/server
 import type { AntigravityAuth } from "../../provider/AntigravityAuth.ts";
 import type * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
 import {
+  ANTIGRAVITY_GATEWAY_EFFORT_OPTION_ID,
   antigravityAppendsSystemPrompt,
   antigravityPermissionMode,
   antigravityRuntimeModeForSessionMode,
@@ -251,9 +253,15 @@ export function makeAntigravityAcpAdapterFlavor(
         model:
           modelSelection.model === ANTIGRAVITY_DEFAULT_MODEL ? undefined : modelSelection.model,
         defaultModel,
+        reasoningEffort: getModelSelectionStringOptionValue(
+          modelSelection,
+          ANTIGRAVITY_GATEWAY_EFFORT_OPTION_ID,
+        ),
         mapError: (cause) => cause,
       });
     }),
+    // Gateway effort selects a per-level model ID; the runtime has no option of that name.
+    ownedModelOptionIds: [ANTIGRAVITY_GATEWAY_EFFORT_OPTION_ID],
     sessionModeForPolicy: (policy) => antigravityPermissionMode(policy.runtimeMode),
     runtimeModeForSessionMode: antigravityRuntimeModeForSessionMode,
     clientFileSystem: {

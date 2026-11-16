@@ -303,6 +303,41 @@ describe("applyAntigravityAcpModelSelection", () => {
       expect(selections).toEqual(["model=gemini-3.8-flash-low (unlisted)"]);
     }),
   );
+
+  it.effect.each([
+    { model: "gemini-4-argon", effort: "high", sent: "gemini-4-argon-high" },
+    { model: "gemini-4-argon", effort: undefined, sent: "gemini-4-argon" },
+    { model: "gemini-4-argon", effort: "max", sent: "gemini-4-argon" },
+    { model: "gemini-4-hydrogen", effort: "xhigh", sent: "gemini-4-hydrogen-xhigh" },
+    { model: ANTIGRAVITY_DEFAULT_MODEL, effort: "low", sent: "gemini-4-argon-low" },
+  ])("selects the gateway model ID for $model at effort $effort", ({ model, effort, sent }) =>
+    Effect.gen(function* () {
+      const { runtime, selections } = makeModelRuntime([
+        {
+          ...modelConfig,
+          currentValue: "MODEL_PLACEHOLDER_M361",
+          options: [
+            { value: "MODEL_PLACEHOLDER_M361", name: "cursor/gpt-5.2-low-fast" },
+            { value: "gemini-4-hydrogen", name: "Gemini 4 Hydrogen (Medium)" },
+            { value: "gemini-4-hydrogen-xhigh", name: "Gemini 4 Hydrogen (XHigh)" },
+            { value: "gemini-4-argon", name: "Gemini 4 Argon (Medium)" },
+            { value: "gemini-4-argon-low", name: "Gemini 4 Argon (Low)" },
+            { value: "gemini-4-argon-high", name: "Gemini 4 Argon (High)" },
+          ],
+        },
+      ]);
+      const applied = yield* applyAntigravityAcpModelSelection({
+        runtime,
+        model,
+        defaultModel: "gemini-4-argon",
+        reasoningEffort: effort,
+        mapError: (cause) => cause,
+      });
+
+      expect(applied).toBe(sent);
+      expect(selections).toEqual([sent]);
+    }),
+  );
 });
 
 const imageAttachment = {
