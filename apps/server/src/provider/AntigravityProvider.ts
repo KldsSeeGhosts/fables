@@ -171,6 +171,70 @@ function buildAntigravityGatewayModels(
   return models;
 }
 
+/**
+ * The legacy list names one ID per family and level, such as `gemini-4-argon-high`. Offer each
+ * family once, with the runtime's thinking option listing the levels that family has.
+ */
+function buildAntigravityFamilyModels(
+  entries: ReadonlyArray<{ readonly value: string; readonly name: string }>,
+  modelConfig: EffectAcpSchema.SessionConfigOption | undefined,
+  thinking: ThinkingConfig,
+): ReadonlyArray<ServerProviderModel> {
+  const currentFamily = modelConfig?.type === "select" ? modelConfig.currentValue : undefined;
+  const families = new Map<string, { name: string; levels: string[] }>();
+  for (const entry of entries) {
+    if (!entry.value.trim()) continue;
+    const variant = antigravityGatewayVariant(entry);
+    const family = variant?.family ?? entry.value;
+    const group = families.get(family) ?? {
+      name: variant?.familyName ?? (entry.name.trim() || entry.value),
+      levels: [],
+    };
+    if (variant && !group.levels.includes(variant.level)) group.levels.push(variant.level);
+    families.set(family, group);
+  }
+  const levelNames = new Map(
+    thinking.options
+      .flatMap((entry) => ("value" in entry ? [entry] : entry.options))
+      .map((entry) => [entry.value, entry.name] as const),
+  );
+  return [...families].map(([family, group]): ServerProviderModel => {
+    const levels = group.levels.toSorted(
+      (left, right) => antigravityGatewayEffortRank(left) - antigravityGatewayEffortRank(right),
+    );
+    const isCurrent = family === currentFamily;
+    const defaultLevel =
+      isCurrent && levels.includes(thinking.currentValue)
+        ? thinking.currentValue
+        : antigravityGatewayDefaultVariant(
+            family,
+            levels.map((level) => ({ value: `${family}-${level}`, level })),
+          )?.level;
+    return {
+      slug: family,
+      name: group.name,
+      isCustom: false,
+      ...(isCurrent ? { isDefault: true, aliases: [ANTIGRAVITY_DEFAULT_MODEL] } : {}),
+      capabilities:
+        levels.length > 0
+          ? createModelCapabilities({
+              optionDescriptors: [
+                buildSelectOptionDescriptor({
+                  id: thinking.id,
+                  label: thinking.name,
+                  options: levels.map((level) => ({
+                    value: level,
+                    label: levelNames.get(level) ?? GATEWAY_EFFORT_LABELS[level] ?? level,
+                    isDefault: level === defaultLevel,
+                  })),
+                }),
+              ],
+            })
+          : EMPTY_MODEL_CAPABILITIES,
+    };
+  });
+}
+
 export function buildAntigravityModelsFromSession(
   setup: SessionSetupResult,
   thinkingLevels: AntigravityThinkingLevels = new Map(),
@@ -198,6 +262,9 @@ export function buildAntigravityModelsFromSession(
           })) ?? [])
         : [];
   const currentThinking = antigravityThinkingConfig(setup.configOptions);
+  if (combined && currentThinking) {
+    return buildAntigravityFamilyModels(entries, config, currentThinking);
+  }
   if (gateway && !currentThinking) {
     return buildAntigravityGatewayModels(
       entries.filter((entry) => entry.value.trim()),
