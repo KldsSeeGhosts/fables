@@ -5,7 +5,6 @@ import {
   type OrchestrationV2ProviderCapabilities,
   type ProviderSetupError,
 } from "@t3tools/contracts";
-import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import type { SelfInvocation } from "@t3tools/shared/nodeRuntime";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
@@ -21,7 +20,6 @@ import { PULL_REQUEST_LINKING_INSTRUCTIONS } from "@t3tools/provider-core/server
 import type { AntigravityAuth } from "../../provider/AntigravityAuth.ts";
 import type * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
 import {
-  ANTIGRAVITY_GATEWAY_EFFORT_OPTION_ID,
   antigravityAppendsSystemPrompt,
   antigravityPermissionMode,
   antigravityRuntimeModeForSessionMode,
@@ -35,8 +33,6 @@ import {
   describeAntigravitySubagentLaunches,
 } from "../../provider/acp/AntigravityChildWork.ts";
 import { readAntigravityClientTextFile } from "../../provider/acp/AntigravityClientFiles.ts";
-import { withAntigravityContextUsage } from "../../provider/acp/AntigravityContextUsage.ts";
-import type { ThreadTokenUsageSnapshot } from "@t3tools/contracts";
 import { watchAntigravityPromptOutcome } from "../../provider/acp/AntigravityTurnOutcome.ts";
 import {
   antigravityApprovalOptions,
@@ -94,7 +90,6 @@ export interface AntigravityAdapterV2Options {
   readonly onSessionEvent?: AcpAdapterV2Flavor["onSessionEvent"];
   readonly nativeLogging?: Parameters<typeof makeAcpAdapterV2>[0]["nativeLogging"];
   readonly continuationRequests?: Parameters<typeof makeAcpAdapterV2>[0]["continuationRequests"];
-  readonly readContextUsage?: (sessionId: string) => Effect.Effect<ThreadTokenUsageSnapshot | null>;
   /** The agent's GEMINI_HOME. Its session logs show turns that ended on an upstream error. */
   readonly profileDirectory?: string;
 }
@@ -145,7 +140,7 @@ export function makeAntigravityAcpAdapterFlavor(
   const makeRuntime = Effect.fn("AntigravityAdapterV2.makeRuntime")(
     function* (input: AcpAdapterV2RuntimeInput) {
       const scope = yield* Scope.fork(yield* Effect.scope);
-      const nativeRuntime = yield* options
+      const runtime = yield* options
         .withProcess(
           Scope.close(scope, Exit.void),
           options.makeRuntime({
@@ -156,7 +151,6 @@ export function makeAntigravityAcpAdapterFlavor(
           }),
         )
         .pipe(Effect.provideService(Scope.Scope, scope));
-      const runtime = withAntigravityContextUsage(nativeRuntime, options.readContextUsage);
       // Repair keeps state across updates, so each runtime must have one session-update handler.
       const reads = makeAntigravityReadRepair();
       // Served reads are reported from the read handler, so they take turns with agent updates.
@@ -253,15 +247,9 @@ export function makeAntigravityAcpAdapterFlavor(
         model:
           modelSelection.model === ANTIGRAVITY_DEFAULT_MODEL ? undefined : modelSelection.model,
         defaultModel,
-        reasoningEffort: getModelSelectionStringOptionValue(
-          modelSelection,
-          ANTIGRAVITY_GATEWAY_EFFORT_OPTION_ID,
-        ),
         mapError: (cause) => cause,
       });
     }),
-    // Gateway effort selects a per-level model ID; the runtime has no option of that name.
-    ownedModelOptionIds: [ANTIGRAVITY_GATEWAY_EFFORT_OPTION_ID],
     sessionModeForPolicy: (policy) => antigravityPermissionMode(policy.runtimeMode),
     runtimeModeForSessionMode: antigravityRuntimeModeForSessionMode,
     clientFileSystem: {

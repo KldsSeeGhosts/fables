@@ -1037,7 +1037,7 @@ export const AntigravitySettings = makeProviderSettingsSchema(
       Schema.annotateKey({
         title: "Gateway models",
         description:
-          "Comma-separated model IDs to show from the gateway. A family such as gemini-4-argon appears once, with its thinking levels under Reasoning. Leave empty to show every gateway model.",
+          "Comma-separated model IDs the gateway serves. A family such as gemini-4-argon adds each thinking level. Leave empty for the built-in list.",
         providerSettingsForm: {
           placeholder: "gemini-4-argon, gemini-3.8-flash",
           clearWhenEmpty: "omit",
