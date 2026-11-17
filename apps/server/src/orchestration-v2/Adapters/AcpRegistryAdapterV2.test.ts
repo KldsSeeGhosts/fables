@@ -31,7 +31,6 @@ import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
-import * as ChildProcess from "effect/process/ChildProcess";
 import * as EffectAcpErrors from "effect-acp/errors";
 
 import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
@@ -47,10 +46,6 @@ import type { AcpRegistryLiveConfiguration } from "@t3tools/provider-acp-registr
 import * as AcpRegistrySupport from "@t3tools/provider-acp-registry/server/AcpRegistrySupport";
 import * as AcpRegistryRuntimeCoordinator from "@t3tools/provider-acp-registry/server/AcpRegistryRuntimeCoordinator";
 import { ACP_SESSION_MODE_OPTION_ID } from "@t3tools/provider-acp/server/sessionConfig";
-import { HERMES_PROFILE } from "@t3tools/provider-hermes/server";
-import { DEEPSEEK_PROFILE } from "@t3tools/provider-deepseek/server";
-import { OMP_PROFILE } from "@t3tools/provider-omp/server";
-import { ZCODE_PROFILE } from "@t3tools/provider-zcode/server";
 import * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
 import { t3AcpPromptWithInstructions } from "@t3tools/provider-core/server/orchestrationInstructions";
 import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
@@ -1310,147 +1305,6 @@ describe("AcpRegistryAdapterV2", () => {
       return opened;
     });
 
-    it.effect(
-      "applies DeepSeek permission-only changes before prompting the same native session",
-      () =>
-        openWithStoredSelection({
-          profile: DEEPSEEK_PROFILE,
-          setup: {
-            modes: {
-              currentModeId: "approval-required",
-              availableModes: ["approval-required", "full-access", "auto"].map((id) => ({
-                id,
-                name: id,
-              })),
-            },
-          },
-          turnRuntimeModes: ["full-access", "approval-required", "auto"],
-          selectionFrames: ["full-access", "approval-required", "auto"].flatMap((modeId) => [
-            outbound("session/set_mode", { sessionId: "agent-session", modeId }),
-            answer("session/set_mode", {}),
-            outbound("session/prompt"),
-            answer("session/prompt", { stopReason: "end_turn" }),
-          ]),
-        }).pipe(Effect.map(assertOpened), Effect.provide(layerTest), Effect.scoped),
-    );
-
-    it.effect.each([
-      ["approval-required", "default"],
-      ["auto-accept-edits", "accept_edits"],
-      ["full-access", "dont_ask"],
-      ["auto", "default"],
-    ] as const)(
-      "synchronizes Hermes %s policy instead of a stale native-mode pick",
-      ([runtimeMode, expectedMode]) =>
-        openWithStoredSelection({
-          profile: HERMES_PROFILE,
-          runtimeMode,
-          setup: {
-            modes: {
-              currentModeId: "accept_edits",
-              availableModes: ["default", "accept_edits", "dont_ask"].map((id) => ({
-                id,
-                name: id,
-              })),
-            },
-          },
-          selectionFrames:
-            expectedMode === "accept_edits"
-              ? []
-              : [
-                  outbound("session/set_mode", {
-                    sessionId: "agent-session",
-                    modeId: expectedMode,
-                  }),
-                  answer("session/set_mode", {}),
-                ],
-          storedModePick: expectedMode === "dont_ask" ? "default" : "dont_ask",
-        }).pipe(Effect.provide(layerTest), Effect.scoped),
-    );
-
-    const zcodeModeOption = (currentValue: string) => ({
-      id: "mode",
-      name: "Mode",
-      category: "mode",
-      type: "select",
-      currentValue,
-      options: ["plan", "build", "edit", "yolo", "auto"].map((value) => ({ value, name: value })),
-    });
-
-    it.effect.each([
-      ["approval-required", "build"],
-      ["auto-accept-edits", "edit"],
-      ["full-access", "yolo"],
-      ["auto", "auto"],
-    ] as const)(
-      "synchronizes ZCode %s policy instead of the bridge's native default",
-      ([runtimeMode, expectedMode]) =>
-        openWithStoredSelection({
-          profile: ZCODE_PROFILE,
-          runtimeMode,
-          setup: { configOptions: [zcodeModeOption("yolo")] },
-          selectionFrames:
-            expectedMode === "yolo"
-              ? []
-              : [
-                  outbound("session/set_config_option", {
-                    sessionId: "agent-session",
-                    configId: "mode",
-                    value: expectedMode,
-                  }),
-                  answer("session/set_config_option", {
-                    configOptions: [zcodeModeOption(expectedMode)],
-                  }),
-                ],
-          storedModePick: expectedMode === "yolo" ? "build" : "yolo",
-        }).pipe(Effect.provide(layerTest), Effect.scoped),
-    );
-
-    it.effect("does not temporarily apply a saved yolo config before Supervised policy", () =>
-      openWithStoredSelection({
-        profile: ZCODE_PROFILE,
-        setup: { configOptions: [zcodeModeOption("build")] },
-        selectionFrames: [],
-        storedModeConfigId: "mode",
-        storedModePick: "yolo",
-      }).pipe(Effect.provide(layerTest), Effect.scoped),
-    );
-
-    it.effect("resumes Hermes in Supervised rather than its persisted Don't Ask mode", () =>
-      openWithStoredSelection({
-        profile: HERMES_PROFILE,
-        resume: true,
-        setup: {
-          modes: {
-            currentModeId: "dont_ask",
-            availableModes: ["default", "accept_edits", "dont_ask"].map((id) => ({ id, name: id })),
-          },
-        },
-        selectionFrames: [
-          outbound("session/set_mode", { sessionId: "agent-session", modeId: "default" }),
-          answer("session/set_mode", {}),
-        ],
-        storedModePick: "dont_ask",
-      }).pipe(Effect.provide(layerTest), Effect.scoped),
-    );
-
-    it.effect("resumes ZCode in Supervised rather than its persisted yolo mode", () =>
-      openWithStoredSelection({
-        profile: ZCODE_PROFILE,
-        resume: true,
-        setup: { configOptions: [zcodeModeOption("yolo")] },
-        selectionFrames: [
-          outbound("session/set_config_option", {
-            sessionId: "agent-session",
-            configId: "mode",
-            value: "build",
-          }),
-          answer("session/set_config_option", { configOptions: [zcodeModeOption("build")] }),
-        ],
-        storedModePick: "yolo",
-      }).pipe(Effect.provide(layerTest), Effect.scoped),
-    );
-
     it.effect("switches an agent that only advertises modes with session/set_mode", () =>
       openWithStoredSelection({
         setup: {
@@ -1584,79 +1438,6 @@ describe("AcpRegistryAdapterV2", () => {
       }).pipe(Effect.provide(layerTest), Effect.scoped),
     );
   });
-
-  it.effect("applies the dedicated OMP policy to the actual spawned process", () =>
-    Effect.gen(function* () {
-      const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-      const path = yield* Path.Path;
-      const mockAgentPath = yield* path.fromFileUrl(
-        new URL("../../../scripts/acp-mock-agent.ts", import.meta.url),
-      );
-      const spawnedArgs: Array<ReadonlyArray<string>> = [];
-      const spawner = ChildProcessSpawner.make((command) => {
-        if (ChildProcess.isStandardCommand(command)) spawnedArgs.push(command.args.map(String));
-        return childProcessSpawner.spawn(command);
-      });
-      for (const [runtimeMode, mode] of [
-        ["approval-required", "always-ask"],
-        ["auto-accept-edits", "write"],
-        ["full-access", "yolo"],
-      ] as const) {
-        yield* Effect.gen(function* () {
-          const instanceId = ProviderInstanceId.make(`omp-spawn-${runtimeMode}`);
-          const adapter = yield* makeAcpRegistryAdapterV2({
-            selfInvocation: yield* resolveSelfInvocation(),
-            instanceId,
-            settings: yield* decodeAcpRegistryAdapterSettings({
-              source: "local",
-              commandPath: process.execPath,
-              authMethodId: "test",
-            }),
-            profile: OMP_PROFILE,
-            environment: {},
-          }).pipe(
-            Effect.provide(
-              Layer.mock(AcpRegistrySupport.AcpRegistryCatalog)({
-                resolve: (_settings, cwd) =>
-                  Effect.succeed({
-                    agent: {
-                      id: "omp",
-                      name: "OMP",
-                      version: "test",
-                      description: "",
-                      distribution: {},
-                    },
-                    distribution: "binary",
-                    spawn: {
-                      command: process.execPath,
-                      args: [mockAgentPath, "--auto-approve", "--approval-mode", "yolo"],
-                      cwd,
-                      env: { T3_ACP_SESSION_LIFECYCLE: "1" },
-                    },
-                  }),
-              }),
-            ),
-          );
-          const session = yield* adapter.openSession({
-            threadId: ThreadId.make(`thread-omp-spawn-${runtimeMode}`),
-            providerSessionId: ProviderSessionId.make(`session-omp-spawn-${runtimeMode}`),
-            modelSelection: { instanceId, model: "default" },
-            runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
-              runtimeMode,
-              interactionMode: "default",
-              cwd: process.cwd(),
-            }),
-          });
-          assert.equal(session.providerSession.driver, "omp");
-          assert.deepEqual(spawnedArgs.at(-1), [mockAgentPath, `--approval-mode=${mode}`]);
-        }).pipe(
-          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
-          Effect.scoped,
-        );
-      }
-      assert.equal(spawnedArgs.length, 3);
-    }).pipe(Effect.provide(layerTest), Effect.scoped),
-  );
 
   // regression: #21618 Claude Agent needs ACP v2 for native background lifecycle
   it.effect("launches Claude Agent on ACP v2 unless its instance environment decides", () =>

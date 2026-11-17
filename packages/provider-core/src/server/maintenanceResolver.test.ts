@@ -328,32 +328,6 @@ it.layer(
     ),
   );
 
-  it.effect("tracks managed release revisions without changing the native protocol version", () =>
-    enrichProviderSnapshotWithVersionAdvisory(
-      { ...installedPackageToolProvider, version: "0.72.0" },
-      {
-        ...manualPackageTool,
-        installedVersion: "0.72.0-ksg.20261015.1",
-        latestVersion: "0.72.0-ksg.20261015.2",
-      },
-    ).pipe(
-      Effect.provide(ProviderLatestVersions.layer),
-      Effect.provideService(
-        HttpClient.HttpClient,
-        HttpClient.make(() => Effect.die("not npm")),
-      ),
-      Effect.map((provider) => {
-        expect(provider.version).toBe("0.72.0");
-        expect(provider.installedVersion).toBe("0.72.0-ksg.20261015.1");
-        expect(provider.versionAdvisory).toMatchObject({
-          status: "behind_latest",
-          currentVersion: "0.72.0-ksg.20261015.1",
-          latestVersion: "0.72.0-ksg.20261015.2",
-        });
-      }),
-    ),
-  );
-
   it.effect("does not invoke a native release check when update checks are disabled", () =>
     enrichProviderSnapshotWithVersionAdvisory(
       installedPackageToolProvider,

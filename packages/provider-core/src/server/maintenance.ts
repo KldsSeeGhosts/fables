@@ -5,8 +5,6 @@ export interface ProviderMaintenanceCapabilities {
   readonly provider: ProviderDriverKind;
   readonly packageName: string | null;
   readonly update: ProviderMaintenanceCommandAction | null;
-  /** A managed fork can retain the native protocol version but ship its own release revisions. */
-  readonly installedVersion?: string;
   /** undefined defers to npm; null means the installer could not determine the latest version. */
   readonly latestVersion?: string | null;
   /** Native release channels must not be inferred from npm's stable tag. */

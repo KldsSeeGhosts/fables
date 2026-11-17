@@ -4395,16 +4395,12 @@ it.layer(
               "claudeAgent",
               "codex",
               "cursor",
-              "deepseek",
               "fx",
               "grok",
-              "hermes",
               "kiro",
               "muse",
-              "omp",
               "opencode",
               "pi",
-              "zcode",
             ]);
             assert.strictEqual(cursorProvider?.enabled, false);
             assert.strictEqual(cursorProvider?.status, "disabled");
@@ -4412,12 +4408,10 @@ it.layer(
             const museProvider = providers.find((provider) => provider.driver === "muse");
             assert.strictEqual(museProvider?.enabled, false);
             assert.strictEqual(museProvider?.status, "disabled");
-            for (const driver of ["deepseek", "fx", "hermes", "omp", "zcode"]) {
-              assert.strictEqual(
-                providers.find((provider) => provider.driver === driver)?.enabled,
-                false,
-              );
-            }
+            assert.strictEqual(
+              providers.find((provider) => provider.driver === "fx")?.enabled,
+              false,
+            );
             assert.strictEqual(cursorSpawned, false);
           }).pipe(Effect.provide(runtimeServices));
         }),

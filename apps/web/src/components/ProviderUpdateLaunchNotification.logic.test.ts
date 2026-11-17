@@ -298,11 +298,11 @@ it("does not offer incompatible latest versions and restores suggestions after p
 
 it("keeps native unknown-version updates in Settings without announcing an available update", () => {
   const snapshot = provider({
-    driver: driver("hermes"),
+    driver: driver("opencode"),
     advisoryStatus: "unknown",
     latestVersion: null,
     canUpdate: true,
-    updateCommand: "hermes update --yes",
+    updateCommand: "opencode upgrade",
   });
   expect(isProviderSettingsUpdateCandidate(snapshot)).toBe(true);
   expect(isProviderUpdateCandidate(snapshot)).toBe(false);

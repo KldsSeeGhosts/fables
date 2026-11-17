@@ -678,7 +678,7 @@ export const checkAcpAgentCliVersion = Effect.fn("checkAcpAgentCliVersion")(func
  * Builds a provider driver on the registry's local-command machinery. The
  * registry itself is one; dedicated ACP agents pass their own profile.
  */
-export const makeAcpAgentDriver = <Settings>(
+const makeAcpAgentDriver = <Settings>(
   definition: AcpAgentDriverDefinition<Settings> & {
     readonly metadata: ProviderDriverMetadata;
     readonly maintenance?: ProviderMaintenanceCapabilitiesResolver;
@@ -741,7 +741,6 @@ export const makeAcpAgentDriver = <Settings>(
       definition.maintenance
         ? resolveProviderMaintenanceCapabilitiesEffect(definition.maintenance, {
             binaryPath: effectiveConfig.commandPath,
-            commandArgs: effectiveConfig.commandArgs,
             env: processEnvironment,
           }).pipe(
             Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
