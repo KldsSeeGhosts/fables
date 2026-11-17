@@ -1,4 +1,17 @@
 import type { ContextWindowSnapshot } from "@t3tools/client-runtime/state/context-window";
+import type { ContextBreakdownKind } from "@t3tools/contracts";
+
+export const CONTEXT_BREAKDOWN_LABELS: Record<ContextBreakdownKind, string> = {
+  system_prompt: "System prompt",
+  system_tools: "System tools",
+  mcp_tools: "MCP tools",
+  t3_tools: "T3 Code tools",
+  memory_files: "Memory files",
+  skills: "Skills",
+  custom_agents: "Custom agents",
+  messages: "Messages",
+  other: "Other",
+};
 
 export type ContextLegendKind = "used" | "estimated" | "inferred" | "other" | "buffer" | "free";
 
@@ -36,9 +49,9 @@ export function buildContextLegend(
       : content;
   const folded = content.slice(shown.length);
   const items: Array<ContextLegendItem> = shown.map((row) => ({
-    label: row.label,
+    label: "label" in row ? row.label : CONTEXT_BREAKDOWN_LABELS[row.kind],
     tokens: row.tokens,
-    kind: row.kind === "buffer" ? "used" : row.kind,
+    kind: row.kind === "estimated" || row.kind === "inferred" ? row.kind : "used",
   }));
   if (folded.length > 0) {
     items.push({

@@ -20,7 +20,7 @@ function Account({
     <li className="space-y-2 border-t py-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div className="min-w-0 space-y-1">
-          <p className="break-all text-sm font-medium">
+          <p className="break-all text-label">
             <RedactedSensitiveText
               value={account.label ?? account.email ?? account.id}
               ariaLabel="Reveal CPA account"
@@ -29,7 +29,7 @@ function Account({
             />
           </p>
           {account.fileName && account.fileName !== account.label ? (
-            <p className="break-all text-xs text-muted-foreground">
+            <p className="break-all text-meta text-muted-foreground">
               <RedactedSensitiveText
                 value={account.fileName}
                 ariaLabel="Reveal auth filename"
@@ -39,31 +39,31 @@ function Account({
             </p>
           ) : null}
         </div>
-        <p className="text-xs text-muted-foreground">
-          {account.providerLabel ?? account.driver}
-          {account.plan ? ` · ${account.plan}` : ""}
-          {account.disabled ? " · Disabled" : ""}
-          {account.synthetic ? " · Dashboard account" : ""}
-        </p>
+        <div className="flex flex-wrap gap-2 text-meta text-muted-foreground">
+          <span>{account.providerLabel ?? account.driver}</span>
+          {account.plan ? <span>{account.plan}</span> : null}
+          {account.disabled ? <span>Disabled</span> : null}
+          {account.synthetic ? <span>Dashboard account</span> : null}
+        </div>
       </div>
       {account.usageLimits.windows.map((window) => (
-        <p key={window.id} className="flex flex-wrap justify-between gap-2 text-xs tabular-nums">
+        <p key={window.id} className="flex flex-wrap justify-between gap-2 text-meta tabular-nums">
           <span>
             {window.label}
             {window.estimated ? " (estimated)" : ""}
           </span>
-          <span>
-            {remainingPercent(window)}% left
-            {window.resetsAt ? ` · ${formatResetsIn(window, now)}` : ""}
+          <span className="flex gap-2">
+            <span>{remainingPercent(window)}% left</span>
+            {window.resetsAt ? <span>{formatResetsIn(window, now)}</span> : null}
           </span>
         </p>
       ))}
       {account.usageLimits.unavailable ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-meta text-muted-foreground">
           {account.usageLimits.unavailable.message ?? "Quota unavailable."}
         </p>
       ) : null}
-      {account.notice ? <p className="text-xs text-muted-foreground">{account.notice}</p> : null}
+      {account.notice ? <p className="text-meta text-muted-foreground">{account.notice}</p> : null}
     </li>
   );
 }
@@ -81,13 +81,13 @@ function Group({
     <section className="rounded-xl border p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
-          <h2 className="text-sm font-medium">{group.label}</h2>
-          <p className="text-xs text-muted-foreground">
-            {count} CPA accounts · Includes disabled and unavailable auth files
+          <h2 className="text-label">{group.label}</h2>
+          <p className="text-meta text-muted-foreground">
+            {count} CPA accounts, including disabled and unavailable auth files
           </p>
         </div>
         <Button
-          variant="outline"
+          variant="secondary"
           size="xs"
           aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}

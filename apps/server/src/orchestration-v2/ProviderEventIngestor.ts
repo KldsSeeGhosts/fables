@@ -48,7 +48,7 @@ import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter"
 import { makeProviderFailureTurnItem } from "@t3tools/provider-core/server/failure";
 import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
 import { stripUnservedToolOutputImageBytes } from "./toolOutputImageBytes.ts";
-import { boundFileChangeForStorage } from "./WireProjection.ts";
+import { boundFileChangeForStorage } from "@t3tools/shared/wireProjection";
 
 const CLAUDE_DRIVER = ProviderDriverKind.make("claudeAgent");
 const MAX_CONTEXT_SIZE_TRACKERS = 32;

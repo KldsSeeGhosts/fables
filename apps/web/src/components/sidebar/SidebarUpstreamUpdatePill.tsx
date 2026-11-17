@@ -43,11 +43,7 @@ export function SidebarUpstreamUpdatePill({
             render={
               <PopoverTrigger
                 render={
-                  <button
-                    type="button"
-                    aria-label={label}
-                    className="inline-flex size-8 cursor-pointer items-center justify-center rounded-full bg-sidebar-control-surface text-sidebar-foreground outline-hidden ring-ring transition-colors hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset"
-                  >
+                  <Button variant="ghost" size="icon-sm" aria-label={label}>
                     <span className="relative grid size-4 place-items-center">
                       <GitForkIcon className="size-4" />
                       <span
@@ -55,7 +51,7 @@ export function SidebarUpstreamUpdatePill({
                         className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-info ring-2 ring-sidebar-control-surface"
                       />
                     </span>
-                  </button>
+                  </Button>
                 }
               />
             }
@@ -63,27 +59,27 @@ export function SidebarUpstreamUpdatePill({
           <TooltipPopup side="top">{label}</TooltipPopup>
         </Tooltip>
         <PopoverPopup side="top" align="end" width="sm">
-          <div className="flex flex-col gap-2 text-xs">
+          <div className="flex flex-col gap-2 text-meta">
             <div className="flex items-center justify-between gap-2">
-              <span className="font-medium text-foreground">Upstream update available</span>
+              <span className="text-foreground">Upstream update available</span>
               <Badge size="sm" variant="info">
                 Nightly
               </Badge>
             </div>
-            <p className="font-mono text-2xs text-muted-foreground">
+            <p className="font-mono text-meta text-muted-foreground">
               {update.includedVersion} → {update.latestVersion}
             </p>
             <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
               <Button
                 render={<a href={update.reviewUrl} target="_blank" rel="noreferrer noopener" />}
                 size="xs"
-                variant="outline"
+                variant="secondary"
               >
                 Review changes
               </Button>
               <Button
                 size="xs"
-                variant="outline"
+                variant="secondary"
                 onClick={() => copyToClipboard(update.mergePrompt, undefined)}
               >
                 {isCopied ? "Copied" : "Copy merge prompt"}

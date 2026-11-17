@@ -42,9 +42,7 @@ export function UpstreamNightlySettings() {
         minute: "2-digit",
       })}`
     : null;
-  const refreshTooltip = lastCheckedTooltip
-    ? `Check upstream · ${lastCheckedTooltip}`
-    : "Check upstream";
+  const refreshTooltip = lastCheckedTooltip ?? "Check upstream";
 
   return (
     <SettingsRow
@@ -53,9 +51,7 @@ export function UpstreamNightlySettings() {
         <span className="inline-flex flex-wrap items-center gap-2">
           <span>Upstream</span>
           {includedUpstreamVersion ? (
-            <code className="text-2xs font-medium text-muted-foreground">
-              {includedUpstreamVersion}
-            </code>
+            <code className="text-meta text-muted-foreground">{includedUpstreamVersion}</code>
           ) : null}
           {isBehind ? (
             <Badge size="sm" variant="info">
@@ -73,15 +69,14 @@ export function UpstreamNightlySettings() {
             `Checking ${T3_UPSTREAM_REPOSITORY}…`
           ) : status === "behind" ? (
             <>
-              <code className="text-2xs font-medium text-foreground">{latest.version}</code> is
-              ready to review and merge.
+              <code className="text-meta text-foreground">{latest.version}</code> is ready to review
+              and merge.
             </>
           ) : status === "current" ? (
             `Up to date with ${T3_UPSTREAM_REPOSITORY}.`
           ) : (
             <>
-              Latest nightly:{" "}
-              <code className="text-2xs font-medium text-foreground">{latest.version}</code>.
+              Latest nightly: <code className="text-meta text-foreground">{latest.version}</code>.
             </>
           )}
         </span>
@@ -99,13 +94,13 @@ export function UpstreamNightlySettings() {
                   />
                 }
                 size="sm"
-                variant="outline"
+                variant="secondary"
               >
                 Review changes
               </Button>
               <Button
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 onClick={() => copyToClipboard(upstreamMergePrompt(latest.version), undefined)}
               >
                 {isCopied ? "Copied" : "Copy merge prompt"}
@@ -121,7 +116,7 @@ export function UpstreamNightlySettings() {
                 />
               }
               size="sm"
-              variant="outline"
+              variant="secondary"
             >
               View upstream
             </Button>
@@ -132,7 +127,7 @@ export function UpstreamNightlySettings() {
                 isBehind ? (
                   <Button
                     size="icon-sm"
-                    variant="outline"
+                    variant="secondary"
                     aria-label={query.isPending ? "Checking upstream…" : "Check upstream"}
                     disabled={query.isPending}
                     onClick={query.refresh}
@@ -142,7 +137,7 @@ export function UpstreamNightlySettings() {
                 ) : (
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     disabled={query.isPending}
                     onClick={query.refresh}
                   >

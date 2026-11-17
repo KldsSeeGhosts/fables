@@ -234,6 +234,87 @@ function threadCreatedEvent(
 
 const layer = it.layer(layerTest);
 
+layer("context breakdown", (it) => {
+  it.effect.each(["claudeAgent", "codex"])(
+    "persists and streams the last category split for %s",
+    (provider) =>
+      Effect.gen(function* () {
+        const now = yield* DateTime.now;
+        const sink = yield* EventSink.EventSinkV2;
+        const projections = yield* ProjectionStore.ProjectionStoreV2;
+        const events = yield* EventStore.EventStoreV2;
+        const thread = yield* threadCreatedEvent(now);
+        yield* sink.write({ events: [thread] });
+        const breakdown = [
+          { kind: "system_prompt", tokens: 300 },
+          { kind: "messages", tokens: 700 },
+        ] as const;
+        const turn = {
+          id: ProviderTurnId.make("context:first"),
+          providerThreadId: ProviderThreadId.make("context:provider-thread"),
+          nodeId: NodeId.make("context:node"),
+          runAttemptId: null,
+          nativeTurnRef: null,
+          ordinal: 1,
+          status: "completed" as const,
+          startedAt: now,
+          completedAt: now,
+          tokenUsage: { usedTokens: 1_000, breakdown, updatedAt: DateTime.formatIso(now) },
+        };
+        yield* sink.write({
+          events: [
+            {
+              id: yield* (yield* IdAllocator.IdAllocatorV2).allocate.event({
+                threadId: thread.threadId,
+              }),
+              type: "provider-turn.updated",
+              threadId: thread.threadId,
+              driver: ProviderDriverKind.make(provider),
+              occurredAt: now,
+              payload: turn,
+            },
+          ],
+        });
+        const stored = yield* sink.write({
+          events: [
+            {
+              id: yield* (yield* IdAllocator.IdAllocatorV2).allocate.event({
+                threadId: thread.threadId,
+              }),
+              type: "provider-turn.updated",
+              threadId: thread.threadId,
+              driver: ProviderDriverKind.make(provider),
+              occurredAt: now,
+              payload: {
+                ...turn,
+                id: ProviderTurnId.make("context:second"),
+                ordinal: 2,
+                status: "running",
+                completedAt: null,
+                tokenUsage: { usedTokens: 1_200, updatedAt: DateTime.formatIso(now) },
+              },
+            },
+          ],
+        });
+        const expected =
+          provider === "claudeAgent"
+            ? ([
+                { kind: "system_prompt", tokens: 300 },
+                { kind: "messages", tokens: 900 },
+              ] as const)
+            : undefined;
+        const live = stored[0]!.event;
+        assert.equal(live.type, "provider-turn.updated");
+        if (live.type !== "provider-turn.updated") return;
+        assert.deepEqual(live.payload.tokenUsage?.breakdown, expected);
+        const reloaded = yield* projections.getThreadProjection(thread.threadId);
+        assert.deepEqual(reloaded.providerTurns[1]?.tokenUsage?.breakdown, expected);
+        const replayed = yield* events.read({ threadId: thread.threadId }).pipe(Stream.runCollect);
+        assert.deepEqual(replayed.at(-1)?.event, live);
+      }),
+  );
+});
+
 it.effect("takes a hub's reset for an unreset usage_limit, then refreshes the snapshot", () =>
   Effect.gen(function* () {
     const refreshed = yield* Deferred.make<void>();
@@ -1934,6 +2015,7 @@ layer("ProviderEventIngestorV2", (it) => {
         nativeTurnId: string,
         ordinal: number,
         usedTokens: number,
+        providerThreadIdForTurn = providerThreadId,
       ) =>
         ingestor.ingestNormalized({
           providerSessionId,
@@ -1944,7 +2026,7 @@ layer("ProviderEventIngestorV2", (it) => {
             driver,
             providerTurn: {
               id: idAllocator.derive.providerTurn({ driver, nativeTurnId }),
-              providerThreadId,
+              providerThreadId: providerThreadIdForTurn,
               nodeId: NodeId.make(`node:${nativeTurnId}`),
               runAttemptId: null,
               nativeTurnRef: null,
@@ -1990,7 +2072,12 @@ layer("ProviderEventIngestorV2", (it) => {
 
       // Claude reports its own breakdown, so it is never estimated.
       const CLAUDE_DRIVER = ProviderDriverKind.make("claudeAgent");
-      yield* reportUsage(CLAUDE_DRIVER, "claude-turn", 3, 10_000);
+      // Provider threads are driver-scoped; the Codex estimate must not carry into Claude.
+      const claudeProviderThreadId = idAllocator.derive.providerThread({
+        driver: CLAUDE_DRIVER,
+        nativeThreadId: "breakdown-thread",
+      });
+      yield* reportUsage(CLAUDE_DRIVER, "claude-turn", 3, 10_000, claudeProviderThreadId);
       const claudeProjection = yield* projectionStore.getThreadProjection(threadEvent.threadId);
       assert.isUndefined(
         claudeProjection.providerTurns.find(

@@ -59,6 +59,7 @@ import {
   type SpawnOptions as ClaudeSpawnOptions,
   type SpawnedProcess as ClaudeSpawnedProcess,
   type SDKAssistantMessage,
+  type SDKControlGetContextUsageResponse,
   type SDKAPIRetryMessage,
   type SDKMessage,
   type SDKRateLimitInfo,
@@ -94,6 +95,8 @@ import {
 } from "@t3tools/shared/claudeCompaction";
 import {
   type ChatAttachment,
+  type ContextBreakdown,
+  type ContextBreakdownKind,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   ClaudeSettings,
   TrimmedNonEmptyString,
@@ -357,12 +360,52 @@ export function claudeContextBreakdown(usage: {
   return rows.length === 0 ? undefined : rows.slice(0, 32);
 }
 
-// The CLI answers from local estimates in summary mode, so a slow answer means
-// it is busy, and the card keeps the previous breakdown instead of holding the
-// turn's end.
-const CLAUDE_CONTEXT_USAGE_TIMEOUT = "2 seconds";
-
 type ClaudeMessageUsage = Parameters<typeof claudeProviderTurnTokenUsage>[0];
+
+const CLAUDE_CONTEXT_CATEGORY_KINDS: Partial<
+  Record<
+    NonNullable<SDKControlGetContextUsageResponse["categories"][number]["id"]>,
+    ContextBreakdownKind
+  >
+> = {
+  system_prompt: "system_prompt",
+  system_tools: "system_tools",
+  mcp_tools: "mcp_tools",
+  memory_files: "memory_files",
+  skills: "skills",
+  custom_agents: "custom_agents",
+  messages: "messages",
+};
+
+/** The in-window rows of Claude's `/context`; a CLI that predates category ids reports none. */
+function claudeCategorizedContextBreakdown(
+  usage: SDKControlGetContextUsageResponse,
+): ContextBreakdown | undefined {
+  if (!usage.categories.some((category) => category.id !== undefined)) return undefined;
+  const tokens = new Map<ContextBreakdownKind, number>();
+  const add = (kind: ContextBreakdownKind, count: number) =>
+    tokens.set(kind, (tokens.get(kind) ?? 0) + count);
+  for (const category of usage.categories) {
+    if (category.kind !== "used") continue;
+    const kind = category.id === undefined ? undefined : CLAUDE_CONTEXT_CATEGORY_KINDS[category.id];
+    add(kind ?? "other", Math.max(0, Math.round(category.tokens)));
+  }
+  const t3Tools = Math.min(
+    tokens.get("mcp_tools") ?? 0,
+    Math.round(
+      usage.mcpTools
+        .filter((tool) => tool.serverName === "t3-code" && tool.isLoaded !== false)
+        .reduce((sum, tool) => sum + tool.tokens, 0),
+    ),
+  );
+  if (t3Tools > 0) {
+    add("mcp_tools", -t3Tools);
+    add("t3_tools", t3Tools);
+  }
+  return Array.from(tokens, ([kind, count]) => ({ kind, tokens: count })).filter(
+    (category) => category.tokens > 0,
+  );
+}
 
 // message_delta usage is per-message cumulative; null or absent fields retain message_start values and zeros replace them.
 function mergeClaudeStreamUsage(
@@ -708,16 +751,12 @@ export interface ClaudeAgentSdkQuerySession {
   readonly backgroundTasks: (
     toolUseId: string,
   ) => Effect.Effect<boolean, ClaudeAgentSdkQueryRunnerError>;
-  /**
-   * The CLI's per-category context usage. Absent on runners that cannot ask,
-   * such as recorded replays; it is not a logged protocol frame.
-   */
-  readonly contextUsage?: Effect.Effect<
-    Awaited<ReturnType<ClaudeQuery["getContextUsage"]>>,
-    ClaudeAgentSdkQueryRunnerError
-  >;
   readonly mcpServerStatus: Effect.Effect<
     ReadonlyArray<ClaudeMcpServerStatus>,
+    ClaudeAgentSdkQueryRunnerError
+  >;
+  readonly getContextUsage: Effect.Effect<
+    SDKControlGetContextUsageResponse,
     ClaudeAgentSdkQueryRunnerError
   >;
   readonly readMcpResource: (input: {
@@ -1887,12 +1926,6 @@ export const layerQueryRunner: Layer.Layer<
                   }),
                 ),
               ),
-            // Summary detail answers from the CLI's local estimates, with no
-            // token-count API calls, so asking once per turn costs nothing.
-            contextUsage: Effect.tryPromise({
-              try: () => queryRuntime.getContextUsage({ detail: "summary" }),
-              catch: (cause) => queryRunnerError(cause, "getContextUsage"),
-            }),
             backgroundTasks: (toolUseId) =>
               Effect.tryPromise({
                 try: () => queryRuntime.backgroundTasks(toolUseId),
@@ -1909,6 +1942,10 @@ export const layerQueryRunner: Layer.Layer<
             mcpServerStatus: Effect.tryPromise({
               try: () => queryRuntime.mcpServerStatus(),
               catch: (cause) => queryRunnerError(cause, "mcpServerStatus"),
+            }),
+            getContextUsage: Effect.tryPromise({
+              try: () => queryRuntime.getContextUsage({ detail: "summary" }),
+              catch: (cause) => queryRunnerError(cause, "getContextUsage"),
             }),
             readMcpResource: ({ server, uri }) =>
               Effect.tryPromise({
@@ -5074,9 +5111,6 @@ interface ActiveClaudeTurnContext {
   nativeSessionTitle: string | null;
   // Steers end segments whose usage is excluded from the final result; bill them too, oldest first.
   readonly steeredSegmentUsage: Array<SDKResultMessage["usage"]>;
-  // The newest context usage this turn reported, so the breakdown fetched when
-  // the turn ends can ride on the same figures instead of replacing them.
-  latestTokenUsage: ReturnType<typeof claudeProviderTurnTokenUsage> | undefined;
   // Set as finalization starts: a steer admitted later would stay pending
   // forever, so it fails and the orchestrator follows up instead.
   steersClosed: boolean;
@@ -6346,6 +6380,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           context: ActiveClaudeTurnContext,
           usage: ClaudeMessageUsage | number,
           requestStarted = false,
+          breakdown?: ContextBreakdown,
         ) {
           const now = yield* DateTime.now;
           // Only message_start marks the request start; an assistant snapshot
@@ -6389,7 +6424,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               status: "running",
               startedAt: context.startedAt,
               completedAt: null,
-              tokenUsage,
+              tokenUsage: breakdown === undefined ? tokenUsage : { ...tokenUsage, breakdown },
               ...(context.executedModel === undefined ? {} : { model: context.executedModel }),
             },
           });
@@ -9415,22 +9450,6 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             }
           }
 
-          // A finished turn has the CLI idle, so this is when it can answer.
-          // Best effort: no answer leaves the card on its previous breakdown.
-          const latestTokenUsage = input.context.latestTokenUsage;
-          const breakdown =
-            input.status === "completed" &&
-            latestTokenUsage !== undefined &&
-            liveQuery !== null &&
-            !liveQuery.stopping &&
-            liveQuery.query.contextUsage !== undefined
-              ? yield* liveQuery.query.contextUsage.pipe(
-                  Effect.timeout(CLAUDE_CONTEXT_USAGE_TIMEOUT),
-                  Effect.map(claudeContextBreakdown),
-                  Effect.orElseSucceed(() => undefined),
-                )
-              : undefined;
-
           const threadDisposition = input.threadDisposition ?? "reusable";
           const terminalEvent: ProviderAdapter.ProviderAdapterV2Event =
             input.status === "failed"
@@ -9475,9 +9494,6 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                     status: input.status,
                     completedAt: input.completedAt,
                   }),
-                  ...(breakdown === undefined || latestTokenUsage === undefined
-                    ? {}
-                    : { tokenUsage: { ...latestTokenUsage, breakdown } }),
                   turnTokenUsage: normalizeClaudeTurnTokenUsage(
                     input.result,
                     input.context.subagentsByTaskId.size > 0 ||
@@ -10980,6 +10996,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               budget.compacting = null;
               yield* persistAttachmentBudget(context.nativeThreadId);
             }
+            const previousUsage = context.streamUsage?.usage;
             if (context.streamUsage !== null) context.streamUsage.usage = null;
             const postTokens = message.compact_metadata.post_tokens;
             const afterTokenCount =
@@ -10987,7 +11004,12 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                 ? Math.round(postTokens)
                 : undefined;
             context.compactionTokens = afterTokenCount;
-            if (afterTokenCount !== undefined) yield* emitContextUsage(context, afterTokenCount);
+            // An empty split invalidates the pre-compaction categories until the next summary.
+            const compactedUsage =
+              afterTokenCount ?? previousUsage ?? message.compact_metadata.pre_tokens;
+            if (compactedUsage != null) {
+              yield* emitContextUsage(context, compactedUsage, false, []);
+            }
             yield* emitProviderEvent({
               type: "turn_item.updated",
               driver: CLAUDE_PROVIDER,
@@ -11119,17 +11141,6 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               message.message.model !== "<synthetic>"
             ) {
               const snapshotUsage = message.message.usage;
-              // The end-of-turn context card reads this; placeholder usage
-              // without input tokens is never a measurement.
-              if (claudeMessageInputTokens(snapshotUsage) > 0) {
-                context.latestTokenUsage = claudeProviderTurnTokenUsage(
-                  snapshotUsage,
-                  claudeContextWindow(context.input.modelSelection),
-                  DateTime.formatIso(now),
-                  adapterOptions.settings.autoCompactWindow,
-                  context.streamUsage?.requestedAt,
-                );
-              }
               const stream = context.streamUsage;
               if (stream === null || stream.messageId !== message.message.id) {
                 context.streamUsage = { messageId: message.message.id, usage: snapshotUsage };
@@ -11787,8 +11798,22 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
 
           if (message.type === "result") {
             const contextUsage = context.streamUsage?.usage ?? context.compactionTokens;
-            if (resultsReportingNewContextWindow.has(message) && contextUsage !== undefined) {
-              yield* emitContextUsage(context, contextUsage);
+            if (contextUsage !== undefined) {
+              // "summary" answers from Claude's local state without a token-count API call.
+              const breakdown = yield* input.query.getContextUsage.pipe(
+                Effect.map(
+                  (usage) =>
+                    claudeCategorizedContextBreakdown(usage) ?? claudeContextBreakdown(usage),
+                ),
+                Effect.timeout("2 seconds"),
+                Effect.tapError((cause) =>
+                  Effect.logDebug("orchestration-v2.claude-context-usage-unavailable", { cause }),
+                ),
+                Effect.orElseSucceed(() => undefined),
+              );
+              if (breakdown !== undefined || resultsReportingNewContextWindow.has(message)) {
+                yield* emitContextUsage(context, contextUsage, false, breakdown);
+              }
             }
             const completedAt = yield* DateTime.now;
             const interrupted = (yield* Ref.get(interruptedTurns)).has(context.providerTurnId);
@@ -13237,7 +13262,6 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               compactionFailure: null,
               nativeSessionTitle: null,
               steeredSegmentUsage: [],
-              latestTokenUsage: undefined,
               steersClosed: false,
               steeredLedgerUsage: { inputTokens: 0, outputTokens: 0 },
               rootModels: new Set(),

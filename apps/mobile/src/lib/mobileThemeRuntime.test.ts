@@ -18,7 +18,7 @@ describe("mobileThemeRuntime", () => {
       (operation) => operation.kind === "update-text-variables",
     );
 
-    expect(variableOperations).toHaveLength(16);
+    expect(variableOperations).toHaveLength(18);
     expect(variableOperations.at(-1)?.themeName).toBe("cursor-dark");
     expect(operations.at(-1)).toEqual({
       kind: "set-appearance-mode",
@@ -42,7 +42,7 @@ describe("mobileThemeRuntime", () => {
       baseFontSize: 18,
     });
 
-    expect(operations).toHaveLength(16);
+    expect(operations).toHaveLength(18);
     expect(operations.every((operation) => operation.kind === "update-text-variables")).toBe(true);
     expect(operations.at(-1)).toMatchObject({
       kind: "update-text-variables",

@@ -16,6 +16,7 @@ import { page } from "vite-plus/test/browser";
 const state = vi.hoisted(() => ({
   threadState: null as unknown as Atom.Writable<AsyncResult.AsyncResult<EnvironmentThreadState>>,
   workflow: null as unknown,
+  command: vi.fn(async (_input: unknown) => undefined),
 }));
 
 vi.mock(import("@t3tools/client-runtime/state/thread-workflows"), async (importOriginal) => ({
@@ -66,7 +67,7 @@ vi.mock(import("../../state/threads"), async (importOriginal) => {
 
 vi.mock(import("../../state/use-atom-command"), async (importOriginal) => ({
   ...(await importOriginal()),
-  useAtomCommand: (() => async () => undefined) as never,
+  useAtomCommand: (() => state.command) as never,
 }));
 
 vi.mock(import("../../assets/assetUrls"), async (importOriginal) => ({
@@ -86,6 +87,7 @@ import type { ExpandedImagePreview } from "./ExpandedImagePreview";
 
 function setup() {
   state.workflow = null;
+  state.command.mockClear();
 }
 
 const baseProps = {
@@ -99,6 +101,7 @@ const baseProps = {
   timestampFormat: "locale",
   onOpenThread: () => undefined,
   onImageExpand: () => undefined,
+  onRemovePending: () => undefined,
 } satisfies ComponentProps<typeof QueuedRunsControl>;
 
 async function renderQueue(props: Partial<ComponentProps<typeof QueuedRunsControl>> = {}) {
@@ -159,11 +162,12 @@ it.each([false, true])(
     }
     await using _screen = await renderUi(<QueueWithGallery />);
 
-    await page.getByRole("button", { name: "Preview second.png", exact: true }).click();
+    // The redesigned row shows the first image; the gallery pages to the rest.
+    await page.getByRole("button", { name: "Preview first.png", exact: true }).click();
     await expect.element(page.getByRole("dialog")).toBeVisible();
-    await expect.element(page.getByText("second.png (2/2)", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Previous media", exact: true }).click();
     await expect.element(page.getByText("first.png (1/2)", { exact: true })).toBeVisible();
+    await page.getByRole("option", { name: "second.png (2/2)", exact: true }).click();
+    await expect.element(page.getByText("second.png (2/2)", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Back, close image preview", exact: true }).click();
     await expect.element(page.getByRole("dialog")).not.toBeInTheDocument();
     await expect.element(page.getByText("Later", { exact: true })).toBeVisible();
@@ -309,6 +313,42 @@ it("shows who sent a queued message and folds automation and agent prompts", asy
 
   await expect.element(page.getByText("Sent by T3 Code")).toBeVisible();
   await expect.element(page.getByText("Continue where you left off.")).toBeVisible();
+
+  const dataTransfer = new DataTransfer();
+  await act(() => {
+    page
+      .getByRole("button", { name: "Reorder queued message 1" })
+      .element()
+      .dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer }));
+  });
+  await act(() => {
+    const last = page.getByRole("listitem").last().element();
+    const bounds = last.getBoundingClientRect();
+    last.dispatchEvent(
+      new DragEvent("dragover", {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer,
+        clientY: bounds.bottom - 1,
+      }),
+    );
+  });
+  await act(() => {
+    page
+      .getByRole("list")
+      .element()
+      .dispatchEvent(
+        new DragEvent("drop", {
+          bubbles: true,
+          cancelable: true,
+          dataTransfer,
+        }),
+      );
+  });
+  expect(state.command).toHaveBeenLastCalledWith({
+    environmentId: baseProps.environmentId,
+    input: { threadId: baseProps.threadId, runId: "run:automation", beforeRunId: null },
+  });
 });
 
 it("stays inside the timeline scroller instead of growing the chat column", async () => {
@@ -398,4 +438,33 @@ it("does not re-render while assistant text streams into the thread", async () =
 
   await act(() => registry.set(state.threadState, thread("Hello there", true)));
   expect(renders).toBeGreaterThan(settled);
+});
+
+it("lets a message that is still saving be removed, on the same fill as a saved one", async () => {
+  setup();
+  state.workflow = {
+    activeRun: { id: "run:active" },
+    canPromoteToSteer: true,
+    queuedRuns: [
+      {
+        run: { id: "run:saved", userMessageId: "message:saved" },
+        text: "Saved",
+        attachments: [],
+      },
+    ],
+  };
+  const onRemovePending = vi.fn();
+  await using screen = await renderQueue({
+    optimisticMessages: [
+      { id: MessageId.make("message:saving"), inputIntent: "queued_turn", text: "Saving one" },
+    ],
+    onRemovePending,
+  });
+
+  const [saved, saving] = screen.getByRole("listitem").elements();
+  expect(getComputedStyle(saving!).backgroundColor).toBe(getComputedStyle(saved!).backgroundColor);
+  const remove = screen.getByRole("button", { name: "Remove queued message" }).nth(1);
+  await expect.element(remove).toBeEnabled();
+  await remove.click();
+  expect(onRemovePending).toHaveBeenCalledExactlyOnceWith("message:saving");
 });

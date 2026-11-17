@@ -51,8 +51,27 @@ describe("context window legend", () => {
   const row = (label: string, tokens: number, kind: "used" | "estimated" | "inferred" | "buffer") =>
     ({ label, tokens, kind }) as const;
 
-  it("has no legend without a breakdown", () => {
+  it("accepts categorized breakdowns and omits the legend without one", () => {
     expect(buildContextLegend({ breakdown: null, maxTokens: 100_000, usedTokens: 0 })).toBeNull();
+    expect(
+      buildContextLegend({
+        breakdown:
+          decodeTokenUsage({
+            usedTokens: 1_000,
+            updatedAt: "2026-11-16T00:00:00Z",
+            breakdown: [
+              { kind: "messages", tokens: 600 },
+              { kind: "t3_tools", tokens: 400 },
+            ],
+          }).breakdown ?? null,
+        maxTokens: 2_000,
+        usedTokens: 1_000,
+      }),
+    ).toEqual([
+      { label: "Messages", tokens: 600, kind: "used" },
+      { label: "T3 Code tools", tokens: 400, kind: "used" },
+      { label: "Free space", tokens: 1_000, kind: "free" },
+    ]);
   });
 
   it("folds rows past the fifth into Other and closes with buffer and free space", () => {
