@@ -28,6 +28,7 @@ export function AssistantCitationCommentEditor({
 }) {
   const [comment, setComment] = useState(citation.comment ?? "");
   const localInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const saveButtonRef = useRef<HTMLButtonElement | null>(null);
   const textareaRef = inputRef ?? localInputRef;
   const { environmentId, projectId } = use(ComposerContextActionsContext);
   const updateComment = (text: string) => {
@@ -94,6 +95,20 @@ export function AssistantCitationCommentEditor({
         onChange={(event) => updateComment(event.currentTarget.value)}
         onKeyDown={(event) => {
           if (
+            event.key === "Tab" &&
+            !event.shiftKey &&
+            !event.altKey &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.nativeEvent.isComposing &&
+            saveButtonRef.current &&
+            !saveButtonRef.current.disabled
+          ) {
+            event.preventDefault();
+            saveButtonRef.current.focus();
+            return;
+          }
+          if (
             event.key === "Enter" &&
             !event.shiftKey &&
             !event.nativeEvent.isComposing &&
@@ -137,6 +152,7 @@ export function AssistantCitationCommentEditor({
           Cancel
         </Button>
         <Button
+          ref={saveButtonRef}
           size="xs"
           disabled={speech.preparing || (commentTooLong && !speech.blocksSubmission)}
           aria-keyshortcuts="Enter"

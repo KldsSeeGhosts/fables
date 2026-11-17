@@ -37,7 +37,8 @@ describe("AddUsageLimitSourceDialog", () => {
     expect(updateSettings).toHaveBeenCalledOnce();
     expect(updateSettings).toHaveBeenCalledWith({
       usageLimitSources: {
-        "cliproxy-hub.example.ts.net-8318": expect.objectContaining({
+        "cpa-manager-hub.example.ts.net-8318": expect.objectContaining({
+          kind: "cpa-manager",
           url: "https://hub.example.ts.net:8318",
           managementKey: "secret-key",
         }),

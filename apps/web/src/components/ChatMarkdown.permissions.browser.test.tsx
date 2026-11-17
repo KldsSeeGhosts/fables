@@ -7,6 +7,7 @@ import {
   type EditorId,
   type ThreadPullRequestLink,
 } from "@t3tools/contracts";
+import { isMacPlatform } from "@t3tools/shared/keybindings";
 import { AsyncResult } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
@@ -204,7 +205,23 @@ it.each(["[Docs](https://example.com/docs)", "[Readme](docs/readme.md)"])(
     using _setup = setup();
     await using screen = await renderMarkdown(text);
     screen.anchor().focus();
-    await userEvent.keyboard("{Shift>}{F10}{/Shift}");
+    if (isMacPlatform(navigator.platform)) {
+      // Chromium on macOS never dispatches contextmenu for Shift+F10. This is the event it
+      // produces for keyboard-opened menus on platforms that do.
+      await act(async () => {
+        const event = new MouseEvent("contextmenu", {
+          bubbles: true,
+          cancelable: true,
+          clientX: 10,
+          clientY: 10,
+        });
+        // Chromium clamps the MouseEvent constructor's -1 button to 0.
+        Object.defineProperty(event, "button", { value: -1 });
+        screen.anchor().dispatchEvent(event);
+      });
+    } else {
+      await userEvent.keyboard("{Shift>}{F10}{/Shift}");
+    }
     await vi.waitFor(() => expect(state.choose.mock.lastCall?.[2]).toBe("keyboard"));
     await userEvent.click(screen.anchor(), { button: "right" });
     await vi.waitFor(() => expect(state.choose.mock.lastCall?.[2]).toBe("mouse"));

@@ -166,6 +166,7 @@ vi.mock("../state/terminalSessions", async () => {
   };
 });
 vi.mock("../state/session", () => ({
+  environmentSession: {},
   useEnvironmentScope: () => true,
   readEnvironmentScope: () => true,
 }));
@@ -186,6 +187,7 @@ vi.mock("../state/server", async () => {
   const config = Atom.make(null);
   return {
     serverEnvironment: { configValueAtom: () => config },
+    environmentServerConfigsAtom: Atom.make(new Map()),
     // The pane notch reads the theme (black chrome keeps the notch), which reads server themes.
     themeServerEnvironmentThemesAtom: Atom.make([]),
   };

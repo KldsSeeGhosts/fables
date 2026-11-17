@@ -9,6 +9,7 @@ import {
 import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
+import { isMacPlatform } from "~/lib/utils";
 import { act, render } from "../../../test/render";
 
 const { permissions } = vi.hoisted(() => ({
@@ -228,7 +229,11 @@ it("copies the pull request's link from the copy link shortcut", async () => {
   await using screen = await render(panel(false, true));
   await expect.element(screen.getByText("Original description", { exact: true })).toBeVisible();
   using writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
-  await userEvent.keyboard("{Control>}{Shift>}C{/Shift}{/Control}");
+  await userEvent.keyboard(
+    isMacPlatform(navigator.platform)
+      ? "{Meta>}{Shift>}C{/Shift}{/Meta}"
+      : "{Control>}{Shift>}C{/Shift}{/Control}",
+  );
   await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(detail.url));
 });
 

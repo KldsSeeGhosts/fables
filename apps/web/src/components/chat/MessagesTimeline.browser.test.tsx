@@ -2517,7 +2517,7 @@ describe("live reasoning groups", () => {
       .element(screen.getByRole("button", { name: "Thinking", exact: true }))
       .toHaveAttribute("aria-expanded", "true");
 
-    await click(screen.button("Thinking"));
+    await userEvent.click(screen.getByRole("button", { name: "Thinking", exact: true }));
 
     await vi.waitFor(() => {
       expect(screen.text()).not.toContain("adb shell dumpsys role");
