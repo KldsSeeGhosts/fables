@@ -199,14 +199,14 @@ it("offers the native updater without claiming an update when the latest version
     status: "unknown" as const,
     currentVersion: "1.0.0",
     latestVersion: null,
-    updateCommand: "hermes update --yes",
+    updateCommand: "opencode upgrade",
     canUpdate: true,
     checkedAt: provider.checkedAt,
     message: null,
   };
   expect(getProviderVersionAdvisoryPresentation(advisory)).toMatchObject({
     title: "Update provider",
-    updateCommand: "hermes update --yes",
+    updateCommand: "opencode upgrade",
     targetVersion: null,
   });
   expect(

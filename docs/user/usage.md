@@ -8,7 +8,7 @@ On mobile, choose **Usage** in the workspace navigation.
 
 ## Understand your usage
 
-**Usage** combines Codex, Claude Code, Grok Build, OpenCode, Antigravity, Pi, ZCode, Muse Code, and Cursor history
+**Usage** combines Codex, Claude Code, Grok Build, OpenCode, Antigravity, Pi, Muse Code, and Cursor history
 from your connected environments. It shows token use, cache savings, model breakdowns, and estimated API-equivalent
 cost, split by token type and by speed. These estimates are not your subscription bill.
 **Premium** is what Fast and Ultrafast requests cost above standard rates. Cost that cannot be
@@ -23,13 +23,6 @@ the totals for Codex or Claude Code 2.0.63 and newer, because those runs save no
 OpenCode reads its SQLite database and older JSON history. Antigravity reads local conversation
 databases, including T3-managed profiles. Set `OPENCODE_DATA_DIR` or `ANTIGRAVITY_DATA_DIR` on the
 server to read a different data directory; comma-separated paths read multiple directories.
-
-ZCode reads its local model usage database under `~/.zcode/cli`, including ACP sessions and
-recorded subagent and summary requests. Set `ZCODE_DATA_DIR` on the server or provider instance
-to read a different CLI data directory; comma-separated paths read multiple directories.
-Only requests with saved token usage are counted, including failed or cancelled requests that
-recorded usage. Running requests appear after they finish. Cost is an API-equivalent estimate,
-not the ZCode subscription charge.
 
 Cursor reads account usage from Cursor's API for the account you signed in with in T3 or set as
 `CURSOR_API_KEY`. This includes headless T3 sessions and desktop usage across machines; the same

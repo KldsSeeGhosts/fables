@@ -101,7 +101,7 @@ function layerAcpRegistryProviderAdapterRegistryReplay(
   );
 }
 
-export function makeAcpAgentOrchestratorReplayHarness(
+function makeAcpAgentOrchestratorReplayHarness(
   profile?: AcpAgentProfile,
 ): OrchestratorV2ProviderReplayHarness<AcpReplayTranscript, AcpReplayTranscriptDecodeError> {
   const driver = profile?.driverKind ?? ACP_REGISTRY_PROVIDER;
