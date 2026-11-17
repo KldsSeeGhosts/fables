@@ -49,7 +49,6 @@ import {
   antigravityThinkingConfig,
   makeAntigravityAcpRuntime,
   type AntigravityAcpRuntimeInput,
-  antigravityGatewayFamilies,
 } from "../acp/AntigravityAcpSupport.ts";
 import type * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
 import type { ServerProviderDraft } from "@t3tools/provider-core/server/snapshotProbe";
@@ -74,7 +73,6 @@ import {
 import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 import { withInstanceIdentity } from "@t3tools/provider-core/server/instanceIdentity";
 import { discoverAntigravitySkills, resolveAntigravityUserHome } from "./AntigravitySkills.ts";
-import { readAntigravityContextUsage } from "./antigravityUsageReader.ts";
 
 const DRIVER = ProviderDriverKind.make("antigravity");
 const decodeSettings = Schema.decodeSync(AntigravitySettings);
@@ -152,8 +150,6 @@ export const AntigravityDriver: ProviderDriver<
       gatewayModels: settings.gatewayModels,
     };
     const authConfigIssue = antigravityAuthConfigIssue(auth);
-    const gatewayFamilies =
-      auth.authMethod === "gateway" ? antigravityGatewayFamilies(auth.gatewayModels) : undefined;
     const processEnvironment = yield* mergeProviderInstanceEnvironment(environment);
     const userHome = resolveAntigravityUserHome(
       yield* HostProcess.Platform,
@@ -446,7 +442,6 @@ export const AntigravityDriver: ProviderDriver<
       probeUsage: usage.probe,
       clearUsage: usage.clear,
       auth: { type: auth.authMethod, label: antigravityAuthLabel(auth.authMethod) },
-      ...(gatewayFamilies ? { gateway: { families: gatewayFamilies } } : {}),
       supportsTextGeneration: isAntigravityTextGenerationAvailable(profileDirectory).pipe(
         Effect.provideService(FileSystem.FileSystem, fileSystem),
         Effect.provideService(Path.Path, path),
@@ -463,23 +458,13 @@ export const AntigravityDriver: ProviderDriver<
           }),
       ),
     );
-    // The manifest default names a Google model; a gateway's default is its first configured family.
-    const defaultModel =
-      gatewayFamilies && gatewayFamilies.length > 0
-        ? Effect.succeed<string | undefined>(gatewayFamilies[0])
-        : currentCatalog.pipe(Effect.map((catalog) => catalog?.defaultChatModel));
+    const defaultModel = currentCatalog.pipe(Effect.map((catalog) => catalog?.defaultChatModel));
     const orchestrationAdapter = yield* makeAntigravityAdapterV2({
       instanceId,
       selfInvocation,
       makeRuntime,
       withProcess: authFlow.withProcess,
       defaultModel,
-      readContextUsage: (sessionId) =>
-        !/^[a-f0-9-]{36}$/i.test(sessionId)
-          ? Effect.succeed(null)
-          : readAntigravityContextUsage(
-              path.join(profileDirectory, "antigravity-acp", "conversations", `${sessionId}.db`),
-            ),
       supportsNativeGoals: provider.snapshot.getSnapshot.pipe(
         Effect.map(
           (snapshot) => snapshot.slashCommands?.some((command) => command.name === "goal") === true,

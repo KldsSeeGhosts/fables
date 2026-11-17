@@ -9,7 +9,7 @@ import {
   type ServerProviderSlashCommand,
   type ServerProviderUsageLimits,
 } from "@t3tools/contracts";
-import { createModelCapabilities, formatModelSlugName } from "@t3tools/shared/model";
+import { createModelCapabilities } from "@t3tools/shared/model";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -36,15 +36,7 @@ import {
   type ServerProviderDraft,
 } from "@t3tools/provider-core/server/snapshotProbe";
 import { resolveUsageLimitsAfterProbe } from "@t3tools/provider-core/server/usageLimits";
-import { buildSelectOptionDescriptor } from "@t3tools/provider-core/server/snapshotProbe";
-import {
-  ANTIGRAVITY_GATEWAY_EFFORT_OPTION_ID,
-  antigravityGatewayDefaultVariant,
-  antigravityGatewayEffortRank,
-  antigravityGatewayVariant,
-  antigravityThinkingConfig,
-  currentAntigravityModel,
-} from "./acp/AntigravityAcpSupport.ts";
+import { antigravityThinkingConfig, currentAntigravityModel } from "./acp/AntigravityAcpSupport.ts";
 
 const EMPTY_MODEL_CAPABILITIES = createModelCapabilities({ optionDescriptors: [] });
 const MAX_WORKSPACE_SNAPSHOTS = 32;
@@ -77,191 +69,9 @@ function thinkingCapabilities(config: ThinkingConfig | null | undefined, observe
   return createModelCapabilities({ optionDescriptors: [observed ? descriptor : unobserved] });
 }
 
-/** Gateway families the user configured; empty keeps every model the gateway lists. */
-export interface AntigravityGatewayModels {
-  readonly families: ReadonlyArray<string>;
-}
-
-const GATEWAY_EFFORT_LABELS: Readonly<Record<string, string>> = {
-  minimal: "Minimal",
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-  xhigh: "Extra High",
-  max: "Max",
-};
-
-/**
- * The runtime fills its gateway picker from the gateway's whole model list, one ID per effort
- * level. Keep the configured families and offer each family once, with its levels as Reasoning.
- */
-function buildAntigravityGatewayModels(
-  entries: ReadonlyArray<{ readonly value: string; readonly name: string }>,
-  currentValue: string | null | undefined,
-  gateway: AntigravityGatewayModels,
-): ReadonlyArray<ServerProviderModel> {
-  const configured = new Set(gateway.families);
-  const kept = entries.filter((entry) => {
-    if (configured.size === 0) return true;
-    const family = antigravityGatewayVariant(entry)?.family;
-    return (
-      configured.has(entry.value) ||
-      configured.has(entry.name) ||
-      (family !== undefined && configured.has(family))
-    );
-  });
-  const families = new Map<string, Array<{ value: string; level: string; name: string }>>();
-  for (const entry of kept) {
-    const variant = antigravityGatewayVariant(entry);
-    if (!variant) continue;
-    const variants = families.get(variant.family) ?? [];
-    if (!variants.some((existing) => existing.level === variant.level)) {
-      variants.push({ value: entry.value, level: variant.level, name: variant.familyName });
-    }
-    families.set(variant.family, variants);
-  }
-  const emitted = new Set<string>();
-  const models = kept.flatMap((entry): ServerProviderModel[] => {
-    const variant = antigravityGatewayVariant(entry);
-    const variants = variant ? (families.get(variant.family) ?? []) : [];
-    const grouped = variants.length > 1;
-    const slug = grouped ? variant!.family : entry.value;
-    if (emitted.has(slug)) return [];
-    emitted.add(slug);
-    const values = grouped ? variants.map((item) => item.value) : [entry.value];
-    const isCurrent =
-      currentValue !== undefined && currentValue !== null && values.includes(currentValue);
-    const defaultLevel = grouped
-      ? antigravityGatewayDefaultVariant(slug, variants)?.level
-      : undefined;
-    return [
-      {
-        slug,
-        name: grouped ? variants[0]!.name : antigravityDisplayName(entry),
-        isCustom: false,
-        ...(isCurrent ? { isDefault: true, aliases: [ANTIGRAVITY_DEFAULT_MODEL] } : {}),
-        capabilities: grouped
-          ? createModelCapabilities({
-              optionDescriptors: [
-                buildSelectOptionDescriptor({
-                  id: ANTIGRAVITY_GATEWAY_EFFORT_OPTION_ID,
-                  label: "Reasoning",
-                  options: variants
-                    .toSorted(
-                      (left, right) =>
-                        antigravityGatewayEffortRank(left.level) -
-                        antigravityGatewayEffortRank(right.level),
-                    )
-                    .map((item) => ({
-                      value: item.level,
-                      label: GATEWAY_EFFORT_LABELS[item.level] ?? item.level,
-                      isDefault: item.level === defaultLevel,
-                    })),
-                }),
-              ],
-            })
-          : EMPTY_MODEL_CAPABILITIES,
-      },
-    ];
-  });
-  // A filtered-out runtime default must not stay the alias target; the first kept model takes it.
-  if (models.length > 0 && !models.some((model) => model.isDefault)) {
-    models[0] = { ...models[0]!, isDefault: true, aliases: [ANTIGRAVITY_DEFAULT_MODEL] };
-  }
-  return models;
-}
-
-/** Some accounts name a model by its ID; show those like the others, e.g. "Gemini 4 Hydrogen". */
-function antigravityDisplayName(entry: { readonly value: string; readonly name: string }) {
-  const name = entry.name.trim();
-  return name && name !== entry.value ? name : formatModelSlugName(entry.value);
-}
-
-/**
- * The legacy list names one ID per family and level, such as `gemini-4-argon-high`. Offer each
- * family from the model option once, with the runtime's thinking option listing its levels.
- */
-function buildAntigravityFamilyModels(
-  entries: ReadonlyArray<{ readonly value: string; readonly name: string }>,
-  modelConfig: EffectAcpSchema.SessionConfigOption | undefined,
-  thinking: ThinkingConfig,
-): ReadonlyArray<ServerProviderModel> {
-  const currentFamily = modelConfig?.type === "select" ? modelConfig.currentValue : undefined;
-  const levelOptions = thinking.options.flatMap((entry) =>
-    "value" in entry ? [entry] : entry.options,
-  );
-  const levelNames = new Map(levelOptions.map((entry) => [entry.value, entry.name] as const));
-  const familyOptions =
-    modelConfig?.type === "select"
-      ? modelConfig.options.flatMap((entry) => ("value" in entry ? [entry] : entry.options))
-      : [];
-  const families = new Map<string, { name: string; levels: string[] }>();
-  for (const option of familyOptions) {
-    if (option.value.trim() && !families.has(option.value)) {
-      families.set(option.value, { name: antigravityDisplayName(option), levels: [] });
-    }
-  }
-  const familyIds = [...families.keys()].toSorted((left, right) => right.length - left.length);
-  for (const entry of entries) {
-    if (!entry.value.trim()) continue;
-    const variant = antigravityGatewayVariant(entry);
-    const family =
-      variant?.family ??
-      familyIds.find(
-        (id) =>
-          entry.value.startsWith(`${id}-`) && levelNames.has(entry.value.slice(id.length + 1)),
-      ) ??
-      entry.value;
-    const level =
-      variant?.level ?? (family === entry.value ? undefined : entry.value.slice(family.length + 1));
-    const group = families.get(family) ?? {
-      name: variant?.familyName ?? antigravityDisplayName(entry),
-      levels: [],
-    };
-    if (level !== undefined && !group.levels.includes(level)) group.levels.push(level);
-    families.set(family, group);
-  }
-  return [...families].map(([family, group]): ServerProviderModel => {
-    const levels = group.levels.toSorted(
-      (left, right) => antigravityGatewayEffortRank(left) - antigravityGatewayEffortRank(right),
-    );
-    const isCurrent = family === currentFamily;
-    const defaultLevel =
-      isCurrent && levels.includes(thinking.currentValue)
-        ? thinking.currentValue
-        : antigravityGatewayDefaultVariant(
-            family,
-            levels.map((level) => ({ value: `${family}-${level}`, level })),
-          )?.level;
-    return {
-      slug: family,
-      name: group.name,
-      isCustom: false,
-      ...(isCurrent ? { isDefault: true, aliases: [ANTIGRAVITY_DEFAULT_MODEL] } : {}),
-      capabilities:
-        levels.length > 0
-          ? createModelCapabilities({
-              optionDescriptors: [
-                buildSelectOptionDescriptor({
-                  id: thinking.id,
-                  label: thinking.name,
-                  options: levels.map((level) => ({
-                    value: level,
-                    label: levelNames.get(level) ?? GATEWAY_EFFORT_LABELS[level] ?? level,
-                    isDefault: level === defaultLevel,
-                  })),
-                }),
-              ],
-            })
-          : EMPTY_MODEL_CAPABILITIES,
-    };
-  });
-}
-
 export function buildAntigravityModelsFromSession(
   setup: SessionSetupResult,
   thinkingLevels: AntigravityThinkingLevels = new Map(),
-  gateway?: AntigravityGatewayModels,
 ): ReadonlyArray<ServerProviderModel> {
   const config = setup.configOptions?.find(
     (option) => option.id === "model" || option.category === "model",
@@ -285,23 +95,13 @@ export function buildAntigravityModelsFromSession(
           })) ?? [])
         : [];
   const currentThinking = antigravityThinkingConfig(setup.configOptions);
-  if (combined && currentThinking) {
-    return buildAntigravityFamilyModels(entries, config, currentThinking);
-  }
-  if (gateway && !currentThinking) {
-    return buildAntigravityGatewayModels(
-      entries.filter((entry) => entry.value.trim()),
-      currentValue,
-      gateway,
-    );
-  }
   const seen = new Set<string>();
   // The agent can list two IDs under one name; label the later ones so the picker tells them apart.
   const names = new Set<string>();
   return entries.flatMap((entry): ServerProviderModel[] => {
     if (!entry.value.trim() || seen.has(entry.value)) return [];
     seen.add(entry.value);
-    const baseName = antigravityDisplayName(entry);
+    const baseName = entry.name.trim() ? entry.name : entry.value;
     const name = names.has(baseName) ? `${baseName} (${entry.value})` : baseName;
     names.add(baseName);
     const observed =
@@ -373,7 +173,6 @@ interface AntigravityProviderOptions {
   readonly clearUsage?: Effect.Effect<void>;
   readonly maintenanceCapabilities?: ProviderMaintenanceCapabilities;
   readonly auth?: { readonly type: string; readonly label: string };
-  readonly gateway?: AntigravityGatewayModels;
 }
 
 export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(function* (
@@ -602,11 +401,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
             label: options.auth?.label ?? "Google account",
           },
           checkedAt: updatedAt,
-          models: buildAntigravityModelsFromSession(
-            started.sessionSetupResult,
-            thinkingLevels,
-            options.gateway,
-          ),
+          models: buildAntigravityModelsFromSession(started.sessionSetupResult, thinkingLevels),
           supportsTextGeneration,
           ...(cwd
             ? {
@@ -633,11 +428,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
     observeThinkingLevels(configOptions);
     // Updates without the legacy model list would replace combined ids with families.
     if (antigravityThinkingConfig(configOptions) !== undefined) return;
-    const models = buildAntigravityModelsFromSession(
-      { configOptions },
-      thinkingLevels,
-      options.gateway,
-    );
+    const models = buildAntigravityModelsFromSession({ configOptions }, thinkingLevels);
     yield* SubscriptionRef.update(metadata, (state) => {
       if (state.draft.auth.status !== "authenticated") return state;
       return { ...state, draft: { ...state.draft, models } };
