@@ -42,48 +42,9 @@ export type ContextWindowSnapshot = NullableContextWindowUsage & {
   readonly updatedAt: string;
 };
 
-// Claude's /context estimate runs a little off the API's count. A larger excess
-// means compaction or a rewind shrank the context since the breakdown was taken.
-const BREAKDOWN_ESTIMATE_SLACK = 1.1;
-
-function breakdownStillDescribes(
-  source: OrchestrationV2ProviderTurnTokenUsage,
-  latest: OrchestrationV2ProviderTurnTokenUsage,
-): boolean {
-  if ((source.maxTokens ?? null) !== (latest.maxTokens ?? null)) return false;
-  const content = (source.breakdown ?? []).reduce(
-    (sum, row) => sum + (row.kind === "buffer" ? 0 : row.tokens),
-    0,
-  );
-  return content <= latest.usedTokens * BREAKDOWN_ESTIMATE_SLACK;
-}
-
-/**
- * Usage for the thread's active provider conversation. After a provider or
- * conversation switch, the previous one's turns must not stand in for it.
- */
-export function activeProviderTokenUsage(
-  projection: Pick<
-    ThreadStructure,
-    "thread" | "contextTransfers" | "providerThreads" | "providerTurns"
-  >,
-  inheritForkUsage = true,
-) {
-  const activeProviderThreadId = projection.thread.activeProviderThreadId;
-  const providerThread =
-    projection.providerThreads.find((thread) => thread.id === activeProviderThreadId) ?? null;
-  const usage = latestProviderTurnTokenUsage(
-    projection.providerTurns.filter((turn) => turn.providerThreadId === activeProviderThreadId),
-    inheritForkUsage ? projection : null,
-    providerThread,
-  );
-  return { providerThread, usage };
-}
-
 /**
  * Newest report by timestamp among the active provider thread's turns, since a provider switch leaves
  * the previous provider's report behind. Without an active provider thread, every turn is a candidate.
- * Snapshots order turns by provider thread.
  */
 export function latestProviderTurnTokenUsage(
   turns: ReadonlyArray<Pick<OrchestrationV2ProviderTurn, "providerThreadId" | "tokenUsage">>,
@@ -91,7 +52,6 @@ export function latestProviderTurnTokenUsage(
   providerThread?: Pick<OrchestrationV2ProviderThread, "id" | "contextUsage"> | null,
 ): OrchestrationV2ProviderTurnTokenUsage | null {
   let latest: OrchestrationV2ProviderTurnTokenUsage | null = null;
-  let latestWithBreakdown: OrchestrationV2ProviderTurnTokenUsage | null = null;
   for (const { providerThreadId, tokenUsage } of turns) {
     if (tokenUsage === undefined) continue;
     if (providerThread != null && providerThreadId !== providerThread.id) continue;
@@ -99,21 +59,6 @@ export function latestProviderTurnTokenUsage(
     if (latest === null || Date.parse(tokenUsage.updatedAt) >= Date.parse(latest.updatedAt)) {
       latest = tokenUsage;
     }
-    if (
-      tokenUsage.breakdown !== undefined &&
-      (latestWithBreakdown === null ||
-        Date.parse(tokenUsage.updatedAt) >= Date.parse(latestWithBreakdown.updatedAt))
-    ) {
-      latestWithBreakdown = tokenUsage;
-    }
-  }
-  if (
-    latest !== null &&
-    latest.breakdown === undefined &&
-    latestWithBreakdown !== null &&
-    breakdownStillDescribes(latestWithBreakdown, latest)
-  ) {
-    return { ...latest, breakdown: latestWithBreakdown.breakdown };
   }
   if (latest !== null || projection == null || providerThread?.contextUsage != null) return latest;
   const forkedFrom = projection.thread.forkedFrom;
@@ -153,7 +98,6 @@ export function deriveLatestContextWindowSnapshot(
       remainingTokens,
       usedPercentage,
       remainingPercentage,
-      breakdown: liveUsage.breakdown ?? null,
       inputTokens: liveUsage.inputTokens ?? null,
       cachedInputTokens: liveUsage.cachedInputTokens ?? null,
       outputTokens: liveUsage.outputTokens ?? null,
@@ -189,7 +133,6 @@ export function deriveLatestContextWindowSnapshot(
       remainingTokens: maxTokens === null ? null : Math.max(0, Math.round(maxTokens - usedTokens)),
       usedPercentage,
       remainingPercentage: usedPercentage === null ? null : Math.max(0, 100 - usedPercentage),
-      breakdown: providerUsage.breakdown ?? null,
       inputTokens: asFiniteNumber(providerUsage.inputTokens),
       cachedInputTokens: asFiniteNumber(providerUsage.cachedInputTokens),
       outputTokens: asFiniteNumber(providerUsage.outputTokens),
@@ -240,7 +183,6 @@ export function deriveLatestContextWindowSnapshot(
       remainingTokens,
       usedPercentage,
       remainingPercentage,
-      breakdown: null,
       inputTokens: null,
       cachedInputTokens: null,
       outputTokens: null,
@@ -363,9 +305,14 @@ export function compactBeforeSendTokens(input: {
   ) {
     return null;
   }
-  const { providerThread, usage: liveUsage } = activeProviderTokenUsage(
-    projection,
-    input.selection.instanceId === projection.thread.modelSelection.instanceId,
+  const activeProviderThreadId = projection.thread.activeProviderThreadId;
+  const providerThread = projection.providerThreads.find(
+    (thread) => thread.id === activeProviderThreadId,
+  );
+  const liveUsage = latestProviderTurnTokenUsage(
+    projection.providerTurns.filter((turn) => turn.providerThreadId === activeProviderThreadId),
+    input.selection.instanceId === projection.thread.modelSelection.instanceId ? projection : null,
+    providerThread,
   );
   const contextWindow = deriveLatestContextWindowSnapshot(
     input.visibleTurnItems,

@@ -203,7 +203,6 @@ export function NoProjectsComposer({
           activeThreadModelSelection={undefined}
           compactThreadUnavailable
           compactDisabled
-          activeContextWindow={null}
           resolvedTheme={resolvedTheme}
           settings={settings}
           keybindings={keybindings}

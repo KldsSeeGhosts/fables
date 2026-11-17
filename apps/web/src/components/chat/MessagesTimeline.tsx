@@ -74,9 +74,7 @@ import { useStableCallback } from "~/hooks/useStableCallback";
 import { resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
 import { observeVisibleAnimation } from "../../lib/visibleAnimation";
 import {
-  lazy,
   memo,
-  Suspense,
   use,
   useContext,
   useEffect,
@@ -93,14 +91,7 @@ import {
   type MaintainScrollAtEndOptions,
 } from "@legendapp/list/react";
 import { type PendingApproval, type TimelineEntry } from "../../session-logic";
-import { timelineGapRecorderEnabled } from "./timelineGapRecorderEnabled";
 import { type CodexArtifactTemplate } from "@t3tools/shared/codexArtifactTemplates";
-
-const TimelineGapRecorder = timelineGapRecorderEnabled
-  ? lazy(() =>
-      import("./TimelineGapRecorder").then((module) => ({ default: module.TimelineGapRecorder })),
-    )
-  : null;
 
 const EMPTY_PENDING_APPROVALS: ReadonlyArray<PendingApproval> = [];
 const EMPTY_RESPONDING_REQUEST_IDS: TimelineRowSharedState["respondingRequestIds"] = [];
@@ -1716,18 +1707,6 @@ const ConversationTimeline = memo(function ConversationTimeline({
   return (
     <>
       {activityAnnouncer}
-      {TimelineGapRecorder ? (
-        <Suspense fallback={null}>
-          <TimelineGapRecorder
-            listRef={listRef}
-            threadKey={listIdentityKey}
-            dataLength={rows.length}
-            latestRunId={latestRun?.runId ?? null}
-            runStatus={latestRun?.status ?? null}
-            foldCollapsing={workingHistoryCollapsing}
-          />
-        </Suspense>
-      ) : null}
       <MarkdownFindContext value={findActive}>
         <TimelineWakeUpsRailInteractionCtx value={wakeUpsRailInteraction}>
           <TimelineRowActivityCtx value={activityState}>
