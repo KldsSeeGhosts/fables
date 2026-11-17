@@ -27,39 +27,8 @@ export function isToolLifecycleItemType(value: string): value is ToolLifecycleIt
   return TOOL_LIFECYCLE_ITEM_TYPES.includes(value as ToolLifecycleItemType);
 }
 
-/**
- * One row of a context window breakdown. `used` rows are reported by the
- * provider. `estimated` rows are T3's own sizing of the thread's items, and
- * `inferred` is the remainder of the reported total those estimates do not
- * explain. `buffer` is a reserve the provider keeps for compaction.
- */
-export const ContextBreakdownKind = Schema.Literals([
-  "system_prompt",
-  "system_tools",
-  "mcp_tools",
-  "t3_tools",
-  "memory_files",
-  "skills",
-  "custom_agents",
-  "messages",
-  "other",
-]);
-export type ContextBreakdownKind = typeof ContextBreakdownKind.Type;
-export const ContextBreakdownRow = Schema.Union([
-  Schema.Struct({
-    label: TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(64)),
-    tokens: NonNegativeInt,
-    kind: Schema.Literals(["used", "estimated", "inferred", "buffer"]),
-  }),
-  Schema.Struct({ kind: ContextBreakdownKind, tokens: NonNegativeInt }),
-]);
-export type ContextBreakdownRow = typeof ContextBreakdownRow.Type;
-export const ContextBreakdown = Schema.Array(ContextBreakdownRow).check(Schema.isMaxLength(32));
-export type ContextBreakdown = typeof ContextBreakdown.Type;
-
 export const ThreadTokenUsageSnapshot = Schema.Struct({
   usedTokens: NonNegativeInt,
-  breakdown: Schema.optional(ContextBreakdown),
   totalProcessedTokens: Schema.optional(NonNegativeInt),
   maxTokens: Schema.optional(PositiveInt),
   inputTokens: Schema.optional(NonNegativeInt),

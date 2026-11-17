@@ -59,7 +59,6 @@ import {
   type SpawnOptions as ClaudeSpawnOptions,
   type SpawnedProcess as ClaudeSpawnedProcess,
   type SDKAssistantMessage,
-  type SDKControlGetContextUsageResponse,
   type SDKAPIRetryMessage,
   type SDKMessage,
   type SDKRateLimitInfo,
@@ -95,8 +94,6 @@ import {
 } from "@t3tools/shared/claudeCompaction";
 import {
   type ChatAttachment,
-  type ContextBreakdown,
-  type ContextBreakdownKind,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   ClaudeSettings,
   TrimmedNonEmptyString,
@@ -116,7 +113,6 @@ import {
   type OrchestrationV2ProviderRetry,
   type OrchestrationV2ProviderSession,
   type OrchestrationV2ProviderThread,
-  type ContextBreakdownRow,
   type OrchestrationV2ProviderTurn,
   type OrchestrationV2RuntimeRequest,
   type OrchestrationV2UserInputQuestion,
@@ -335,77 +331,8 @@ export function claudeProviderTurnTokenUsage(
     updatedAt,
   };
 }
-/**
- * Rows for the context card from the CLI's own /context categories. Free
- * space and deferred tool schemas are left out: the first follows from the
- * window and the second sits outside it.
- */
-export function claudeContextBreakdown(usage: {
-  readonly categories: ReadonlyArray<{
-    readonly name: string;
-    readonly tokens: number;
-    readonly kind: "used" | "free" | "buffer" | "deferred";
-  }>;
-}): ReadonlyArray<ContextBreakdownRow> | undefined {
-  const rows = usage.categories.flatMap((category) => {
-    const label = category.name.trim().slice(0, 64);
-    const tokens = Math.round(category.tokens);
-    return (category.kind === "used" || category.kind === "buffer") &&
-      label.length > 0 &&
-      Number.isFinite(tokens) &&
-      tokens > 0
-      ? [{ label, tokens, kind: category.kind }]
-      : [];
-  });
-  return rows.length === 0 ? undefined : rows.slice(0, 32);
-}
 
 type ClaudeMessageUsage = Parameters<typeof claudeProviderTurnTokenUsage>[0];
-
-const CLAUDE_CONTEXT_CATEGORY_KINDS: Partial<
-  Record<
-    NonNullable<SDKControlGetContextUsageResponse["categories"][number]["id"]>,
-    ContextBreakdownKind
-  >
-> = {
-  system_prompt: "system_prompt",
-  system_tools: "system_tools",
-  mcp_tools: "mcp_tools",
-  memory_files: "memory_files",
-  skills: "skills",
-  custom_agents: "custom_agents",
-  messages: "messages",
-};
-
-/** The in-window rows of Claude's `/context`; a CLI that predates category ids reports none. */
-function claudeCategorizedContextBreakdown(
-  usage: SDKControlGetContextUsageResponse,
-): ContextBreakdown | undefined {
-  if (!usage.categories.some((category) => category.id !== undefined)) return undefined;
-  const tokens = new Map<ContextBreakdownKind, number>();
-  const add = (kind: ContextBreakdownKind, count: number) =>
-    tokens.set(kind, (tokens.get(kind) ?? 0) + count);
-  for (const category of usage.categories) {
-    if (category.kind !== "used") continue;
-    const kind = category.id === undefined ? undefined : CLAUDE_CONTEXT_CATEGORY_KINDS[category.id];
-    add(kind ?? "other", Math.max(0, Math.round(category.tokens)));
-  }
-  const t3Tools = Math.min(
-    tokens.get("mcp_tools") ?? 0,
-    Math.round(
-      usage.mcpTools
-        .filter((tool) => tool.serverName === "t3-code" && tool.isLoaded !== false)
-        .reduce((sum, tool) => sum + tool.tokens, 0),
-    ),
-  );
-  if (t3Tools > 0) {
-    add("mcp_tools", -t3Tools);
-    add("t3_tools", t3Tools);
-  }
-  return Array.from(tokens, ([kind, count]) => ({ kind, tokens: count })).filter(
-    (category) => category.tokens > 0,
-  );
-}
 
 // message_delta usage is per-message cumulative; null or absent fields retain message_start values and zeros replace them.
 function mergeClaudeStreamUsage(
@@ -753,10 +680,6 @@ export interface ClaudeAgentSdkQuerySession {
   ) => Effect.Effect<boolean, ClaudeAgentSdkQueryRunnerError>;
   readonly mcpServerStatus: Effect.Effect<
     ReadonlyArray<ClaudeMcpServerStatus>,
-    ClaudeAgentSdkQueryRunnerError
-  >;
-  readonly getContextUsage: Effect.Effect<
-    SDKControlGetContextUsageResponse,
     ClaudeAgentSdkQueryRunnerError
   >;
   readonly readMcpResource: (input: {
@@ -1942,10 +1865,6 @@ export const layerQueryRunner: Layer.Layer<
             mcpServerStatus: Effect.tryPromise({
               try: () => queryRuntime.mcpServerStatus(),
               catch: (cause) => queryRunnerError(cause, "mcpServerStatus"),
-            }),
-            getContextUsage: Effect.tryPromise({
-              try: () => queryRuntime.getContextUsage({ detail: "summary" }),
-              catch: (cause) => queryRunnerError(cause, "getContextUsage"),
             }),
             readMcpResource: ({ server, uri }) =>
               Effect.tryPromise({
@@ -6380,7 +6299,6 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           context: ActiveClaudeTurnContext,
           usage: ClaudeMessageUsage | number,
           requestStarted = false,
-          breakdown?: ContextBreakdown,
         ) {
           const now = yield* DateTime.now;
           // Only message_start marks the request start; an assistant snapshot
@@ -6424,7 +6342,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               status: "running",
               startedAt: context.startedAt,
               completedAt: null,
-              tokenUsage: breakdown === undefined ? tokenUsage : { ...tokenUsage, breakdown },
+              tokenUsage,
               ...(context.executedModel === undefined ? {} : { model: context.executedModel }),
             },
           });
@@ -10996,7 +10914,6 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               budget.compacting = null;
               yield* persistAttachmentBudget(context.nativeThreadId);
             }
-            const previousUsage = context.streamUsage?.usage;
             if (context.streamUsage !== null) context.streamUsage.usage = null;
             const postTokens = message.compact_metadata.post_tokens;
             const afterTokenCount =
@@ -11004,12 +10921,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                 ? Math.round(postTokens)
                 : undefined;
             context.compactionTokens = afterTokenCount;
-            // An empty split invalidates the pre-compaction categories until the next summary.
-            const compactedUsage =
-              afterTokenCount ?? previousUsage ?? message.compact_metadata.pre_tokens;
-            if (compactedUsage != null) {
-              yield* emitContextUsage(context, compactedUsage, false, []);
-            }
+            if (afterTokenCount !== undefined) yield* emitContextUsage(context, afterTokenCount);
             yield* emitProviderEvent({
               type: "turn_item.updated",
               driver: CLAUDE_PROVIDER,
@@ -11798,22 +11710,8 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
 
           if (message.type === "result") {
             const contextUsage = context.streamUsage?.usage ?? context.compactionTokens;
-            if (contextUsage !== undefined) {
-              // "summary" answers from Claude's local state without a token-count API call.
-              const breakdown = yield* input.query.getContextUsage.pipe(
-                Effect.map(
-                  (usage) =>
-                    claudeCategorizedContextBreakdown(usage) ?? claudeContextBreakdown(usage),
-                ),
-                Effect.timeout("2 seconds"),
-                Effect.tapError((cause) =>
-                  Effect.logDebug("orchestration-v2.claude-context-usage-unavailable", { cause }),
-                ),
-                Effect.orElseSucceed(() => undefined),
-              );
-              if (breakdown !== undefined || resultsReportingNewContextWindow.has(message)) {
-                yield* emitContextUsage(context, contextUsage, false, breakdown);
-              }
+            if (resultsReportingNewContextWindow.has(message) && contextUsage !== undefined) {
+              yield* emitContextUsage(context, contextUsage);
             }
             const completedAt = yield* DateTime.now;
             const interrupted = (yield* Ref.get(interruptedTurns)).has(context.providerTurnId);

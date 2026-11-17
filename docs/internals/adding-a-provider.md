@@ -12,7 +12,7 @@ whether a turn runs. This page lists the decisions and evidence a new driver nee
   spec does not cover, and then it is a small flavor over the
   [shared ACP adapter](../../packages/provider-acp/src/server/adapter.ts), like Grok
   and Antigravity. Never add agent-id checks to the generic registry adapter. An agent that only
-  needs its own identity, native compaction, or the context meter can instead pass an
+  needs its own identity, native compaction, or context usage reporting can instead pass an
   `AcpAgentProfile` to the registry's `makeAcpAgentDriver`, keeping the registry's discovery,
   sign-in, and live configuration; ZCode, Hermes, and OMP do this.
 - **Other protocols** get a native adapter that implements
