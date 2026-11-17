@@ -6,7 +6,7 @@ import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
 import { observeResize } from "../../lib/observeResize";
-import { usePullRequestsSupported } from "../../state/environments";
+import { useIssuesSupported, usePullRequestsSupported } from "../../state/environments";
 import {
   resolveEnvironmentIdentificationPillLabel,
   useSidebarStageBackdropVariant,
@@ -26,6 +26,8 @@ import {
 } from "../ui/sidebar";
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
 import { useOpenLayoutPage } from "../../layout/pageNavigation";
+import { readIssueListPreferences } from "../issue/issueListPreferences";
+import { IssueGlyph } from "../issue/issuePresentation";
 import { isSidebarUtilityPage, useNavigateToMainApp } from "./mainAppLocation";
 import { SidebarHeaderIconButton } from "./SidebarThreadHeader";
 import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
@@ -177,6 +179,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     select: (location) => isSidebarUtilityPage(location.pathname),
   });
   const pullRequestsSupported = usePullRequestsSupported();
+  const issuesSupported = useIssuesSupported();
   const closeMobileSidebar = () => {
     if (isMobile) {
       setOpenMobile(false);
@@ -185,6 +188,10 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const handlePullRequestsClick = () => {
     closeMobileSidebar();
     void openLayoutPage("pull-requests");
+  };
+  const handleIssuesClick = () => {
+    closeMobileSidebar();
+    void navigate({ to: "/issues", search: readIssueListPreferences() });
   };
   const handleSettingsClick = () => {
     closeMobileSidebar();
@@ -227,6 +234,13 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
                   icon={<PullRequestGlyph.pullRequest className="size-4" />}
                   label="Pull Requests"
                   onClick={handlePullRequestsClick}
+                />
+              ) : null}
+              {issuesSupported ? (
+                <SidebarUtilityItem
+                  icon={<IssueGlyph.issue className="size-4" />}
+                  label="Issues"
+                  onClick={handleIssuesClick}
                 />
               ) : null}
               <SidebarUtilityItem

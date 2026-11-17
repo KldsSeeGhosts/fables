@@ -29,8 +29,8 @@ import {
   resolvePullRequestState,
 } from "./pullRequestPresentation";
 
-function GhostBar({ className }: { className?: string | undefined }) {
-  return <div aria-hidden className={cn("h-3 rounded bg-muted-foreground/15", className)} />;
+export function GhostBar({ className }: { className?: string | undefined }) {
+  return <span aria-hidden className={cn("block h-3 rounded bg-muted-foreground/15", className)} />;
 }
 
 const TITLE_WIDTHS = ["w-3/5", "w-2/5", "w-1/2", "w-2/3", "w-2/5", "w-3/5", "w-1/2"];

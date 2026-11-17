@@ -15,6 +15,7 @@ import { getSourceControlPresentationForKind } from "~/sourceControlPresentation
 import { Badge } from "../ui/badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { PullRequestChecksPopover } from "./PullRequestChecksPopover";
+import { pullRequestPanelReference } from "./usePullRequestDetail";
 import type { EnvironmentPullRequestEntry } from "./pullRequestList.logic";
 import { openOnHostLabel, showPullRequestLinkContextMenu } from "./pullRequestLinkContextMenu";
 import {
@@ -26,7 +27,7 @@ import {
 } from "./PullRequestListRow";
 import { observeResize } from "~/lib/observeResize";
 import { PullRequestGlyph } from "./pullRequestIcons";
-import { PullRequestLabelChip } from "./pullRequestPresentation";
+import { PullRequestLabelChip, PullRequestReviewDecisionGlyph } from "./pullRequestPresentation";
 
 /** The most label chips a row lays out; the rest only ever count toward its "+N". */
 const MAX_ROW_LABELS = 3;
@@ -296,6 +297,23 @@ function PullRequestRowImpl({
             </span>
           }
           title={entry.title}
+          signals={
+            <>
+              {entry.checksState === undefined ? null : (
+                <PullRequestChecksPopover
+                  checksState={entry.checksState}
+                  environmentId={entry.environmentId}
+                  reference={{
+                    ...pullRequestPanelReference({ ...entry, host: entry.host.toLowerCase() }),
+                    allowStale: false,
+                  }}
+                />
+              )}
+              {entry.reviewDecision === undefined ? null : (
+                <PullRequestReviewDecisionGlyph decision={entry.reviewDecision} />
+              )}
+            </>
+          }
           status={
             <>
               {entry.stack && !rail ? (

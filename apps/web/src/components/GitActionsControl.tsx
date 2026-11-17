@@ -119,6 +119,7 @@ import { THREAD_DETAILS_PANEL_LABEL_CLASS } from "./chat/threadDetailsPanelStyle
 import { getSourceControlPresentation } from "~/sourceControlPresentation";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { PullRequestGlyph } from "./pullRequest/pullRequestIcons";
+import { ChangeBreakdownGrid } from "./pullRequest/ChangeBreakdownGrid";
 import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
 
 interface GitActionsControlProps {
@@ -515,6 +516,7 @@ export default function GitActionsControl({
     changesPreview.data?.sources.find((source) => source.kind === "branch-range"),
   );
   const changesTotals = resolvedChangesTotals ?? { insertions: 0, deletions: 0 };
+  const changesBreakdown = resolvedChangesTotals?.breakdown ?? null;
   const changesBaseLabel = resolvedChangesTotals
     ? resolvedChangesTotals.baseRef === null
       ? "Uncommitted"
@@ -1128,12 +1130,41 @@ export default function GitActionsControl({
           <TooltipPopup side="top">{changesBaseLabel}</TooltipPopup>
         </Tooltip>
       ) : null}
-      <span className="shrink-0 text-diff-addition">
-        +{formatDiffCount(changesTotals?.insertions ?? 0)}
-      </span>
-      <span className="shrink-0 text-diff-deletion">
-        -{formatDiffCount(changesTotals?.deletions ?? 0)}
-      </span>
+      {changesBreakdown && (changesTotals?.insertions || changesTotals?.deletions) ? (
+        // Base UI fixes the popup width on open; remeasure when the breakdown changes.
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span className="flex shrink-0 items-baseline gap-1">
+                <span className="text-diff-addition">
+                  +{formatDiffCount(changesTotals?.insertions ?? 0)}
+                </span>
+                <span className="text-diff-deletion">
+                  -{formatDiffCount(changesTotals?.deletions ?? 0)}
+                </span>
+              </span>
+            }
+          />
+          <TooltipPopup key={JSON.stringify(changesBreakdown)} side="bottom">
+            <ChangeBreakdownGrid
+              breakdown={changesBreakdown}
+              total={{
+                additions: changesTotals?.insertions ?? 0,
+                deletions: changesTotals?.deletions ?? 0,
+              }}
+            />
+          </TooltipPopup>
+        </Tooltip>
+      ) : (
+        <>
+          <span className="shrink-0 text-diff-addition">
+            +{formatDiffCount(changesTotals?.insertions ?? 0)}
+          </span>
+          <span className="shrink-0 text-diff-deletion">
+            -{formatDiffCount(changesTotals?.deletions ?? 0)}
+          </span>
+        </>
+      )}
     </span>
   );
 

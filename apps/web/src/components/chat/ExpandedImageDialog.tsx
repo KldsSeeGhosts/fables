@@ -26,6 +26,7 @@ import { MediaVideoPlayer } from "../media/MediaVideoPlayer";
 import { isContextMenuOpen } from "../../contextMenuFallback";
 import {
   SnapShotAccessibilityData,
+  SnapShotCopyButton,
   SnapShotContentsButton,
   snapShotAccessibilityDetails,
 } from "./SnapShotAttachmentDetails";
@@ -408,6 +409,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
             ) : item.source ? (
               <SnapShotContentsButton source={item.source} side="bottom" />
             ) : null}
+            {item.onCopySnapshot ? <SnapShotCopyButton onCopy={item.onCopySnapshot} /> : null}
             {zoomable ? (
               <div className="flex h-7 shrink-0 items-center rounded-control surface-well px-0.5 max-sm:hidden">
                 {/* aria-disabled keeps focus in the dialog when a click reaches a zoom limit, so arrow keys still navigate. */}

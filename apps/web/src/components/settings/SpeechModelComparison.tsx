@@ -52,12 +52,12 @@ export function ModelBenchmarks({
 }: {
   model: EnvironmentSpeechModel;
   languages: readonly string[];
-  tier: SpeechBenchmarkTier;
+  tier: SpeechBenchmarkTier | undefined;
   /** Plain facts, such as language count and size, shown after the scores. */
   facts: readonly string[];
 }) {
   const data = model.benchmark;
-  const seconds = data?.secondsPer30s[tier];
+  const seconds = tier === undefined ? undefined : data?.secondsPer30s[tier];
   const visible = !data
     ? []
     : languages.length
@@ -85,21 +85,23 @@ export function ModelBenchmarks({
           </span>
         );
       })}
-      <span>
-        Speed:{" "}
-        {tier === "cpu" && data && data.secondsPer30s.cpu === undefined ? (
-          "update server"
-        ) : seconds == null ? (
-          "not benchmarked"
-        ) : (
-          <>
-            <Text variant="meta" tone="strong" emphasis>
-              {seconds} s
-            </Text>{" "}
-            / 30 s
-          </>
-        )}
-      </span>
+      {data ? (
+        <span>
+          Speed:{" "}
+          {seconds === undefined ? (
+            "update server for this benchmark"
+          ) : seconds === null ? (
+            "not benchmarked"
+          ) : (
+            <>
+              <Text variant="meta" tone="strong" emphasis>
+                {Number(seconds.toFixed(2))} s
+              </Text>{" "}
+              / 30 s
+            </>
+          )}
+        </span>
+      ) : null}
       {facts.map((fact) => (
         <span key={fact}>{fact}</span>
       ))}

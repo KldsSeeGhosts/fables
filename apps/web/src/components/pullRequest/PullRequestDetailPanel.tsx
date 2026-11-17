@@ -471,6 +471,26 @@ export function PullRequestDetailPanel({
   } else if (!tabMountState.tabs.has(tab)) {
     setTabMountState({ key: tabScopeKey, tabs: new Set(tabMountState.tabs).add(tab) });
   }
+  // A pointer on the Code tab reads the page it opens on; only intent costs the host a read.
+  // A pointer passing over a tab is not intent; it must rest like a list row does.
+  const [codeIntentKey, setCodeIntentKey] = useState<string | null>(null);
+  const codeIntentTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a pending intent timer must not fire after the panel unmounts
+  useEffect(() => () => clearTimeout(codeIntentTimer.current), []);
+  const intendCodeTab = () => {
+    clearTimeout(codeIntentTimer.current);
+    codeIntentTimer.current = setTimeout(() => {
+      void loadCodeTab();
+      setCodeIntentKey(pullRequestKey);
+    }, 150);
+  };
+  const cancelCodeTabIntent = () => clearTimeout(codeIntentTimer.current);
+  useEnvironmentQuery(
+    codeIntentKey === pullRequestKey && !mountedTabs.has("code")
+      ? pullRequestEnvironment.diff({ environmentId, input: { ...reference } })
+      : null,
+  );
+  // Each tab restores the condensed state its own scrolling left behind.
   const [condensedByTab, setCondensedByTab] = useState<
     Partial<Record<PullRequestDetailTab, boolean>>
   >({});
@@ -1872,8 +1892,16 @@ export function PullRequestDetailPanel({
                   key={item.value}
                   value={item.value}
                   className="@container/pr-tab flex-1"
-                  onPointerEnter={item.value === "code" ? () => void loadCodeTab() : undefined}
-                  onFocus={item.value === "code" ? () => void loadCodeTab() : undefined}
+                  onPointerEnter={item.value === "code" ? intendCodeTab : undefined}
+                  onPointerLeave={item.value === "code" ? cancelCodeTabIntent : undefined}
+                  onFocus={
+                    item.value === "code"
+                      ? () => {
+                          void loadCodeTab();
+                          setCodeIntentKey(pullRequestKey);
+                        }
+                      : undefined
+                  }
                 >
                   <item.icon aria-hidden className="hidden @max-[4.25em]/pr-tab:block" />
                   <span className="@max-[4.25em]/pr-tab:sr-only">{item.label}</span>

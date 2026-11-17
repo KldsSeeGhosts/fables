@@ -10,10 +10,11 @@ import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { isMacPlatform } from "~/lib/utils";
-import { act, render } from "../../../test/render";
+import { act, fakeTimers, render } from "../../../test/render";
 
-const { permissions } = vi.hoisted(() => ({
+const { permissions, reads } = vi.hoisted(() => ({
   permissions: { checkout: true, operate: true },
+  reads: { diff: [] as unknown[] },
 }));
 
 vi.mock(import("~/state/session"), async (original) => ({
@@ -53,6 +54,19 @@ vi.mock(import("~/state/usePullRequestStack"), async (original) => ({
     refresh: vi.fn(),
   })) as never,
 }));
+vi.mock(import("~/state/pullRequests"), async (original) => {
+  const actual = await original();
+  return {
+    ...actual,
+    pullRequestEnvironment: {
+      ...actual.pullRequestEnvironment,
+      diff: ((target: unknown) => {
+        reads.diff.push(target);
+        return actual.pullRequestEnvironment.diff(target as never);
+      }) as never,
+    },
+  };
+});
 vi.mock(import("~/state/use-atom-command"), async (original) => ({
   ...(await original()),
   useAtomCommand: (() => vi.fn()) as never,
@@ -193,6 +207,7 @@ const panel = (attach = false, shortcutsEnabled = false) => (
 function setup() {
   permissions.checkout = true;
   permissions.operate = true;
+  reads.diff = [];
   useComposerDraftStore.setState({ draftsByThreadKey: {} });
   useRightPanelStore.setState({ byThreadKey: {} });
 }
@@ -302,4 +317,22 @@ it("switches the timeline between newest and oldest activity first", async () =>
       .compareDocumentPosition(screen.getByText("Earlier commit", { exact: true }).element()) &
       Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
+});
+
+it("reads the first diff page once the pointer rests on the Code tab", async () => {
+  setup();
+  await using screen = await render(panel());
+  using _timers = fakeTimers({ now: 0 });
+  const code = screen.getByRole("button", { name: "Code", exact: true });
+  await expect.element(code).toBeVisible();
+
+  await userEvent.hover(code);
+  await act(() => vi.advanceTimersByTime(149));
+  expect(reads.diff).toEqual([]);
+  await act(() => vi.advanceTimersByTime(1));
+  // The page the Code tab reads first, keyed as the tab keys it, so a click paints from it.
+  expect(reads.diff).toContainEqual({
+    environmentId,
+    input: { projectId: detail.projectId, repository: detail.repository, number: detail.number },
+  });
 });
