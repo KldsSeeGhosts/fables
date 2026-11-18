@@ -328,13 +328,13 @@ export const applyAntigravityAcpModelSelection = Effect.fn("applyAntigravityAcpM
     const gatewaySelections = antigravityGatewayModelSelections(input.gatewayModels ?? "");
     if (gatewaySelections.length > 0) {
       const modelConfig = antigravityModelConfig(configOptions);
-      const entries =
-        input.legacyModels && (!modelConfig || antigravityThinkingConfig(configOptions))
-          ? input.legacyModels.availableModels.map(({ modelId, name }) => ({
-              value: modelId,
-              name,
-            }))
-          : options;
+      const entries = [
+        ...options,
+        ...(input.legacyModels?.availableModels.map(({ modelId, name }) => ({
+          value: modelId,
+          name,
+        })) ?? []),
+      ];
       const rows = antigravityGatewayModelRows(gatewaySelections, entries);
       const rowFor = (id: string | null | undefined) =>
         rows.find((row) => row.slug === id || row.routes.some(({ value }) => value === id));
@@ -354,7 +354,14 @@ export const applyAntigravityAcpModelSelection = Effect.fn("applyAntigravityAcpM
           return yield* Effect.fail(unavailable(`${row.slug} (${effort})`));
         }
         resolved = route;
-        if (!modelConfig && input.runtime.setSessionModel) {
+        if (modelConfig) {
+          // Gateway IDs can be absent from ACP's family list or the current model's levels.
+          yield* input.runtime
+            .setConfigOption(modelConfig.id, resolved, { allowUnlistedValue: true })
+            .pipe(Effect.mapError(input.mapError));
+          return resolved;
+        }
+        if (input.runtime.setSessionModel) {
           if (resolved !== current) {
             yield* input.runtime.setSessionModel(resolved).pipe(Effect.mapError(input.mapError));
           }

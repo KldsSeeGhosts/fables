@@ -238,6 +238,10 @@ describe("Antigravity model catalog", () => {
       levels.map((level) => `${base}-${level}`);
     const models = buildAntigravityModelsFromSession(
       {
+        models: {
+          currentModelId: "gemini-4-hydrogen-high",
+          availableModels: [{ modelId: "gemini-4-hydrogen-high", name: "Gemini 4 Hydrogen" }],
+        },
         configOptions: [
           {
             ...modelConfig,
@@ -254,6 +258,14 @@ describe("Antigravity model catalog", () => {
               { value: "claude-opus-5-5", name: "Claude Opus 5.5" },
               { value: "gpt-6.2-sol", name: "GPT 6.2 Sol" },
             ],
+          },
+          {
+            id: "thought_level",
+            name: "Thinking Level",
+            category: "thought_level",
+            type: "select",
+            currentValue: "high",
+            options: [{ value: "high", name: "High" }],
           },
         ],
       },

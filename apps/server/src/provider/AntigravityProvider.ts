@@ -39,7 +39,11 @@ import {
   type ServerProviderDraft,
 } from "@t3tools/provider-core/server/snapshotProbe";
 import { resolveUsageLimitsAfterProbe } from "@t3tools/provider-core/server/usageLimits";
-import { antigravityThinkingConfig, currentAntigravityModel } from "./acp/AntigravityAcpSupport.ts";
+import {
+  antigravityModelOptions,
+  antigravityThinkingConfig,
+  currentAntigravityModel,
+} from "./acp/AntigravityAcpSupport.ts";
 import {
   ANTIGRAVITY_GATEWAY_EFFORT_OPTION_ID,
   antigravityGatewayModelRows,
@@ -105,7 +109,10 @@ export function buildAntigravityModelsFromSession(
         : [];
   const gatewaySelections = antigravityGatewayModelSelections(gatewayModels ?? "");
   if (gatewaySelections.length > 0) {
-    const rows = antigravityGatewayModelRows(gatewaySelections, entries);
+    const rows = antigravityGatewayModelRows(gatewaySelections, [
+      ...entries,
+      ...antigravityModelOptions(configOptions),
+    ]);
     const preferred = rows.find((row) => row.routes.some(({ value }) => value === currentValue));
     const defaultSlug = (preferred ?? rows[0])?.slug;
     return rows.map(({ slug, name, efforts }) => ({

@@ -175,9 +175,9 @@ describe("applyAntigravityAcpModelSelection", () => {
         message: expect.stringContaining("low"),
       });
       expect(selections).toEqual([
-        "claude-opus-5-5-high",
-        "gemini-4-argon-medium",
-        "gemini-4-argon-medium",
+        "model=claude-opus-5-5-high (unlisted)",
+        "model=gemini-4-argon-medium (unlisted)",
+        "model=gemini-4-argon-medium (unlisted)",
       ]);
     }),
   );
@@ -219,47 +219,71 @@ describe("applyAntigravityAcpModelSelection", () => {
           reasoningEffort,
           mapError: (cause) => cause,
         });
-      expect(yield* choose("gemini-4-carbon", "low")).toBe("gemini-4-carbon");
-      expect(yield* choose("gemini-4-hydrogen", "medium")).toBe("gemini-4-hydrogen");
+      expect(yield* choose("gemini-4-carbon", "low")).toBe("gemini-4-carbon-low");
+      expect(yield* choose("gemini-4-hydrogen", "medium")).toBe("gemini-4-hydrogen-medium");
       expect(yield* choose("gemini-4-hydrogen", "xhigh")).toBe("gemini-4-hydrogen-xhigh");
-      // Unlisted tiers report their family; the selections below are what the agent receives.
-      // The bare Opus family is the direct Claude route, so it is never sent.
-      expect(yield* choose("claude-opus-5-5")).toBe("claude-opus-5-5");
-      expect(yield* choose("claude-opus-5-5", "high")).toBe("claude-opus-5-5");
+      expect(yield* choose("claude-opus-5-5")).toBe("claude-opus-5-5-medium");
+      expect(yield* choose("claude-opus-5-5", "high")).toBe("claude-opus-5-5-high");
       expect(selections).toEqual([
         "model=gemini-4-carbon-low (unlisted)",
         "model=gemini-4-hydrogen-medium (unlisted)",
-        "gemini-4-hydrogen-xhigh",
+        "model=gemini-4-hydrogen-xhigh (unlisted)",
         "model=claude-opus-5-5-medium (unlisted)",
         "model=claude-opus-5-5-high (unlisted)",
       ]);
     }),
   );
 
-  it.effect("uses the advertised gateway route when ACP splits model and thinking controls", () =>
-    Effect.gen(function* () {
-      const { runtime, selections, levels } = makeModelRuntime([
-        { ...familyConfig, options: [{ value: "gemini-4-argon", name: "Gemini 4 Argon" }] },
-        thinkingConfig,
-      ]);
-      const model = yield* applyAntigravityAcpModelSelection({
-        runtime,
-        model: "gemini-4-argon",
-        gatewayModels: "gemini-4-argon(low), gemini-4-argon(medium)",
-        legacyModels: {
-          currentModelId: "gemini-4-argon-medium",
-          availableModels: [
-            { modelId: "gemini-4-argon-low", name: "Gemini 4 Argon" },
-            { modelId: "gemini-4-argon-medium", name: "Gemini 4 Argon" },
+  it.effect(
+    "sends the exact gateway route without validating another model's thinking controls",
+    () =>
+      Effect.gen(function* () {
+        const { runtime, selections, levels } = makeModelRuntime(
+          [
+            {
+              ...familyConfig,
+              options: [
+                ...familyConfig.options,
+                { value: "claude-opus-5-5", name: "Claude Opus 5.5" },
+              ],
+            },
+            { ...thinkingConfig, options: [{ value: "high", name: "High" }] },
           ],
-        },
-        reasoningEffort: "low",
-        mapError: (cause) => cause,
-      });
-      expect(model).toBe("gemini-4-argon-low");
-      expect(selections).toEqual(["gemini-4-argon"]);
-      expect(levels).toEqual(["low"]);
-    }),
+          EffectAcpErrors.AcpRequestError.invalidParams("The family is not a selectable route."),
+        );
+        const model = yield* applyAntigravityAcpModelSelection({
+          runtime,
+          model: "gemini-4-carbon",
+          gatewayModels: "gemini-4-carbon(low), gemini-4-carbon(medium), claude-opus-5-5(high)",
+          legacyModels: {
+            currentModelId: "gemini-3.8-flash-high",
+            availableModels: [
+              { modelId: "gemini-4-carbon-low", name: "Gemini 4 Carbon" },
+              { modelId: "gemini-4-carbon-medium", name: "Gemini 4 Carbon" },
+            ],
+          },
+          reasoningEffort: "low",
+          mapError: (cause) => cause,
+        });
+        expect(model).toBe("gemini-4-carbon-low");
+        expect(
+          yield* applyAntigravityAcpModelSelection({
+            runtime,
+            model: "claude-opus-5-5-high",
+            gatewayModels: "claude-opus-5-5-high",
+            legacyModels: {
+              currentModelId: "gemini-3.8-flash-high",
+              availableModels: [{ modelId: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash" }],
+            },
+            mapError: (cause) => cause,
+          }),
+        ).toBe("claude-opus-5-5-high");
+        expect(selections).toEqual([
+          "model=gemini-4-carbon-low (unlisted)",
+          "model=claude-opus-5-5-high (unlisted)",
+        ]);
+        expect(levels).toEqual([]);
+      }),
   );
 
   it.effect("restores the saved model instead of the cold-resume default", () =>
