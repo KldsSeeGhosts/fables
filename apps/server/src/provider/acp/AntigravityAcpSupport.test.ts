@@ -234,6 +234,37 @@ describe("applyAntigravityAcpModelSelection", () => {
     }),
   );
 
+  it.effect("uses the advertised family when the agent rejects its combined medium ID", () =>
+    Effect.gen(function* () {
+      const model = "gemini-4-hydrogen";
+      const { runtime, selections } = makeModelRuntime([
+        { ...modelConfig, options: [{ value: model, name: "Gemini 4 Hydrogen" }] },
+      ]);
+      const choose = (reasoningEffort?: string) =>
+        applyAntigravityAcpModelSelection({
+          runtime: {
+            ...runtime,
+            setConfigOption: (id, value, options) =>
+              value === model
+                ? runtime.setConfigOption(id, value, options)
+                : Effect.fail(
+                    EffectAcpErrors.AcpRequestError.invalidParams(`Unknown model ID: ${value}`),
+                  ),
+          },
+          model,
+          gatewayModels: `${model}-medium,${model}-high`,
+          reasoningEffort,
+          mapError: (cause) => cause,
+        });
+      expect(yield* choose()).toBe(model);
+      expect(yield* choose("medium")).toBe(model);
+      expect(yield* choose("high").pipe(Effect.flip)).toMatchObject({
+        message: `Unknown model ID: ${model}-high`,
+      });
+      expect(selections).toEqual([`model=${model} (unlisted)`, `model=${model} (unlisted)`]);
+    }),
+  );
+
   it.effect(
     "sends the exact gateway route without validating another model's thinking controls",
     () =>

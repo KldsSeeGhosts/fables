@@ -356,10 +356,27 @@ export const applyAntigravityAcpModelSelection = Effect.fn("applyAntigravityAcpM
         resolved = route;
         if (modelConfig) {
           // Gateway IDs can be absent from ACP's family list or the current model's levels.
-          yield* input.runtime
-            .setConfigOption(modelConfig.id, resolved, { allowUnlistedValue: true })
-            .pipe(Effect.mapError(input.mapError));
-          return resolved;
+          const select = (value: string) =>
+            input.runtime.setConfigOption(modelConfig.id, value, { allowUnlistedValue: true });
+          return yield* select(route).pipe(
+            Effect.as(route),
+            Effect.catchTags({
+              AcpRequestError: (cause) => {
+                // Some gateway families advertise their default tier without the "-medium" suffix.
+                if (
+                  cause.code !== -32602 ||
+                  cause.errorMessage !== `Unknown model ID: ${route}` ||
+                  route !== `${row.slug}-medium` ||
+                  options.some(({ value }) => value === route) ||
+                  !options.some(({ value }) => value === row.slug)
+                ) {
+                  return Effect.fail(cause);
+                }
+                return select(row.slug).pipe(Effect.as(row.slug));
+              },
+            }),
+            Effect.mapError(input.mapError),
+          );
         }
         if (input.runtime.setSessionModel) {
           if (resolved !== current) {
