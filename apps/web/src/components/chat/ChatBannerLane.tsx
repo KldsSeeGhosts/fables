@@ -7,6 +7,7 @@ import type {
   UsageLimitSourceSnapshots,
 } from "@t3tools/contracts";
 import { type Dispatch, type SetStateAction, useState } from "react";
+import { useMessages } from "gt-react";
 import { getDefaultServerModel } from "../../providerModels";
 import {
   dismissProviderStatusBannerForSession,
@@ -68,6 +69,7 @@ export function useChatBannerLane(input: {
     setThreadError,
     setThreadErrorBannerDismissTick,
   } = input;
+  const resolve = useMessages();
   const [lowLimitDismissals, setLowLimitDismissals] = useState(readLowLimitDismissals);
   const lowLimitSignal = resolveLowLimitSignal(
     activeProviderStatus,
@@ -110,22 +112,28 @@ export function useChatBannerLane(input: {
   if (errorItem) items.push(errorItem);
   if (lowLimitVisible && lowLimitSignal !== null) {
     items.push(
-      lowLimitBannerItem({
-        signal: lowLimitSignal,
-        switchTarget: lowLimitSwitchTarget,
-        onSwitch: (target) =>
-          onProviderModelSelect(target.instanceId, getDefaultServerModel([target], target.driver)),
-        limits:
-          limitsAvailable && activeProviderStatus !== null
-            ? {
-                environmentId,
-                instanceId: activeProviderStatus.instanceId,
-                providers: providerStatuses,
-                sources: usageLimitSources,
-              }
-            : null,
-        onDismissed: setLowLimitDismissals,
-      }),
+      lowLimitBannerItem(
+        {
+          signal: lowLimitSignal,
+          switchTarget: lowLimitSwitchTarget,
+          onSwitch: (target) =>
+            onProviderModelSelect(
+              target.instanceId,
+              getDefaultServerModel([target], target.driver),
+            ),
+          limits:
+            limitsAvailable && activeProviderStatus !== null
+              ? {
+                  environmentId,
+                  instanceId: activeProviderStatus.instanceId,
+                  providers: providerStatuses,
+                  sources: usageLimitSources,
+                }
+              : null,
+          onDismissed: setLowLimitDismissals,
+        },
+        resolve,
+      ),
     );
   }
   return items;

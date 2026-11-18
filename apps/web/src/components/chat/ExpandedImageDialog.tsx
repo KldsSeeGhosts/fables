@@ -1,4 +1,6 @@
 import { memo, useRef, useState, type ReactNode, type KeyboardEvent } from "react";
+import { flushSync } from "react-dom";
+import { useGT } from "gt-react";
 import { cn } from "~/lib/utils";
 import {
   ArrowLeftIcon,
@@ -13,7 +15,6 @@ import {
   Text as TextGlyphIcon,
 } from "lucide-react";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
-import { flushSync } from "react-dom";
 import { Button } from "../ui/button";
 
 import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
@@ -161,6 +162,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
   preview,
   onClose,
 }: ExpandedImageDialogProps) {
+  const gt = useGT();
   const [imageOffset, setImageOffset] = useState(0);
   const [failedImageSrc, setFailedImageSrc] = useState<string | null>(null);
   const [accessibilityDetailsSrc, setAccessibilityDetailsSrc] = useState<string | null>(null);
@@ -190,7 +192,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
   const item = preview.images[index];
   const source: MediaActionSource = item?.actionsSource ?? {
     kind: item?.type === "video" ? "video" : "image",
-    name: item?.name ?? "Media",
+    name: item?.name ?? gt("Media"),
     src: item?.src ?? null,
   };
   const openFile = source.onOpenFile;
@@ -234,7 +236,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
   };
 
   if (!item) return null;
-  const mediaLabel = item.type === "video" ? "video" : "image";
+  const mediaLabel = item.type === "video" ? gt("video") : gt("image");
   const openOriginalLink =
     item.originalUrl && resolveExternalWebLinkHost(item.originalUrl) !== null ? (
       <OpenMediaLink originalUrl={item.originalUrl} />
@@ -243,10 +245,10 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
   const showingAccessibilityDetails =
     Boolean(accessibilityDetails) && accessibilityDetailsSrc === item.src;
   const contentsLabel = showingAccessibilityDetails
-    ? "Show screenshot"
+    ? gt("Show screenshot")
     : accessibilityDetails?.format === "json"
-      ? "Show accessibility JSON"
-      : "Show extracted text";
+      ? gt("Show accessibility JSON")
+      : gt("Show extracted text");
   const imageFailed = item.src === null || failedImageSrc === item.src;
   const zoomable = item.type !== "video" && !showingAccessibilityDetails && !imageFailed;
   const unavailable = actionsSource.src === null && actionsSource.asset === undefined;
@@ -261,18 +263,18 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
       ? item.originalUrl
       : browserUrl(item.src);
   const openExternally = actionsSource.onOpenFile
-    ? { label: "Open in file viewer", run: actionsSource.onOpenFile }
+    ? { label: gt("Open in file viewer"), run: actionsSource.onOpenFile }
     : externalUrl
       ? {
-          label: item.originalUrl ? "Open original" : "Open in browser",
+          label: item.originalUrl ? gt("Open original") : gt("Open in browser"),
           run: () => {
             void readLocalApi()
               ?.shell.openExternal(externalUrl)
               .catch((error: unknown) => {
                 toastManager.add({
                   type: "error",
-                  title: "Could not open link",
-                  description: error instanceof Error ? error.message : "An error occurred.",
+                  title: gt("Could not open link"),
+                  description: error instanceof Error ? error.message : gt("An error occurred."),
                 });
               });
           },
@@ -325,11 +327,13 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
           if (event.target === event.currentTarget) close();
         }}
       >
-        <DialogTitle className="sr-only">Expanded {mediaLabel} preview</DialogTitle>
+        <DialogTitle className="sr-only">
+          {gt("Expanded {kind} preview", { kind: mediaLabel })}
+        </DialogTitle>
         <div className="relative isolate z-10 flex w-fit min-w-[min(var(--media-width),36rem)] max-w-[var(--media-width)] flex-col items-center gap-2.5">
           <div
             role="toolbar"
-            aria-label={`${item.name} actions`}
+            aria-label={gt("{name} actions", { name: item.name })}
             className="flex h-10 w-0 min-w-full items-center gap-2 rounded-card surface-popover px-1.5"
           >
             {/* Back sits first, away from where the window's own close button is. */}
@@ -342,13 +346,13 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
                     size="icon-sm"
                     variant="secondary"
                     onClick={close}
-                    aria-label={`Back, close ${mediaLabel} preview`}
+                    aria-label={gt("Back, close {kind} preview", { kind: mediaLabel })}
                   />
                 }
               >
                 <ArrowLeftIcon aria-hidden="true" />
               </TooltipTrigger>
-              <TooltipPopup side="bottom">Back</TooltipPopup>
+              <TooltipPopup side="bottom">{gt("Back")}</TooltipPopup>
             </Tooltip>
             <ImageIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
             <span
@@ -417,7 +421,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
                   type="button"
                   size="xs"
                   variant="ghost-muted"
-                  aria-label="Zoom out"
+                  aria-label={gt("Zoom out")}
                   aria-disabled={!view?.canZoomOut}
                   onClick={() => zoomableImageRef.current?.zoomOut()}
                 >
@@ -427,7 +431,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
                   type="button"
                   size="xs"
                   variant="ghost-muted"
-                  aria-label={`Zoom ${zoomPercent}, reset to fit`}
+                  aria-label={gt("Zoom {percent}, reset to fit", { percent: zoomPercent })}
                   aria-disabled={!view?.canZoomOut}
                   onClick={() => zoomableImageRef.current?.resetZoom()}
                 >
@@ -437,7 +441,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
                   type="button"
                   size="xs"
                   variant="ghost-muted"
-                  aria-label="Zoom in"
+                  aria-label={gt("Zoom in")}
                   aria-disabled={!view?.canZoomIn}
                   onClick={() => zoomableImageRef.current?.zoomIn()}
                 >
@@ -447,7 +451,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
             ) : null}
             {item.type !== "video" ? (
               <MediaBarButton
-                label="Copy image"
+                label={gt("Copy image")}
                 disabled={!canCopyImage}
                 onClick={() => void runByteAction("copy-image")}
               >
@@ -455,7 +459,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
               </MediaBarButton>
             ) : null}
             <MediaBarButton
-              label={`Save ${mediaLabel}`}
+              label={gt("Save {kind}", { kind: mediaLabel })}
               disabled={unavailable}
               onClick={() => void runByteAction("save")}
             >
@@ -482,8 +486,8 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
                 <ExpandedMediaFailure>
                   <p>
                     {openOriginalLink
-                      ? "This image could not be loaded."
-                      : "Image unavailable. The file may have been moved or deleted."}
+                      ? gt("This image could not be loaded.")
+                      : gt("Image unavailable. The file may have been moved or deleted.")}
                   </p>
                   {openOriginalLink}
                 </ExpandedMediaFailure>
@@ -506,7 +510,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
           {imageCount > 1 ? (
             <div
               role="listbox"
-              aria-label="Media in this message"
+              aria-label={gt("Media in this message")}
               aria-orientation="horizontal"
               className="flex w-0 min-w-full justify-center-safe gap-2 overflow-x-auto p-0.5"
             >

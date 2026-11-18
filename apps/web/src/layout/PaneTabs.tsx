@@ -8,6 +8,7 @@ import type {
 } from "@t3tools/contracts";
 import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-actions";
 import { projectScriptCwd } from "@t3tools/shared/projectScripts";
+import { msg } from "gt-react";
 import { createPortal } from "react-dom";
 import { create } from "zustand";
 import { useAtomValue } from "@effect/atom-react";
@@ -725,9 +726,11 @@ export function runLayoutTabMenuAction(action: LayoutTabMenuId, tabId: string): 
     case "layout:copy-link": {
       const link = threadLinkFor(location.tab);
       if (!link) return;
-      void writeTextToClipboard(link, "thread link").catch(() =>
-        toastManager.add({ type: "error", title: "Could not copy the link" }),
-      );
+      void writeTextToClipboard(link, {
+        target: "thread link",
+        unavailableMessage: msg("Clipboard API is unavailable while copying thread link."),
+        failureMessage: msg("Failed to copy thread link to the clipboard."),
+      }).catch(() => toastManager.add({ type: "error", title: "Could not copy the link" }));
       return;
     }
     case "layout:close-tab":

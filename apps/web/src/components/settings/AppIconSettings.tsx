@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { SettingResetButton, SettingsRow } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 
 function AppIconPickerDialog(props: {
   readonly open: boolean;
@@ -61,6 +61,7 @@ function AppIconPickerDialog(props: {
 }
 
 export function AppIconRow() {
+  const searchableSetting = useSearchableSetting();
   const [open, setOpen] = useState(false);
   const appIcon = useClientSettings((settings) => settings.appIcon);
   const current = appIconOption(appIcon);
@@ -71,7 +72,7 @@ export function AppIconRow() {
       resetAction={
         current.id !== DEFAULT_APP_ICON ? (
           <SettingResetButton
-            label="app icon"
+            ariaLabel="Reset app icon to default"
             onClick={() => void updateClientSettings({ appIcon: DEFAULT_APP_ICON })}
           />
         ) : null

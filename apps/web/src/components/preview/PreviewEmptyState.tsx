@@ -1,4 +1,5 @@
 import type { EnvironmentId } from "@t3tools/contracts";
+import { useGT } from "gt-react";
 import { parseUrl } from "@t3tools/shared/url";
 import { Globe, Link } from "lucide-react";
 
@@ -36,6 +37,7 @@ export function PreviewEmptyState({
     environmentId,
     configuredUrls,
   });
+  const gt = useGT();
   const recents = recentEntries.filter((entry) => parseUrl(entry.url) !== null).slice(0, 8);
 
   return (
@@ -45,21 +47,21 @@ export function PreviewEmptyState({
           <span className="flex size-10 shrink-0 items-center justify-center rounded-full surface-raised">
             <Globe aria-hidden className="size-4.5 text-muted-foreground" />
           </span>
-          <h2 className="text-label text-foreground">No preview yet</h2>
+          <h2 className="text-label text-foreground">{gt("No preview yet")}</h2>
           <p className="max-w-[300px] text-balance text-body text-muted-foreground">
-            Start a dev server or open a URL. Agents can open pages here too.
+            {gt("Start a dev server or open a URL. Agents can open pages here too.")}
           </p>
           {onFocusUrl ? (
             <div className="pt-1.5">
               <Button type="button" variant="secondary" size="xs" onClick={onFocusUrl}>
                 <Link />
-                Open URL
+                {gt("Open URL")}
               </Button>
             </div>
           ) : null}
         </div>
         {servers.length > 0 ? (
-          <LabeledSection label="Local servers">
+          <LabeledSection label={gt("Local servers")}>
             {servers.map((server) => (
               <PreviewLocalServerCard
                 key={`${server.host}:${server.port}`}
@@ -70,7 +72,7 @@ export function PreviewEmptyState({
           </LabeledSection>
         ) : null}
         {recents.length > 0 ? (
-          <LabeledSection label="Recently used">
+          <LabeledSection label={gt("Recently used")}>
             <div className="flex flex-col">
               {recents.map((entry) => (
                 <PreviewRecentUrlCard

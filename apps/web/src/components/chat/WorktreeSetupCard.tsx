@@ -1,6 +1,7 @@
 import { toServerClock } from "@t3tools/client-runtime/clock";
 import type { EnvironmentId, WorktreeSetupSnapshot, WorktreeSetupStage } from "@t3tools/contracts";
 import { formatDuration } from "@t3tools/shared/orchestrationTiming";
+import { useGT } from "gt-react";
 import {
   BrainIcon,
   FolderGit2Icon,
@@ -75,24 +76,48 @@ const stopped = (stage: WorktreeSetupStage, snapshot: WorktreeSetupSnapshot) =>
   stage.startedAt !== null &&
   stage.endedAt === snapshot.endedAt;
 
-function stageLabel(stage: WorktreeSetupStage, snapshot: WorktreeSetupSnapshot): string {
+function stageLabel(
+  stage: WorktreeSetupStage,
+  snapshot: WorktreeSetupSnapshot,
+  gt: ReturnType<typeof useGT>,
+): string {
   if (stopped(stage, snapshot)) {
-    const running = stageLabel({ ...stage, status: "running" }, snapshot);
-    return `Stopped ${running.charAt(0).toLowerCase()}${running.slice(1)}`;
+    const running = stageLabel({ ...stage, status: "running" }, snapshot, gt);
+    return gt("Stopped {step}", {
+      step: `${running.charAt(0).toLowerCase()}${running.slice(1)}`,
+    });
   }
   const tense = stage.status === "running" ? 0 : stage.status === "failed" ? 2 : 1;
-  const script = snapshot.setupScript?.name ?? "setup script";
+  const script = snapshot.setupScript?.name ?? gt("setup script");
   switch (stage.id) {
     case "fetch":
-      return `${["Fetching", "Fetched", "Couldn't fetch"][tense]} ${snapshot.baseRef ?? "base branch"}`;
+      return tense === 0
+        ? gt("Fetching {reference}", { reference: snapshot.baseRef ?? gt("base branch") })
+        : tense === 2
+          ? gt("Couldn't fetch {reference}", {
+              reference: snapshot.baseRef ?? gt("base branch"),
+            })
+          : gt("Fetched {reference}", { reference: snapshot.baseRef ?? gt("base branch") });
     case "checkout":
-      return `${["Checking out", "Checked out", "Couldn't check out"][tense]} ${snapshot.branch ?? "files"}`;
+      return tense === 0
+        ? gt("Checking out {branch}", { branch: snapshot.branch ?? gt("files") })
+        : tense === 2
+          ? gt("Couldn't check out {branch}", { branch: snapshot.branch ?? gt("files") })
+          : gt("Checked out {branch}", { branch: snapshot.branch ?? gt("files") });
     case "submodules":
-      return `${["Initializing", "Initialized", "Couldn't initialize"][tense]} submodules`;
+      return tense === 0
+        ? gt("Initializing submodules")
+        : tense === 2
+          ? gt("Couldn't initialize submodules")
+          : gt("Initialized submodules");
     case "setup-script":
-      return `${["Running", "Ran", "Failed"][tense]} ${script}`;
+      return tense === 0
+        ? gt("Running {script}", { script })
+        : tense === 2
+          ? gt("Failed {script}", { script })
+          : gt("Ran {script}", { script });
     case "agent":
-      return "Starting agent";
+      return gt("Starting agent");
   }
 }
 
@@ -176,6 +201,7 @@ function SettledRow({
   "data-worktree-setup-stage"?: string;
   "data-worktree-setup-status"?: string;
 }) {
+  const gt = useGT();
   const [expanded, setExpanded] = useState(false);
   const details =
     children ?? (body ? <pre className={WORK_LOG_OUTPUT_CLASS_NAME}>{body}</pre> : null);
@@ -184,7 +210,7 @@ function SettledRow({
     ? {
         role: "button" as const,
         tabIndex: 0 as const,
-        "aria-label": failed ? `${label}, setup step failed` : label,
+        "aria-label": failed ? gt("{label}, setup step failed", { label }) : label,
         "aria-expanded": expanded,
         onClick: toggle,
         onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
@@ -247,8 +273,9 @@ function StageRow({
   snapshot: WorktreeSetupSnapshot;
   onOpenTerminal: (() => void) | null;
 }) {
+  const gt = useGT();
   const icon = STAGE_ICONS[stage.id];
-  const label = stageLabel(stage, snapshot);
+  const label = stageLabel(stage, snapshot, gt);
   const terminal =
     stage.id === "setup-script" && onOpenTerminal ? (
       <InlineButton
@@ -259,7 +286,7 @@ function StageRow({
         }}
         onKeyDown={(event) => event.stopPropagation()}
       >
-        Open terminal
+        {gt("Open terminal")}
       </InlineButton>
     ) : null;
   if (stage.status === "running" && snapshot.phase === "running") {
@@ -328,12 +355,13 @@ export function WorktreeSetupRows({
   startingLabel?: string | null;
   onOpenTerminal: (() => void) | null;
 }) {
+  const gt = useGT();
   const stages = snapshot.stages.filter((stage) => shownStage(stage, snapshot));
   const clean = snapshot.phase === "done" && !stages.some((stage) => stage.status === "failed");
   const agent = snapshot.stages.find((stage) => stage.id === "agent");
   const starting =
     snapshot.phase === "running" || snapshot.phase === "done"
-      ? (startingLabel ?? (agent?.status === "running" ? "Starting agent" : null))
+      ? (startingLabel ?? (agent?.status === "running" ? gt("Starting agent") : null))
       : null;
   const stageRows = stages.map((stage) => (
     <StageRow
@@ -346,7 +374,7 @@ export function WorktreeSetupRows({
   ));
   return (
     <section
-      aria-label="Worktree setup"
+      aria-label={gt("Worktree setup")}
       data-worktree-setup-phase={snapshot.phase}
       className="flex min-w-0 flex-col gap-1"
     >
@@ -354,7 +382,11 @@ export function WorktreeSetupRows({
         <SettledRow
           data-worktree-setup-stage="summary"
           icon={FolderGit2Icon}
-          label={snapshot.branch ? `Set up worktree ${snapshot.branch}` : "Set up worktree"}
+          label={
+            snapshot.branch
+              ? gt("Set up worktree {branch}", { branch: snapshot.branch })
+              : gt("Set up worktree")
+          }
           trailing={
             <Elapsed
               startedAt={snapshot.startedAt}

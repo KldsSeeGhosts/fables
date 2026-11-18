@@ -1,9 +1,13 @@
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import type { DesktopSshPasswordPromptRequest } from "@t3tools/contracts";
 import { KeyRoundIcon, TimerIcon } from "lucide-react";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Cause from "effect/Cause";
+import { msg, T, useGT, Var } from "gt-react";
 import { useId, useRef, useState, useSyncExternalStore } from "react";
+
+import { m } from "../../i18n/messages";
 
 import { useDeadlinePassed } from "../../hooks/useDeadline";
 import { useNowSecond } from "../../hooks/useNowSecond";
@@ -36,9 +40,9 @@ function formatRemainingSeconds(seconds: number): string {
 }
 
 function getPromptErrorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : "SSH verification prompt failed.";
+  const message = thrownErrorMessage(error, m) ?? m(msg("SSH verification prompt failed."));
   return message.includes("expired") || message.includes("no longer pending")
-    ? "This SSH verification prompt expired. Try connecting again."
+    ? m(msg("This SSH verification prompt expired. Try connecting again."))
     : message;
 }
 
@@ -98,6 +102,7 @@ function ActiveSshPasswordPrompt({
 }: {
   readonly request: DesktopSshPasswordPromptRequest;
 }) {
+  const gt = useGT();
   const [password, setPassword] = useState("");
   const [isResponding, setIsResponding] = useState(false);
   const [responseError, setResponseError] = useState<string | null>(null);
@@ -116,7 +121,6 @@ function ActiveSshPasswordPrompt({
   const remainingSeconds = remainingMs === null ? null : Math.ceil(remainingMs / 1_000);
   const remainingLabel =
     remainingSeconds === null ? null : formatRemainingSeconds(remainingSeconds);
-
   const respond = async (nextPassword: string | null) => {
     if (isRespondingRef.current) {
       return;
@@ -124,7 +128,7 @@ function ActiveSshPasswordPrompt({
 
     const requestId = request.requestId;
     if (nextPassword !== null && isExpired) {
-      setResponseError("This SSH verification prompt expired. Try connecting again.");
+      setResponseError(gt("This SSH verification prompt expired. Try connecting again."));
       return;
     }
 
@@ -156,6 +160,7 @@ function ActiveSshPasswordPrompt({
   };
 
   const target = describeSshTarget(request);
+  const promptKind = describeSshPrompt(request.prompt);
 
   return (
     <Dialog
@@ -169,14 +174,20 @@ function ActiveSshPasswordPrompt({
       <DialogPopup className="max-w-100" initialFocus={inputRef} showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>
-            {describeSshPrompt(request.prompt) === "Password"
-              ? "SSH Password Required"
-              : "SSH verification required"}
+            {promptKind === "Password"
+              ? gt("SSH Password Required")
+              : gt("SSH verification required")}
           </DialogTitle>
           <DialogDescription>
-            <code>{target}</code> asked for{" "}
-            {describeSshPrompt(request.prompt) === "Password" ? "a password" : "verification"} to
-            connect.
+            {promptKind === "Password" ? (
+              <T>
+                <Var>{target}</Var> asked for a password to connect.
+              </T>
+            ) : (
+              <T>
+                <Var>{target}</Var> asked for verification to connect.
+              </T>
+            )}
           </DialogDescription>
         </DialogHeader>
         <DialogPanel scrollFade={false}>
@@ -189,7 +200,11 @@ function ActiveSshPasswordPrompt({
             }}
           >
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor={`${formId}-password`}>{describeSshPrompt(request.prompt)}</Label>
+              <Label htmlFor={`${formId}-password`}>
+                {promptKind === "Password"
+                  ? gt("Password", { $context: "noun, SSH credential" })
+                  : promptKind}
+              </Label>
               <InputGroup>
                 <InputGroupAddon>
                   <KeyRoundIcon />
@@ -207,7 +222,7 @@ function ActiveSshPasswordPrompt({
               </InputGroup>
             </div>
             <p className="text-caption text-dim-foreground">
-              Your response stays in memory for this host and is never written to disk.
+              <T>Your response stays in memory for this host and is never written to disk.</T>
             </p>
             {remainingLabel ? (
               <p
@@ -218,7 +233,13 @@ function ActiveSshPasswordPrompt({
                 }
               >
                 <TimerIcon aria-hidden className="size-3 shrink-0" />
-                {isExpired ? "Expired. Try connecting again." : `Expires in ${remainingLabel}`}
+                {isExpired ? (
+                  <T>Expired. Try connecting again.</T>
+                ) : (
+                  <T>
+                    Expires in <Var>{remainingLabel}</Var>
+                  </T>
+                )}
               </p>
             ) : null}
             {responseError && !isExpired ? (
@@ -234,10 +255,10 @@ function ActiveSshPasswordPrompt({
             variant="secondary"
             onClick={cancelPrompt}
           >
-            {isExpired ? "Dismiss" : "Cancel"}
+            {isExpired ? gt("Dismiss") : gt("Cancel")}
           </Button>
           <Button size="standard" disabled={isResponding || isExpired} form={formId} type="submit">
-            Connect
+            {gt("Connect")}
             <SubmitKbd />
           </Button>
         </DialogFooter>

@@ -21,7 +21,8 @@ import {
   projectScriptRuntimeEnv,
   resolveProjectScripts,
 } from "@t3tools/shared/projectScripts";
-import { nextTerminalId, resolveTerminalSessionLabel } from "@t3tools/shared/terminalLabels";
+import { nextTerminalId } from "@t3tools/shared/terminalLabels";
+import { resolveTerminalSessionLabel } from "@t3tools/shared/terminalLabelsCopy";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 import { FolderX, Unlink2Icon } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";

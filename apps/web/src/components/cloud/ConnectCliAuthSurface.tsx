@@ -4,6 +4,7 @@ import {
   connectLoopbackCancelUrl,
   readConnectAuthorizeRequest,
 } from "@t3tools/shared/connectAuth";
+import { useGT } from "gt-react";
 import { SquareTerminalIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -46,6 +47,7 @@ function ConnectCliRequestRow({
  */
 export function ConnectCliAuthorizeSurface() {
   const [request] = useState(() => readConnectAuthorizeRequest(new URL(window.location.href)));
+  const gt = useGT();
   const clerk = useClerk();
   const { isLoaded, isSignedIn } = useAuth();
   const loadFailed = useClerkLoadFailed();
@@ -87,8 +89,10 @@ export function ConnectCliAuthorizeSurface() {
           <SquareTerminalIcon />
         </StandalonePageIcon>
         <StandaloneCardHeader
-          title="This connect link is incomplete"
-          description="The link is missing its authorization request. Re-run `t3 connect` in your terminal and open the freshly printed URL."
+          title={gt("This connect link is incomplete")}
+          description={gt(
+            "The link is missing its authorization request. Re-run `t3 connect` in your terminal and open the freshly printed URL.",
+          )}
         />
       </StandalonePage>
     );
@@ -100,22 +104,24 @@ export function ConnectCliAuthorizeSurface() {
         <SquareTerminalIcon />
       </StandalonePageIcon>
       <StandaloneCardHeader
-        title="Connecting your terminal"
+        title={gt("Connecting your terminal")}
         description={
           redirecting
-            ? "Redirecting to authorize T3 Connect for your CLI…"
+            ? gt("Redirecting to authorize T3 Connect for your CLI…")
             : isSignedIn
-              ? "Authorize T3 Connect for your CLI. Check that the code matches your terminal."
-              : "Sign in to continue authorizing T3 Connect for your CLI."
+              ? gt("Authorize T3 Connect for your CLI. Check that the code matches your terminal.")
+              : gt("Sign in to continue authorizing T3 Connect for your CLI.")
         }
       />
 
       <dl className="flex flex-col gap-1.5 rounded-lg surface-well px-3 py-2.5 text-meta">
-        <ConnectCliRequestRow label="Authorization request">t3 connect login</ConnectCliRequestRow>
+        <ConnectCliRequestRow label={gt("Authorization request")}>
+          t3 connect login
+        </ConnectCliRequestRow>
         {request.device ? (
-          <ConnectCliRequestRow label="Device">{request.device}</ConnectCliRequestRow>
+          <ConnectCliRequestRow label={gt("Device")}>{request.device}</ConnectCliRequestRow>
         ) : null}
-        <ConnectCliRequestRow label="Code">
+        <ConnectCliRequestRow label={gt("Code")}>
           {connectAuthorizeRequestCode(request.state)}
         </ConnectCliRequestRow>
       </dl>
@@ -128,22 +134,22 @@ export function ConnectCliAuthorizeSurface() {
         }}
       >
         <Button disabled={redirecting} onClick={cancel} size="sm" type="button" variant="secondary">
-          Cancel
+          {gt("Cancel")}
         </Button>
         {loadFailed ? (
           <Button size="sm" type="button" onClick={retryClerkLoad}>
-            Retry sign-in
+            {gt("Retry sign-in")}
           </Button>
         ) : (
           <Button autoFocus disabled={!isLoaded || redirecting} size="sm" type="submit">
             {redirecting ? <Spinner /> : null}
-            {isSignedIn ? "Authorize" : "Sign in and authorize"}
+            {isSignedIn ? gt("Authorize") : gt("Sign in and authorize")}
             {redirecting ? null : <Kbd>⏎</Kbd>}
           </Button>
         )}
       </form>
 
-      <StandaloneCardNote>The terminal continues once you approve.</StandaloneCardNote>
+      <StandaloneCardNote>{gt("The terminal continues once you approve.")}</StandaloneCardNote>
     </StandalonePage>
   );
 }

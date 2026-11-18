@@ -324,7 +324,7 @@ function PlacementRow<Value extends string>({
       description={description}
       resetAction={
         value !== defaultValue ? (
-          <SettingResetButton label={title} onClick={() => onChange(defaultValue)} />
+          <SettingResetButton ariaLabel={title} onClick={() => onChange(defaultValue)} />
         ) : null
       }
       control={

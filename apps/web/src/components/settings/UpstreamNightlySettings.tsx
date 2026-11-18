@@ -4,6 +4,7 @@ import {
   upstreamMergePrompt,
   upstreamReviewUrl,
 } from "@t3tools/shared/forkUpstream";
+import { msg } from "gt-react";
 import { CircleArrowUpIcon } from "lucide-react";
 
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
@@ -24,7 +25,11 @@ export function UpstreamNightlySettings() {
   const status =
     latest === null ? null : compareForkUpstream(includedUpstreamVersion, latest.version);
   const { copyToClipboard, isCopied } = useCopyToClipboard({
-    target: "upstream merge prompt",
+    target: {
+      target: "upstream merge prompt",
+      unavailableMessage: msg("Clipboard API is unavailable while copying upstream merge prompt."),
+      failureMessage: msg("Failed to copy upstream merge prompt to the clipboard."),
+    },
     onError: (error) =>
       toastManager.add(
         stackedThreadToast({

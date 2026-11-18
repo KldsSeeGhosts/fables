@@ -25,6 +25,7 @@ import {
   TerminalIcon,
   type LucideIcon,
 } from "lucide-react";
+import { msg, useGT, useMessages } from "gt-react";
 import {
   Children,
   memo,
@@ -205,6 +206,8 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
   onHighlightedItemChange: (itemId: string | null) => void;
   onSelect: (item: ComposerCommandItem) => void;
 }) {
+  const gt = useGT();
+  const m = useMessages();
   const listRef = useRef<HTMLDivElement>(null);
   const groups = groupComposerCommandItems(props.items, props.triggerKind);
   // `#` lists threads right away, but pull requests come from the git host and can take
@@ -244,7 +247,9 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
         {props.items.length > 0 ? (
           <CommandList
             id={props.listId}
-            aria-label={props.triggerKind ? LISTBOX_LABEL_BY_TRIGGER[props.triggerKind] : undefined}
+            aria-label={
+              props.triggerKind ? m(LISTBOX_LABEL_BY_TRIGGER[props.triggerKind]) : undefined
+            }
             className="max-h-112 min-h-0"
           >
             {pullRequestsPending ? (
@@ -283,7 +288,7 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
           <div className="p-2">
             {props.triggerKind ? (
               <div className="px-2 py-1.5 text-meta text-dim-foreground">
-                {LISTBOX_LABEL_BY_TRIGGER[props.triggerKind]}
+                {m(LISTBOX_LABEL_BY_TRIGGER[props.triggerKind])}
               </div>
             ) : null}
             <div
@@ -299,16 +304,16 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
               <span className="min-w-0 truncate">
                 {props.isLoading
                   ? props.triggerKind === "skill" || props.triggerKind === "slash-command"
-                    ? "Searching workspace skills..."
+                    ? gt("Searching workspace skills...")
                     : props.triggerKind === "pull-request"
-                      ? "Finding pull request..."
-                      : "Searching workspace files..."
+                      ? gt("Finding pull request...")
+                      : gt("Searching workspace files...")
                   : (props.emptyStateText ??
                     (props.triggerKind === "skill"
-                      ? "No skills found. Try / to browse provider commands."
+                      ? gt("No skills found. Try / to browse provider commands.")
                       : props.triggerKind === "path"
-                        ? "No matching files or folders."
-                        : "No matching command."))}
+                        ? gt("No matching files or folders.")
+                        : gt("No matching command.")))}
               </span>
             </div>
           </div>
@@ -443,10 +448,11 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
   onHighlight: (itemId: string | null) => void;
   onSelect: (item: ComposerCommandItem) => void;
 }) {
+  const m = useMessages();
   const isSlashSkill =
     props.triggerKind === "slash-command" && props.item.type === "skill" ? props.item.skill : null;
   const pullRequestPresentation =
-    props.item.type === "pull-request" ? resolvePullRequestState(props.item.pullRequest) : null;
+    props.item.type === "pull-request" ? resolvePullRequestState(props.item.pullRequest, m) : null;
   const descriptionRef = useRef<HTMLSpanElement>(null);
   const [descriptionTruncated, setDescriptionTruncated] = useState(false);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- measures the rendered description so only cut-off text gets a tooltip
@@ -555,8 +561,8 @@ export function composerSuggestionOptionId(listId: string, itemId: string): stri
 }
 
 const LISTBOX_LABEL_BY_TRIGGER: Record<ComposerTriggerKind, string> = {
-  path: "Files and folders",
-  "pull-request": "Pull requests and threads",
-  "slash-command": "Commands",
-  skill: "Skills",
+  path: msg("Files and folders"),
+  "pull-request": msg("Pull requests and threads"),
+  "slash-command": msg("Commands"),
+  skill: msg("Skills"),
 };

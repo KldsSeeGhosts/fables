@@ -8,8 +8,10 @@ import type { ProviderOptionDescriptor } from "@t3tools/contracts";
 import type { EffortDisplay } from "@t3tools/contracts/settings";
 import { getProviderOptionCurrentLabel } from "@t3tools/shared/model";
 import { CheckIcon, ChevronRightIcon, GaugeIcon, WorkflowIcon } from "lucide-react";
+import { msg, T, useGT, useMessages } from "gt-react";
 import { type KeyboardEvent, type ReactNode, use, useRef, useState } from "react";
 
+import { m, type MessageResolver } from "~/i18n/messages";
 import { cn } from "~/lib/utils";
 import {
   Menu,
@@ -82,9 +84,10 @@ export function describeComposerEffort(
   traits: TraitsSelectionInput | null,
   effortDisplay: EffortDisplay,
   size: ComposerControlSize,
+  resolve: MessageResolver = m,
 ): { suffix: ReactNode; detail: string | null } {
   if (!traits) return { suffix: null, detail: null };
-  const visibility = getTraitsSectionVisibility(traits);
+  const visibility = getTraitsSectionVisibility({ ...traits, resolve });
   if (!visibility.hasAnyControls) return { suffix: null, detail: null };
   const modelSelection =
     traits.instanceId && traits.model
@@ -101,13 +104,16 @@ export function describeComposerEffort(
       descriptor.id === "ultracode",
   );
   if (descriptors.length === 0) return { suffix: null, detail: null };
-  const display = buildTraitsTriggerDisplay({
-    descriptors,
-    primarySelectDescriptorId: reasoning?.type === "select" ? reasoning.id : null,
-    ultrathinkPromptControlled: visibility.ultrathinkPromptControlled,
-    modelSelection,
-    reportedModelSelection: traits.reportedModelSelection,
-  });
+  const display = buildTraitsTriggerDisplay(
+    {
+      descriptors,
+      primarySelectDescriptorId: reasoning?.type === "select" ? reasoning.id : null,
+      ultrathinkPromptControlled: visibility.ultrathinkPromptControlled,
+      modelSelection,
+      reportedModelSelection: traits.reportedModelSelection,
+    },
+    resolve,
+  );
   const ultrathink =
     visibility.ultrathinkPromptControlled && reasoning === visibility.primarySelectDescriptor;
   const glyph =
@@ -125,7 +131,9 @@ export function describeComposerEffort(
     : !reasoning
       ? null
       : reasoning.type === "boolean"
-        ? `${reasoning.label} ${reasoning.currentValue === true ? "On" : "Off"}`
+        ? reasoning.currentValue === true
+          ? resolve(msg("{option} On", { option: reasoning.label }))
+          : resolve(msg("{option} Off", { option: reasoning.label }))
         : ultrathink
           ? "Ultrathink"
           : (getProviderOptionCurrentLabel(
@@ -237,6 +245,7 @@ function ColumnRow(props: {
   disabled?: boolean;
   onPick: () => void;
 }) {
+  const gt = useGT();
   const rowProps = {
     type: "button",
     role: "radio",
@@ -255,11 +264,17 @@ function ColumnRow(props: {
       <span className="min-w-0 flex-1 truncate">{props.label}</span>
       {props.selected ? (
         <>
-          {props.isDefault ? <span className="sr-only">Default</span> : null}
+          {props.isDefault ? (
+            <span className="sr-only">
+              {gt("Default", { $context: "marks the default option" })}
+            </span>
+          ) : null}
           <CheckIcon aria-hidden="true" className="size-3.5" />
         </>
       ) : props.isDefault ? (
-        <span className="text-muted-foreground/70 text-meta">Default</span>
+        <span className="text-muted-foreground/70 text-meta">
+          {gt("Default", { $context: "marks the default option" })}
+        </span>
       ) : null}
     </>
   );
@@ -356,6 +371,8 @@ function EffortLevels(props: { traits: TraitsSelectionInput; optionsOnly?: boole
 type TraitsSelection = ReturnType<typeof useTraitsSelection>;
 
 function EffortRows(props: { control: ColumnControl; traits: TraitsSelection; locked: boolean }) {
+  const gt = useGT();
+  const messages = useMessages();
   const { control, traits } = props;
   const { descriptor } = control;
   if (control.kind === "boolean") {
@@ -364,7 +381,11 @@ function EffortRows(props: { control: ColumnControl; traits: TraitsSelection; lo
         {([true, false] as const).map((value) => (
           <ColumnRow
             key={String(value)}
-            label={value ? "On" : "Off"}
+            label={
+              value
+                ? gt("On", { $context: "option state" })
+                : gt("Off", { $context: "option state" })
+            }
             selected={(control.descriptor.currentValue === true) === value}
             tabStop={(control.descriptor.currentValue === true) === value}
             onPick={() => traits.changeBoolean(descriptor.id, value)}
@@ -382,7 +403,7 @@ function EffortRows(props: { control: ColumnControl; traits: TraitsSelection; lo
     <div role="radiogroup" aria-label={descriptor.label} className="flex flex-col gap-0.5">
       {locked ? (
         <div className="px-2 pb-1.5 text-muted-foreground/80 text-meta">
-          {ULTRATHINK_IN_BODY_NOTE}
+          {messages(ULTRATHINK_IN_BODY_NOTE)}
         </div>
       ) : null}
       {choices.map((option, index) => (
@@ -423,6 +444,7 @@ function OptionMenuRow(props: {
   /** Holds the column's tab stop when the model has no levels. */
   tabStop: boolean;
 }) {
+  const gt = useGT();
   const { descriptor, traits } = props;
   const [open, setOpen] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -508,7 +530,9 @@ function OptionMenuRow(props: {
                   ) : null}
                 </span>
                 {choice.isDefault ? (
-                  <span className="text-muted-foreground/70 text-meta">Default</span>
+                  <span className="text-muted-foreground/70 text-meta">
+                    {gt("Default", { $context: "marks the default option" })}
+                  </span>
                 ) : null}
                 <MenuRadioItemIndicator />
               </span>
@@ -526,11 +550,17 @@ function OptionSwitchRow(props: {
   traits: TraitsSelection;
   tabStop: boolean;
 }) {
+  const gt = useGT();
   const { descriptor, traits } = props;
   const checked = descriptor.currentValue === true;
   return (
     <label className={cn(OPTION_ROW, "has-focus-visible:bg-foreground/[0.09]")}>
-      <OptionRowText label={descriptor.label} value={checked ? "On" : "Off"} />
+      <OptionRowText
+        label={descriptor.label}
+        value={
+          checked ? gt("On", { $context: "option state" }) : gt("Off", { $context: "option state" })
+        }
+      />
       <Switch
         size="sm"
         checked={checked}
@@ -546,7 +576,7 @@ function OptionSwitchRow(props: {
 function NoEffortRow() {
   return (
     <div className="flex h-8 items-center px-2 text-muted-foreground text-label">
-      No effort levels
+      <T>No effort levels</T>
     </div>
   );
 }
@@ -556,8 +586,12 @@ export function ComposerEffortColumn(props: {
   traits: TraitsSelectionInput | null;
   optionsOnly?: boolean;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const picker = use(DockedPickerContext);
-  const visibility = props.traits ? getTraitsSectionVisibility(props.traits) : null;
+  const visibility = props.traits
+    ? getTraitsSectionVisibility({ ...props.traits, resolve: messages })
+    : null;
   const controls =
     props.traits && visibility
       ? columnControls(visibility.selectDescriptors, visibility.booleanDescriptors)
@@ -569,9 +603,11 @@ export function ComposerEffortColumn(props: {
         <div className="flex h-8.25 -translate-y-px items-center gap-2 border-b border-border/70 pb-1.5 text-label">
           <span className="text-muted-foreground">
             {props.optionsOnly
-              ? "Options"
+              ? gt("Options", { $context: "heading for model options" })
               : (controls?.effort?.descriptor.label ??
-                (controls?.others.length ? "Options" : "Effort"))}
+                (controls?.others.length
+                  ? gt("Options", { $context: "heading for model options" })
+                  : gt("Effort", { $context: "heading for reasoning effort levels" })))}
           </span>
           <span className="ms-auto min-w-0 truncate text-muted-foreground text-meta">
             {picker.modelLabel}

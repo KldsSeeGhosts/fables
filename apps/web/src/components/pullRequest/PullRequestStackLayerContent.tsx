@@ -1,5 +1,6 @@
 import type { ChangeRequestTerminology } from "@t3tools/client-runtime/source-control-clients";
 import type { PullRequestStack } from "@t3tools/contracts";
+import { T, useMessages, Var } from "gt-react";
 import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
 import { resolvePullRequestState } from "./pullRequestPresentation";
@@ -12,7 +13,6 @@ export function PullRequestStackLayerContent({
   terminology,
   compact = false,
   position,
-
   current = false,
 }: {
   layer: PullRequestStack["layers"][number];
@@ -24,10 +24,14 @@ export function PullRequestStackLayerContent({
   base?: string;
   current?: boolean;
 }) {
-  const state = resolvePullRequestState({
-    state: layer.state,
-    isDraft: layer.isDraft ?? false,
-  });
+  const messages = useMessages();
+  const state = resolvePullRequestState(
+    {
+      state: layer.state,
+      isDraft: layer.isDraft ?? false,
+    },
+    messages,
+  );
   if (compact) {
     return (
       <>
@@ -44,13 +48,23 @@ export function PullRequestStackLayerContent({
   }
 
   const badge = current ? (
-    <Badge variant="success">This {terminology.shortLabel}</Badge>
+    <Badge variant="success">
+      <T>
+        This <Var>{terminology.shortLabel}</Var>
+      </T>
+    </Badge>
   ) : layer.state === "merged" ? (
-    <Badge variant="merged">Merged</Badge>
+    <Badge variant="merged">
+      <T>Merged</T>
+    </Badge>
   ) : layer.state === "closed" ? (
-    <Badge variant="secondary">Closed</Badge>
+    <Badge variant="secondary">
+      <T>Closed</T>
+    </Badge>
   ) : layer.isDraft ? (
-    <Badge variant="secondary">Draft</Badge>
+    <Badge variant="secondary">
+      <T>Draft</T>
+    </Badge>
   ) : null;
   return (
     <>

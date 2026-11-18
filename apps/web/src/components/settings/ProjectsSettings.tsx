@@ -1,4 +1,5 @@
 import { EnvironmentId } from "@t3tools/contracts";
+import { T } from "gt-react";
 import {
   FolderOpenIcon,
   FolderPlusIcon,
@@ -47,7 +48,7 @@ export function ProjectsSettings() {
               onClick={() => selectScope(selectEnvironmentAxis(value, ALL_ENVIRONMENTS_VALUE))}
             >
               <LayersIcon />
-              Show all environments
+              <T>Show all environments</T>
             </Button>
           ) : null}
         </div>

@@ -1,8 +1,5 @@
-import {
-  collectCpaAccountGroups,
-  formatResetsIn,
-  remainingPercent,
-} from "@t3tools/shared/usageLimits";
+import { collectCpaAccountGroups, remainingPercent } from "@t3tools/shared/usageLimits";
+import { formatResetsIn } from "@t3tools/shared/usageLimitsCopy";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 

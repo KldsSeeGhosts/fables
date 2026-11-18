@@ -619,6 +619,20 @@ export default defineConfig({
           ],
         },
       },
+      // Registered always so a disable comment for intentional English counts as used.
+      // `vp run i18n:untranslated` counts what it flags.
+      {
+        files: ["apps/web/src/**", "apps/mobile/src/**", "packages/client-runtime/src/**"],
+        excludeFiles: [
+          "**/*.{test,spec,bench}.{ts,tsx}",
+          "**/{test,testkit,testing,fixtures}/**",
+          "**/*.test-fixtures.ts",
+          "**/{test-fixtures,*TestFixtures}.ts",
+          "apps/mobile/src/features/development/**",
+          "packages/client-runtime/src/rpc/**",
+        ],
+        rules: { "t3code/no-untranslated-copy": "warn" },
+      },
       {
         // React Compiler owns memoization; upstream rules do not ban redundant useMemo/useCallback.
         files: ["apps/web/src/**/*.{ts,tsx}"],
@@ -879,7 +893,6 @@ export default defineConfig({
         "apps/web/src/components/pullRequest/PullRequestsPage.tsx": 2,
         "apps/web/src/components/pullRequest/PullRequestListGroups.tsx": 2,
         "apps/web/src/browser/BrowserDeviceToolbar.tsx": 3,
-        "apps/web/src/components/BranchToolbarEnvModeSelector.tsx": 1,
         "apps/web/src/components/chat/ComposerCommandMenu.tsx": 2,
         "apps/web/src/components/chat/ComposerControl.tsx": 3,
         "apps/web/src/components/chat/ExpandedImageDialog.tsx": 3,
@@ -933,7 +946,6 @@ export default defineConfig({
         "apps/web/src/components/WorkspaceBreadcrumb.tsx": 2,
         "apps/web/src/contextMenuFallback.ts": 1,
         "apps/web/src/browser/HostedBrowserWebview.tsx": 1,
-        "apps/web/src/components/BranchToolbarEnvironmentSelector.tsx": 1,
         "apps/web/src/components/chat/ChatGptSharingControl.tsx": 1,
         "apps/web/src/components/chat/ComposerPrimaryActions.tsx": 1,
         "apps/web/src/components/chat/ProviderModelPicker.tsx": 1,

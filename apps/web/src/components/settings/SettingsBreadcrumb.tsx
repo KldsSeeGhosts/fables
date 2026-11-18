@@ -24,7 +24,7 @@ export function SettingsBreadcrumb({ pathname }: { pathname: string }) {
 
   return (
     <nav
-      aria-label="Settings breadcrumb"
+      aria-label={m(msg("Settings breadcrumb"))}
       data-settings-breadcrumb
       className="flex min-w-0 items-center text-label"
     >

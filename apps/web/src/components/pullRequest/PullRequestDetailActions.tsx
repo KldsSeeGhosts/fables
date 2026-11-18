@@ -5,6 +5,7 @@ import {
   type PullRequestUpdateMethod,
 } from "@t3tools/contracts";
 import { CheckIcon, FolderGit2Icon, GitBranchIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
+import { useGT } from "gt-react";
 import type { ReactNode } from "react";
 import { cn } from "~/lib/utils";
 import {
@@ -80,6 +81,7 @@ export function PullRequestResolveConflictsButton({
   unavailable: boolean;
   onResolve: () => void;
 }) {
+  const gt = useGT();
   return (
     <Button
       size="xs"
@@ -88,7 +90,7 @@ export function PullRequestResolveConflictsButton({
       onClick={onResolve}
     >
       <PullRequestGlyph.conflicting aria-hidden className="size-3.5" />
-      {handoff === "conflicts" ? "Preparing..." : "Resolve conflicts"}
+      {handoff === "conflicts" ? gt("Preparing...") : gt("Resolve conflicts")}
     </Button>
   );
 }
@@ -106,6 +108,7 @@ export function PullRequestCheckoutMenuItems({
   canCheckoutHere: boolean;
   onCheckout: (mode: "worktree" | "local") => void;
 }) {
+  const gt = useGT();
   return (
     <>
       <MenuItem
@@ -115,10 +118,12 @@ export function PullRequestCheckoutMenuItems({
         <GitBranchIcon className="mt-1 size-3.5 shrink-0 self-start sm:mt-0.5" />
         <span className="flex min-w-0 flex-col">
           <span>
-            {handoff === "checkout:worktree" ? "Checking out..." : "Check out in a worktree"}
+            {handoff === "checkout:worktree"
+              ? gt("Checking out...")
+              : gt("Check out in a worktree")}
           </span>
           <span className="text-meta text-muted-foreground">
-            Its own folder and thread. Nothing you have open moves.
+            {gt("Its own folder and thread. Nothing you have open moves.")}
           </span>
         </span>
       </MenuItem>
@@ -129,10 +134,12 @@ export function PullRequestCheckoutMenuItems({
         <FolderGit2Icon className="mt-1 size-3.5 shrink-0 self-start sm:mt-0.5" />
         <span className="flex min-w-0 flex-col">
           <span>
-            {handoff === "checkout:local" ? "Checking out..." : "Check out in this repository"}
+            {handoff === "checkout:local"
+              ? gt("Checking out...")
+              : gt("Check out in this repository")}
           </span>
           <span className="text-meta text-muted-foreground">
-            Switches the branch you are working in.
+            {gt("Switches the branch you are working in.")}
           </span>
         </span>
       </MenuItem>
@@ -168,6 +175,7 @@ export function PullRequestPrimaryAction({
   pendingAutoMergeLabel: string;
   armedAutoMergeLabel: string;
 }) {
+  const gt = useGT();
   const actionPending = pendingAction !== null;
   // The merge, full width at the foot of the readiness card. One stable slot from waiting through
   // completion: conflicts take it while they need a person, and a finished pull request shows its
@@ -182,7 +190,7 @@ export function PullRequestPrimaryAction({
         onClick={onResolve}
       >
         <PullRequestGlyph.conflicting aria-hidden className="size-3.5" />
-        {handoff === "conflicts" ? "Preparing..." : "Resolve conflicts"}
+        {handoff === "conflicts" ? gt("Preparing...") : gt("Resolve conflicts")}
       </Button>
     ) : primaryAction === "ready" ? (
       <Button
@@ -192,7 +200,7 @@ export function PullRequestPrimaryAction({
         onClick={() => void perform("ready")}
       >
         <PullRequestGlyph.pullRequest aria-hidden className="size-3.5" />
-        Ready for review
+        {gt("Ready for review")}
       </Button>
     ) : primaryAction === "enable-auto-merge" ? (
       <Button
@@ -214,9 +222,9 @@ export function PullRequestPrimaryAction({
           <PullRequestGlyph.merged aria-hidden className="size-3.5" />
         )}
         {pendingAction === "enable-auto-merge"
-          ? "Enabling..."
+          ? gt("Enabling...")
           : inlineConfirm.isArmed("enable-auto-merge")
-            ? "Confirm auto-merge?"
+            ? gt("Confirm auto-merge?")
             : pendingAutoMergeLabel}
       </Button>
     ) : primaryAction === "merge" ? (
@@ -236,9 +244,9 @@ export function PullRequestPrimaryAction({
           <PullRequestGlyph.merged aria-hidden className="size-3.5" />
         )}
         {pendingAction === "merge"
-          ? "Merging..."
+          ? gt("Merging...")
           : inlineConfirm.isArmed("merge")
-            ? "Confirm merge?"
+            ? gt("Confirm merge?")
             : selectedMergeMethodLabel}
       </Button>
     ) : null;
@@ -316,25 +324,28 @@ export function PullRequestFinishedMenuItems({
   inlineConfirm: ReturnType<typeof useInlineActionConfirm>;
   confirmDeleteBranch: () => Promise<void>;
 }) {
+  const gt = useGT();
   const actionPending = pendingAction !== null;
   return (
     <>
       {state === "closed" && canReopen ? (
         <MenuItem disabled={actionPending} onClick={() => void perform("reopen")}>
           <PullRequestGlyph.reopen className="size-3.5" />
-          Reopen {singular}
+          {gt("Reopen {target}", { target: singular })}
         </MenuItem>
       ) : null}
       {state === "merged" && canRevert ? (
         <MenuItem
           closeOnClick={inlineConfirm.isArmed("revert")}
-          aria-label={inlineConfirm.isArmed("revert") ? "Confirm revert?" : "Revert changes"}
+          aria-label={
+            inlineConfirm.isArmed("revert") ? gt("Confirm revert?") : gt("Revert changes")
+          }
           variant={inlineConfirm.isArmed("revert") ? "destructive" : "default"}
           disabled={actionPending}
           {...inlineConfirm.props("revert", () => void perform("revert"))}
         >
           <RotateCcwIcon className="size-3.5" />
-          {inlineConfirm.isArmed("revert") ? "Confirm revert?" : "Revert changes"}
+          {inlineConfirm.isArmed("revert") ? gt("Confirm revert?") : gt("Revert changes")}
         </MenuItem>
       ) : null}
       {showsDeleteBranch ? (
@@ -346,10 +357,10 @@ export function PullRequestFinishedMenuItems({
           <Trash2Icon className="mt-1 size-3.5 shrink-0 self-start" />
           <span className="flex min-w-0 flex-col">
             <span>
-              {pendingAction === "delete-branch" ? "Deleting branch..." : "Delete branch"}
+              {pendingAction === "delete-branch" ? gt("Deleting branch...") : gt("Delete branch")}
             </span>
             <span className="truncate text-caption text-muted-foreground">
-              {environmentConnected ? headBranch : "Reconnect to delete this branch"}
+              {environmentConnected ? headBranch : gt("Reconnect to delete this branch")}
             </span>
           </span>
         </MenuItem>
@@ -390,12 +401,13 @@ export function PullRequestPrimaryActionMenu({
   showCheckout: boolean;
   checkoutMenuItems: ReactNode;
 }) {
+  const gt = useGT();
   const actionPending = pendingAction !== null;
   return (
     <>
       {showsMergeMethods ? (
         <MenuGroup>
-          <MenuGroupLabel>Merge method</MenuGroupLabel>
+          <MenuGroupLabel>{gt("Merge method")}</MenuGroupLabel>
           <MenuRadioGroup
             value={selectedMergeMethod}
             onValueChange={(method) => {
@@ -420,26 +432,26 @@ export function PullRequestPrimaryActionMenu({
           {showsMergeNow ? (
             <MenuItem
               closeOnClick={inlineConfirm.isArmed("merge")}
-              aria-label={inlineConfirm.isArmed("merge") ? "Confirm merge?" : "Merge now"}
+              aria-label={inlineConfirm.isArmed("merge") ? gt("Confirm merge?") : gt("Merge now")}
               disabled={actionPending}
               {...inlineConfirm.props("merge", () => void perform("merge", selectedMergeMethod))}
             >
               <PullRequestGlyph.merged className="size-3.5" />
-              {inlineConfirm.isArmed("merge") ? "Confirm merge?" : "Merge now"}
+              {inlineConfirm.isArmed("merge") ? gt("Confirm merge?") : gt("Merge now")}
             </MenuItem>
           ) : null}
           {autoMergeArmed && can("disable-auto-merge") ? (
             <MenuItem disabled={actionPending} onClick={() => void perform("disable-auto-merge")}>
               <PullRequestGlyph.merged className="size-3.5" />
-              Disable auto-merge
+              {gt("Disable auto-merge")}
             </MenuItem>
           ) : showsAutoMerge ? (
             <MenuItem
               closeOnClick={inlineConfirm.isArmed("enable-auto-merge")}
               aria-label={
                 inlineConfirm.isArmed("enable-auto-merge")
-                  ? "Confirm auto-merge?"
-                  : "Enable auto-merge"
+                  ? gt("Confirm auto-merge?")
+                  : gt("Enable auto-merge")
               }
               disabled={actionPending}
               {...inlineConfirm.props(
@@ -449,8 +461,8 @@ export function PullRequestPrimaryActionMenu({
             >
               <PullRequestGlyph.merged className="size-3.5" />
               {inlineConfirm.isArmed("enable-auto-merge")
-                ? "Confirm auto-merge?"
-                : "Enable auto-merge"}
+                ? gt("Confirm auto-merge?")
+                : gt("Enable auto-merge")}
             </MenuItem>
           ) : null}
         </>
@@ -465,7 +477,7 @@ export function PullRequestPrimaryActionMenu({
               onClick={() => void perform("update-branch", undefined, method)}
             >
               <RefreshIcon size="sm" />
-              {method === "rebase" ? "Update with rebase" : "Update branch"}
+              {method === "rebase" ? gt("Update with rebase") : gt("Update branch")}
             </MenuItem>
           ))}
         </>

@@ -23,6 +23,7 @@ import type {
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowDownUpIcon, CircleAlertIcon, LayersIcon, Plug2Icon } from "lucide-react";
+import { T, useGT, useMessages } from "gt-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import {
@@ -69,7 +70,12 @@ import {
   type PullRequestFilterOption,
 } from "./PullRequestListFilters";
 import { PullRequestCompactFilterMenu } from "./PullRequestCompactFilterMenu";
-import { INVOLVEMENT_TABS, SORT_OPTIONS, STATE_TABS } from "./pullRequestListOptions";
+import {
+  INVOLVEMENT_TABS,
+  resolveFilterOptions,
+  SORT_OPTIONS,
+  STATE_TABS,
+} from "./pullRequestListOptions";
 import { PullRequestsColumn } from "./PullRequestsColumn";
 import { PullRequestListGroups } from "./PullRequestListGroups";
 import { pullRequestPanelReference } from "./usePullRequestDetail";
@@ -188,6 +194,8 @@ function usePendingListEntries(
 }
 
 export function PullRequestsPage() {
+  const gt = useGT();
+  const resolve = useMessages();
   const { visible } = useLayoutPane();
   const location = useLayoutPageLocation();
   const search = validatePullRequestsSearch(location.search);
@@ -1252,8 +1260,8 @@ export function PullRequestsPage() {
   const searchInput = (
     <PullRequestSearchInput
       value={search.q ?? ""}
-      label="Search pull requests"
-      placeholder="Search pull requests, or label:bug"
+      label={gt("Search pull requests")}
+      placeholder={gt("Search pull requests, or label:bug")}
       busy={typedQuery.length > 0 && (!querySettled || showingCarried)}
       onChange={(query) => updateListScope({ q: query || undefined })}
       onSubmit={submitQuery}
@@ -1275,7 +1283,7 @@ export function PullRequestsPage() {
       </div>
     ) : null;
   const listError = listQuery.error
-    ? `${environmentLabels.get(listQuery.error.environmentId) || "Environment"}: ${listQuery.error.message}`
+    ? `${environmentLabels.get(listQuery.error.environmentId) || gt("Environment")}: ${listQuery.error.message}`
     : null;
   // Said in the empty list, so a list narrowed to nothing names what narrowed it.
   const hostFilterEntries = hosts.length > 0 ? hosts : expectedHosts;
@@ -1352,15 +1360,15 @@ export function PullRequestsPage() {
   const listBody = (
     <>
       {!capabilityKnown ? (
-        <PullRequestListGhost rows={7} caption="Loading pull requests…" />
+        <PullRequestListGhost rows={7} caption={gt("Loading pull requests…")} />
       ) : !pullRequestsSupported ? (
         <PullRequestListNotice
           icon={PullRequestGlyph.pullRequest}
-          title="Pull requests unavailable"
-          description="Update your T3 Code servers to browse pull requests."
+          title={gt("Pull requests unavailable")}
+          description={gt("Update your T3 Code servers to browse pull requests.")}
         />
       ) : firstLoad ? (
-        <PullRequestListGhost rows={7} caption="Loading pull requests…" />
+        <PullRequestListGhost rows={7} caption={gt("Loading pull requests…")} />
       ) : listError && shownCount === 0 ? (
         <PullRequestListNotice
           icon={CircleAlertIcon}
@@ -1436,9 +1444,9 @@ export function PullRequestsPage() {
 
       {listError && shownCount > 0 ? (
         <div className="flex items-center justify-between gap-3 rounded-control border border-warning/30 bg-warning-surface px-3 py-2 text-xs">
-          <span>{listError} Showing the last pull requests loaded.</span>
+          <span>{gt("{error} Showing the last pull requests loaded.", { error: listError })}</span>
           <Button size="xs" variant="secondary" onClick={() => listQuery.refresh()}>
-            Retry
+            <T>Retry</T>
           </Button>
         </div>
       ) : null}
@@ -1447,7 +1455,7 @@ export function PullRequestsPage() {
           {loadingMore ? (
             <span className="flex items-center gap-2">
               <Spinner aria-hidden size="sm" />
-              {sentCursors === null ? "Updating pull requests" : "Loading more"}
+              {sentCursors === null ? gt("Updating pull requests") : gt("Loading more")}
             </span>
           ) : canContinue || pageSize < MAX_PAGE_SIZE ? (
             <Button
@@ -1456,10 +1464,12 @@ export function PullRequestsPage() {
               onClick={loadMore}
               disabled={listQuery.isPending || showingCarried}
             >
-              Load more pull requests
+              <T>Load more pull requests</T>
             </Button>
           ) : (
-            <span>Narrow your search to find more pull requests.</span>
+            <span>
+              <T>Narrow your search to find more pull requests.</T>
+            </span>
           )}
         </div>
       ) : null}
@@ -1467,7 +1477,7 @@ export function PullRequestsPage() {
   );
   const hostEntries = hosts.length > 0 ? hosts : expectedHosts;
   const hostMenuOptions: ReadonlyArray<PullRequestFilterOption<string>> = [
-    { value: "", label: "All forges", Icon: Plug2Icon },
+    { value: "", label: gt("All forges"), Icon: Plug2Icon },
     ...hostEntries.map((entry) => {
       const summary = hosts.find((host) => host.host === entry.host);
       return {
@@ -1476,12 +1486,12 @@ export function PullRequestsPage() {
         Icon: getSourceControlPresentationForKind(entry.kind).Icon,
         ...(summary === undefined || summary.configured
           ? {}
-          : { unavailable: summary.detail ?? "This host could not be read." }),
+          : { unavailable: summary.detail ?? gt("This host could not be read.") }),
       };
     }),
   ];
   const serverMenuOptions: ReadonlyArray<PullRequestFilterOption<string>> = [
-    { value: "", label: "All servers", Icon: LayersIcon },
+    { value: "", label: gt("All servers"), Icon: LayersIcon },
     ...capableEnvironments.map((environment) => ({
       value: environment.environmentId,
       label: environment.label,
@@ -1490,22 +1500,22 @@ export function PullRequestsPage() {
   ];
   const sortMenu = (
     <PullRequestCompactFilterMenu
-      label="Sort pull requests"
+      label={gt("Sort pull requests")}
       triggerIcon={<ArrowDownUpIcon aria-hidden className="size-4" />}
-      triggerLabel="Sort"
+      triggerLabel={gt("Sort", { $context: "verb, sort a list" })}
       value={sort}
-      options={SORT_OPTIONS}
+      options={resolveFilterOptions(SORT_OPTIONS, resolve)}
       onChange={(next) => updateListScope({ sort: next })}
     />
   );
   const filtersMenu = (
     <PullRequestFiltersMenu
       state={search.state}
-      stateOptions={STATE_TABS}
+      stateOptions={resolveFilterOptions(STATE_TABS, resolve)}
       onState={(state) => updateListScope({ state })}
       onOpenChange={setFiltersOpen}
       involvement={search.involvement}
-      involvementOptions={INVOLVEMENT_TABS}
+      involvementOptions={resolveFilterOptions(INVOLVEMENT_TABS, resolve)}
       onInvolvement={(involvement) => updateListScope({ involvement })}
       filters={
         typedParsed.filters.draft
