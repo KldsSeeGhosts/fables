@@ -1,5 +1,6 @@
 import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { T, useGT } from "gt-react";
 import { memo } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
@@ -63,10 +64,11 @@ export function SidebarBrandWidthProbe({
 }
 
 function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
+  const gt = useGT();
   return (
     <Link
       data-app-brand=""
-      aria-label="T3 Code home"
+      aria-label={gt("T3 Code home")}
       className={cn(
         "pointer-events-auto relative z-10 hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md outline-hidden ring-ring [-webkit-app-region:no-drag] focus-visible:ring-2 focus-visible:ring-inset md:flex",
         onBackdrop ? "text-white light:text-foreground" : "text-foreground",
@@ -88,7 +90,8 @@ function SidebarBrandMark({ onBackdrop }: { onBackdrop: boolean }) {
           onBackdrop ? "text-white/70 light:text-muted-foreground" : "text-muted-foreground",
         )}
       >
-        Code
+        {/* oxlint-disable-next-line t3code/no-untranslated-copy -- product wordmark */}
+        {"Code"}
       </span>
     </span>
   );
@@ -174,6 +177,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const navigate = useNavigate();
   const navigateToMainApp = useNavigateToMainApp();
   const openLayoutPage = useOpenLayoutPage();
+  const gt = useGT();
   const { isMobile, setOpenMobile } = useSidebar();
   const isOnUtilityPage = useLocation({
     select: (location) => isSidebarUtilityPage(location.pathname),
@@ -217,7 +221,9 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           <SidebarMenuItem className="min-w-0 flex-1">
             <SidebarMenuButton size="control" onClick={handleBackClick}>
               <ArrowLeftIcon />
-              <span>Back</span>
+              <span>
+                <T>Back</T>
+              </span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         ) : (
@@ -226,26 +232,26 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             <div className="flex gap-1">
               <SidebarUtilityItem
                 icon={<SettingsIcon className="size-4" />}
-                label="Settings"
+                label={gt("Settings")}
                 onClick={handleSettingsClick}
               />
               {pullRequestsSupported ? (
                 <SidebarUtilityItem
                   icon={<PullRequestGlyph.pullRequest className="size-4" />}
-                  label="Pull Requests"
+                  label={gt("Pull requests")}
                   onClick={handlePullRequestsClick}
                 />
               ) : null}
               {issuesSupported ? (
                 <SidebarUtilityItem
                   icon={<IssueGlyph.issue className="size-4" />}
-                  label="Issues"
+                  label={gt("Issues", { $context: "sidebar link to the list of issues" })}
                   onClick={handleIssuesClick}
                 />
               ) : null}
               <SidebarUtilityItem
                 icon={<ChartNoAxesColumnIcon className="size-4" />}
-                label="Usage"
+                label={gt("Usage")}
                 onClick={handleUsageClick}
               />
             </div>

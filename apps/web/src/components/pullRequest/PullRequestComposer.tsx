@@ -9,9 +9,11 @@ import type {
   PullRequestRef,
   PullRequestReviewVerdict,
 } from "@t3tools/contracts";
+import { T, useGT } from "gt-react";
 import { MessageSquareIcon, MessageSquareTextIcon, XIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { changeRequestTermKind } from "./changeRequestTerm";
 import { Button } from "../ui/button";
 import { Popover, PopoverClose, PopoverPopup, PopoverTitle, PopoverTrigger } from "../ui/popover";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
@@ -46,7 +48,10 @@ export function PullRequestComposer({
   onReviewSubmitted: () => void;
   openReviewRequest?: number | undefined;
 }) {
-  const term = sourceControlClients.get(detail.provider).changeRequest.singular;
+  const gt = useGT();
+  const changeRequest = sourceControlClients.get(detail.provider).changeRequest;
+  const term = changeRequest.singular;
+  const termKind = changeRequestTermKind(changeRequest);
   // "review" is open from a review request, which offers the review over a plain comment.
   const [popover, setPopover] = useState<"closed" | "open" | "review">("closed");
   const open = popover !== "closed";
@@ -88,14 +93,17 @@ export function PullRequestComposer({
     (verdicts.includes("comment") && (reviewStarted || reviewRequested));
 
   const close = (
-    <PopoverClose render={<Button size="icon-xs" variant="ghost" />} aria-label="Close composer">
+    <PopoverClose
+      render={<Button size="icon-xs" variant="ghost" />}
+      aria-label={gt("Close composer")}
+    >
       <XIcon className="size-3.5" />
     </PopoverClose>
   );
   const modePicker =
     modes.length > 1 ? (
       <ToggleGroup
-        aria-label="Composer mode"
+        aria-label={gt("Composer mode")}
         variant="segmented"
         value={[mode]}
         onValueChange={(next) => {
@@ -105,7 +113,11 @@ export function PullRequestComposer({
       >
         {modes.map((value) => (
           <Toggle key={value} value={value}>
-            {value === "comment" ? "Comment" : value === "approve" ? "Approve" : "Request changes"}
+            {value === "comment"
+              ? gt("Comment", { $context: "noun, composer mode" })
+              : value === "approve"
+                ? gt("Approve")
+                : gt("Request changes")}
           </Toggle>
         ))}
       </ToggleGroup>
@@ -123,10 +135,19 @@ export function PullRequestComposer({
         render={<Button size="icon" variant="floating" />}
         aria-label={
           pendingComments.length > 0
-            ? `Review ${term}, ${pendingComments.length} ${pendingComments.length === 1 ? "comment" : "comments"} pending`
+            ? gt(
+                "{count, plural, one {Review {kind, select, mr {merge request} cr {change request} other {pull request}}, {count} comment pending} other {Review {kind, select, mr {merge request} cr {change request} other {pull request}}, {count} comments pending}}",
+                { count: pendingComments.length, kind: termKind },
+              )
             : reviewStarted || !canComment
-              ? `Review ${term}`
-              : `Comment on ${term}`
+              ? gt(
+                  "Review {kind, select, mr {merge request} cr {change request} other {pull request}}",
+                  { kind: termKind },
+                )
+              : gt(
+                  "Comment on {kind, select, mr {merge request} cr {change request} other {pull request}}",
+                  { kind: termKind },
+                )
         }
       >
         <MessageSquareIcon className="size-4" />
@@ -146,7 +167,7 @@ export function PullRequestComposer({
         sideOffset={8}
         width="lg"
         initialFocus={sendsReview ? reviewRef : commentRef}
-        aria-label={`${capitalizeTerm(term)} composer`}
+        aria-label={gt("{term} composer", { term: capitalizeTerm(term) })}
       >
         {/* With line comments waiting, the review header takes the title row and the verdicts
             sit under it; otherwise the verdicts, or the plain title, share the row with close. */}
@@ -154,10 +175,14 @@ export function PullRequestComposer({
           <>
             <div className="mb-2 flex items-center gap-2 text-body">
               <MessageSquareTextIcon aria-hidden className="size-4 text-muted-foreground" />
-              <PopoverTitle>Your review</PopoverTitle>
+              <PopoverTitle>
+                <T>Your review</T>
+              </PopoverTitle>
               <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
-                {pendingComments.length} pending{" "}
-                {pendingComments.length === 1 ? "comment" : "comments"}
+                {gt(
+                  "{count, plural, one {{count} pending comment} other {{count} pending comments}}",
+                  { count: pendingComments.length },
+                )}
               </span>
               {close}
             </div>
@@ -166,7 +191,17 @@ export function PullRequestComposer({
         ) : (
           <div className="mb-3 flex items-center justify-between gap-2">
             {modePicker ?? (
-              <PopoverTitle>{sendsReview ? `Review ${term}` : `Comment on ${term}`}</PopoverTitle>
+              <PopoverTitle>
+                {sendsReview
+                  ? gt(
+                      "Review {kind, select, mr {merge request} cr {change request} other {pull request}}",
+                      { kind: termKind },
+                    )
+                  : gt(
+                      "Comment on {kind, select, mr {merge request} cr {change request} other {pull request}}",
+                      { kind: termKind },
+                    )}
+              </PopoverTitle>
             )}
             {close}
           </div>

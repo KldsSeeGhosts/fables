@@ -1,8 +1,10 @@
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, IssueRef } from "@t3tools/contracts";
+import { msg, useGT } from "gt-react";
 import { ArrowUpIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { m } from "~/i18n/messages";
 import { TextFieldSpeechControls, useTextFieldSpeech } from "~/speech/useTextFieldSpeech";
 import { issueEnvironment } from "~/state/issues";
 import { useAtomCommand } from "~/state/use-atom-command";
@@ -25,6 +27,7 @@ export function IssueCommentComposer({
   /** Why the viewer cannot comment here; null when they can. */
   blocked: string | null;
 }) {
+  const gt = useGT();
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -48,8 +51,11 @@ export function IssueCommentComposer({
     if (result._tag === "Failure") {
       toastManager.add({
         type: "error",
-        title: "The comment could not be posted",
-        description: readableFailure(squashAtomCommandFailure(result), "The tracker refused it."),
+        title: m(msg("The comment could not be posted")),
+        description: readableFailure(
+          squashAtomCommandFailure(result),
+          m(msg("The tracker refused it.")),
+        ),
       });
       return;
     }
@@ -76,8 +82,8 @@ export function IssueCommentComposer({
               rows={2}
               className="flex w-full"
               style={{ resize: "none" }}
-              aria-label="Add a comment"
-              placeholder={blocked ?? "Leave a comment"}
+              aria-label={gt("Add a comment")}
+              placeholder={blocked ?? gt("Leave a comment")}
               value={body}
               // Lock while posting because success clears the draft.
               disabled={locked}
@@ -97,7 +103,11 @@ export function IssueCommentComposer({
                 type="submit"
                 size="icon-sm-pill"
                 disabled={submitDisabled}
-                aria-label={submitting ? "Posting comment" : "Comment"}
+                aria-label={
+                  submitting
+                    ? gt("Posting comment")
+                    : gt("Comment", { $context: "verb, posts the comment" })
+                }
               >
                 {submitting ? (
                   <Spinner size="sm" aria-hidden />

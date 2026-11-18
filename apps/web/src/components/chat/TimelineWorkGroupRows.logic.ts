@@ -1,6 +1,8 @@
 import { toServerClock } from "@t3tools/client-runtime/clock";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { formatDuration } from "@t3tools/shared/orchestrationTiming";
+import { formatDuration } from "@t3tools/shared/orchestrationTimingCopy";
+import { msg } from "gt-react";
+import { m, type MessageResolver } from "~/i18n/messages";
 
 export function formatWorkingTimer(startIso: string, endIso: string): string | null {
   const startedAtMs = Date.parse(startIso);
@@ -12,13 +14,13 @@ export function formatWorkingTimer(startIso: string, endIso: string): string | n
   return formatWorkingDuration(endedAtMs - startedAtMs);
 }
 
-export function formatWorkingDuration(elapsedMs: number): string {
+export function formatWorkingDuration(elapsedMs: number, resolve: MessageResolver = m): string {
   const elapsedSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
   if (elapsedSeconds < 60) {
-    return `${elapsedSeconds}s`;
+    return resolve(msg("{seconds}s", { seconds: elapsedSeconds }));
   }
 
-  return formatDuration(elapsedSeconds * 1_000);
+  return formatDuration(elapsedSeconds * 1_000, resolve);
 }
 
 export function formatWorkingTimerNow(
@@ -36,7 +38,7 @@ export function formatWorkingTimerNow(
   }
   const startedAtMs = Date.parse(startIso);
   if (!Number.isFinite(startedAtMs)) {
-    return "0s";
+    return m(msg("{seconds}s", { seconds: 0 }));
   }
 
   const elapsedSeconds = Math.max(
@@ -44,8 +46,8 @@ export function formatWorkingTimerNow(
     Math.floor((toServerClock(environmentId, Date.now()) - startedAtMs) / 1000),
   );
   if (elapsedSeconds < 60) {
-    return `${elapsedSeconds}s`;
+    return m(msg("{seconds}s", { seconds: elapsedSeconds }));
   }
 
-  return formatDuration(elapsedSeconds * 1_000);
+  return formatDuration(elapsedSeconds * 1_000, m);
 }

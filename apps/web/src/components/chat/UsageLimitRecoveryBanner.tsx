@@ -1,3 +1,6 @@
+import { T, msg, useGT } from "gt-react";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { m, type MessageResolver } from "~/i18n/messages";
 import {
   type OrchestrationV2LimitRecovery,
   type OrchestrationV2LimitRecoveryUpdate,
@@ -40,21 +43,24 @@ function isAutoResumeScheduled({ runId, resetAt, recovery }: RecoveryProps): boo
   return Boolean(recovery?.runId === runId && recovery.resetAt === resetAt && recovery.autoResume);
 }
 
-function formatTimeUntil(ms: number): string {
-  const minutes = Math.max(1, Math.ceil(ms / 60_000));
-  const hours = Math.floor(minutes / 60);
-  return hours > 0 ? `in ${hours}h ${minutes % 60}m` : `in ${minutes}m`;
-}
-
 /** Counts down to the reset. It re-renders once a minute, never per frame. */
 function ResetCountdown({ resetAt }: { resetAt: string }) {
+  const gt = useGT();
   const deadline = Date.parse(resetAt);
   const passed = useDeadlinePassed(deadline);
   const remainingMs = deadline - Date.parse(`${useNowMinute()}:00.000Z`);
-  return !passed && remainingMs > 0 ? formatTimeUntil(remainingMs) : "now";
+  if (passed || remainingMs <= 0) return <T>now</T>;
+  const minutes = Math.max(1, Math.ceil(remainingMs / 60_000));
+  const hours = Math.floor(minutes / 60);
+  return hours > 0
+    ? gt("in {hours}h {minutes}m", { hours, minutes: minutes % 60 })
+    : gt("in {minutes}m", { minutes });
 }
 
-export function usageLimitRecoveryBannerItem(props: RecoveryProps): ComposerBannerStackItem {
+export function usageLimitRecoveryBannerItem(
+  props: RecoveryProps,
+  resolve: MessageResolver = m,
+): ComposerBannerStackItem {
   const {
     runId,
     errorCode,
@@ -84,12 +90,16 @@ export function usageLimitRecoveryBannerItem(props: RecoveryProps): ComposerBann
     resumes && displayAt ? (
       <ResetCountdown resetAt={displayAt} />
     ) : displayAt ? (
-      `Resets ${formatUpcomingTimestamp(displayAt, timestampFormat)}`
+      resolve(
+        msg("Resets {time}", {
+          time: formatUpcomingTimestamp(displayAt, timestampFormat, undefined, undefined, resolve),
+        }),
+      )
     ) : (
-      "Reset time unavailable; retry manually"
+      resolve(msg("Reset time unavailable; retry manually"))
     );
   const dismiss = props.onDismiss
-    ? { dismissLabel: "Dismiss usage limit notice", onDismiss: props.onDismiss }
+    ? { dismissLabel: resolve(msg("Dismiss usage limit notice")), onDismiss: props.onDismiss }
     : {};
   if (!chatGptLimit) {
     return {
@@ -99,8 +109,18 @@ export function usageLimitRecoveryBannerItem(props: RecoveryProps): ComposerBann
       icon: resumes ? <TimerIcon /> : <GaugeIcon />,
       title:
         resumes && displayAt
-          ? `Resumes ${formatUpcomingTimestamp(displayAt, timestampFormat)}`
-          : "Usage limit reached",
+          ? resolve(
+              msg("Resumes {time}", {
+                time: formatUpcomingTimestamp(
+                  displayAt,
+                  timestampFormat,
+                  undefined,
+                  undefined,
+                  resolve,
+                ),
+              }),
+            )
+          : resolve(msg("Usage limit reached")),
       description: resetDescription,
       actions: recoveryActions,
       ...dismiss,
@@ -112,16 +132,18 @@ export function usageLimitRecoveryBannerItem(props: RecoveryProps): ComposerBann
     variant: "warning",
     group: "environment",
     icon: <OpenAI aria-hidden="true" />,
-    title: "ChatGPT usage limit reached",
+    title: resolve(msg("ChatGPT usage limit reached")),
     description: workspaceLimit
-      ? "You've reached your workspace's limit for using your ChatGPT plan in other apps."
+      ? resolve(
+          msg("You've reached your workspace's limit for using your ChatGPT plan in other apps."),
+        )
       : resetDescription,
     actions: (
       <>
         {recoveryActions}
         {workspaceLimit ? (
           <Button size="xs" variant="ghost" onClick={copyAdminRequest}>
-            Copy request for admin
+            <T>Copy request for admin</T>
           </Button>
         ) : (
           <ChatGptUsageButton size="xs" variant="ghost" />
@@ -147,8 +169,8 @@ function RecoveryActions(props: RecoveryProps) {
     if (action === "snooze" && !snoozed && Date.parse(resetAt) <= Date.now()) {
       toastManager.add({
         type: "error",
-        title: "Could not snooze thread",
-        description: "The reset time has passed. Retry the thread manually.",
+        title: m(msg("Could not snooze thread")),
+        description: m(msg("The reset time has passed. Retry the thread manually.")),
       });
       // The deadline timer can lag after a throttled tab or sleep; disable now.
       deadlineStore(Date.parse(resetAt)).refresh();
@@ -164,8 +186,11 @@ function RecoveryActions(props: RecoveryProps) {
     } catch (cause) {
       toastManager.add({
         type: "error",
-        title: action === "resume" ? "Could not change auto-resume" : "Could not snooze thread",
-        description: cause instanceof Error ? cause.message : "An error occurred.",
+        title:
+          action === "resume"
+            ? m(msg("Could not change auto-resume"))
+            : m(msg("Could not snooze thread")),
+        description: thrownErrorMessage(cause, m) ?? m(msg("An error occurred.")),
       });
     }
     setPending(false);
@@ -181,7 +206,7 @@ function RecoveryActions(props: RecoveryProps) {
           disabled={pending || (!snoozed && resetPassed)}
           onClick={() => void toggle("snooze")}
         >
-          {pending ? "Saving..." : snoozed ? "Wake now" : "Snooze until reset"}
+          {pending ? <T>Saving...</T> : snoozed ? <T>Wake now</T> : <T>Snooze until reset</T>}
         </Button>
       ) : null}
       <Button
@@ -190,7 +215,13 @@ function RecoveryActions(props: RecoveryProps) {
         disabled={pending}
         onClick={() => void toggle("resume")}
       >
-        {pending ? "Saving..." : scheduled ? "Cancel auto-resume" : "Resume at reset"}
+        {pending ? (
+          <T>Saving...</T>
+        ) : scheduled ? (
+          <T>Cancel auto-resume</T>
+        ) : (
+          <T>Resume at reset</T>
+        )}
       </Button>
     </div>
   );

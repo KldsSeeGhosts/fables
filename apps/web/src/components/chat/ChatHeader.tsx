@@ -11,6 +11,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { GitForkIcon, PlusIcon, SquarePenIcon, SquareTerminal } from "lucide-react";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import {
   memo,
   useRef,
@@ -115,10 +116,10 @@ function resolveRenameCommit(input: {
 }
 
 const OPEN_BESIDE_MENU: ContextMenuItem<LayoutBesideKind>[] = [
-  { id: "browser", label: "Browser", icon: "globe" },
-  { id: "terminal", label: "Terminal", icon: "terminal" },
-  { id: "files", label: "Files", icon: "folder" },
-  { id: "diff", label: "Diff", icon: "file-diff" },
+  { id: "browser", label: msg("Browser"), icon: "globe" },
+  { id: "terminal", label: msg("Terminal"), icon: "terminal" },
+  { id: "files", label: msg("Files"), icon: "folder" },
+  { id: "diff", label: msg("Diff"), icon: "file-diff" },
 ];
 export const ChatHeader = memo(function ChatHeader({
   activeThreadEnvironmentId,
@@ -142,7 +143,10 @@ export const ChatHeader = memo(function ChatHeader({
   // Right-click "+" for a terminal, browser, files or diff beside the chat (pen HQTgu).
   const openBesideMenu = (event: React.MouseEvent) => {
     const api = readLocalApi();
-    const items = OPEN_BESIDE_MENU.filter((item) => besideAvailable.has(item.id));
+    const items = OPEN_BESIDE_MENU.filter((item) => besideAvailable.has(item.id)).map((item) => ({
+      ...item,
+      label: m(item.label),
+    }));
     if (!api || items.length === 0) return;
     event.preventDefault();
     // The header's own menu would replace this one.
@@ -168,7 +172,9 @@ export const ChatHeader = memo(function ChatHeader({
   const runLayoutMenuAction = (id: string) => {
     if (layoutTabId !== null && isLayoutTabMenuId(id)) runLayoutTabMenuAction(id, layoutTabId);
   };
-  const activeProjectName = activeProject?.isScratch ? "No project" : activeProject?.title;
+  const gt = useGT();
+  const m = useMessages();
+  const activeProjectName = activeProject?.isScratch ? gt("No project") : activeProject?.title;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const activeThreadRef = scopeThreadRef(activeThreadEnvironmentId, activeThreadId);
   const canOperateThread = useEnvironmentScope(
@@ -232,7 +238,7 @@ export const ChatHeader = memo(function ChatHeader({
       originalTitle: renamingTitle ?? activeThreadTitle,
     });
     if (resolution.action === "reject-empty") {
-      toastManager.add({ type: "warning", title: "Thread title cannot be empty" });
+      toastManager.add({ type: "warning", title: gt("Thread title cannot be empty") });
       return;
     }
     if (resolution.action === "noop") return;
@@ -244,8 +250,8 @@ export const ChatHeader = memo(function ChatHeader({
         const error = squashAtomCommandFailure(result);
         toastManager.add({
           type: "error",
-          title: "Failed to rename thread",
-          description: error instanceof Error ? error.message : "An error occurred.",
+          title: gt("Failed to rename thread"),
+          description: error instanceof Error ? error.message : gt("An error occurred."),
         });
       }
     });
@@ -292,7 +298,7 @@ export const ChatHeader = memo(function ChatHeader({
               ? [
                   {
                     id: "project-settings",
-                    label: "Project settings",
+                    label: gt("Project settings"),
                     icon: "settings",
                     separatorBefore: layoutItems.length > 0,
                   },
@@ -383,7 +389,7 @@ export const ChatHeader = memo(function ChatHeader({
               <input
                 autoFocus
                 dir="auto"
-                aria-label="Thread title"
+                aria-label={gt("Thread title")}
                 className="min-w-24 max-w-full bg-transparent outline-none [field-sizing:content]"
                 defaultValue={renamingTitle}
                 onBlur={(event) => {
@@ -413,7 +419,9 @@ export const ChatHeader = memo(function ChatHeader({
                       <PaneTabButton
                         data-layout-pane-tab={layoutTabId ?? undefined}
                         type="button"
-                        aria-label={`Thread actions for ${activeThreadTitle}`}
+                        aria-label={gt("Thread actions for {title}", {
+                          title: activeThreadTitle,
+                        })}
                         aria-haspopup="menu"
                         onClick={openMenuFromTitle}
                         onAuxClick={handleTabAuxClick}
@@ -486,7 +494,7 @@ export const ChatHeader = memo(function ChatHeader({
                   <br />
                   {activeThreadTitle}
                   <br />
-                  {hiddenTerminal.running ? "Process running" : "Idle"}
+                  {hiddenTerminal.running ? gt("Process running") : gt("Idle")}
                 </TooltipPopup>
               </Tooltip>
             </span>
@@ -505,10 +513,15 @@ export const ChatHeader = memo(function ChatHeader({
         {renamingTitle === null && activeThreadLinkOrigin ? (
           <Tooltip>
             <TooltipTrigger render={<Badge variant="info" size="sm" />}>
-              From {activeThreadLinkOrigin}
+              <T>
+                From <Var>{activeThreadLinkOrigin}</Var>
+              </T>
             </TooltipTrigger>
             <TooltipPopup side="top">
-              Started by an agent on {activeThreadLinkOrigin} through a linked environment.
+              <T>
+                Started by an agent on <Var>{activeThreadLinkOrigin}</Var> through a linked
+                environment.
+              </T>
             </TooltipPopup>
           </Tooltip>
         ) : null}

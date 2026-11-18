@@ -1,4 +1,5 @@
 import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import {
   pullRequestLinkProject,
   resolveLinkPullRequestInput,
@@ -11,6 +12,8 @@ import {
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { useLayoutEffect, useRef, useState } from "react";
 import { observeResize } from "~/lib/observeResize";
+import { msg, useGT } from "gt-react";
+import { m } from "~/i18n/messages";
 
 import { usePullRequestPreviewTarget } from "~/lib/openPullRequestLink";
 import { cn } from "~/lib/utils";
@@ -137,6 +140,7 @@ function LinkPullRequestDialog({
   projectId,
   onOpenChange,
 }: LinkPullRequestDialogProps) {
+  const gt = useGT();
   const inputRef = useRef<HTMLInputElement>(null);
   const [contentInset, setContentInset] = useState(0);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Align the portaled dialog with the actual content bounds, including a resized or collapsed sidebar.
@@ -195,7 +199,8 @@ function LinkPullRequestDialog({
     if (result._tag === "Failure") {
       const error = squashAtomCommandFailure(result);
       setSubmitError(
-        error instanceof Error ? error.message : `Could not link the ${terminology.singular}.`,
+        thrownErrorMessage(error, m) ??
+          m(msg("Could not link the {term}.", { term: terminology.singular })),
       );
       return;
     }
@@ -205,9 +210,9 @@ function LinkPullRequestDialog({
   const validation = !dirty
     ? null
     : reference.trim().length === 0
-      ? `Paste a ${terminology.singular} URL or enter 123 / #123.`
+      ? gt("Paste a {term} URL or enter 123 / #123.", { term: terminology.singular })
       : resolved === null
-        ? `Use a ${terminology.singular} URL, 123, or #123.`
+        ? gt("Use a {term} URL, 123, or #123.", { term: terminology.singular })
         : "error" in resolved
           ? resolved.error
           : null;
@@ -224,10 +229,10 @@ function LinkPullRequestDialog({
         <div className="flex min-h-0 flex-col gap-4 px-5 pt-5 pb-4 [--type-body:0.8125rem] [--type-label:0.8125rem] [--type-prompt:0.8125rem]">
           <div className="flex flex-col gap-1">
             <div className="[--type-label:0.9375rem]">
-              <DialogTitle>Link {terminology.singular}</DialogTitle>
+              <DialogTitle>{gt("Link {term}", { term: terminology.singular })}</DialogTitle>
             </div>
             <DialogDescription>
-              Paste a {terminology.singular} URL or enter 123 / #123.
+              {gt("Paste a {term} URL or enter 123 / #123.", { term: terminology.singular })}
             </DialogDescription>
           </div>
           <div className="flex flex-col gap-4">
@@ -239,9 +244,13 @@ function LinkPullRequestDialog({
                 ref={inputRef}
                 size="sm"
                 aria-invalid={validation !== null || submitError !== null}
-                aria-label={`${capitalizeTerm(terminology.singular)} URL or number`}
+                aria-label={gt("{term} URL or number", {
+                  term: capitalizeTerm(terminology.singular),
+                })}
                 font="mono"
-                placeholder={`${capitalizeTerm(terminology.singular)} URL or #42`}
+                placeholder={gt("{term} URL or #42", {
+                  term: capitalizeTerm(terminology.singular),
+                })}
                 value={reference}
                 onChange={(event) => {
                   setDirty(true);
@@ -274,7 +283,7 @@ function LinkPullRequestDialog({
               onClick={() => onOpenChange(false)}
               disabled={pending}
             >
-              Cancel
+              {gt("Cancel")}
             </Button>
             <Button
               type="button"
@@ -282,7 +291,7 @@ function LinkPullRequestDialog({
               onClick={() => void submit()}
               disabled={pending || resolved === null || "error" in resolved}
             >
-              {pending ? "Linking..." : "Link"}
+              {pending ? gt("Linking...") : gt("Link", { $context: "verb, button" })}
               <SubmitKbd />
             </Button>
           </div>

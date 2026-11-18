@@ -9,6 +9,7 @@ import {
   capitalizeTerm,
   sourceControlClients,
 } from "@t3tools/client-runtime/source-control-clients";
+import { changeRequestTermKind } from "./changeRequestTerm";
 import { useAtomCommand } from "~/state/use-atom-command";
 import {
   type EnvironmentId,
@@ -32,7 +33,10 @@ import {
   TagIcon,
 } from "lucide-react";
 import * as Schema from "effect/Schema";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
+
+import { m, type MessageResolver } from "~/i18n/messages";
 
 import { pullRequestEnvironment } from "~/state/pullRequests";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
@@ -144,12 +148,23 @@ function CommentLocation({
         <TooltipTrigger render={<span className="truncate font-mono" />}>{label}</TooltipTrigger>
         <TooltipPopup>{label}</TooltipPopup>
       </Tooltip>
-      {thread?.isOutdated ? <span className="shrink-0">Outdated</span> : null}
+      {thread?.isOutdated ? (
+        <span className="shrink-0">
+          <T context="review thread state">Outdated</T>
+        </span>
+      ) : null}
     </div>
   );
 }
 
-function reviewStateLabel(state: string): string {
+const REVIEW_STATE_LABELS: Partial<Record<string, string>> = {
+  commented: msg("Commented", { $context: "review state" }),
+  pending: msg("Pending", { $context: "review state" }),
+};
+
+function reviewStateLabel(state: string, resolve: MessageResolver): string {
+  const known = REVIEW_STATE_LABELS[state.trim().toLowerCase()];
+  if (known) return resolve(known);
   const words = state.toLowerCase().replace(/_/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -177,6 +192,7 @@ function CommentBody({
   editing: CommentEditing;
   className?: string | undefined;
 }) {
+  const gt = useGT();
   if (editing.editingId === comment.id) {
     return (
       <PullRequestMarkdownEditor
@@ -186,7 +202,7 @@ function CommentBody({
         environmentId={editing.environmentId}
         completionScope={editing.completionScope}
         threadRef={editing.threadRef}
-        label="Edit comment"
+        label={gt("Edit comment")}
         saving={editing.saving}
         onSave={(body) => editing.onSave(comment, body)}
         onCancel={() => editing.onEdit(null)}
@@ -205,7 +221,10 @@ function CommentBody({
         threadRef={editing.threadRef}
       />
       {editing.canEdit(comment) ? (
-        <PullRequestEditButton aria-label="Edit comment" onClick={() => editing.onEdit(comment)} />
+        <PullRequestEditButton
+          aria-label={gt("Edit comment")}
+          onClick={() => editing.onEdit(comment)}
+        />
       ) : null}
     </div>
   );
@@ -234,7 +253,9 @@ function AddToChatButton({ onClick }: { onClick: () => void }) {
       {/* Wrapped like Fix's label so both sit on the header's baseline. */}
       <span className="inline-flex items-baseline gap-1">
         <MessageSquarePlusIcon className="size-3 self-center" />
-        <span>Add to chat</span>
+        <span>
+          <T>Add to chat</T>
+        </span>
       </span>
     </Button>
   );
@@ -315,7 +336,7 @@ export function PullRequestSection({
       open={open !== false}
       onOpenChange={setOpenWithScrollAnchor}
       render={<section aria-label={title} />}
-      data-pull-request-summary-section
+      data-pull-request-summary-section={name ?? ""}
     >
       <div
         ref={headingRef}
@@ -364,7 +385,7 @@ export function PullRequestSummaryTab({
   activityPending,
   activityError,
   pendingFinding,
-  fixFindingLabel = "Fix in a thread",
+  fixFindingLabel: requestedFixFindingLabel,
   onFixFinding,
   onAddToChat,
   onRefresh,
@@ -383,11 +404,15 @@ export function PullRequestSummaryTab({
   activityError: string | null;
   pendingFinding?: string | null;
   fixFindingLabel?: string;
+  fixCheckLabel?: string;
   onFixFinding?: (finding: PullRequestFinding) => void;
   /** Absent where there is no composer beside the panel to add a remark to. */
   onAddToChat?: (subject: PullRequestChatSubject) => void;
   onRefresh: () => void;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
+  const fixFindingLabel = requestedFixFindingLabel ?? gt("Fix in a thread");
   const terminology = sourceControlClients.get(detail.provider).changeRequest;
   const [shown, setShown] = useState({ url: detail.url, count: COMMENT_PAGE });
   const shownConversations = shown.url === detail.url ? shown.count : COMMENT_PAGE;
@@ -615,7 +640,9 @@ export function PullRequestSummaryTab({
     descriptionSavesRunning.current -= 1;
     const saved = result._tag === "Success";
     setDescriptionDraft((draft) => settleDescriptionSave(draft, key, saved));
-    if (!saved) toastManager.add({ type: "error", title: "Could not save the description" });
+    if (!saved) {
+      toastManager.add({ type: "error", title: m(msg("Could not save the description")) });
+    }
     if (descriptionSavesRunning.current === 0) onRefresh();
     return saved;
   };
@@ -648,7 +675,7 @@ export function PullRequestSummaryTab({
       });
       setCommentSaving(false);
       if (result._tag === "Failure") {
-        toastManager.add({ type: "error", title: "Could not save the comment" });
+        toastManager.add({ type: "error", title: m(msg("Could not save the comment")) });
         return;
       }
       setCommentScope(null);
@@ -711,7 +738,7 @@ export function PullRequestSummaryTab({
             {outcome ? (
               <PullRequestReviewOutcomeBadge outcome={outcome} />
             ) : comment.reviewState ? (
-              <span>{reviewStateLabel(comment.reviewState)}</span>
+              <span>{reviewStateLabel(comment.reviewState, resolve)}</span>
             ) : null}
           </div>
           {onFixFinding && finding ? (
@@ -726,7 +753,7 @@ export function PullRequestSummaryTab({
                 <HammerIcon className="size-3 self-center" />
                 <span>
                   {pendingFinding === pullRequestFindingKey(finding)
-                    ? "Preparing..."
+                    ? gt("Preparing...")
                     : fixFindingLabel}
                 </span>
               </span>
@@ -784,7 +811,9 @@ export function PullRequestSummaryTab({
           url={comment.url}
           outcome={outcome}
           stateLabel={
-            comment.reviewState ? reviewStateLabel(comment.reviewState).toLowerCase() : "reviewed"
+            comment.reviewState
+              ? reviewStateLabel(comment.reviewState, resolve).toLowerCase()
+              : gt("reviewed", { $context: "review status" })
           }
           preview={body === null ? null : pullRequestBodyPreview(body)}
           action={
@@ -1005,7 +1034,7 @@ export function PullRequestSummaryTab({
 
         <PullRequestSection
           key={`description:${detail.url}`}
-          title="Description"
+          title={gt("Description")}
           keepMounted
           revealCount={descriptionReveals}
         >
@@ -1018,8 +1047,10 @@ export function PullRequestSummaryTab({
                 environmentId={environmentId}
                 completionScope={completionScope}
                 threadRef={threadRef}
-                label={`${capitalizeTerm(terminology.singular)} description`}
-                placeholder={`Describe this ${terminology.singular}`}
+                label={gt("{term} description", {
+                  term: capitalizeTerm(terminology.singular),
+                })}
+                placeholder={gt("Describe this {term}", { term: terminology.singular })}
                 saving={descriptionSaving}
                 onSave={(body) => void saveBody(body)}
                 onCancel={() => setBodyScope(null)}
@@ -1032,7 +1063,11 @@ export function PullRequestSummaryTab({
                   collapsedHeight={descriptionRoom}
                   revealCount={descriptionReveals}
                   className="min-w-0 flex-1"
-                  text={description.trim().length > 0 ? description : "_No description provided._"}
+                  text={
+                    description.trim().length > 0
+                      ? description
+                      : `_${gt("No description provided.")}_`
+                  }
                   cwd={detail.workspaceRoot}
                   environmentId={environmentId}
                   threadRef={threadRef}
@@ -1040,7 +1075,7 @@ export function PullRequestSummaryTab({
                 />
                 {canEditDescription ? (
                   <PullRequestEditButton
-                    aria-label="Edit description"
+                    aria-label={gt("Edit description")}
                     onClick={() => setBodyScope({ url: detail.url, body: description })}
                   />
                 ) : null}
@@ -1075,7 +1110,7 @@ export function PullRequestSummaryTab({
         {attachments.length > 0 ? (
           <PullRequestSection
             key={`attachments:${detail.url}`}
-            title="Attachments"
+            title={gt("Attachments")}
             count={attachments.length}
           >
             <ScrollArea
@@ -1110,7 +1145,7 @@ export function PullRequestSummaryTab({
 
         <PullRequestSection
           key={`conversation:${detail.url}`}
-          title="Conversation"
+          title={gt("Conversation")}
           revealCount={linked?.url === detail.url ? linked.count : 0}
           count={
             activityPending || activityError
@@ -1123,20 +1158,24 @@ export function PullRequestSummaryTab({
               <Menu>
                 <MenuTrigger
                   render={<Button size="xs" variant="ghost-muted" />}
-                  aria-label="Filter comments"
+                  aria-label={gt("Filter comments")}
                 >
                   <ListFilterIcon aria-hidden className="size-3" />
-                  {filteredOutCount > 0 ? `${filteredOutCount} hidden` : "Filter"}
+                  {filteredOutCount > 0
+                    ? gt("{count} hidden", { count: filteredOutCount })
+                    : gt("Filter")}
                 </MenuTrigger>
                 <MenuPopup align="end">
                   <MenuGroup>
-                    <MenuGroupLabel>Show</MenuGroupLabel>
+                    <MenuGroupLabel>
+                      <T>Show</T>
+                    </MenuGroupLabel>
                     <MenuCheckboxItem
                       checked={commentFilter.bots}
                       closeOnClick={false}
                       onCheckedChange={(bots) => setCommentFilter((value) => ({ ...value, bots }))}
                     >
-                      Bot comments
+                      <T>Bot comments</T>
                     </MenuCheckboxItem>
                     <MenuCheckboxItem
                       checked={commentFilter.resolved}
@@ -1145,7 +1184,7 @@ export function PullRequestSummaryTab({
                         setCommentFilter((value) => ({ ...value, resolved }))
                       }
                     >
-                      Resolved or dismissed
+                      <T>Resolved or dismissed</T>
                     </MenuCheckboxItem>
                   </MenuGroup>
                 </MenuPopup>
@@ -1155,22 +1194,22 @@ export function PullRequestSummaryTab({
                 variant="ghost-muted"
                 aria-label={
                   commentOrder === "newest"
-                    ? "Show oldest comments first"
-                    : "Show newest comments first"
+                    ? gt("Show oldest comments first")
+                    : gt("Show newest comments first")
                 }
                 onClick={() =>
                   setCommentOrder((value) => (value === "newest" ? "oldest" : "newest"))
                 }
               >
                 <ArrowDownUpIcon aria-hidden className="size-3" />
-                {commentOrder === "newest" ? "Newest first" : "Oldest first"}
+                {commentOrder === "newest" ? gt("Newest first") : gt("Oldest first")}
               </Button>
             </div>
           }
         >
           {linkedAnchor !== null && revealUrl === undefined && !items.some(itemMatchesLink) ? (
             <p role="status" className="py-4 text-meta text-muted-foreground">
-              The linked item is not in the loaded activity.
+              <T>The linked item is not in the loaded activity.</T>
             </p>
           ) : null}
           {activityPending ? (
@@ -1179,20 +1218,29 @@ export function PullRequestSummaryTab({
             <PullRequestActivityUnavailableState
               compact
               error={activityError}
-              term={terminology.singular}
+              term={changeRequestTermKind(terminology)}
               onRetry={onRefresh}
             />
           ) : (
             <>
               {detail.commentsTruncated ? (
                 <p className="mb-2 rounded-md border border-warning/30 bg-warning-surface px-2 py-1.5 text-meta">
-                  This conversation is only partially loaded. {commentCount} comment
-                  {commentCount === 1 ? " is" : "s are"} loaded; open it on the host to read the
-                  rest.
+                  <T>
+                    This conversation is only partially loaded.{" "}
+                    <Var>
+                      {gt(
+                        "{count, plural, one {{count} comment is} other {{count} comments are}}",
+                        { count: commentCount },
+                      )}
+                    </Var>{" "}
+                    loaded; open it on the host to read the rest.
+                  </T>
                 </p>
               ) : null}
               {items.length === 0 ? (
-                <p className="py-2 text-meta text-muted-foreground">No comments yet.</p>
+                <p className="py-2 text-meta text-muted-foreground">
+                  <T>No comments yet.</T>
+                </p>
               ) : (
                 <div className="space-y-3">
                   {conversation.changeRequests.map((entry) => (
@@ -1204,14 +1252,19 @@ export function PullRequestSummaryTab({
                             {entry.openThreadCount > 0 ? (
                               <span className="inline-flex items-center gap-1.5">
                                 <CornerDownRightIcon aria-hidden className="size-3.5" />
-                                {entry.openThreadCount}{" "}
-                                {entry.openThreadCount === 1 ? "thread" : "threads"} below
+                                {gt(
+                                  "{count, plural, one {{count} thread} other {{count} threads}}",
+                                  { count: entry.openThreadCount },
+                                )}{" "}
+                                <T>below</T>
                               </span>
                             ) : null}
                             {entry.reRequestedAt ? (
                               <span className="ml-auto inline-flex items-center gap-1.5">
                                 <RefreshCwIcon aria-hidden className="size-3" />
-                                Re-requested <RelativeTime timestamp={entry.reRequestedAt} />
+                                <T>
+                                  Re-requested <RelativeTime timestamp={entry.reRequestedAt} />
+                                </T>
                               </span>
                             ) : null}
                           </div>

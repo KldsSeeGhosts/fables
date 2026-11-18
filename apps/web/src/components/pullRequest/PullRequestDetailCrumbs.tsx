@@ -1,4 +1,5 @@
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
+import { useGT } from "gt-react";
 import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 
@@ -38,6 +39,7 @@ function BackButton({
   focusable: boolean;
   plural: string;
 }) {
+  const gt = useGT();
   return (
     <Tooltip>
       <TooltipTrigger
@@ -48,13 +50,13 @@ function BackButton({
             {...(focusable ? {} : { tabIndex: -1 })}
             onClick={onBack}
             className="-ms-1.25"
-            aria-label={`Back to this thread's ${plural}`}
+            aria-label={gt("Back to this thread's {term}", { term: plural })}
           >
             <ArrowLeftIcon aria-hidden className="size-3.5" />
           </Button>
         }
       />
-      <TooltipPopup side="top">Back to {plural}</TooltipPopup>
+      <TooltipPopup side="top">{gt("Back to {term}", { term: plural })}</TooltipPopup>
     </Tooltip>
   );
 }
@@ -70,6 +72,7 @@ function NumberLink({
   openOnHostText: string;
   focusable: boolean;
 }) {
+  const gt = useGT();
   return (
     <span className={cn("inline-flex shrink-0", toneClassName)}>
       <Tooltip>
@@ -83,7 +86,10 @@ function NumberLink({
                 if (event.button === 1) void readLocalApi()?.shell.openExternal(detail.url);
               }}
               onContextMenu={(event) => openNumberContextMenu(event, detail)}
-              aria-label={`Open ${sourceControlClients.get(detail.provider).changeRequest.singular} #${detail.number} on host`}
+              aria-label={gt("Open {term} #{number} on host", {
+                term: sourceControlClients.get(detail.provider).changeRequest.singular,
+                number: detail.number,
+              })}
             >
               #{detail.number}
               <ExternalLinkIcon aria-hidden className="size-[13px]" />
@@ -111,6 +117,7 @@ export function PullRequestDetailCrumbs({
   onBack: (() => void) | undefined;
   children?: ReactNode;
 }) {
+  const gt = useGT();
   const state = detail ? resolvePullRequestState(detail) : null;
   return (
     <div className="mt-2 flex min-h-6 min-w-0 items-center gap-1.5 pl-4 text-label text-muted-foreground">
@@ -142,7 +149,9 @@ export function PullRequestDetailCrumbs({
               }
             />
             <TooltipPopup side="top">
-              {repositoryUrl ? `Open ${detail.repository} repository` : detail.repository}
+              {repositoryUrl
+                ? gt("Open {repository} repository", { repository: detail.repository })
+                : detail.repository}
             </TooltipPopup>
           </Tooltip>
           <NumberLink

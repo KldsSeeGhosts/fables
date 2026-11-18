@@ -1,5 +1,6 @@
 import { type RuntimeRequestId, type ScopedThreadRef } from "@t3tools/contracts";
 import { markdownProseDirection, textDirection } from "~/textDirection";
+import { useGT } from "gt-react";
 import { memo, use, useEffect, useEffectEvent, useRef, useState } from "react";
 import { BackgroundThreadContext } from "./backgroundThread";
 import { useStableCallback } from "~/hooks/useStableCallback";
@@ -133,6 +134,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   onPrevious: (() => void) | undefined;
   onWriteAnswer: (() => void) | undefined;
 }) {
+  const gt = useGT();
   // Message-mode requests remain answerable after their provider turn ends.
   const canRespond = prompt.responseCapability !== "not_resumable";
   const responseDisabled = disabled || isResponding || !canRespond;
@@ -301,14 +303,14 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
             render={<button type="button" />}
             title={
               isCollapsed
-                ? "Show the question and its options"
-                : "Hide the question and its options"
+                ? gt("Show the question and its options")
+                : gt("Hide the question and its options")
             }
             data-pending-user-input-toggle={isCollapsed ? "collapsed" : "expanded"}
           />
         }
         icon={<MessageCircleQuestionMarkIcon className="text-ring" />}
-        title="Question"
+        title={gt("Question")}
         sub={
           isCollapsed ? (
             <span
@@ -317,8 +319,10 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
             >
               {activeQuestion.question}
             </span>
+          ) : providerLabel ? (
+            gt("{provider} needs an answer", { provider: providerLabel })
           ) : (
-            `${providerLabel || "The agent"} needs an answer`
+            gt("The agent needs an answer")
           )
         }
         trailing={
@@ -330,8 +334,8 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
             {prompt.dismissible ? (
               <ComposerBanner.Dismiss
                 render={<span role="button" tabIndex={0} />}
-                aria-label="Dismiss question without answering"
-                title="Dismiss question without answering"
+                aria-label={gt("Dismiss question without answering")}
+                title={gt("Dismiss question without answering")}
                 disabled={isResponding}
                 data-pending-user-input-dismiss
                 onClick={(event) => {

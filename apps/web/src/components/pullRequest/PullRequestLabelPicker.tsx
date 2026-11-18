@@ -5,8 +5,11 @@ import { useAtomCommand } from "~/state/use-atom-command";
  * and then what was taken off.
  */
 import type { EnvironmentId, PullRequestLabelCandidate, PullRequestRef } from "@t3tools/contracts";
+import { msg, useGT, useMessages } from "gt-react";
 import { TagIcon } from "lucide-react";
 import { useState } from "react";
+
+import { m } from "~/i18n/messages";
 
 import { pullRequestEnvironment } from "~/state/pullRequests";
 import { useEnvironmentQuery } from "~/state/query";
@@ -43,12 +46,14 @@ export function PullRequestLabelPicker({
   reference: PullRequestRef;
   allowed: boolean;
 }) {
+  const gt = useGT();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState(emptySelection<PullRequestLabelCandidate>);
 
   const candidatesQuery = useEnvironmentQuery(
     open ? pullRequestEnvironment.labelCandidates({ environmentId, input: reference }) : null,
+    useMessages(),
   );
   const setLabels = useAtomCommand(pullRequestEnvironment.setLabels, {
     reportFailure: false,
@@ -73,11 +78,11 @@ export function PullRequestLabelPicker({
     toastManager.add({
       type: "error",
       title: applied
-        ? `Could not put ${names.join(", ")} on`
-        : `Could not take ${names.join(", ")} off`,
+        ? m(msg("Could not put {names} on", { names: names.join(", ") }))
+        : m(msg("Could not take {names} off", { names: names.join(", ") })),
       description: readableFailure(
         squashAtomCommandFailure(result),
-        "The host refused it. Check that you have triage access on this repository.",
+        m(msg("The host refused it. Check that you have triage access on this repository.")),
       ),
     });
   };
@@ -99,23 +104,25 @@ export function PullRequestLabelPicker({
   return (
     <PullRequestCandidatePicker
       icon={<TagIcon className="size-3.5" />}
-      label="Change labels"
+      label={gt("Change labels")}
       allowed={allowed}
-      disabledReason="Changing labels needs triage access on this repository"
+      disabledReason={gt("Changing labels needs triage access on this repository")}
       open={open}
       onOpenChange={onOpenChange}
       query={query}
       onQueryChange={setQuery}
-      searchLabel="Search labels"
+      searchLabel={gt("Search labels")}
       popupWidth="labels"
       isPending={candidatesQuery.isPending && candidatesQuery.data === null}
       error={candidatesQuery.data === null ? candidatesQuery.error : null}
       candidates={candidates}
-      emptyLabel="This repository has no labels."
-      noMatchLabel="No label matches that."
-      errorLabel="The labels could not be read."
+      emptyLabel={gt("This repository has no labels.")}
+      noMatchLabel={gt("No label matches that.")}
+      errorLabel={gt("The labels could not be read.")}
       truncated={candidatesQuery.data?.truncated === true}
-      truncatedLabel="This repository has more labels than are listed here. Apply the rest on the host."
+      truncatedLabel={gt(
+        "This repository has more labels than are listed here. Apply the rest on the host.",
+      )}
       candidateKey={(candidate) => candidate.name}
       onSelect={(candidate) =>
         setDraft((current) =>
@@ -125,8 +132,8 @@ export function PullRequestLabelPicker({
       footer={
         candidatesQuery.data ? (
           <span className="flex flex-col gap-0.5">
-            <span>{appliedCount.toLocaleString()} applied</span>
-            <span>Changes save when you close</span>
+            <span>{gt("{count} applied", { count: appliedCount.toLocaleString() })}</span>
+            <span>{gt("Changes save when you close")}</span>
           </span>
         ) : null
       }
@@ -152,7 +159,11 @@ export function PullRequestLabelPicker({
                 </span>
               ) : null}
             </span>
-            <span className="sr-only">{isChecked(candidate) ? "Applied" : "Not applied"}</span>
+            <span className="sr-only">
+              {isChecked(candidate)
+                ? gt("Applied", { $context: "label is applied" })
+                : gt("Not applied")}
+            </span>
           </>
         );
       }}

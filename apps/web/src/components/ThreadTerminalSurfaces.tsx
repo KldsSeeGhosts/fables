@@ -18,7 +18,8 @@ import {
 } from "@t3tools/client-runtime/state/terminal";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { projectScriptCwd, projectScriptRuntimeEnv } from "@t3tools/shared/projectScripts";
-import { nextTerminalId, resolveTerminalSessionLabel } from "@t3tools/shared/terminalLabels";
+import { nextTerminalId } from "@t3tools/shared/terminalLabels";
+import { resolveTerminalSessionLabel } from "@t3tools/shared/terminalLabelsCopy";
 import { memo, useEffect } from "react";
 import { focusActiveDrawerTerminal, focusTerminal } from "../lib/terminalFocus";
 import { isAtomCommandInterrupted } from "@t3tools/client-runtime/state/runtime";

@@ -5,18 +5,18 @@ import type {
   UsageLimitSourceSnapshots,
 } from "@t3tools/contracts";
 import {
-  resolveProviderLimitPool,
-  resolveProviderUsageLimits,
   displayLimitWindows,
   elapsedShare,
-  formatDuration,
-  type LimitPace,
-  type LimitPoolWindow,
   limitPoolNotice,
-  limitsNotice,
   paceOf,
   remainingPercent,
+  type LimitPace,
+  type LimitPoolWindow,
+  resolveProviderLimitPool,
+  resolveProviderUsageLimits,
 } from "@t3tools/shared/usageLimits";
+import { formatDuration, limitsNotice } from "@t3tools/shared/usageLimitsCopy";
+import { msg, useGT, useLocale, useMessages } from "gt-react";
 import { BoxIcon, CalendarRangeIcon, GaugeIcon, Minimize2Icon, TimerIcon } from "lucide-react";
 import * as Schema from "effect/Schema";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -28,6 +28,7 @@ import { formatContextWindowTokens } from "../../lib/contextWindow";
 import { cn } from "../../lib/utils";
 import { observeResize } from "../../lib/observeResize";
 import { formatUpcomingTimestamp } from "../../timestampFormat";
+import type { MessageResolver } from "../../i18n/messages";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Button } from "../ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
@@ -40,9 +41,9 @@ const USAGE_ROW_CLASS =
   "col-span-full grid min-w-0 grid-cols-subgrid items-center gap-x-1.5 text-meta";
 
 const PACE_LABEL: Record<LimitPace, string> = {
-  ahead: "Ahead of pace",
-  on: "On pace",
-  under: "Under pace",
+  ahead: msg("Ahead of pace"),
+  on: msg("On pace"),
+  under: msg("Under pace"),
 };
 export interface ThreadDetailsUsageInput {
   readonly providerInstanceId: ProviderInstanceId | null;
@@ -58,13 +59,17 @@ export function ThreadDetailsUsage({
   providers,
   sources,
 }: Omit<ThreadDetailsUsageInput, "contextWindow">) {
+  const gt = useGT();
+  const m = useMessages();
   const nowMinute = useNowMinute();
   const now = Date.parse(`${nowMinute}:00Z`);
   const limits =
     providerInstanceId !== null
       ? resolveProviderUsageLimits(providerInstanceId, providers, sources)
       : undefined;
-  const ownNotice = limits ? limitsNotice(limits) : "This provider has not reported usage limits.";
+  const ownNotice = limits
+    ? limitsNotice(limits, m)
+    : gt("This provider has not reported usage limits.");
   const pool =
     providerInstanceId !== null && ownNotice !== null
       ? resolveProviderLimitPool(providerInstanceId, providers, sources, now)
@@ -81,17 +86,19 @@ export function ThreadDetailsUsage({
       : null;
   const notice = pool ? null : (poolNotice ?? ownNotice);
   return (
-    <ThreadDetailsSection title="Usage limits" variant="usage">
+    <ThreadDetailsSection title={gt("Usage limits")} variant="usage">
       {notice || !rows.length ? (
         <UsageRow
-          label="Limits"
+          label={gt("Limits", { $context: "usage limits row label" })}
           icon={<TimerIcon />}
           fill={null}
           tone={null}
           value={
-            poolNotice && !sources.some((source) => source.error) ? "Not linked" : "Unavailable"
+            poolNotice && !sources.some((source) => source.error)
+              ? gt("Not linked")
+              : gt("Unavailable")
           }
-          tooltip={notice ?? "No usage windows reported."}
+          tooltip={notice ?? gt("No usage windows reported.")}
         />
       ) : (
         <>
@@ -115,6 +122,8 @@ export function ThreadDetailsContext({
   /** Why compacting cannot start now; the button stays hoverable to say so. */
   readonly compactUnavailableReason?: string | null | undefined;
 }) {
+  const gt = useGT();
+  const locale = useLocale();
   const [collapsed, setCollapsed] = useLocalStorage(
     "thread-details:collapsed:Context breakdown",
     true,
@@ -122,14 +131,14 @@ export function ThreadDetailsContext({
   );
   if (!usage) {
     return (
-      <ThreadDetailsSection title="Context window" variant="usage">
+      <ThreadDetailsSection title={gt("Context window")} variant="usage">
         <UsageRow
-          label="Context"
+          label={gt("Context", { $context: "context window row label" })}
           icon={<GaugeIcon />}
           fill={null}
           tone={null}
-          value="N/A"
-          tooltip="The provider has not reported context usage."
+          value={gt("N/A")}
+          tooltip={gt("The provider has not reported context usage.")}
         />
       </ThreadDetailsSection>
     );
@@ -140,8 +149,9 @@ export function ThreadDetailsContext({
     maxTokens !== null
       ? `${formatContextWindowTokens(usage.usedTokens)} / ${formatContextWindowTokens(maxTokens)}`
       : `${formatContextWindowTokens(usage.usedTokens)} tokens`;
+  const tokensAria = maxTokens !== null ? gt("{tokens} tokens", { tokens }) : tokens;
   return (
-    <ThreadDetailsSection title="Context window" variant="usage">
+    <ThreadDetailsSection title={gt("Context window")} variant="usage">
       <Collapsible
         className="col-span-full grid grid-cols-subgrid"
         open={!collapsed}
@@ -150,10 +160,17 @@ export function ThreadDetailsContext({
         <div className={cn(USAGE_ROW_CLASS, "h-8")}>
           <CollapsibleTrigger
             render={<ThreadDetailsControl part="usage" />}
-            aria-label={`Context: ${tokens}${maxTokens !== null ? " tokens" : ""}${used !== null ? `, ${Math.round(used)}% used` : " used"}`}
+            aria-label={
+              used !== null
+                ? gt("Context: {usage}, {used}% used", {
+                    usage: tokensAria,
+                    used: Math.round(used),
+                  })
+                : gt("Context: {usage}", { usage: tokensAria })
+            }
           >
             <GaugeIcon className="size-4 shrink-0" />
-            <span className="flex h-6 items-center text-foreground">Context</span>
+            <span className="flex h-6 items-center text-foreground">{gt("Context")}</span>
             <span className={cn("flex items-center gap-1.5", onCompact && "pe-7.5")}>
               <span className="min-w-12 flex-1">
                 {used !== null ? <ContextWindowSegments usage={usage} minSegmentWidth={2} /> : null}
@@ -171,7 +188,7 @@ export function ThreadDetailsContext({
                     <Button
                       size="icon-xs"
                       variant="secondary"
-                      aria-label="Compact context"
+                      aria-label={gt("Compact context")}
                       aria-disabled={compactUnavailableReason ? true : undefined}
                       onClick={compactUnavailableReason ? undefined : onCompact}
                     />
@@ -180,7 +197,7 @@ export function ThreadDetailsContext({
                   <Minimize2Icon className="size-[13px]" />
                 </TooltipTrigger>
                 <TooltipPopup side="top">
-                  {compactUnavailableReason ?? "Compact context"}
+                  {compactUnavailableReason ?? gt("Compact context")}
                 </TooltipPopup>
               </Tooltip>
             ) : null}
@@ -203,15 +220,15 @@ export function ThreadDetailsContext({
                       {segment.label}
                     </dt>
                     <dd className="text-caption tabular-nums text-muted-foreground">
-                      {segment.tokens.toLocaleString("en-US")}
+                      {segment.tokens.toLocaleString(locale)}
                     </dd>
                   </div>
                 ))}
                 <div className="flex min-h-8 items-center justify-between gap-2 px-2.5">
-                  <dt>{maxTokens !== null ? "Used / max" : "Used"}</dt>
+                  <dt>{maxTokens !== null ? gt("Used / max") : gt("Used")}</dt>
                   <dd className="text-caption tabular-nums text-muted-foreground">
-                    {usage.usedTokens.toLocaleString("en-US")}
-                    {maxTokens !== null ? ` / ${maxTokens.toLocaleString("en-US")}` : null}
+                    {usage.usedTokens.toLocaleString(locale)}
+                    {maxTokens !== null ? ` / ${maxTokens.toLocaleString(locale)}` : null}
                   </dd>
                 </div>
               </dl>
@@ -234,13 +251,17 @@ function pooledWindow(pooled: LimitPoolWindow, now: number): ServerProviderUsage
   };
 }
 
-function resetLabel(window: ServerProviderUsageWindow, now: number): string | null {
+function resetLabel(
+  window: ServerProviderUsageWindow,
+  now: number,
+  resolve: MessageResolver,
+): string | null {
   const resetsAt = window.resetsAt ? Date.parse(window.resetsAt) : Number.NaN;
   const remainingMs = resetsAt - now;
   if (!(remainingMs > 0)) return null;
   return isWeeklyWindow(window)
     ? new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(resetsAt)
-    : formatDuration(remainingMs);
+    : formatDuration(remainingMs, resolve);
 }
 
 function isWeeklyWindow(window: ServerProviderUsageWindow): boolean {
@@ -256,6 +277,8 @@ function LimitRow({
   readonly now: number;
   readonly pooledAccounts: number;
 }) {
+  const gt = useGT();
+  const m = useMessages();
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const left = remainingPercent(window);
   const pace = paceOf(window, now);
@@ -267,7 +290,7 @@ function LimitRow({
     weekly && window.id.startsWith("seven_day_")
       ? /^Weekly\s*·\s*(.+)$/i.exec(window.label)?.[1]
       : undefined;
-  const reset = resetLabel(window, now);
+  const reset = resetLabel(window, now, m);
   return (
     <UsageRow
       label={modelLabel ?? window.label}
@@ -277,7 +300,7 @@ function LimitRow({
       tick={elapsed === null ? null : (1 - elapsed) * 100}
       tone={left <= 10 ? "error" : left <= 20 ? "warning" : null}
       value={`${left}%`}
-      ariaValue={`${left}% left`}
+      ariaValue={gt("{left}% left", { left })}
       trailing={
         reset ? (
           <span className="whitespace-nowrap text-caption text-dim-foreground">{reset}</span>
@@ -286,20 +309,28 @@ function LimitRow({
       tooltip={
         <>
           <span className="text-foreground">
-            {window.label}: {left}% left
+            {gt("{label}: {left}% left", { label: window.label, left })}
           </span>
           {window.resetsAt && remainingMs > 0 ? (
             <span>
               <span className="block">
-                {pooledAccounts > 1 ? "Next reset in" : "Resets in"} {formatDuration(remainingMs)}
+                {pooledAccounts > 1
+                  ? gt("Next reset in {duration}", {
+                      duration: formatDuration(remainingMs, m),
+                    })
+                  : gt("Resets in {duration}", {
+                      duration: formatDuration(remainingMs, m),
+                    })}
               </span>
               <span className="block">
-                {formatUpcomingTimestamp(window.resetsAt, timestampFormat, now)}
+                {formatUpcomingTimestamp(window.resetsAt, timestampFormat, now, undefined, m)}
               </span>
             </span>
           ) : null}
-          {pace ? <span>{PACE_LABEL[pace]}</span> : null}
-          {pooledAccounts > 1 ? <span>Across {pooledAccounts} accounts</span> : null}
+          {pace ? <span>{m(PACE_LABEL[pace])}</span> : null}
+          {pooledAccounts > 1 ? (
+            <span>{gt("Across {count} accounts", { count: pooledAccounts })}</span>
+          ) : null}
         </>
       }
     />
@@ -329,6 +360,7 @@ function UsageRow({
   readonly tooltip: ReactNode;
   readonly trailing?: ReactNode;
 }) {
+  const gt = useGT();
   return (
     <Tooltip>
       <div className={cn(USAGE_ROW_CLASS, "h-8")}>
@@ -336,7 +368,7 @@ function UsageRow({
           render={
             <div
               tabIndex={0}
-              aria-label={`${label}: ${ariaValue}`}
+              aria-label={gt("{label}: {value}", { label, value: ariaValue })}
               className="col-span-full grid min-w-0 cursor-default grid-cols-subgrid items-center gap-x-1.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             />
           }

@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import {
   LoaderCircleIcon,
@@ -302,6 +303,7 @@ function audioTime(seconds: number) {
 }
 
 function AudioChip(props: AudioPreviewProps) {
+  const gt = useGT();
   const audio = useRef<HTMLAudioElement | null>(null);
   const onUnmount = useContext(AudioPreviewUnmountContext);
   const [loadedSource, setLoadedSource] = useState<string | null>(null);
@@ -321,15 +323,15 @@ function AudioChip(props: AudioPreviewProps) {
   });
   const loading = !props.failed && !ready;
   const open = props.onOpen ?? (props.failed ? props.onRetry : undefined);
-  const action = props.failed
+  const actionLabel = props.failed
     ? props.onOpen
-      ? "Open"
-      : "Retry"
+      ? gt("Audio unavailable. Open {name}", { name: props.name })
+      : gt("Audio unavailable. Retry {name}", { name: props.name })
     : loading
-      ? "Loading"
+      ? gt("Loading {name}", { name: props.name })
       : playing
-        ? "Pause"
-        : "Play";
+        ? gt("Pause {name}", { name: props.name })
+        : gt("Play {name}", { name: props.name });
   const Icon = props.failed
     ? TriangleAlertIcon
     : loading
@@ -344,7 +346,7 @@ function AudioChip(props: AudioPreviewProps) {
       {...(props.failed ? { state: "invalid" as const } : {})}
       {...(props.variant === "bubble" ? { shape: "bubble" as const } : {})}
       className="relative isolate overflow-hidden"
-      title={props.failed ? "Audio unavailable. Open the file or retry playback." : props.name}
+      title={props.failed ? gt("Audio unavailable. Open the file or retry playback.") : props.name}
     >
       <span
         aria-hidden
@@ -353,7 +355,7 @@ function AudioChip(props: AudioPreviewProps) {
       />
       <ContextChipAction
         className="ml-0 [&_svg]:size-[1em]"
-        aria-label={`${props.failed ? "Audio unavailable. " : ""}${action} ${props.name}`}
+        aria-label={actionLabel}
         disabled={loading}
         onClick={() => {
           if (props.failed) {
@@ -377,7 +379,11 @@ function AudioChip(props: AudioPreviewProps) {
           <InlineButton
             className="block max-w-full"
             onClick={open}
-            aria-label={`${props.failed && !props.onOpen ? "Retry" : "Preview"} ${props.name}`}
+            aria-label={
+              props.failed && !props.onOpen
+                ? gt("Retry {name}", { name: props.name })
+                : gt("Preview {name}", { name: props.name })
+            }
           >
             <span className="block truncate text-left">
               {middleTruncateAttachmentName(props.name)}
@@ -389,7 +395,7 @@ function AudioChip(props: AudioPreviewProps) {
       </ContextChipLabel>
       <span dir="ltr" className="shrink-0 text-micro text-current">
         {props.failed
-          ? "Unavailable"
+          ? gt("Unavailable")
           : loading
             ? "..."
             : duration > 0
