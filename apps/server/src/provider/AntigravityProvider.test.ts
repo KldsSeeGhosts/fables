@@ -188,6 +188,50 @@ const makeHarness = Effect.fn("makeAntigravityProviderHarness")(function* (
 });
 
 describe("Antigravity model catalog", () => {
+  it("shows only configured gateway models and nests advertised efforts under one row", () => {
+    const models = buildAntigravityModelsFromSession(
+      {
+        configOptions: [
+          {
+            ...modelConfig,
+            currentValue: "gpt-6.0-luna",
+            options: [
+              { value: "gpt-6.0-luna", name: "GPT 6.0 Luna" },
+              { value: "gemini-4-argon-high", name: "Gemini 4 Argon" },
+              { value: "gemini-4-argon-medium", name: "Gemini 4 Argon" },
+              { value: "gemini-4-hydrogen-high", name: "Gemini 4 Hydrogen" },
+              { value: "gemini-4-hydrogen-low", name: "Gemini 4 Hydrogen" },
+              { value: "gemini-4-carbon-high", name: "Gemini 4 Carbon" },
+              { value: "claude-opus-5-5", name: "Claude Opus 5.5" },
+              { value: "devin/claude-opus-5-5", name: "Claude Opus 5.5" },
+              { value: "claude-opus-5-5-high", name: "Claude Opus 5.5 (High)" },
+              { value: "claude-sonnet-5-5-high", name: "Claude Sonnet 5.5 (High)" },
+            ],
+          },
+        ],
+      },
+      new Map(),
+      "gemini-4-argon, gemini-4-hydrogen, gemini-4-carbon-high, claude-opus-5-5-high, claude-sonnet-5-5-high",
+    );
+    expect(models.map(({ slug, name }) => [slug, name])).toEqual([
+      ["gemini-4-argon", "Gemini 4 Argon"],
+      ["gemini-4-hydrogen", "Gemini 4 Hydrogen"],
+      ["gemini-4-carbon-high", "Gemini 4 Carbon"],
+      ["claude-opus-5-5-high", "Claude Opus 5.5"],
+      ["claude-sonnet-5-5-high", "Claude Sonnet 5.5"],
+    ]);
+    expect(models.find((model) => model.isDefault)?.slug).toBe("gemini-4-argon");
+    expect(models[0]?.capabilities?.optionDescriptors).toMatchObject([
+      {
+        id: "reasoningEffort",
+        options: [{ id: "medium", isDefault: true }, { id: "high" }],
+      },
+    ]);
+    expect(models[2]?.capabilities?.optionDescriptors).toMatchObject([
+      { id: "reasoningEffort", options: [{ id: "high", isDefault: true }] },
+    ]);
+  });
+
   it("uses legacy session models only when model config is absent", () => {
     const fromLegacy = buildAntigravityModelsFromSession({
       models: sessionSetupResult.models,

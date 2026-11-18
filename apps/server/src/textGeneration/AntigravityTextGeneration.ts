@@ -1,4 +1,5 @@
 import { ProviderSetupError, TextGenerationError } from "@t3tools/contracts";
+import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -12,6 +13,7 @@ import * as Stream from "effect/Stream";
 import { type AcpError, AcpRequestError } from "effect-acp/errors";
 
 import { applyAntigravityAcpModelSelection } from "../provider/acp/AntigravityAcpSupport.ts";
+import { ANTIGRAVITY_GATEWAY_EFFORT_OPTION_ID } from "../provider/acp/AntigravityGatewayModels.ts";
 import { removeAntigravitySessionFiles } from "../provider/acp/AntigravitySessionFiles.ts";
 import {
   ANTIGRAVITY_SIGN_IN_REQUIRED_MESSAGE,
@@ -50,11 +52,13 @@ type AntigravityTextRuntime = Pick<
   | "handleTerminalKill"
   | "handleTerminalRelease"
   | "handleUnknownExtRequest"
->;
+> &
+  Partial<Pick<AcpSessionRuntime.AcpSessionRuntime["Service"], "setSessionModel">>;
 
 export interface AntigravityTextGenerationOptions {
   readonly profileDirectory: string;
   readonly defaultModel?: Effect.Effect<string | undefined>;
+  readonly gatewayModels?: string;
   readonly makeRuntime: (
     cwd: string,
   ) => Effect.Effect<AntigravityTextRuntime, AcpError | ProviderSetupError, Scope.Scope>;
@@ -253,6 +257,16 @@ export const makeAntigravityTextGeneration = Effect.fn("makeAntigravityTextGener
               runtime,
               model: input.modelSelection.model,
               defaultModel: yield* options.defaultModel ?? Effect.undefined,
+              ...(options.gatewayModels
+                ? {
+                    gatewayModels: options.gatewayModels,
+                    legacyModels: started.sessionSetupResult.models,
+                    reasoningEffort: getModelSelectionStringOptionValue(
+                      input.modelSelection,
+                      ANTIGRAVITY_GATEWAY_EFFORT_OPTION_ID,
+                    ),
+                  }
+                : {}),
               mapError: (cause) =>
                 new TextGenerationError({
                   operation,

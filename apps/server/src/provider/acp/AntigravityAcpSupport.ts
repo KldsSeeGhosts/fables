@@ -25,6 +25,11 @@ import {
 } from "../antigravityAuthSupport.ts";
 import * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
 import packageJson from "../../../package.json" with { type: "json" };
+import {
+  antigravityGatewayModelRows,
+  antigravityGatewayModelSelections,
+  antigravityHasConfiguredGatewayModel,
+} from "./AntigravityGatewayModels.ts";
 import { normalizeAntigravitySessionUpdate } from "./AntigravityProtocol.ts";
 
 export interface AntigravityAcpRuntimeInput extends Omit<
@@ -295,27 +300,75 @@ export const applyAntigravityAcpModelSelection = Effect.fn("applyAntigravityAcpM
     readonly runtime: Pick<
       AcpSessionRuntime.AcpSessionRuntime["Service"],
       "getConfigOptions" | "setModel" | "setConfigOption"
-    >;
+    > &
+      Partial<Pick<AcpSessionRuntime.AcpSessionRuntime["Service"], "setSessionModel">>;
     readonly model: string | null | undefined;
     readonly defaultModel?: string | undefined;
+    readonly gatewayModels?: string | undefined;
+    readonly legacyModels?: AcpSessionRuntime.AcpSessionRuntimeStartResult["sessionSetupResult"]["models"];
+    readonly reasoningEffort?: string | undefined;
     readonly mapError: (cause: EffectAcpErrors.AcpError) => E;
   }): Effect.fn.Return<string | undefined, E> {
     const configOptions = yield* input.runtime.getConfigOptions;
-    const current = currentAntigravityModel(configOptions);
-    const resolved = resolveAntigravityModel({
+    const current = currentAntigravityModel(configOptions) ?? input.legacyModels?.currentModelId;
+    const requested =
+      input.model && input.model !== ANTIGRAVITY_DEFAULT_MODEL ? input.model : undefined;
+    const unavailable = (model: string) =>
+      input.mapError(
+        EffectAcpErrors.AcpRequestError.invalidParams(
+          `Antigravity model '${model}' is unavailable. Select an available model.`,
+        ),
+      );
+    let resolved = resolveAntigravityModel({
       configOptions,
       model: input.model,
       defaultModel: input.defaultModel,
     });
-    const explicit = Boolean(input.model) && input.model !== ANTIGRAVITY_DEFAULT_MODEL;
-    if (resolved === undefined || (!explicit && resolved === current)) return current;
-    const unavailable = () =>
-      input.mapError(
-        EffectAcpErrors.AcpRequestError.invalidParams(
-          `Antigravity model '${resolved}' is unavailable. Select an available model.`,
-        ),
-      );
     const options = antigravityModelOptions(configOptions);
+    const gatewaySelections = antigravityGatewayModelSelections(input.gatewayModels ?? "");
+    if (gatewaySelections.length > 0) {
+      const modelConfig = antigravityModelConfig(configOptions);
+      const entries =
+        input.legacyModels && (!modelConfig || antigravityThinkingConfig(configOptions))
+          ? input.legacyModels.availableModels.map(({ modelId, name }) => ({
+              value: modelId,
+              name,
+            }))
+          : options;
+      const rows = antigravityGatewayModelRows(gatewaySelections, entries);
+      const rowFor = (id: string | null | undefined) =>
+        rows.find((row) => row.slug === id || row.routes.some(({ value }) => value === id));
+      const row = requested
+        ? rowFor(requested)
+        : (rows.find(({ slug }) => slug === input.defaultModel) ?? rowFor(current) ?? rows[0]);
+      if (row) {
+        const effort = input.reasoningEffort;
+        const exact =
+          requested === row.slug
+            ? undefined
+            : row.routes.find(({ value }) => value === requested)?.value;
+        const route = effort
+          ? row.efforts.find(({ value }) => value === effort)?.route.value
+          : (exact ?? row.defaultRoute);
+        if (route === undefined) {
+          return yield* Effect.fail(unavailable(`${row.slug} (${effort})`));
+        }
+        resolved = route;
+        if (!modelConfig && input.runtime.setSessionModel) {
+          if (resolved !== current) {
+            yield* input.runtime.setSessionModel(resolved).pipe(Effect.mapError(input.mapError));
+          }
+          return resolved;
+        }
+      } else if (
+        !requested ||
+        input.reasoningEffort !== undefined ||
+        antigravityHasConfiguredGatewayModel(gatewaySelections, requested)
+      ) {
+        return yield* Effect.fail(unavailable(requested ?? ANTIGRAVITY_DEFAULT_MODEL));
+      }
+    }
+    if (resolved === undefined || (!requested && resolved === current)) return current;
     const legacyFamily = options.some((option) => option.value === resolved)
       ? undefined
       : legacyAntigravityFamily(configOptions, resolved);
@@ -326,13 +379,13 @@ export const applyAntigravityAcpModelSelection = Effect.fn("applyAntigravityAcpM
       return legacyFamily;
     }
     const target = splitAntigravityModel(configOptions, resolved);
-    if (!target) return yield* Effect.fail(unavailable());
+    if (!target) return yield* Effect.fail(unavailable(resolved));
     yield* input.runtime.setModel(target.model).pipe(Effect.mapError(input.mapError));
     if (target.thinkingLevel !== undefined) {
       // Thinking levels vary by family, so read them after the family switch.
       const levels = antigravityThinkingConfig(yield* input.runtime.getConfigOptions);
       if (!levels || !selectValues(levels).some((entry) => entry.value === target.thinkingLevel)) {
-        return yield* Effect.fail(unavailable());
+        return yield* Effect.fail(unavailable(resolved));
       }
       yield* input.runtime
         .setConfigOption(levels.id, target.thinkingLevel)

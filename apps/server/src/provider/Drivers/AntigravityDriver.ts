@@ -150,6 +150,10 @@ export const AntigravityDriver: ProviderDriver<
       gatewayModels: settings.gatewayModels,
     };
     const authConfigIssue = antigravityAuthConfigIssue(auth);
+    const gatewayModelOptions =
+      auth.authMethod === "gateway" && auth.gatewayModels
+        ? { gatewayModels: auth.gatewayModels }
+        : {};
     const processEnvironment = yield* mergeProviderInstanceEnvironment(environment);
     const userHome = resolveAntigravityUserHome(
       yield* HostProcess.Platform,
@@ -465,6 +469,7 @@ export const AntigravityDriver: ProviderDriver<
       makeRuntime,
       withProcess: authFlow.withProcess,
       defaultModel,
+      ...gatewayModelOptions,
       supportsNativeGoals: provider.snapshot.getSnapshot.pipe(
         Effect.map(
           (snapshot) => snapshot.slashCommands?.some((command) => command.name === "goal") === true,
@@ -491,6 +496,7 @@ export const AntigravityDriver: ProviderDriver<
     const textGeneration = yield* makeAntigravityTextGeneration({
       profileDirectory,
       defaultModel,
+      ...gatewayModelOptions,
       withProcess: authFlow.withProcess,
       makeRuntime: (cwd) =>
         makeRuntime({

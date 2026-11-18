@@ -5,6 +5,7 @@ import {
   type OrchestrationV2ProviderCapabilities,
   type ProviderSetupError,
 } from "@t3tools/contracts";
+import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import type { SelfInvocation } from "@t3tools/shared/nodeRuntime";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
@@ -27,6 +28,7 @@ import {
   buildAntigravityPrompt,
   type AntigravityAcpRuntimeInput,
 } from "../../provider/acp/AntigravityAcpSupport.ts";
+import { ANTIGRAVITY_GATEWAY_EFFORT_OPTION_ID } from "../../provider/acp/AntigravityGatewayModels.ts";
 import {
   ANTIGRAVITY_SUBAGENT_BATCH_TITLE,
   antigravitySubagentLaunches,
@@ -82,6 +84,7 @@ export interface AntigravityAdapterV2Options {
   >;
   readonly withProcess: AntigravityAuth["withProcess"];
   readonly defaultModel: Effect.Effect<string | undefined>;
+  readonly gatewayModels?: string;
   readonly supportsNativeGoals?: Effect.Effect<boolean>;
   readonly onSessionStarted?: (
     started: AcpSessionRuntime.AcpSessionRuntimeStartResult,
@@ -237,8 +240,12 @@ export function makeAntigravityAcpAdapterFlavor(
     // Loading history replays tool calls; resume avoids replay.
     subagentsIdleOnTurnCompletion: true,
     ...(options.onSessionEvent === undefined ? {} : { onSessionEvent: options.onSessionEvent }),
+    ...(options.gatewayModels
+      ? { ownedModelOptionIds: [ANTIGRAVITY_GATEWAY_EFFORT_OPTION_ID] }
+      : {}),
     applyModelSelection: Effect.fn("AntigravityAdapterV2.applyModelSelection")(function* ({
       runtime,
+      startResult,
       modelSelection,
     }) {
       const defaultModel = yield* options.defaultModel;
@@ -247,6 +254,16 @@ export function makeAntigravityAcpAdapterFlavor(
         model:
           modelSelection.model === ANTIGRAVITY_DEFAULT_MODEL ? undefined : modelSelection.model,
         defaultModel,
+        ...(options.gatewayModels
+          ? {
+              gatewayModels: options.gatewayModels,
+              legacyModels: startResult.sessionSetupResult.models,
+              reasoningEffort: getModelSelectionStringOptionValue(
+                modelSelection,
+                ANTIGRAVITY_GATEWAY_EFFORT_OPTION_ID,
+              ),
+            }
+          : {}),
         mapError: (cause) => cause,
       });
     }),

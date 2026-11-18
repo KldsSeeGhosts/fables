@@ -46,9 +46,11 @@ Choose **Sign-in method** in the Antigravity provider settings:
 
 An AI API gateway is a proxy that serves the Gemini API, such as a
 self-hosted model router. Antigravity sends the API key as a bearer token.
-**Gateway models** takes comma-separated IDs; a family such as `gemini-4-argon`
-adds each of its thinking levels. Leave it empty to offer Antigravity's built-in
-list. Google still marks gateway support as a rollout feature of its runtime.
+**Gateway models** takes comma-separated IDs and limits the picker to those routes.
+A family such as `gemini-4-argon` appears once, with the levels the gateway advertises
+under Reasoning. Use a full ID such as `claude-opus-5-5-high` to keep that route and
+omit similarly named routes. Leave the field empty to show the unfiltered list.
+Google still marks gateway support as a rollout feature of its runtime.
 
 The environment stores the Antigravity API key outside its settings file, and
 clients only see whether one is saved. The agent uses the method and credentials selected for this instance;

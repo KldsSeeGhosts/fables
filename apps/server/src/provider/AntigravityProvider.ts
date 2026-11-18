@@ -1,4 +1,7 @@
-import { resolveProviderProbeTimeoutMs } from "@t3tools/provider-core/server/snapshotProbe";
+import {
+  buildSelectOptionDescriptor,
+  resolveProviderProbeTimeoutMs,
+} from "@t3tools/provider-core/server/snapshotProbe";
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
   ProviderDriverKind,
@@ -37,6 +40,11 @@ import {
 } from "@t3tools/provider-core/server/snapshotProbe";
 import { resolveUsageLimitsAfterProbe } from "@t3tools/provider-core/server/usageLimits";
 import { antigravityThinkingConfig, currentAntigravityModel } from "./acp/AntigravityAcpSupport.ts";
+import {
+  ANTIGRAVITY_GATEWAY_EFFORT_OPTION_ID,
+  antigravityGatewayModelRows,
+  antigravityGatewayModelSelections,
+} from "./acp/AntigravityGatewayModels.ts";
 
 const EMPTY_MODEL_CAPABILITIES = createModelCapabilities({ optionDescriptors: [] });
 const MAX_WORKSPACE_SNAPSHOTS = 32;
@@ -72,6 +80,7 @@ function thinkingCapabilities(config: ThinkingConfig | null | undefined, observe
 export function buildAntigravityModelsFromSession(
   setup: SessionSetupResult,
   thinkingLevels: AntigravityThinkingLevels = new Map(),
+  gatewayModels?: string,
 ): ReadonlyArray<ServerProviderModel> {
   const config = setup.configOptions?.find(
     (option) => option.id === "model" || option.category === "model",
@@ -94,6 +103,29 @@ export function buildAntigravityModelsFromSession(
             name: model.name,
           })) ?? [])
         : [];
+  const gatewaySelections = antigravityGatewayModelSelections(gatewayModels ?? "");
+  if (gatewaySelections.length > 0) {
+    const rows = antigravityGatewayModelRows(gatewaySelections, entries);
+    const preferred = rows.find((row) => row.routes.some(({ value }) => value === currentValue));
+    const defaultSlug = (preferred ?? rows[0])?.slug;
+    return rows.map(({ slug, name, efforts }) => ({
+      slug,
+      name,
+      isCustom: false,
+      ...(slug === defaultSlug ? { isDefault: true, aliases: [ANTIGRAVITY_DEFAULT_MODEL] } : {}),
+      capabilities: createModelCapabilities({
+        optionDescriptors: efforts.length
+          ? [
+              buildSelectOptionDescriptor({
+                id: ANTIGRAVITY_GATEWAY_EFFORT_OPTION_ID,
+                label: "Reasoning",
+                options: efforts,
+              }),
+            ]
+          : [],
+      }),
+    }));
+  }
   const currentThinking = antigravityThinkingConfig(setup.configOptions);
   const seen = new Set<string>();
   // The agent can list two IDs under one name; label the later ones so the picker tells them apart.
@@ -181,6 +213,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
 ) {
   const usesCredentials =
     options.auth?.type === "gemini-api-key" || options.auth?.type === "agent-platform";
+  const gatewayModels = settings.authMethod === "gateway" ? settings.gatewayModels : undefined;
   const signInMessage = usesCredentials
     ? `Connect with ${options.auth.label} to use Antigravity and load models.`
     : SIGN_IN_MESSAGE;
@@ -401,7 +434,11 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
             label: options.auth?.label ?? "Google account",
           },
           checkedAt: updatedAt,
-          models: buildAntigravityModelsFromSession(started.sessionSetupResult, thinkingLevels),
+          models: buildAntigravityModelsFromSession(
+            started.sessionSetupResult,
+            thinkingLevels,
+            gatewayModels,
+          ),
           supportsTextGeneration,
           ...(cwd
             ? {
@@ -428,7 +465,11 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
     observeThinkingLevels(configOptions);
     // Updates without the legacy model list would replace combined ids with families.
     if (antigravityThinkingConfig(configOptions) !== undefined) return;
-    const models = buildAntigravityModelsFromSession({ configOptions }, thinkingLevels);
+    const models = buildAntigravityModelsFromSession(
+      { configOptions },
+      thinkingLevels,
+      gatewayModels,
+    );
     yield* SubscriptionRef.update(metadata, (state) => {
       if (state.draft.auth.status !== "authenticated") return state;
       return { ...state, draft: { ...state.draft, models } };

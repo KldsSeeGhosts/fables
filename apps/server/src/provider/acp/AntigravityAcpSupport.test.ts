@@ -142,6 +142,72 @@ describe("Antigravity release gates", () => {
 });
 
 describe("applyAntigravityAcpModelSelection", () => {
+  it.effect("uses exact gateway effort routes and keeps the default on the allowlist", () =>
+    Effect.gen(function* () {
+      const { runtime, selections } = makeModelRuntime([
+        {
+          ...modelConfig,
+          currentValue: "claude-opus-5-5",
+          options: [
+            { value: "claude-opus-5-5", name: "Claude Opus 5.5" },
+            { value: "claude-opus-5-5-high", name: "Claude Opus 5.5 (High)" },
+            { value: "gemini-4-argon", name: "Gemini 4 Argon" },
+            { value: "gemini-4-argon-high", name: "Gemini 4 Argon" },
+            { value: "gemini-4-argon-medium", name: "Gemini 4 Argon" },
+          ],
+        },
+      ]);
+      const gatewayModels = "claude-opus-5-5-high,gemini-4-argon";
+      const choose = (model: string | undefined, reasoningEffort?: string) =>
+        applyAntigravityAcpModelSelection({
+          runtime,
+          model,
+          defaultModel: "claude-opus-5-5",
+          gatewayModels,
+          reasoningEffort,
+          mapError: (cause) => cause,
+        });
+      expect(yield* choose(undefined)).toBe("claude-opus-5-5-high");
+      expect(yield* choose("gemini-4-argon")).toBe("gemini-4-argon-medium");
+      expect(yield* choose("gemini-4-argon", "medium")).toBe("gemini-4-argon-medium");
+      expect(yield* choose("claude-opus-5-5").pipe(Effect.flip)).toMatchObject({ code: -32602 });
+      expect(yield* choose("gemini-4-argon", "low").pipe(Effect.flip)).toMatchObject({
+        message: expect.stringContaining("low"),
+      });
+      expect(selections).toEqual([
+        "claude-opus-5-5-high",
+        "gemini-4-argon-medium",
+        "gemini-4-argon-medium",
+      ]);
+    }),
+  );
+
+  it.effect("uses the advertised gateway route when ACP splits model and thinking controls", () =>
+    Effect.gen(function* () {
+      const { runtime, selections, levels } = makeModelRuntime([
+        { ...familyConfig, options: [{ value: "gemini-4-argon", name: "Gemini 4 Argon" }] },
+        thinkingConfig,
+      ]);
+      const model = yield* applyAntigravityAcpModelSelection({
+        runtime,
+        model: "gemini-4-argon",
+        gatewayModels: "gemini-4-argon(low), gemini-4-argon(medium)",
+        legacyModels: {
+          currentModelId: "gemini-4-argon-medium",
+          availableModels: [
+            { modelId: "gemini-4-argon-low", name: "Gemini 4 Argon" },
+            { modelId: "gemini-4-argon-medium", name: "Gemini 4 Argon" },
+          ],
+        },
+        reasoningEffort: "low",
+        mapError: (cause) => cause,
+      });
+      expect(model).toBe("gemini-4-argon-low");
+      expect(selections).toEqual(["gemini-4-argon"]);
+      expect(levels).toEqual(["low"]);
+    }),
+  );
+
   it.effect("restores the saved model instead of the cold-resume default", () =>
     Effect.gen(function* () {
       const { runtime, selections } = makeModelRuntime();
