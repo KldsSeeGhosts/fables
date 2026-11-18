@@ -53,13 +53,27 @@ export function antigravityGatewayModelRows(
 ) {
   const grouped = new Map<string, Map<string, AntigravityGatewayModelOption>>();
   for (const selection of selections) {
+    let matched = false;
     for (const model of models) {
       if (!matchesRoute(selection, model.value)) continue;
+      matched = true;
       const family = routeFamily(model.value);
       const entries = grouped.get(family) ?? new Map();
       entries.set(model.value, model);
       grouped.set(family, entries);
     }
+    if (matched || !ROUTE_SUFFIX.test(selection)) continue;
+    // The agent folds tier routes into one family option and can omit tiers it
+    // does not know. The gateway still serves a configured tier of a family the
+    // agent advertises, so keep it rather than hide a working level.
+    const family = routeFamily(selection);
+    const familyModel = models.find(
+      (model) => model.value === family || routeFamily(model.value) === family,
+    );
+    if (!familyModel) continue;
+    const entries = grouped.get(family) ?? new Map();
+    entries.set(selection, { value: selection, name: familyModel.name });
+    grouped.set(family, entries);
   }
   return Array.from(grouped, ([family, entries]) => {
     const routes = [...entries.values()];

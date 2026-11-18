@@ -182,6 +182,60 @@ describe("applyAntigravityAcpModelSelection", () => {
     }),
   );
 
+  it.effect("dispatches configured tiers the agent folds into family options", () =>
+    Effect.gen(function* () {
+      // Shape reported by agy 1.5.10 in gateway mode on 2026-11-17.
+      const { runtime, selections } = makeModelRuntime([
+        {
+          ...modelConfig,
+          currentValue: "gemini-4-hydrogen-high",
+          options: [
+            { value: "gemini-4-hydrogen-high", name: "Gemini 4 Hydrogen" },
+            { value: "gemini-4-hydrogen-xhigh", name: "Gemini 4 Hydrogen" },
+            { value: "gemini-4-hydrogen", name: "Gemini 4 Hydrogen" },
+            { value: "gemini-4-hydrogen-low", name: "Gemini 4 Hydrogen" },
+            { value: "gemini-4-carbon", name: "Gemini 4 Carbon" },
+            { value: "claude-opus-5-5", name: "Claude Opus 5.5" },
+          ],
+        },
+      ]);
+      const gatewayModels = [
+        "gemini-4-hydrogen-low",
+        "gemini-4-hydrogen-medium",
+        "gemini-4-hydrogen-high",
+        "gemini-4-hydrogen-xhigh",
+        "gemini-4-carbon-low",
+        "gemini-4-carbon-medium",
+        "gemini-4-carbon-high",
+        "claude-opus-5-5-low",
+        "claude-opus-5-5-medium",
+        "claude-opus-5-5-high",
+      ].join(",");
+      const choose = (model: string, reasoningEffort?: string) =>
+        applyAntigravityAcpModelSelection({
+          runtime,
+          model,
+          gatewayModels,
+          reasoningEffort,
+          mapError: (cause) => cause,
+        });
+      expect(yield* choose("gemini-4-carbon", "low")).toBe("gemini-4-carbon");
+      expect(yield* choose("gemini-4-hydrogen", "medium")).toBe("gemini-4-hydrogen");
+      expect(yield* choose("gemini-4-hydrogen", "xhigh")).toBe("gemini-4-hydrogen-xhigh");
+      // Unlisted tiers report their family; the selections below are what the agent receives.
+      // The bare Opus family is the direct Claude route, so it is never sent.
+      expect(yield* choose("claude-opus-5-5")).toBe("claude-opus-5-5");
+      expect(yield* choose("claude-opus-5-5", "high")).toBe("claude-opus-5-5");
+      expect(selections).toEqual([
+        "model=gemini-4-carbon-low (unlisted)",
+        "model=gemini-4-hydrogen-medium (unlisted)",
+        "gemini-4-hydrogen-xhigh",
+        "model=claude-opus-5-5-medium (unlisted)",
+        "model=claude-opus-5-5-high (unlisted)",
+      ]);
+    }),
+  );
+
   it.effect("uses the advertised gateway route when ACP splits model and thinking controls", () =>
     Effect.gen(function* () {
       const { runtime, selections, levels } = makeModelRuntime([

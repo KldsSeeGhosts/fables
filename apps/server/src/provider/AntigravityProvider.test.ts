@@ -232,6 +232,61 @@ describe("Antigravity model catalog", () => {
     ]);
   });
 
+  it("keeps configured tiers of families the agent folds into one option", () => {
+    // Shape reported by agy 1.5.10 in gateway mode on 2026-11-17.
+    const tiers = (base: string, levels: ReadonlyArray<string>) =>
+      levels.map((level) => `${base}-${level}`);
+    const models = buildAntigravityModelsFromSession(
+      {
+        configOptions: [
+          {
+            ...modelConfig,
+            currentValue: "gemini-4-hydrogen-high",
+            options: [
+              { value: "gemini-4-hydrogen-high", name: "Gemini 4 Hydrogen" },
+              { value: "gemini-4-hydrogen-xhigh", name: "Gemini 4 Hydrogen" },
+              { value: "gemini-4-hydrogen", name: "Gemini 4 Hydrogen" },
+              { value: "gemini-4-hydrogen-low", name: "Gemini 4 Hydrogen" },
+              { value: "gemini-4-carbon", name: "Gemini 4 Carbon" },
+              { value: "devin/gemini-4-carbon", name: "Gemini 4 Carbon" },
+              { value: "gemini-4-argon", name: "Gemini 4 Argon" },
+              { value: "claude-sonnet-5-5", name: "Claude Sonnet 5.5" },
+              { value: "claude-opus-5-5", name: "Claude Opus 5.5" },
+              { value: "gpt-6.2-sol", name: "GPT 6.2 Sol" },
+            ],
+          },
+        ],
+      },
+      new Map(),
+      [
+        ...tiers("gemini-4-argon", ["low", "medium", "high"]),
+        ...tiers("gemini-4-hydrogen", ["low", "medium", "high", "xhigh"]),
+        ...tiers("gemini-4-carbon", ["low", "medium", "high"]),
+        ...tiers("claude-opus-5-5", ["low", "medium", "high"]),
+        ...tiers("claude-sonnet-5-5", ["low", "medium", "high"]),
+        "gemini-9-unknown-high",
+      ].join(","),
+    );
+    const efforts = (slug: string) =>
+      models
+        .find((model) => model.slug === slug)
+        ?.capabilities?.optionDescriptors?.flatMap((descriptor) =>
+          "options" in descriptor ? descriptor.options.map((option) => option.id) : [],
+        );
+    expect(models.map(({ slug, name }) => [slug, name])).toEqual([
+      ["gemini-4-argon", "Gemini 4 Argon"],
+      ["gemini-4-hydrogen", "Gemini 4 Hydrogen"],
+      ["gemini-4-carbon", "Gemini 4 Carbon"],
+      ["claude-opus-5-5", "Claude Opus 5.5"],
+      ["claude-sonnet-5-5", "Claude Sonnet 5.5"],
+    ]);
+    expect(efforts("gemini-4-argon")).toEqual(["low", "medium", "high"]);
+    expect(efforts("gemini-4-hydrogen")).toEqual(["low", "medium", "high", "xhigh"]);
+    expect(efforts("gemini-4-carbon")).toEqual(["low", "medium", "high"]);
+    expect(efforts("claude-opus-5-5")).toEqual(["low", "medium", "high"]);
+    expect(efforts("claude-sonnet-5-5")).toEqual(["low", "medium", "high"]);
+  });
+
   it("uses legacy session models only when model config is absent", () => {
     const fromLegacy = buildAntigravityModelsFromSession({
       models: sessionSetupResult.models,
