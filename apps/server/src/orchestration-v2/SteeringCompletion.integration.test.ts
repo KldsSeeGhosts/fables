@@ -42,6 +42,7 @@ import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter"
 import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import * as ProviderTurnControlService from "./ProviderTurnControlService.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
+import * as McpAppModelContext from "../mcpApps/McpAppModelContext.ts";
 
 const driver = ProviderDriverKind.make("codex");
 const instanceId = ProviderInstanceId.make("codex");
@@ -470,10 +471,15 @@ it.effect.each([
         Effect.provide(
           ProviderTurnControlService.layer.pipe(
             Layer.provide(
-              Layer.mock(ProjectionStore.ProjectionStoreV2)({
-                getProviderControlContext: () =>
-                  Effect.die("An admission receipt must be checked before completed-turn fallback"),
-              }),
+              Layer.mergeAll(
+                Layer.mock(ProjectionStore.ProjectionStoreV2)({
+                  getProviderControlContext: () =>
+                    Effect.die(
+                      "An admission receipt must be checked before completed-turn fallback",
+                    ),
+                }),
+                McpAppModelContext.layerEmpty,
+              ),
             ),
           ),
         ),
