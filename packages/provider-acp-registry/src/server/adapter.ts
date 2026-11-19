@@ -188,6 +188,10 @@ function makeAcpRegistryRuntime(
     });
 }
 
+const isHermes = (
+  initializeResult: AcpSessionRuntime.AcpSessionRuntimeStartResult["initializeResult"],
+) => initializeResult.agentInfo?.name === "hermes-agent";
+
 export const makeAcpRegistryAdapterV2 = Effect.fn("makeAcpRegistryAdapterV2")(function* (
   options: AcpRegistryAdapterV2Options,
 ) {
@@ -199,6 +203,9 @@ export const makeAcpRegistryAdapterV2 = Effect.fn("makeAcpRegistryAdapterV2")(fu
   const startupKey =
     options.settings.source === "local" ? `local:${options.instanceId}` : registryAgentId;
   const isDevin = registryAgentId === "devin";
+  const isAntigravityCli =
+    options.settings.source === "local" &&
+    /^agy(\.exe|\.cmd)?$/i.test(options.settings.commandPath.split(/[\\/]/).pop() ?? "");
   const isOmp =
     options.settings.source === "local" &&
     /^omp(\.exe|\.cmd)?$/i.test(options.settings.commandPath.split(/[\\/]/).pop() ?? "");
@@ -218,10 +225,6 @@ export const makeAcpRegistryAdapterV2 = Effect.fn("makeAcpRegistryAdapterV2")(fu
     registryAgentId === "kimi-code" ||
     (options.settings.source === "local" &&
       /^kimi(\.exe|\.cmd)?$/i.test(options.settings.commandPath.split(/[\\/]/).pop() ?? ""));
-  // Hermes Agent is not in the public registry; local installs run `hermes acp`.
-  const isHermes =
-    options.settings.source === "local" &&
-    /^hermes(\.exe|\.cmd)?$/i.test(options.settings.commandPath.split(/[\\/]/).pop() ?? "");
   const isClaude =
     registryAgentId === "claude-acp" ||
     (options.settings.source === "local" &&
@@ -258,6 +261,7 @@ export const makeAcpRegistryAdapterV2 = Effect.fn("makeAcpRegistryAdapterV2")(fu
       : AcpProviderCapabilitiesV2,
     customModels: readCustomModelEntries(options.settings.customModels).map((entry) => entry.slug),
     compactViaAdvertisedCommand: true,
+    ...(isAntigravityCli ? { wakeOnDetachedRequest: true, replyEndsWithUsageUpdate: true } : {}),
     ...options.profile?.flavor,
     promptFailure: (cause) => acpRegistryPromptFailure(registryAgentId, cause),
     ...(registryAgentId === "factory-droid"
@@ -296,9 +300,12 @@ export const makeAcpRegistryAdapterV2 = Effect.fn("makeAcpRegistryAdapterV2")(fu
       : {}),
     // Hermes replies on the root session when a background process it started exits; no
     // prompt response follows, so the continuation ends on the deferred-finalize debounce.
-    ...(isHermes
-      ? { enablePostSettleContinuation: true, deferFinalizeForBackgroundWork: true }
-      : {}),
+    // Hermes is not in the public registry and may run through a wrapper, so only its
+    // initialize reply identifies it. agy does the same and is known by its command.
+    enablePostSettleContinuation: (initializeResult) =>
+      isAntigravityCli || isHermes(initializeResult),
+    deferFinalizeForBackgroundWork: (initializeResult) =>
+      isAntigravityCli || isHermes(initializeResult),
     ...(isDevin
       ? {
           clientCapabilitiesMeta: {

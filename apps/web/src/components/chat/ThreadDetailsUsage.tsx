@@ -9,6 +9,7 @@ import {
   elapsedShare,
   limitPoolNotice,
   paceOf,
+  paceRemainingPercent,
   remainingPercent,
   type LimitPace,
   type LimitPoolWindow,
@@ -16,6 +17,7 @@ import {
   resolveProviderUsageLimits,
 } from "@t3tools/shared/usageLimits";
 import { formatDuration, limitsNotice } from "@t3tools/shared/usageLimitsCopy";
+import { Link } from "@tanstack/react-router";
 import { msg, useGT, useLocale, useMessages } from "gt-react";
 import { BoxIcon, CalendarRangeIcon, GaugeIcon, Minimize2Icon, TimerIcon } from "lucide-react";
 import * as Schema from "effect/Schema";
@@ -99,6 +101,7 @@ export function ThreadDetailsUsage({
               : gt("Unavailable")
           }
           tooltip={notice ?? gt("No usage windows reported.")}
+          opensUsage
         />
       ) : (
         <>
@@ -283,6 +286,7 @@ function LimitRow({
   const left = remainingPercent(window);
   const pace = paceOf(window, now);
   const elapsed = elapsedShare(window, now);
+  const timeLeft = paceRemainingPercent(window, now);
   const resetsAt = window.resetsAt ? Date.parse(window.resetsAt) : Number.NaN;
   const remainingMs = resetsAt - now;
   const weekly = isWeeklyWindow(window);
@@ -306,6 +310,7 @@ function LimitRow({
           <span className="whitespace-nowrap text-caption text-dim-foreground">{reset}</span>
         ) : undefined
       }
+      opensUsage
       tooltip={
         <>
           <span className="text-foreground">
@@ -328,6 +333,9 @@ function LimitRow({
             </span>
           ) : null}
           {pace ? <span>{m(PACE_LABEL[pace])}</span> : null}
+          {pace && timeLeft !== null ? (
+            <span className="block">{gt("{timeLeft}% of the window left", { timeLeft })}</span>
+          ) : null}
           {pooledAccounts > 1 ? (
             <span>{gt("Across {count} accounts", { count: pooledAccounts })}</span>
           ) : null}
@@ -337,6 +345,7 @@ function LimitRow({
   );
 }
 
+/** One label, hairline, and value row; the whole row opens the details tooltip. With `opensUsage` it links to the usage page. */
 function UsageRow({
   label,
   shortLabel,
@@ -348,6 +357,8 @@ function UsageRow({
   ariaValue = value,
   tooltip,
   trailing,
+  muted = false,
+  opensUsage = false,
 }: {
   readonly label: string;
   readonly shortLabel?: string | undefined;
@@ -359,18 +370,30 @@ function UsageRow({
   readonly ariaValue?: string;
   readonly tooltip: ReactNode;
   readonly trailing?: ReactNode;
+  readonly muted?: boolean;
+  readonly opensUsage?: boolean;
 }) {
   const gt = useGT();
+  const triggerClassName =
+    "col-span-full grid min-w-0 grid-cols-subgrid items-center gap-x-1.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
   return (
     <Tooltip>
       <div className={cn(USAGE_ROW_CLASS, "h-8")}>
         <TooltipTrigger
           render={
-            <div
-              tabIndex={0}
-              aria-label={gt("{label}: {value}", { label, value: ariaValue })}
-              className="col-span-full grid min-w-0 cursor-default grid-cols-subgrid items-center gap-x-1.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-            />
+            opensUsage ? (
+              <Link
+                to="/usage"
+                aria-label={gt("{label}: {value}", { label, value: ariaValue })}
+                className={cn(triggerClassName, "cursor-pointer")}
+              />
+            ) : (
+              <div
+                tabIndex={0}
+                aria-label={gt("{label}: {value}", { label, value: ariaValue })}
+                className={cn(triggerClassName, "cursor-default")}
+              />
+            )
           }
         >
           <span className="shrink-0 text-muted-foreground [&>svg]:size-4">{icon}</span>
@@ -390,7 +413,9 @@ function UsageRow({
                         ? "bg-error"
                         : tone === "warning"
                           ? "bg-warning"
-                          : "bg-foreground/80",
+                          : muted
+                            ? "bg-muted-foreground"
+                            : "bg-foreground/80",
                     )}
                     style={{ width: `max(${fill}%, 2px)` }}
                   />
@@ -418,7 +443,10 @@ function UsageRow({
         </TooltipTrigger>
       </div>
       <TooltipPopup side="left" sideOffset={16}>
-        <div className="flex flex-col gap-0.5 text-muted-foreground">{tooltip}</div>
+        <div className="flex flex-col gap-0.5 text-muted-foreground">
+          {tooltip}
+          {opensUsage ? <span>{gt("Open usage")}</span> : null}
+        </div>
       </TooltipPopup>
     </Tooltip>
   );
