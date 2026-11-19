@@ -2820,17 +2820,30 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   );
 
   const handleThreadContextMenu = useStableCallback(
-    (threadRef: ScopedThreadRef, position: { x: number; y: number }, source: ContextMenuSource) => {
+    (
+      threadRef: ScopedThreadRef,
+      position: { x: number; y: number },
+      source: ContextMenuSource,
+      fromSearch = false,
+    ) => {
       void (async () => {
         const api = readLocalApi();
         if (!api) return;
         const threadKey = scopedThreadKey(threadRef);
         const selectionState = useThreadSelectionStore.getState();
-        if (selectionState.hasSelection() && selectionState.selectedThreadKeys.has(threadKey)) {
+        // Search results are not selectable rows, so they always act on their own thread.
+        if (
+          !fromSearch &&
+          selectionState.hasSelection() &&
+          selectionState.selectedThreadKeys.has(threadKey)
+        ) {
           await handleMultiSelectContextMenu(position, source);
           return;
         }
-        const thread = threadByKeyRef.current.get(threadKey);
+        // Search results also reach threads in collapsed shelves, which are not rendered rows.
+        const thread =
+          threadByKeyRef.current.get(threadKey) ??
+          searchableThreads.find((candidate) => threadShellKey(candidate) === threadKey);
         if (!thread) return;
         const threadWorkspacePath =
           thread.worktreePath ??
@@ -2867,6 +2880,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                   AuthOrchestrationOperateScope,
                 ),
                 branch: thread.branch ?? null,
+                // An archived project is not a filter choice.
                 projectFilter:
                   threadProjectGroup && !threadProjectGroup.archived
                     ? {
@@ -2885,6 +2899,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                   canShareWithGuestAtom(threadRef.environmentId),
                 ),
                 canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+                canRename: !fromSearch,
                 supports: {
                   settlement: configLoaded,
                   autoSettleOptOut: supportsAutoSettleOptOut,
@@ -3118,6 +3133,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         }
       })();
     },
+  );
+  const handleSearchResultContextMenu = useStableCallback(
+    (threadRef: ScopedThreadRef, position: { x: number; y: number }, source: ContextMenuSource) =>
+      handleThreadContextMenu(threadRef, position, source, true),
   );
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to window keydown for thread navigation shortcuts using the current thread list
@@ -3484,6 +3503,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           searchMatchQuery={threadSearch.query}
                           onHighlight={() => setActiveSearchResultIndex(index)}
                           onSelect={() => selectThreadSearchResult(thread)}
+                          onContextMenu={handleSearchResultContextMenu}
                           onFileDropThreads={handleThreadFileDrop}
                         />
                       );

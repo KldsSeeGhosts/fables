@@ -47,19 +47,20 @@ function useUpdateRunMachineViews(run: UpdateEverythingRun): ReadonlyArray<Updat
   }));
 }
 
+function restartSecondsLeft(run: UpdateEverythingRun, now: number): number | null {
+  return run.phase === "countdown" && run.restartAt !== null
+    ? Math.max(0, Math.ceil((run.restartAt - now) / 1000))
+    : null;
+}
+
 function localStatusLabel(
   run: UpdateEverythingRun,
   local: UpdateRunLocalState,
   now: number,
   resolve: MessageResolver,
 ) {
-  if (run.phase === "countdown" && run.restartAt !== null) {
-    return resolve(
-      msg("restarts in {seconds}s", {
-        seconds: Math.max(0, Math.ceil((run.restartAt - now) / 1000)),
-      }),
-    );
-  }
+  const seconds = restartSecondsLeft(run, now);
+  if (seconds !== null) return resolve(msg("restarts in {seconds}s", { seconds }));
   if (run.phase === "installing") return resolve(msg("restarting"));
   if (local?.status === "downloading") {
     return local.percent === null
@@ -91,6 +92,7 @@ export function SidebarUpdateCapsule({
   const updateServer = useServerUpdate();
   const failed = machines.some(({ status }) => status === "failed");
   const settled = !hasActiveMachine && run.localVersion === null;
+  const restartSeconds = restartSecondsLeft(run, now);
 
   const actionLabel =
     view.action === "later" ? gt("Later") : view.action === "retry" ? gt("Retry") : gt("Dismiss");
@@ -104,7 +106,7 @@ export function SidebarUpdateCapsule({
     <Popover>
       <div
         className={cn(
-          "relative flex h-8 flex-1 items-center rounded-full bg-sidebar-control-surface text-sidebar-foreground",
+          "relative ml-auto flex h-8 w-8 shrink-0 items-center rounded-full bg-sidebar-control-surface text-sidebar-foreground @min-[12rem]/sidebar-update:w-full",
           view.tone === "slow" && "ring-1 ring-warning/40 ring-inset",
           view.tone === "failed" && "ring-1 ring-destructive/40 ring-inset",
         )}
@@ -134,11 +136,17 @@ export function SidebarUpdateCapsule({
               {actionLabel}
             </Button>
           </span>
-        ) : (
-          <span className="pointer-events-none relative grid size-8 shrink-0 place-items-center">
-            {icon}
-          </span>
-        )}
+        ) : null}
+        <span
+          className={cn(
+            "pointer-events-none relative grid size-8 shrink-0 place-items-center",
+            view.action !== null && "@min-[12rem]/sidebar-update:hidden",
+            restartSeconds !== null &&
+              "rounded-full text-caption tabular-nums ring-1 ring-current/22 ring-inset",
+          )}
+        >
+          {restartSeconds !== null ? m(msg("{seconds}s", { seconds: restartSeconds })) : icon}
+        </span>
       </div>
       <PopoverPopup side="top" align="end" padding="compact" width="sm">
         <div className="flex flex-col gap-1 text-caption">

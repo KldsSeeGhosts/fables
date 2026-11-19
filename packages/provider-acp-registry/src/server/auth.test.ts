@@ -432,6 +432,23 @@ it.effect("keeps failing when the agent rejects an explicit authenticate", () =>
     assert.deepEqual(h.changed, []);
   }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
+
+it.effect("surfaces what the login command printed when it exits non-zero", () =>
+  Effect.gen(function* () {
+    const h = yield* makeHarness(terminalMethod);
+    yield* h.controller.start("owner", Effect.void, "terminal");
+    yield* h.phase("waiting");
+    h.data("Connect to the VPN, then sign in again.\r\n");
+    h.exit(1);
+    const failed = yield* h.phase("failed");
+    assert.strictEqual(
+      failed.message,
+      "The provider login command did not finish successfully. Connect to the VPN, then sign in again.",
+    );
+    assert.deepEqual(h.changed, []);
+  }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+);
+
 it.effect("surfaces the agent error message when authenticate fails with AcpRequestError", () =>
   Effect.gen(function* () {
     const error = new AcpRequestError({

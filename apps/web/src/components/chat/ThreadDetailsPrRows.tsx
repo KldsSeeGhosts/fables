@@ -1,4 +1,4 @@
-import { ThreadDetailsControl } from "./ThreadDetailsControl";
+import { ThreadDetailsMoreButton } from "./ThreadDetailsControl";
 import type {
   EnvironmentId,
   ScopedThreadRef,
@@ -12,8 +12,7 @@ import {
   threadPullRequestKeyOf,
   visibleThreadPullRequests,
 } from "@t3tools/client-runtime/thread-pull-requests";
-import { T, useMessages, Var } from "gt-react";
-import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
+import { useMessages } from "gt-react";
 import { useState, type ComponentProps, type MouseEvent as ReactMouseEvent } from "react";
 
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
@@ -111,7 +110,6 @@ function ThreadDetailsPrRows({
   const currentRow = <ThreadDetailsPrRow {...row} onStopWatching={stopWatching(currentLink)} />;
   const visibleLinks = visibleThreadPullRequests(links);
   if (currentLink === null || visibleLinks.length <= 1) return currentRow;
-  const restCount = visibleLinks.length - 1;
   const currentKey = threadPullRequestKeyOf(currentLink);
   const rest = expanded
     ? pullRequestListLines(resolveThreadPullRequestChains(visibleLinks))
@@ -137,28 +135,11 @@ function ThreadDetailsPrRows({
           ))}
         </div>
       ) : null}
-      <ThreadDetailsControl
-        variant="ghost"
-        size="sm"
-        aria-expanded={expanded}
-        onClick={() => setExpanded(!expanded)}
-        part="row"
-        tone="muted"
-        className="w-full"
-      >
-        {expanded ? (
-          <ChevronUpIcon aria-hidden className="size-4 shrink-0" />
-        ) : (
-          <ChevronDownIcon aria-hidden className="size-4 shrink-0" />
-        )}
-        {expanded ? (
-          <T>Show less</T>
-        ) : (
-          <T>
-            Show <Var>{restCount}</Var> more
-          </T>
-        )}
-      </ThreadDetailsControl>
+      <ThreadDetailsMoreButton
+        expanded={expanded}
+        remaining={rest.length}
+        onToggle={() => setExpanded(!expanded)}
+      />
     </>
   );
 }
