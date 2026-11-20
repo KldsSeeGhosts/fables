@@ -129,3 +129,33 @@ it("opens sparse activity and keeps manual choices when more events arrive", asy
   await screen.rerender(tab(sparse));
   await expect.element(screen.getByRole("button", { name: "Show description" })).toBeVisible();
 });
+
+it("gives each review a heading for screen reader navigation", async () => {
+  const reviewed: PullRequestDetailView = {
+    ...detail,
+    commits: [],
+    comments: [
+      {
+        id: "review",
+        kind: "review",
+        author: { login: "bob", name: null, avatarUrl: null },
+        body: "Looks good",
+        createdAt: "2026-10-01T00:00:00Z",
+        url: `${detail.url}#pullrequestreview-1`,
+        path: null,
+        reviewState: "APPROVED",
+      },
+    ],
+  };
+  await using screen = await render(
+    <div style={{ height: 600 }}>
+      <PullRequestTimelineTab
+        detail={reviewed}
+        environmentId={EnvironmentId.make("environment")}
+        order="oldest"
+        onOpenCommit={() => {}}
+      />
+    </div>,
+  );
+  await expect.element(screen.getByRole("heading", { name: /bob approved/i })).toBeVisible();
+});
