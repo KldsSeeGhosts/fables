@@ -91,6 +91,7 @@ import { pullRequestGroups, pullRequestListEntryId } from "./pullRequestListGrou
 import { PullRequestListEmptyState, PullRequestListNotice } from "./PullRequestListEmptyState";
 import { PullRequestGlyph } from "./pullRequestIcons";
 import { PullRequestListGhost } from "./PullRequestGhosts";
+import { PullRequestsUnavailableState } from "./PullRequestsUnavailableState";
 import { type PullRequestRowTarget } from "./PullRequestRow";
 import { RightPanelTabs } from "../RightPanelTabs";
 import { isCommandPaletteOpen } from "~/commandPaletteBus";
@@ -1370,21 +1371,11 @@ export function PullRequestsPage() {
       ) : firstLoad ? (
         <PullRequestListGhost rows={7} caption={gt("Loading pull requests…")} />
       ) : listError && shownCount === 0 ? (
-        <PullRequestListNotice
-          icon={CircleAlertIcon}
-          title="Could not load pull requests"
-          description={listError}
-        >
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={listQuery.isPending}
-            onClick={() => listQuery.refresh()}
-          >
-            <RefreshIcon size="sm" refreshing={listQuery.isPending} />
-            Retry
-          </Button>
-        </PullRequestListNotice>
+        <PullRequestsUnavailableState
+          error={listError}
+          refreshing={listQuery.isPending}
+          onRetry={listQuery.retry}
+        />
       ) : carriedToNothing ? (
         <PullRequestListGhost rows={7} />
       ) : shownCount === 0 &&
@@ -1445,7 +1436,7 @@ export function PullRequestsPage() {
       {listError && shownCount > 0 ? (
         <div className="flex items-center justify-between gap-3 rounded-control border border-warning/30 bg-warning-surface px-3 py-2 text-xs">
           <span>{gt("{error} Showing the last pull requests loaded.", { error: listError })}</span>
-          <Button size="xs" variant="secondary" onClick={() => listQuery.refresh()}>
+          <Button size="xs" variant="outline" onClick={listQuery.retry}>
             <T>Retry</T>
           </Button>
         </div>
