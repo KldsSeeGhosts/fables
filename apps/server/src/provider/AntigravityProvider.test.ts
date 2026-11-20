@@ -200,7 +200,7 @@ describe("Antigravity model catalog", () => {
             currentValue: "gpt-6.0-luna",
             options: [
               { value: "gpt-6.0-luna", name: "GPT 6.0 Luna" },
-              { value: "gemini-4-argon-high", name: "Gemini 4 Argon" },
+              { value: "gemini-4-argon-high", name: "Gemini 4 Argon (gemini-4-argon-high)" },
               { value: "gemini-4-argon-medium", name: "Gemini 4 Argon" },
               { value: "gemini-4-hydrogen-high", name: "Gemini 4 Hydrogen" },
               { value: "gemini-4-hydrogen-low", name: "Gemini 4 Hydrogen" },
@@ -209,12 +209,17 @@ describe("Antigravity model catalog", () => {
               { value: "devin/claude-opus-5-5", name: "Claude Opus 5.5" },
               { value: "claude-opus-5-5-high", name: "Claude Opus 5.5 (High)" },
               { value: "claude-sonnet-5-5-high", name: "Claude Sonnet 5.5 (High)" },
+              { value: "gemini-4-neon-medium", name: "Gemini 4 Neon (gemini-4-neon-medium)" },
+              {
+                value: "devin-gemini-4-neon-medium",
+                name: "Gemini 4 Neon (Devin) (devin-gemini-4-neon-medium)",
+              },
             ],
           },
         ],
       },
       new Map(),
-      "gemini-4-argon, gemini-4-hydrogen, gemini-4-carbon-high, claude-opus-5-5-high, claude-sonnet-5-5-high",
+      "gemini-4-argon, gemini-4-hydrogen, gemini-4-carbon-high, claude-opus-5-5-high, claude-sonnet-5-5-high, gemini-4-neon, devin-gemini-4-neon",
     );
     expect(models.map(({ slug, name }) => [slug, name])).toEqual([
       ["gemini-4-argon", "Gemini 4 Argon"],
@@ -222,6 +227,8 @@ describe("Antigravity model catalog", () => {
       ["gemini-4-carbon-high", "Gemini 4 Carbon"],
       ["claude-opus-5-5-high", "Claude Opus 5.5"],
       ["claude-sonnet-5-5-high", "Claude Sonnet 5.5"],
+      ["gemini-4-neon", "Gemini 4 Neon"],
+      ["devin-gemini-4-neon", "Gemini 4 Neon (Devin)"],
     ]);
     expect(models.find((model) => model.isDefault)?.slug).toBe("gemini-4-argon");
     expect(models[0]?.capabilities?.optionDescriptors).toMatchObject([
@@ -254,7 +261,7 @@ describe("Antigravity model catalog", () => {
               { value: "gemini-4-hydrogen-xhigh", name: "Gemini 4 Hydrogen" },
               { value: "gemini-4-hydrogen", name: "Gemini 4 Hydrogen" },
               { value: "gemini-4-hydrogen-low", name: "Gemini 4 Hydrogen" },
-              { value: "gemini-4-carbon", name: "Gemini 4 Carbon" },
+              { value: "gemini-4-carbon", name: "Gemini 4 Carbon (gemini-4-carbon)" },
               { value: "devin/gemini-4-carbon", name: "Gemini 4 Carbon" },
               { value: "gemini-4-argon", name: "Gemini 4 Argon" },
               { value: "claude-sonnet-5-5", name: "Claude Sonnet 5.5" },

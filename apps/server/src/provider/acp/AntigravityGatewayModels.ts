@@ -25,6 +25,16 @@ function matchesRoute(selection: string, id: string) {
   return selection === id || (!ROUTE_SUFFIX.test(selection) && selection === routeFamily(id));
 }
 
+function gatewayModelLabel({ value, name }: AntigravityGatewayModelOption) {
+  // ACP appends the route ID when gateway tiers share a display name.
+  const routeSuffix = ` (${value})`;
+  const label = name.trim();
+  return (label.endsWith(routeSuffix) ? label.slice(0, -routeSuffix.length) : label).replace(
+    LABEL_SUFFIX,
+    "",
+  );
+}
+
 export function antigravityGatewayModelSelections(configured: string) {
   return [
     ...new Set(
@@ -59,7 +69,7 @@ export function antigravityGatewayModelRows(
       matched = true;
       const family = routeFamily(model.value);
       const entries = grouped.get(family) ?? new Map();
-      entries.set(model.value, model);
+      entries.set(model.value, { value: model.value, name: gatewayModelLabel(model) });
       grouped.set(family, entries);
     }
     if (matched || !ROUTE_SUFFIX.test(selection)) continue;
@@ -72,7 +82,7 @@ export function antigravityGatewayModelRows(
     );
     if (!familyModel) continue;
     const entries = grouped.get(family) ?? new Map();
-    entries.set(selection, { value: selection, name: familyModel.name });
+    entries.set(selection, { value: selection, name: gatewayModelLabel(familyModel) });
     grouped.set(family, entries);
   }
   return Array.from(grouped, ([family, entries]) => {
@@ -88,7 +98,7 @@ export function antigravityGatewayModelRows(
       selections.filter((selection) => routeFamily(selection) === family).length > 1;
     return {
       slug: familySelected ? family : first.value,
-      name: first.name.trim().replace(LABEL_SUFFIX, "") || family,
+      name: first.name || family,
       routes,
       efforts: efforts.map((effort) => ({ ...effort, isDefault: effort === defaultEffort })),
       defaultRoute: defaultEffort?.route.value ?? first.value,
