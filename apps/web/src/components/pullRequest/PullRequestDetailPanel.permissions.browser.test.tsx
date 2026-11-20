@@ -67,6 +67,16 @@ vi.mock(import("~/state/pullRequests"), async (original) => {
         return actual.pullRequestEnvironment.diff(target as never);
       }) as never,
     },
+    usePullRequestList: () => ({
+      data: null,
+      error: null,
+      isPending: false,
+      observations: [],
+      refresh: vi.fn(),
+      retry: vi.fn(),
+    }),
+    usePullRequestListStats: () => ({ stats: null, isPending: false, refresh: vi.fn() }),
+    usePullRequestTurnRefreshes: () => [],
   };
 });
 vi.mock(import("~/state/use-atom-command"), async (original) => ({
@@ -109,20 +119,6 @@ vi.mock(import("~/hooks/useSidebarProjectGroups"), () => ({
     },
   ]) as never,
 }));
-vi.mock(import("~/state/pullRequests"), async (original) => ({
-  ...(await original()),
-  usePullRequestList: () => ({
-    data: null,
-    error: null,
-    isPending: false,
-    observations: [],
-    refresh: vi.fn(),
-    retry: vi.fn(),
-  }),
-  usePullRequestListStats: () => ({ stats: null, isPending: false, refresh: vi.fn() }),
-  usePullRequestTurnRefreshes: () => [],
-}));
-
 import { createWorkspaceFocusController, workspaceAreaProps } from "~/lib/workspaceFocus";
 import { PullRequestDetailPanel } from "./PullRequestDetailPanel";
 import { PullRequestsPage } from "./PullRequestsPage";
@@ -344,9 +340,14 @@ it("reads the first diff page once the pointer rests on the Code tab", async () 
 
 it("keeps a screen reader's place when scrolling the description condenses the header", async () => {
   setup();
+  // The description only fills what the rest of the summary leaves; the timeline tab scrolls.
   shown.detail = {
     ...detail,
-    body: Array.from({ length: 80 }, (_, line) => `Line ${line}`).join("\n\n"),
+    commits: Array.from({ length: 60 }, (_, commit) => ({
+      oid: String(commit).padStart(40, "0"),
+      messageHeadline: `Commit ${commit}`,
+      committedDate: "2026-09-01T00:00:00Z",
+    })),
   };
   const style = document.createElement("style");
   style.textContent = appCss;
@@ -359,12 +360,14 @@ it("keeps a screen reader's place when scrolling the description condenses the h
       {panel()}
     </div>,
   );
-  const openOnHost = screen.getByRole("button", { name: "Open pull request #1 on host" });
-  await expect.element(openOnHost).toBeVisible();
-  const expanded = openOnHost.element() as HTMLButtonElement;
+  const editTitle = screen.getByRole("button", { name: "Edit title" });
+  await expect.element(editTitle).toBeVisible();
+  const expanded = editTitle.element() as HTMLButtonElement;
   expanded.focus();
-  await expect.element(screen.getByText("Line 79")).toBeInTheDocument();
-  let scroller = screen.getByText("Line 79").element().parentElement;
+  await userEvent.click(screen.getByRole("button", { name: "Timeline", exact: true }));
+  const anyCommit = screen.getByText(/Commit \d+/).first();
+  await expect.element(anyCommit).toBeInTheDocument();
+  let scroller = anyCommit.element().parentElement;
   while (scroller && getComputedStyle(scroller).overflowY !== "auto") {
     scroller = scroller.parentElement;
   }
