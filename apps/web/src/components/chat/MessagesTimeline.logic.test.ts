@@ -1802,8 +1802,24 @@ describe("deriveMessagesTimelineRows", () => {
           message("third-steer", 25, "user", "steer"),
           edit("edit-after-steers", 28, 30),
           message("final", 30, "assistant"),
+          {
+            kind: "event",
+            id: "late-subagent",
+            createdAt: time(50),
+            projectedItem: { item: { type: "subagent", status: "completed", runId } } as never,
+          },
         ],
-        latestRun: { runId, status, startedAt: time(0), completedAt: time(30) },
+        // A later wake run is the latest, so this turn's times come from its
+        // entries; an interrupt marks this run stopped instead.
+        latestRun:
+          status === "interrupted"
+            ? { runId, status, startedAt: time(0), completedAt: time(30) }
+            : {
+                runId: RunId.make("wake-run"),
+                status: "completed",
+                startedAt: time(55),
+                completedAt: time(58),
+              },
         isWorking: false,
         expandedRunIds,
         turnDiffSummaries: [
@@ -1830,6 +1846,7 @@ describe("deriveMessagesTimelineRows", () => {
       "third-steer",
       `turn-fold:${runId}`,
       "final",
+      "late-subagent",
     ]);
     expect(collapsed[5]).toMatchObject({
       createdAt: time(0),
@@ -1850,6 +1867,7 @@ describe("deriveMessagesTimelineRows", () => {
       `turn-fold:${runId}`,
       "work-toggle:edit-before-steers",
       "final",
+      "late-subagent",
     ]);
     expect(expanded[6]).toMatchObject({ hiddenCount: 3 });
 
@@ -1867,6 +1885,7 @@ describe("deriveMessagesTimelineRows", () => {
       "third-steer",
       [`turn-fold:${runId}:steer:third-steer`, "Continued for 5s", null],
       "final",
+      "late-subagent",
     ]);
   });
 
