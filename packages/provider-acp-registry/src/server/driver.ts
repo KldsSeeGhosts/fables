@@ -715,7 +715,7 @@ const makeAcpAgentDriver = <Settings>(
     }
     const random = yield* SecureRandom.SecureRandom;
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-    const fs = yield* FileSystem.FileSystem;
+    const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const httpClient = yield* HttpClient.HttpClient;
     const latestVersions = yield* ProviderLatestVersions.ProviderLatestVersions;
@@ -744,7 +744,7 @@ const makeAcpAgentDriver = <Settings>(
             env: processEnvironment,
           }).pipe(
             Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
-            Effect.provideService(FileSystem.FileSystem, fs),
+            Effect.provideService(FileSystem.FileSystem, fileSystem),
             Effect.provideService(Path.Path, path),
           )
         : Effect.succeed(
@@ -872,6 +872,8 @@ const makeAcpAgentDriver = <Settings>(
     ).pipe(
       Effect.provideService(AcpRegistrySupport.AcpRegistryCatalog, catalog),
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(Path.Path, path),
       Effect.provideService(SecureRandom.SecureRandom, random),
     );
     const enrichmentCache = yield* Ref.make<AcpRegistryEnrichmentCache>({

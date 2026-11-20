@@ -292,7 +292,7 @@ describe("root reopen shortcut", () => {
       expect(useClosedViewStore.getState().entries).toEqual([]);
     },
   );
-  it("forwards address-bar focus, zoom, and panel close from a focused desktop page", async () => {
+  it("forwards address-bar focus, zoom, and panel new and close from a focused desktop page", async () => {
     setup();
     state.keybindings = [
       ...DEFAULT_RESOLVED_KEYBINDINGS,
@@ -316,6 +316,7 @@ describe("root reopen shortcut", () => {
           "preview.zoomIn",
           "preview.zoomOut",
           "preview.resetZoom",
+          "rightPanel.new",
           "rightPanel.close",
         ].map((command) => expect.objectContaining({ command })),
       ),
