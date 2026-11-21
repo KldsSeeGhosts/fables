@@ -761,6 +761,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --color-popover-foreground: var(--contrast-popover-foreground);
   --color-popover: var(--popover);
   --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
   --color-card-bottom: var(--card-bottom);
   --color-code: var(--code-background);
   --color-foreground: var(--contrast-foreground);

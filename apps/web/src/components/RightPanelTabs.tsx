@@ -1,4 +1,4 @@
-import { msg, T, useGT } from "gt-react";
+import { msg, T, useGT, useMessages } from "gt-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { useQuietThreadShell } from "~/state/entities";
 import { useLayoutPane, useLayoutPaneFocusedRef } from "../layout/layoutPaneContext";
@@ -21,6 +21,7 @@ import type {
   PreviewSessionSnapshot,
   ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
+import { formatSubagentDisplayTitle } from "@t3tools/client-runtime/state/subagent-display";
 import {
   closestCenter,
   DndContext,
@@ -85,6 +86,7 @@ import { preventThumbButtonFocus, takeThumbButtonNavigation } from "./preview/th
 import { observeResize } from "~/lib/observeResize";
 import {
   previewFaviconOf,
+  sideChatTabState,
   SurfaceIcon,
   surfaceTitle,
   type PullRequestTabStatusSeed,
@@ -130,6 +132,10 @@ export interface RightPanelTabsProps {
   onActivate: (surface: RightPanelSurface) => void;
   onRenameDevice?: (surfaceId: string, title: string) => void;
   onCloseSurface: (surface: RightPanelSurface) => void;
+  /** Moves a subagent, side chat or linked thread tab to the main screen. */
+  onOpenInMainView?: (
+    surface: Extract<RightPanelSurface, { kind: "thread" | "linked-thread" }>,
+  ) => void;
   onCloseOtherSurfaces: (surface: RightPanelSurface) => void;
   onCloseSurfacesToRight: (surface: RightPanelSurface) => void;
   onCloseAllSurfaces: () => void;
@@ -180,6 +186,7 @@ const SURFACE_DISABLED_REASONS = {
 } as const;
 
 type TabContextMenuAction =
+  | "open-in-main-view"
   | "rename"
   | "copy-path"
   | "toggle-mute"
@@ -446,6 +453,12 @@ interface RightPanelTabHandlers {
   onFinishRename: (surfaceId: string, title: string) => void;
 }
 
+const SIDE_CHAT_STATE_LABELS = {
+  "needs approval": msg("needs approval"),
+  "needs input": msg("needs input"),
+  running: msg("running", { $context: "side chat status" }),
+} as const;
+
 const NO_LAYOUT_TAB: LayoutTab = {
   id: "panel",
   content: { kind: "launcher", id: "panel", context: null },
@@ -511,7 +524,7 @@ function RightPanelTab(
     disabled: dragDisabled,
   });
   const sideChatShell = useQuietThreadShell(
-    surface.kind === "side-chat" && props.environmentId !== null
+    surface.kind === "thread" && props.environmentId !== null
       ? scopeThreadRef(props.environmentId, surface.threadId)
       : null,
   );
@@ -520,8 +533,16 @@ function RightPanelTab(
       ? null
       : (findLayoutTab(state.layout, (tab) => tab.id === layoutTabId)?.tab ?? null),
   );
+  const messages = useMessages();
   const layoutLabel = useLayoutTabLabel(layoutTab ?? NO_LAYOUT_TAB);
-  const title = layoutTab ? layoutLabel.title : (sideChatShell?.title ?? props.title);
+  const sideChatTitle =
+    sideChatShell === null
+      ? null
+      : sideChatShell.lineage.sideChat === true
+        ? sideChatShell.title
+        : formatSubagentDisplayTitle(sideChatShell.title);
+  const title = layoutTab ? layoutLabel.title : (sideChatTitle ?? props.title);
+  const sideChatState = sideChatTabState(sideChatShell);
   const tooltip = layoutTab
     ? layoutLabel.tooltip
     : [title, threadTitle, previewUrl, surface.kind === "file" ? surface.relativePath : null]
@@ -643,9 +664,14 @@ function RightPanelTab(
                     active && surface.kind === "diff" && "shrink-0",
                   )}
                   aria-label={
-                    surface.kind === "terminal" && threadTitle
-                      ? `${title}, ${threadTitle}`
-                      : undefined
+                    sideChatState !== null
+                      ? gt("{title}, {state}", {
+                          title,
+                          state: messages(SIDE_CHAT_STATE_LABELS[sideChatState]),
+                        })
+                      : surface.kind === "terminal" && threadTitle
+                        ? `${title}, ${threadTitle}`
+                        : undefined
                   }
                   onClick={() => onActivate(surface)}
                 >
@@ -840,6 +866,9 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
     if (surfaceIndex < 0) return;
 
     const items: ContextMenuItem<TabContextMenuAction>[] = [];
+    if ((surface.kind === "thread" || surface.kind === "linked-thread") && props.onOpenInMainView) {
+      items.push({ id: "open-in-main-view", label: gt("Open in main view") });
+    }
     if (surface.kind === "device" && props.onRenameDevice)
       items.push({ id: "rename", label: gt("Rename") });
     if (surface.kind === "file" && surface.attachment === undefined) {
@@ -878,6 +907,11 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
 
     const action = await api.contextMenu.show(items, { x: event.clientX, y: event.clientY });
     switch (action) {
+      case "open-in-main-view":
+        if (surface.kind === "thread" || surface.kind === "linked-thread") {
+          props.onOpenInMainView?.(surface);
+        }
+        break;
       case "rename":
         setRenamingDevice(surface.id);
         break;

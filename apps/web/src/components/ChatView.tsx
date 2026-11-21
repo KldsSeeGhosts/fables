@@ -41,7 +41,7 @@ import { useComposerResume } from "./chat/useComposerResume";
 import { ThreadFind, ThreadFindCanvas } from "./chat/ThreadFindProvider";
 import { closeThreadFind, openThreadFind, useThreadFindOpen } from "./chat/threadFindStore";
 import { THREAD_FIND_BAR_RESERVED_HEIGHT } from "./chat/ThreadFindBar";
-import { usageLimitRecoveryBannerItem } from "./chat/UsageLimitRecoveryBanner";
+import { useUsageLimitRecoveryBannerItem } from "./chat/UsageLimitRecoveryBanner";
 import {
   isThreadEnvironmentLocked,
   resolveDraftHeroState,
@@ -77,7 +77,6 @@ import {
   type AssistantCitation,
   type ResponseContextRecord,
   type ChatFileAttachment,
-  isProviderNativeSubagentThread,
   type EnvironmentId,
   type MessageId,
   type ModelSelection,
@@ -326,6 +325,7 @@ import { pendingApprovalSlotLabel } from "./chat/MessagesTimeline.logic";
 import { resolveScrollToEndClearance } from "./composerFooterLayout";
 import { ChatHeader, type HiddenTerminalChip } from "./chat/ChatHeader";
 import { useSideChat } from "./chat/useSideChat";
+import { sideThreadComposer, sideThreadKindOf } from "@t3tools/client-runtime/side-thread";
 import { useRemoteOpenState } from "~/remoteOpen";
 import { shouldShowOpenInPicker } from "./chat/OpenInPicker.logic";
 import {
@@ -480,6 +480,7 @@ export default function ChatView(props: ChatViewProps) {
     embedded: parentPanel,
   } = props;
   const embedded = parentPanel !== undefined;
+  const panelHostShell = useQuietThreadShell(parentPanel?.hostRef ?? null);
   const canOperateThread = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const canOperateTerminal = useEnvironmentScope(environmentId, AuthTerminalOperateScope);
   const draftId = routeKind === "draft" ? props.draftId : null;
@@ -914,8 +915,9 @@ export default function ChatView(props: ChatViewProps) {
     serverProjection === null ? null : deriveRunlessWorkStartedAt(serverProjection);
   const providerSubagentStatus =
     serverProjection === null ? null : deriveProviderSubagentStatus(serverProjection);
+  const sideThreadKind = serverThread === null ? null : sideThreadKindOf(serverThread.source);
   const isProviderSubagent =
-    serverThread !== null && isProviderNativeSubagentThread(serverThread.source);
+    sideThreadKind !== null && sideThreadComposer(sideThreadKind) === "read-only";
   const supportsProviderSwitchingViaHandoff = threadSupportsProviderHandoff(serverProjection);
   const activeLatestRun = isServerThread ? serverLatestRun : (activeThread?.latestRun ?? null);
   const activeActivityRun = isServerThread ? serverActivityRun : (activeThread?.latestRun ?? null);
@@ -1002,8 +1004,16 @@ export default function ChatView(props: ChatViewProps) {
       };
     }
     if (parentSubagentThreadRef !== null) {
+      const title = parentSubagentThread?.title ?? gt("Parent thread");
+      // Embedded in its parent's panel, the parent is the view around it.
+      if (
+        parentPanel !== undefined &&
+        scopedThreadKey(parentPanel.hostRef) === scopedThreadKey(parentSubagentThreadRef)
+      ) {
+        return { title };
+      }
       return {
-        title: parentSubagentThread?.title ?? gt("Parent thread"),
+        title,
         open: (): void => {
           void navigate({
             to: "/$environmentId/$threadId",
@@ -2700,34 +2710,33 @@ export default function ChatView(props: ChatViewProps) {
     limitRecoveryRun !== null
       ? `${limitRecoveryRun.runId}:${serverRuntime?.usageLimitResetAt ?? ""}`
       : null;
-  const limitRecoveryBanner =
+  const limitRecoveryBanner = useUsageLimitRecoveryBannerItem(
     limitRecoveryKey !== null &&
-    limitRecoveryKey !== dismissedLimitRecoveryKey &&
-    limitRecoveryRun !== null &&
-    activeThreadShell !== null
-      ? usageLimitRecoveryBannerItem(
-          {
-            runId: limitRecoveryRun.runId,
-            errorCode: serverRuntime?.lastErrorCode ?? null,
-            resetAt: serverRuntime?.usageLimitResetAt ?? null,
-            stoppedAt: limitRecoveryRun.completedAt ?? activeThreadShell.updatedAt,
-            settled: activeThreadShell.settledOverride === "settled",
-            requestPending: pendingApprovals.length > 0 || pendingUserInputs.length > 0,
-            recovery: activeThreadShell.limitRecovery ?? null,
-            snoozedUntil: activeThreadShell.snoozedUntil,
-            timestampFormat,
-            onChange: async (limitRecovery) => {
-              const result = await updateThreadMetadata({
-                environmentId,
-                input: { threadId: activeThreadShell.id, limitRecovery },
-              });
-              if (result._tag === "Failure") throw squashAtomCommandFailure(result);
-            },
-            onDismiss: () => setDismissedLimitRecoveryKey(limitRecoveryKey),
+      limitRecoveryKey !== dismissedLimitRecoveryKey &&
+      limitRecoveryRun !== null &&
+      activeThreadShell !== null
+      ? {
+          runId: limitRecoveryRun.runId,
+          errorCode: serverRuntime?.lastErrorCode ?? null,
+          resetAt: serverRuntime?.usageLimitResetAt ?? null,
+          stoppedAt: limitRecoveryRun.completedAt ?? activeThreadShell.updatedAt,
+          settled: activeThreadShell.settledOverride === "settled",
+          requestPending: pendingApprovals.length > 0 || pendingUserInputs.length > 0,
+          recovery: activeThreadShell.limitRecovery ?? null,
+          snoozedUntil: activeThreadShell.snoozedUntil,
+          timestampFormat,
+          onChange: async (limitRecovery) => {
+            const result = await updateThreadMetadata({
+              environmentId,
+              input: { threadId: activeThreadShell.id, limitRecovery },
+            });
+            if (result._tag === "Failure") throw squashAtomCommandFailure(result);
           },
-          messages,
-        )
-      : null;
+          onDismiss: () => setDismissedLimitRecoveryKey(limitRecoveryKey),
+        }
+      : null,
+    messages,
+  );
   // The working bar names the request while its row stays actionable.
   const firstPendingApproval = pendingApprovals[0] ?? null;
   const timelinePendingRequest = (() => {
@@ -2939,6 +2948,12 @@ export default function ChatView(props: ChatViewProps) {
       isInSideChatPane(document.activeElement) === embedded,
     draftThreadRoute: routeKind === "draft",
     turnRunning: phase === "running" || phase === "connecting",
+    // A queued-message edit or a question's answer owns the composer even when its text is empty.
+    composerEmpty:
+      !queuedRunEdit.isEditing &&
+      pendingUserInputs.length === 0 &&
+      !composerHasNonPromptContent &&
+      promptRef.current.trim().length === 0,
     composerRequiresModifier: composerRequiresModifier(settings.sendShortcut, promptRef.current),
     assistantSelection: hasCitableAssistantSelection(),
     isWeb: !isElectron,
@@ -3067,6 +3082,9 @@ export default function ChatView(props: ChatViewProps) {
       if (activeThread) setThreadError(activeThread.id, message);
     },
   });
+  // An embedded thread's commands run in its host's terminal, which is the host's checkout.
+  const runsOutsideHostCheckout =
+    embedded && (activeThread?.worktreePath ?? null) !== (panelHostShell?.worktreePath ?? null);
   // Main-thread surfaces show this reason; `/side` sent anyway gets it as a toast.
   const sideChatDisabledReason =
     activeThread?.lineage.sideChat === true
@@ -3699,7 +3717,7 @@ export default function ChatView(props: ChatViewProps) {
                   citationHistory={citationHistory}
                   onCiteAssistantText={citeAssistantTextStable}
                   onReplyToResponse={replyToResponseStable}
-                  {...(activeProject
+                  {...(activeProject && !runsOutsideHostCheckout
                     ? { onRunShellCommand: parentPanel?.runShellCommand ?? runShellCommandStable }
                     : {})}
                   isWorking={isWorking}

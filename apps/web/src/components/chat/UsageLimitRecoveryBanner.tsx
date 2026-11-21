@@ -35,6 +35,8 @@ type RecoveryProps = {
   snoozedUntil: string | null;
   recovery: OrchestrationV2LimitRecovery | null;
   timestampFormat: TimestampFormat;
+  resetPassed?: boolean;
+  displayPassed?: boolean;
   onChange: (recovery: OrchestrationV2LimitRecoveryUpdate) => Promise<void>;
   onDismiss?: () => void;
 };
@@ -57,43 +59,78 @@ function ResetCountdown({ resetAt }: { resetAt: string }) {
     : gt("in {minutes}m", { minutes });
 }
 
+function parseEpochMs(isoDate: string | null): number | null {
+  if (isoDate === null) return null;
+  const parsed = Date.parse(isoDate);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function limitRecoveryScheduleState(
+  props: Pick<
+    RecoveryProps,
+    "runId" | "resetAt" | "stoppedAt" | "settled" | "requestPending" | "recovery" | "snoozedUntil"
+  >,
+) {
+  // The server refuses recovery changes while a request is pending.
+  const canSchedule =
+    !props.settled &&
+    !props.requestPending &&
+    props.resetAt !== null &&
+    Date.parse(props.resetAt) > Date.parse(props.stoppedAt);
+  const resumes =
+    canSchedule &&
+    props.recovery?.runId === props.runId &&
+    props.recovery.resetAt === props.resetAt &&
+    props.recovery.autoResume;
+  const displayAt =
+    resumes &&
+    props.resetAt &&
+    props.snoozedUntil &&
+    Date.parse(props.snoozedUntil) > Date.parse(props.resetAt)
+      ? props.snoozedUntil
+      : props.resetAt;
+  return { canSchedule, resumes, displayAt };
+}
+
+export function useUsageLimitRecoveryBannerItem(
+  props: RecoveryProps | null,
+  resolve: MessageResolver = m,
+): ComposerBannerStackItem | null {
+  const displayAt = props === null ? null : limitRecoveryScheduleState(props).displayAt;
+  const resetPassed = useDeadlinePassed(props === null ? null : parseEpochMs(props.resetAt));
+  const displayPassed = useDeadlinePassed(parseEpochMs(displayAt));
+  if (props === null) return null;
+  return usageLimitRecoveryBannerItem({ ...props, resetPassed, displayPassed }, resolve);
+}
+
 export function usageLimitRecoveryBannerItem(
   props: RecoveryProps,
   resolve: MessageResolver = m,
 ): ComposerBannerStackItem {
-  const {
-    runId,
-    errorCode,
-    resetAt,
-    stoppedAt,
-    settled,
-    requestPending,
-    recovery,
-    snoozedUntil,
-    timestampFormat,
-  } = props;
-  // The server refuses recovery changes while a request is pending.
-  const canSchedule =
-    !settled && !requestPending && resetAt !== null && Date.parse(resetAt) > Date.parse(stoppedAt);
-  const resumes =
-    canSchedule && recovery?.runId === runId && recovery.resetAt === resetAt && recovery.autoResume;
+  const { runId, errorCode, resetAt, timestampFormat } = props;
+  const { canSchedule, resumes, displayAt } = limitRecoveryScheduleState(props);
+  const resetAtMs = parseEpochMs(resetAt);
+  const displayAtMs = parseEpochMs(displayAt);
+  const resetPassed = props.resetPassed ?? (resetAtMs !== null && resetAtMs <= Date.now());
+  const displayPassed = props.displayPassed ?? (displayAtMs !== null && displayAtMs <= Date.now());
   const workspaceLimit = errorCode === CHATGPT_WORKSPACE_USAGE_LIMIT_CODE;
   const chatGptLimit = workspaceLimit || errorCode === CHATGPT_USAGE_LIMIT_CODE;
   const recoveryActions = canSchedule ? (
     <RecoveryActions key={`${runId}:${resetAt}`} {...props} />
   ) : null;
-  const displayAt =
-    resumes && resetAt && snoozedUntil && Date.parse(snoozedUntil) > Date.parse(resetAt)
-      ? snoozedUntil
-      : resetAt;
+  const resumesUpcoming = resumes && !displayPassed;
+  const shownAt = resumesUpcoming ? displayAt : resetAt;
+  const formattedTime = shownAt
+    ? formatUpcomingTimestamp(shownAt, timestampFormat, undefined, undefined, resolve)
+    : null;
   const resetDescription =
-    resumes && displayAt ? (
+    resumesUpcoming && displayAt !== null ? (
       <ResetCountdown resetAt={displayAt} />
-    ) : displayAt ? (
-      resolve(
-        msg("Resets {time}", {
-          time: formatUpcomingTimestamp(displayAt, timestampFormat, undefined, undefined, resolve),
-        }),
+    ) : formattedTime !== null ? (
+      resetPassed ? (
+        resolve(msg("Reset {time}", { time: formattedTime }))
+      ) : (
+        resolve(msg("Resets {time}", { time: formattedTime }))
       )
     ) : (
       resolve(msg("Reset time unavailable; retry manually"))
@@ -219,6 +256,8 @@ function RecoveryActions(props: RecoveryProps) {
           <T>Saving...</T>
         ) : scheduled ? (
           <T>Cancel auto-resume</T>
+        ) : resetPassed ? (
+          <T>Resume now</T>
         ) : (
           <T>Resume at reset</T>
         )}

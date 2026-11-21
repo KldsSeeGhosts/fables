@@ -189,6 +189,7 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
     }
   };
   const togglePreviewPanelStable = useStableCallback(togglePreviewPanel);
+
   const toggleThreadPanel = () => {
     if (!activeThreadRef) return;
     const store = useRightPanelStore.getState();

@@ -33,6 +33,7 @@ import { type ComposerImageAttachment, useComposerDraftStore } from "../composer
 import { useDiffPanelStore } from "../diffPanelStore";
 import { isElectron } from "../env";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
+import { useOpenSurfaceInMainView } from "../hooks/useOpenSurfaceInMainView";
 import { useEnvironmentSettings } from "../hooks/useSettings";
 import { useLayoutPane } from "../layout/layoutPaneContext";
 import { copyLayoutFilePath } from "../layout/PaneTabs";
@@ -121,7 +122,10 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { confirmTerminalClose } from "../lib/terminalCloseConfirm";
 
-const SideChatPane = lazy(() => import("./chat/SideChatPane"));
+// SideThreadPane and LinkedThreadPane are not lazy: revealing a suspended tiptap editor
+// tears down its view and crashes the composer.
+import SideThreadPane from "./chat/SideThreadPane";
+import { LinkedThreadPane } from "./chat/LinkedThreadPane";
 const PreviewPanel = lazy(() =>
   import("./preview/PreviewPanel").then((module) => ({ default: module.PreviewPanel })),
 );
@@ -520,6 +524,7 @@ function ThreadSurfacePane({
   const threadTitle = useThreadTitle(threadRef);
   const { visible, paneId } = useLayoutPane();
   const handleNewThread = useNewThreadHandler();
+  const openSurfaceInMainView = useOpenSurfaceInMainView(threadRef);
   const { projectRef } = context;
   const add = (kind: LauncherSurfaceKind, browserProfileId?: string) => {
     if (paneId !== null && openers.available[kind]) {
@@ -561,9 +566,10 @@ function ThreadSurfacePane({
       threadTitle={threadTitle}
       onActivate={(active) => {
         // Choosing a side chat's tab puts the keyboard in its message box, even when it shows.
-        if (active.kind === "side-chat") requestSideChatComposerFocus(threadRef, active.id);
+        if (active.kind === "thread") requestSideChatComposerFocus(threadRef, active.id);
       }}
       onCloseSurface={close}
+      onOpenInMainView={openSurfaceInMainView}
       onRenameDevice={(id, title) =>
         useRightPanelStore.getState().renameDevice(threadRef, id, title)
       }
@@ -682,6 +688,7 @@ function ThreadSurfaceContent({
   const shortcutLabels = useTerminalShortcutLabels();
   const shell = context.serverThread;
   const sideChatParentPanel: SideChatParentPanel = {
+    hostRef: threadRef,
     openToolDiff: (target) => {
       useDiffPanelStore.getState().selectToolCall(threadRef, target);
       useRightPanelStore.getState().open(threadRef, "diff");
@@ -690,16 +697,24 @@ function ThreadSurfaceContent({
   };
 
   switch (surface.kind) {
-    case "side-chat":
+    case "thread":
       return (
-        <Suspense fallback={null}>
-          <SideChatPane
-            parentRef={threadRef}
-            threadId={surface.threadId}
-            parentPanel={sideChatParentPanel}
-            onClose={() => void closeThreadSurface(threadRef, surface.id)}
-          />
-        </Suspense>
+        <SideThreadPane
+          key={surface.id}
+          parentRef={threadRef}
+          surface={surface}
+          parentPanel={sideChatParentPanel}
+          onClose={() => void closeThreadSurface(threadRef, surface.id)}
+        />
+      );
+    case "linked-thread":
+      return (
+        <LinkedThreadPane
+          key={surface.id}
+          panelRef={threadRef}
+          surface={surface}
+          visible={visible}
+        />
       );
     case "preview":
       return (
@@ -1152,7 +1167,7 @@ export function ThreadSurfaceServices() {
     const closer: SurfaceCloser = (threadRef, surfaces) => {
       for (const surface of surfaces) {
         if (
-          surface.kind === "side-chat" &&
+          surface.kind === "thread" &&
           readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope)
         ) {
           void deleteThread({

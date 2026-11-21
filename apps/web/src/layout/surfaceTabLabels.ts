@@ -1,6 +1,7 @@
 import type { PreviewSessionSnapshot } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
 
+import { linkedThreadTitle } from "../linkedThreadSurface";
 import type { RightPanelSurface } from "../rightPanelStore";
 
 /** Tabs show the command; the tooltip retains the complete terminal label. */
@@ -35,8 +36,11 @@ export function surfaceTabTitle(
       return /^\d+$/.test(surface.key) ? `#${surface.key}` : surface.key;
     case "device":
       return surface.title ?? surface.target?.name ?? "Device";
-    case "side-chat":
-      return "Side chat";
+    case "thread":
+      // Until the thread's own title loads.
+      return "Thread";
+    case "linked-thread":
+      return linkedThreadTitle(surface, `Thread on ${surface.label}`);
     case "preview": {
       const navigation = snapshot?.navStatus;
       if (navigation && navigation._tag !== "Idle" && navigation.title.trim()) {

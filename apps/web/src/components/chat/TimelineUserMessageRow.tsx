@@ -284,7 +284,9 @@ function UserMessageContent({ row }: { row: Extract<TimelineRow, { kind: "messag
       <WorkflowOpeningBlock
         opening={ctx.workflowOpening}
         environmentId={ctx.activeThreadEnvironmentId}
-        onOpenThread={(threadId) => ctx.onOpenThread(ThreadId.make(threadId))}
+        onOpenThread={(threadId, intent) =>
+          ctx.onOpenThread(ThreadId.make(threadId), undefined, intent)
+        }
       />
       {userMessageHasSwitch(row) ? (
         <div className="flex justify-end pe-1 pt-1">

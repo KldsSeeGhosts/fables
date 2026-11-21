@@ -1,21 +1,25 @@
+import type { ScopedThreadRef } from "@t3tools/contracts";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { useGT } from "gt-react";
 import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 
+import { useOpenLink } from "~/browser/useOpenLink";
 import { resolvePullRequestState } from "./pullRequestPresentation";
 import { cn } from "~/lib/utils";
-import { readLocalApi } from "~/localApi";
 import { Badge } from "../ui/badge";
 import { Button, InlineButton } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { openOnHostLabel, showPullRequestLinkContextMenu } from "./pullRequestLinkContextMenu";
+
+import { changeRequestTermKind } from "./changeRequestTerm";
 
 interface CrumbsPullRequest {
   readonly url: string;
   readonly provider: string;
   readonly number: number;
   readonly repository: string;
+  readonly title: string;
   readonly state: "open" | "merged" | "closed";
   readonly isDraft: boolean;
 }
@@ -63,16 +67,19 @@ function BackButton({
 
 function NumberLink({
   detail,
+  threadRef,
   toneClassName,
   openOnHostText,
   focusable,
 }: {
   detail: CrumbsPullRequest;
+  threadRef: ScopedThreadRef | null;
   toneClassName: string;
   openOnHostText: string;
   focusable: boolean;
 }) {
   const gt = useGT();
+  const openLink = useOpenLink(threadRef);
   return (
     <span className={cn("inline-flex shrink-0", toneClassName)}>
       <Tooltip>
@@ -81,15 +88,20 @@ function NumberLink({
             <InlineButton
               tone={null}
               {...(focusable ? {} : { tabIndex: -1 })}
-              onClick={() => void readLocalApi()?.shell.openExternal(detail.url)}
+              onClick={(event) => void openLink(detail.url, { event }).catch(console.error)}
               onAuxClick={(event) => {
-                if (event.button === 1) void readLocalApi()?.shell.openExternal(detail.url);
+                if (event.button === 1) void openLink(detail.url, { event }).catch(console.error);
               }}
               onContextMenu={(event) => openNumberContextMenu(event, detail)}
-              aria-label={gt("Open {term} #{number} on host", {
-                term: sourceControlClients.get(detail.provider).changeRequest.singular,
-                number: detail.number,
-              })}
+              aria-label={gt(
+                "Open {term, select, mr {merge request} cr {change request} other {pull request}} #{number} on host",
+                {
+                  term: changeRequestTermKind(
+                    sourceControlClients.get(detail.provider).changeRequest,
+                  ),
+                  number: detail.number,
+                },
+              )}
             >
               #{detail.number}
               <ExternalLinkIcon aria-hidden className="size-[13px]" />
@@ -102,8 +114,12 @@ function NumberLink({
   );
 }
 
+/**
+ * The repository and number above the title.
+ */
 export function PullRequestDetailCrumbs({
   detail,
+  threadRef,
   toneClassName,
   repositoryUrl,
   openOnHostText,
@@ -111,6 +127,7 @@ export function PullRequestDetailCrumbs({
   children,
 }: {
   detail: CrumbsPullRequest | null;
+  threadRef: ScopedThreadRef | null;
   toneClassName: string | null;
   repositoryUrl: string | null;
   openOnHostText: string;
@@ -118,6 +135,7 @@ export function PullRequestDetailCrumbs({
   children?: ReactNode;
 }) {
   const gt = useGT();
+  const openLink = useOpenLink(threadRef);
   const state = detail ? resolvePullRequestState(detail) : null;
   return (
     <div className="mt-2 flex min-h-6 min-w-0 items-center gap-1.5 pl-4 text-label text-muted-foreground">
@@ -137,7 +155,9 @@ export function PullRequestDetailCrumbs({
                   <InlineButton
                     tone="muted"
                     className="min-w-16 shrink @max-sm/pr-header:hidden"
-                    onClick={() => void readLocalApi()?.shell.openExternal(repositoryUrl)}
+                    onClick={(event) =>
+                      void openLink(repositoryUrl, { event }).catch(console.error)
+                    }
                   >
                     <span className="truncate">{detail.repository}</span>
                   </InlineButton>
@@ -156,6 +176,7 @@ export function PullRequestDetailCrumbs({
           </Tooltip>
           <NumberLink
             detail={detail}
+            threadRef={threadRef}
             toneClassName={toneClassName}
             openOnHostText={openOnHostText}
             focusable

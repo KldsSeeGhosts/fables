@@ -254,6 +254,18 @@ it("opens a linked Linear issue from an inactive thread's sidebar badge", async 
   await act(() => previewLink.element().dispatchEvent(contextMenu));
   expect(contextMenu.defaultPrevented).toBe(false);
   await userEvent.click(badge);
+  // Each open lands as a surface tab beside the chat, but the route sync refocuses the chat
+  // tab, so the test focuses the surface tab the way a tab click would.
+  const activateSurfaceTab = (surfaceIdPrefix: string) => {
+    const { layout, focusTab } = useLayoutStore.getState();
+    const tab = layout.workspaces
+      .flatMap((workspace) =>
+        workspace.columns.flatMap((column) => column.panes.flatMap((pane) => pane.tabs)),
+      )
+      .find((t) => t.content.kind === "surface" && t.content.surfaceId.startsWith(surfaceIdPrefix));
+    if (tab) focusTab(tab.id);
+  };
+  await act(() => activateSurfaceTab("pull-requests"));
   const issueRow = page
     .getByRole("region", { name: "Linked issues" })
     .getByRole("link", { name: issueName });
@@ -263,7 +275,14 @@ it("opens a linked Linear issue from an inactive thread's sidebar badge", async 
   await expect.element(issueRow.getByText(issue.scope, { exact: true })).toBeVisible();
   await userEvent.click(issueRow);
   expect(router.history.location.pathname).toBe(`/${ENVIRONMENT_ID}/${linked.id}`);
-  await expect.element(page.getByRole("heading", { name: liveTitle })).toBeVisible();
+  // The open registers the issue surface; its detail view lives on the issues page, not a tab.
+  await vi.waitFor(() => {
+    const panel = selectThreadRightPanelState(
+      useRightPanelStore.getState().byThreadKey,
+      scopeThreadRef(ENVIRONMENT_ID, linked.id),
+    );
+    expect(panel.activeSurfaceId?.startsWith("issue:")).toBe(true);
+  });
   await act(() => useRightPanelStore.getState().close(scopeThreadRef(ENVIRONMENT_ID, linked.id)));
   await expect
     .element(
@@ -997,6 +1016,9 @@ it("a shortcut conditioned on rightPanelOpen sees the thread's open right panel"
 
 it("selecting a side-chat tab focuses that side chat's composer", async () => {
   const parent = threadWithHistory("focus-parent", 1);
+  // Surfaces opened by earlier tests persist in these stores; this test starts clean.
+  useLayoutStore.getState().reset();
+  useRightPanelStore.setState({ byThreadKey: {}, threadPanelVisibilityByThreadKey: {} });
   // The shell loaded by the file's first test stays; a family read serves side chats added later.
   const sideChat = (name: string) => ({
     ...threadWithHistory(name, 1),
@@ -1020,11 +1042,13 @@ it("selecting a side-chat tab focuses that side chat's composer", async () => {
     // AppRoot brings its own router.
     router: false,
   });
-  using _focus = { [Symbol.dispose]: startWorkspaceFocus(router) };
+  // The surface sync clamps unplaced surfaces shut when a later host mounts, so the opens
+  // happen after render, the way a user's would.
   await act(() => {
-    useRightPanelStore.getState().openSideChat(parentRef, otherSide.id);
-    useRightPanelStore.getState().openSideChat(parentRef, side.id);
+    useRightPanelStore.getState().openThread(parentRef, otherSide.id);
+    useRightPanelStore.getState().openThread(parentRef, side.id);
   });
+  using _focus = { [Symbol.dispose]: startWorkspaceFocus(router) };
   const mainEditor = screen.getByRole("textbox", { name: `Message ${parent.title}`, exact: true });
   const sideEditor = screen.getByRole("textbox", { name: `Message ${side.title}`, exact: true });
   await expect.element(sideEditor).toBeVisible();
@@ -1049,6 +1073,47 @@ it("selecting a side-chat tab focuses that side chat's composer", async () => {
   await expect.element(mainEditor).toHaveFocus();
   await userEvent.click(screen.getByRole("button", { name: side.title, exact: true }));
   await expect.element(sideEditor).toHaveFocus();
+});
+
+it("a subagent tab shows its read-only bar under no header of its own", async () => {
+  const parent = threadWithHistory("subagent-parent", 1);
+  // Surfaces opened by earlier tests persist in these stores; this test starts clean.
+  useLayoutStore.getState().reset();
+  useRightPanelStore.setState({ byThreadKey: {}, threadPanelVisibilityByThreadKey: {} });
+  const subagent = {
+    ...threadWithHistory("subagent-child", 1),
+    providerSubagentOf: parent.id,
+    olderSettled: true as const,
+  };
+  await page.viewport(1400, 900);
+  using _environment = installFakeEnvironment([parent, subagent]);
+  __setClientSettingsForTests({
+    ...DEFAULT_CLIENT_SETTINGS,
+    onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
+  });
+  const parentRef = scopeThreadRef(ENVIRONMENT_ID, parent.id);
+  const router = getRouter(
+    createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${parent.id}`] }),
+  );
+  await router.load();
+  await using screen = await render(<AppRoot router={router} />, {
+    // AppRoot brings its own router.
+    router: false,
+  });
+  // The surface sync clamps unplaced surfaces shut when a later host mounts, so the open
+  // happens after render, the way a user's would.
+  await act(() => useRightPanelStore.getState().openThread(parentRef, subagent.id));
+  const pane = screen.getByTestId("side-thread-pane");
+  // No header of its own: the tab names it, and only a side chat has actions to put in one.
+  await expect.element(pane.getByRole("heading", { name: subagent.title })).not.toBeInTheDocument();
+  await expect.element(pane.getByText("Runs on its own")).toBeVisible();
+  await expect.element(pane.getByRole("button", { name: "Add to chat" })).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByRole("textbox", { name: `Message ${subagent.title}`, exact: true }))
+    .not.toBeInTheDocument();
+  await expect
+    .element(screen.getByRole("textbox", { name: `Message ${parent.title}`, exact: true }))
+    .toBeVisible();
 });
 
 it("/side sends the draft's attachments and context, and keeps them when it does not start", async () => {
@@ -1101,7 +1166,7 @@ it("/side sends the draft's attachments and context, and keeps them when it does
       for (const column of workspace.columns)
         for (const pane of column.panes)
           for (const tab of pane.tabs)
-            if (tab.content.kind === "surface" && tab.content.surfaceId.startsWith("side-chat:"))
+            if (tab.content.kind === "surface" && tab.content.surfaceId.startsWith("thread:"))
               surfaceIds.add(tab.content.surfaceId);
     return surfaceIds.size;
   };

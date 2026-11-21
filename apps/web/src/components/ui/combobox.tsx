@@ -137,7 +137,7 @@ function ComboboxSearchInput({
     );
   }
   return (
-    <div className="min-w-0 shrink-0 px-3 pt-2.5">
+    <label className="block min-w-0 shrink-0 cursor-text px-3 pt-2.5">
       <div
         className={cn(
           "relative -translate-y-px border-b pb-1.5 transition-colors",
@@ -156,7 +156,7 @@ function ComboboxSearchInput({
           unstyled
         />
       </div>
-    </div>
+    </label>
   );
 }
 

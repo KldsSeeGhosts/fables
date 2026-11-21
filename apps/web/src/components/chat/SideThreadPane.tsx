@@ -1,4 +1,6 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { sideThreadKindOf } from "@t3tools/client-runtime/side-thread";
+import { formatSubagentDisplayTitle } from "@t3tools/client-runtime/state/subagent-display";
 import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/shell";
 import { resolveLatestMergeBackRun } from "@t3tools/client-runtime/state/thread-workflows";
 import {
@@ -6,11 +8,7 @@ import {
   settlePromise,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import {
-  AuthOrchestrationOperateScope,
-  type ScopedThreadRef,
-  type ThreadId,
-} from "@t3tools/contracts";
+import { AuthOrchestrationOperateScope, type ScopedThreadRef } from "@t3tools/contracts";
 import { T, useGT } from "gt-react";
 import { CornerUpLeftIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -21,11 +19,16 @@ import { useClientSettings } from "../../hooks/useSettings";
 import { releaseComposerDraftUploads } from "../../lib/composerDraftUploads";
 import type { SideChatParentPanel } from "../../lib/sideChatPane";
 import { readLocalApi } from "../../localApi";
-import { hostRightPanel, useRightPanelStore } from "../../rightPanelStore";
+import { hostRightPanel, type ThreadSurface, useRightPanelStore } from "../../rightPanelStore";
 import { useQuietThreadProjection, useQuietThreadShell } from "../../state/entities";
 import { useEnvironmentScope } from "../../state/session";
-import { useEnvironmentShellHasSnapshot } from "../../state/shell";
-import { threadEnvironment } from "../../state/threads";
+import { useEnvironmentShellStatus } from "../../state/shell";
+import { threadEnvironment, useEnvironmentThread } from "../../state/threads";
+import {
+  isThreadRouteSnapshotAuthoritative,
+  resolveThreadRouteRenderState,
+} from "../../threadRoutes";
+import { useOpenThreadFamily } from "../ThreadRouteView";
 import { useAtomCommand } from "../../state/use-atom-command";
 import ChatView from "../ChatView";
 import { PanelTabActions, useInPanelTabBar } from "../PanelTabBreadcrumb";
@@ -34,13 +37,20 @@ import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { BackgroundThreadContext } from "./backgroundThread";
 
-export default function SideChatPane(props: {
+/**
+ * A side chat or a subagent as a tab: the thread's own chat, which decides its bottom, the
+ * composer or the read-only bar, as it does on the main screen. The tab names it and closes it,
+ * so only a side chat, which has actions of its own, gets a header.
+ */
+export default function SideThreadPane(props: {
+  /** The thread whose panel shows the tab. */
   readonly parentRef: ScopedThreadRef;
-  readonly threadId: ThreadId;
+  readonly surface: ThreadSurface;
   readonly parentPanel: SideChatParentPanel;
   readonly onClose: () => void;
 }) {
-  const { parentRef, threadId } = props;
+  const { parentRef, surface } = props;
+  const { threadId } = surface;
   const inPanelTabBar = useInPanelTabBar();
   const gt = useGT();
   const threadRef = scopeThreadRef(parentRef.environmentId, threadId);
@@ -51,8 +61,27 @@ export default function SideChatPane(props: {
   );
   const shell = useQuietThreadShell(threadRef);
   const parent = useQuietThreadShell(parentRef);
-  const snapshotLoaded = useEnvironmentShellHasSnapshot(parentRef.environmentId);
-  const projection = useQuietThreadProjection(shell === null ? null : threadRef)?.projection;
+  const bootstrapComplete = isThreadRouteSnapshotAuthoritative(
+    useEnvironmentShellStatus(parentRef.environmentId),
+  );
+  // The shell can leave an idle subagent out, so its own detail says whether it still exists.
+  const unlistedDetail = useEnvironmentThread(
+    shell === null ? parentRef.environmentId : null,
+    shell === null ? threadId : null,
+  );
+  useOpenThreadFamily(threadRef, bootstrapComplete && shell === null);
+  const renderState = resolveThreadRouteRenderState({
+    bootstrapComplete,
+    serverThreadExists: shell !== null,
+    serverThreadDeleted: shell?.deletedAt != null,
+    unlistedThreadDetail: unlistedDetail,
+    draftThreadExists: false,
+  });
+  const projection = useQuietThreadProjection(threadRef)?.projection;
+  const thread = shell ?? projection?.thread ?? null;
+  // A tab opens for side chats and subagents only, so an unloaded one is still one of them.
+  const kind = sideThreadKindOf(thread) ?? "subagent";
+  const isSideChat = kind === "side-chat";
   const canOperate = useEnvironmentScope(parentRef.environmentId, AuthOrchestrationOperateScope);
   const mergeBack = useAtomCommand(threadEnvironment.mergeBack, { reportFailure: false });
   const deleteThread = useAtomCommand(threadEnvironment.delete, { reportFailure: false });
@@ -118,7 +147,7 @@ export default function SideChatPane(props: {
     if (result._tag === "Success") {
       releaseComposerDraftUploads(threadRef);
       useComposerDraftStore.getState().clearDraftThread(threadRef);
-      useRightPanelStore.getState().closeSurface(parentRef, `side-chat:${threadId}`);
+      useRightPanelStore.getState().closeSurface(parentRef, surface.id);
     } else if (!isAtomCommandInterrupted(result)) {
       const error = squashAtomCommandFailure(result);
       toastManager.add({
@@ -128,6 +157,15 @@ export default function SideChatPane(props: {
       });
     }
   };
+
+  const title =
+    thread === null
+      ? isSideChat
+        ? gt("Side chat")
+        : gt("Subagent")
+      : isSideChat
+        ? thread.title
+        : formatSubagentDisplayTitle(thread.title);
 
   const actions = (
     <div className="flex shrink-0 items-center gap-1.5">
@@ -189,24 +227,30 @@ export default function SideChatPane(props: {
   );
 
   return (
-    <div data-side-chat-pane={threadId} className="flex h-full min-h-0 flex-col">
-      {inPanelTabBar ? (
-        <PanelTabActions>{actions}</PanelTabActions>
-      ) : (
-        <div className="flex h-9 shrink-0 items-center gap-1 pr-1 pl-3">
-          <span className="min-w-0 flex-1 truncate text-meta">
-            {shell?.title ?? gt("Side chat")}
-          </span>
-          {actions}
-        </div>
-      )}
-      {shell === null ? (
-        snapshotLoaded ? (
-          <p className="p-3 text-xs text-muted-foreground">
+    <div
+      data-side-chat-pane={threadId}
+      data-testid="side-thread-pane"
+      className="flex h-full min-h-0 flex-col"
+    >
+      {isSideChat ? (
+        inPanelTabBar ? (
+          <PanelTabActions>{actions}</PanelTabActions>
+        ) : (
+          <div className="flex h-9 shrink-0 items-center gap-1 pr-1 pl-3">
+            <span className="min-w-0 flex-1 truncate text-meta">{title}</span>
+            {actions}
+          </div>
+        )
+      ) : null}
+      {renderState === "missing" ? (
+        <p className="p-3 text-xs text-muted-foreground">
+          {isSideChat ? (
             <T>This side chat was deleted.</T>
-          </p>
-        ) : null
-      ) : (
+          ) : (
+            <T>This thread is no longer available.</T>
+          )}
+        </p>
+      ) : renderState === "loading" && thread === null ? null : (
         <BackgroundThreadContext value>
           <ComposerHandleContext value={null}>
             <ChatView

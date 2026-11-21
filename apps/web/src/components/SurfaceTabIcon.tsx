@@ -161,8 +161,10 @@ export function SurfaceIcon({
       );
     case "issue":
       return <IssueSurfaceIcon surface={surface} environmentId={environmentId} />;
-    case "side-chat":
+    case "thread":
       return <SideChatTabIcon environmentId={environmentId} threadId={surface.threadId} />;
+    case "linked-thread":
+      return <MessagesSquare className="size-3.5 shrink-0" />;
     case "device":
       return surface.target?.platform === "ios" ? (
         <AppleIcon className="size-3.5 shrink-0 group-data-[active-tab=true]/tab:text-foreground" />
@@ -210,7 +212,7 @@ function IssueSurfaceIcon({
 }
 
 /** What a side chat tab's dot shows and its title's accessible name says. */
-function sideChatTabState(shell: EnvironmentThreadShell | null) {
+export function sideChatTabState(shell: EnvironmentThreadShell | null) {
   if (shell === null) return null;
   if (shell.hasPendingApprovals || shell.pendingSubagentRequest === "approval") {
     return "needs approval";

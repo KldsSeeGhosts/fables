@@ -1544,6 +1544,25 @@ export default function FilePreviewPanel({
     !renderMermaid &&
     !(isMarkdown && renderMarkdown) &&
     !(tableDelimiter && renderTable);
+  const copyableContents =
+    previewPath !== null &&
+    !isMedia &&
+    !isDocument &&
+    !isPdf &&
+    file.data &&
+    !file.data.truncated &&
+    file.data.contents.length > 0
+      ? file.data.contents
+      : null;
+  const { copyToClipboard, isCopied } = useCopyToClipboard({
+    target: namedClipboardTarget(previewPath ?? ""),
+    onError: (error) =>
+      toastManager.add({
+        type: "error",
+        title: gt("Could not copy file"),
+        description: error.message,
+      }),
+  });
   const contentFocusRef = useRef<HTMLDivElement>(null);
   const fileEditorRef = useRef<FileEditor | null>(null);
   const focusEditorFromContent = () => {
@@ -1798,7 +1817,10 @@ export default function FilePreviewPanel({
                   compact
                 />
               ) : null}
-              {showsRawText || canOpenInBrowser || (foldActions && canAddToChat) ? (
+              {showsRawText ||
+              canOpenInBrowser ||
+              copyableContents !== null ||
+              (foldActions && canAddToChat) ? (
                 <Menu>
                   <Tooltip>
                     <TooltipTrigger
@@ -1831,6 +1853,12 @@ export default function FilePreviewPanel({
                       <MenuCheckboxItem checked={wordWrap} onCheckedChange={setWordWrapOverride}>
                         {gt("Word wrap")}
                       </MenuCheckboxItem>
+                    ) : null}
+                    {copyableContents !== null ? (
+                      <MenuItem onClick={() => copyToClipboard(copyableContents, undefined)}>
+                        {isCopied ? <CheckIcon aria-hidden /> : <CopyIcon aria-hidden />}
+                        {isCopied ? gt("Copied") : gt("Copy contents")}
+                      </MenuItem>
                     ) : null}
                     {canOpenInBrowser ? (
                       <MenuItem onClick={handleOpenInBrowser}>
