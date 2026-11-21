@@ -59,6 +59,7 @@ function setup() {
 }
 
 import "~/index.css";
+import { workspaceAreaProps } from "~/lib/workspaceFocus";
 import { act, fakeTimers, render as renderUi } from "../../../test/render";
 import { PullRequestSummaryTab } from "./PullRequestSummaryTab";
 
@@ -483,4 +484,22 @@ it("adds promoted review conversations to chat without requiring review permissi
   );
   await userEvent.click(screen.getByRole("button", { name: "Add to chat", exact: true }));
   expect(onAddToChat).toHaveBeenCalledWith({ kind: "thread", thread });
+});
+
+it("scrolls from the keyboard after a click inside it", async () => {
+  setup();
+  const body = Array.from({ length: 80 }, (_, index) => `Paragraph ${index}`).join("\n\n");
+  const container = document.createElement("div");
+  container.className = "flex h-[300px]";
+  await using screen = await renderUi(
+    // The panel area takes focus itself, so a click on plain text lands on it unless the tab can.
+    <div {...workspaceAreaProps("panel", 4, "Workspace panel")} className="flex min-w-0 flex-1">
+      {tab({ ...detail, body })}
+    </div>,
+    { container },
+  );
+  const scroller = container.querySelector<HTMLElement>("[data-pull-request-summary-scroll]")!;
+  await userEvent.click(screen.getByText("Paragraph 0", { exact: true }));
+  await userEvent.keyboard("{PageDown}");
+  await vi.waitFor(() => expect(scroller.scrollTop).toBeGreaterThan(0));
 });

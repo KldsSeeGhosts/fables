@@ -638,8 +638,10 @@ export function PullRequestTimelineTab({
         </>
       )}
       estimatedItemSize={140}
-      className="h-full px-4"
-      contentContainerClassName="relative min-w-0"
+      tabIndex={-1}
+      data-workspace-focus-default
+      className="scrollbar-gutter-both h-full px-4 outline-none"
+      contentContainerClassName="relative mx-auto w-full max-w-3xl min-w-0"
       ListHeaderComponent={<div className="h-0.75" />}
       ListFooterComponent={<div className="h-3" />}
     />

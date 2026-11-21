@@ -317,7 +317,11 @@ export function PullRequestDetailGhost({
         </nav>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div
+        tabIndex={-1}
+        data-workspace-focus-default
+        className="min-h-0 flex-1 overflow-hidden outline-none"
+      >
         {/* The readiness card's geometry: checks, reviews and conflicts rows over the merge. */}
         <section className="px-4 pt-3 pb-4">
           <div className="overflow-hidden rounded-card border border-border surface-card">

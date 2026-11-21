@@ -45,6 +45,7 @@ function splitFilePath(path: string): { readonly name: string; readonly director
 export function GitCommitDialog({
   open,
   onOpenChange,
+  folderName = null,
   gitStatus,
   isDefaultRef,
   canWriteSourceControl,
@@ -56,6 +57,8 @@ export function GitCommitDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** The repository folder the commit runs in, shown when the caller knows it. */
+  folderName?: string | null;
   gitStatus: VcsStatusResult | null;
   isDefaultRef: boolean;
   canWriteSourceControl: boolean;
@@ -131,6 +134,12 @@ export function GitCommitDialog({
         </DialogHeader>
         <DialogPanel>
           <div className="flex flex-col gap-1.5">
+            {folderName ? (
+              <div className="flex items-center gap-2 text-caption text-muted-foreground">
+                <span className="shrink-0">Folder</span>
+                <span className="min-w-0 truncate text-caption text-foreground">{folderName}</span>
+              </div>
+            ) : null}
             <Label htmlFor={branchFieldId}>Branch</Label>
             <Select
               value={branchTarget}

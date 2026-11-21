@@ -27,7 +27,12 @@ import { type ReactNode, useId, useRef, useState } from "react";
 import { requestConfirmDialog } from "~/confirmDialog";
 import { useEnvironment } from "~/state/environments";
 import { mintPairingCodeOn } from "~/state/peerPairingCode";
-import { peerLinkEnvironment, useLinkableMachines, useLinkBackOffers } from "~/state/peerLinks";
+import {
+  peerLinkEnvironment,
+  useLinkableMachines,
+  useLinkBackOffers,
+  useLinkThroughRoutes,
+} from "~/state/peerLinks";
 import { useEnvironments } from "~/state/environments";
 import { useEnvironmentQuery } from "~/state/query";
 import { useEnvironmentScope, usePreparedConnection } from "~/state/session";
@@ -228,6 +233,15 @@ export interface LinkEnvironmentPrefill {
   /** The machine to link to, by environment id, or `ANOTHER_ADDRESS` with `address`. */
   readonly choice: string | null;
   readonly address?: string;
+  /**
+   * With `address`: the machine there, and one of this app's that links to it at full access and
+   * so can get the pairing code from it.
+   */
+  readonly through?: {
+    readonly viaEnvironmentId: EnvironmentId;
+    readonly environmentId: EnvironmentId;
+    readonly label: string;
+  };
 }
 
 /**
@@ -252,7 +266,24 @@ export function LinkEnvironmentDialog({
   const setOpen = onOpenChange;
   // Named in the title: from the map, nothing else on screen says which machine is linking.
   const source = useEnvironment(environmentId);
-  const machines = useLinkableMachines(environmentId, open);
+  const saved = useLinkableMachines(environmentId, open);
+  const routes = useLinkThroughRoutes(environmentId, open);
+  // Machines this app has no entry for are still pickable when one of its environments links
+  // to them at full access.
+  const machines = [
+    ...saved,
+    ...[...routes.values()]
+      .filter((route) => saved.every((machine) => machine.environmentId !== route.environmentId))
+      .map((route) => ({
+        environmentId: route.environmentId,
+        label: route.label,
+        machine: "server" as const,
+        connected: false,
+        connectOnly: false,
+        linked: false,
+        urls: route.urls,
+      })),
+  ];
   // Null until the user picks; with no other machines known, only an address is left.
   const [choice, setChoice] = useState<string | null>(prefill?.choice ?? null);
   const [address, setAddress] = useState(prefill?.address ?? "");
@@ -271,8 +302,23 @@ export function LinkEnvironmentDialog({
     reportFailure: false,
     reportDefect: false,
   });
+  const pairThrough = useAtomCommand(peerLinkEnvironment.pairLink, {
+    label: "pair link through a linked environment",
+    // The answer is a credential; keep it out of the console.
+    reportFailure: false,
+    reportDefect: false,
+  });
+  // Machines that would not give a code through a link, so the dialog asks for one instead.
+  const [throughFailed, setThroughFailed] = useState<ReadonlySet<EnvironmentId>>(new Set());
   const [alsoLinkBack, setAlsoLinkBack] = useState(false);
   const selected = choice ?? (machines.length === 0 ? ANOTHER_ADDRESS : null);
+  // Only for the machine the dialog opened for: another choice or address is another machine.
+  const prefilledThrough =
+    prefill?.through !== undefined &&
+    selected === ANOTHER_ADDRESS &&
+    address === (prefill.address ?? "")
+      ? prefill.through
+      : null;
   const machine = machines.find((candidate) => candidate.environmentId === selected) ?? null;
   const targetId = machine?.environmentId ?? null;
   const connected = usePreparedConnection(targetId);
@@ -288,12 +334,21 @@ export function LinkEnvironmentDialog({
     Option.isSome(connected) &&
     mayMint &&
     !mintFailed.has(targetId);
+  // Minting with this client's own session there comes first: it needs no third machine.
+  const throughCandidate =
+    prefilledThrough ?? (targetId === null || canMint ? null : (routes.get(targetId) ?? null));
+  const via = useEnvironment(throughCandidate?.viaEnvironmentId ?? null);
+  const through =
+    throughCandidate !== null && via !== null && !throughFailed.has(throughCandidate.environmentId)
+      ? throughCandidate
+      : null;
   const linkBack = useLinkBackOffers(environmentId, targetId === null ? [] : [targetId], open);
   const backOffer = linkBack.offerFor(targetId);
   const ready =
-    selected !== null &&
-    (!needsAddress || address.trim().length > 0) &&
-    (canMint || pairingCode.trim().length > 0);
+    through !== null ||
+    (selected !== null &&
+      (!needsAddress || address.trim().length > 0) &&
+      (canMint || pairingCode.trim().length > 0));
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
     if (!next) {
@@ -302,8 +357,38 @@ export function LinkEnvironmentDialog({
       setPairingCode("");
       setAccess("approval-required");
       setMintFailed(new Set());
+      setThroughFailed(new Set());
       setAlsoLinkBack(false);
     }
+  };
+  // Settles to what to link with, or null after reporting why the linked machine gave no code.
+  const resolveThrough = async (target: NonNullable<typeof through>) => {
+    const asked = await pairThrough({
+      environmentId: target.viaEnvironmentId,
+      input: { environmentId: target.environmentId, access },
+    });
+    if (asked._tag === "Success" && asked.value.type === "credential") {
+      const [url, ...alternateUrls] = asked.value.urls;
+      if (url !== undefined) {
+        return {
+          url,
+          ...(alternateUrls.length > 0 ? { alternateUrls } : {}),
+          expectedEnvironmentId: asked.value.environmentId,
+          expectedLabel: asked.value.label,
+          pairingCode: asked.value.credential,
+        };
+      }
+    }
+    if (asked._tag === "Failure" && isAtomCommandInterrupted(asked)) return null;
+    setThroughFailed((failed) => new Set(failed).add(target.environmentId));
+    failureToast(
+      gt("{via} could not get a pairing code from {target}", {
+        via: via?.label ?? "",
+        target: target.label,
+      }),
+      gt("Enter its address and a pairing code from it instead."),
+    );
+    return null;
   };
   // Settles to the code to link with, or null after reporting why there is none.
   const resolvePairingCode = async () => {
@@ -323,23 +408,28 @@ export function LinkEnvironmentDialog({
     if (inFlight.current || !ready || url === undefined) return;
     inFlight.current = true;
     setBusy(true);
-    const code = await resolvePairingCode();
+    const throughInput = through === null ? null : await resolveThrough(through);
+    const code = through === null ? await resolvePairingCode() : null;
     const result =
-      code === null
-        ? null
-        : await link({
-            environmentId,
-            input: {
-              url,
-              ...(alternateUrls.length > 0 ? { alternateUrls } : {}),
-              // A typed address links alone: only this app's own addresses name a machine.
-              ...(machine === null || needsAddress
-                ? {}
-                : { expectedEnvironmentId: machine.environmentId, expectedLabel: machine.label }),
-              pairingCode: code,
-              access,
-            },
-          });
+      through !== null
+        ? throughInput === null
+          ? null
+          : await link({ environmentId, input: { ...throughInput, access } })
+        : code === null
+          ? null
+          : await link({
+              environmentId,
+              input: {
+                url,
+                ...(alternateUrls.length > 0 ? { alternateUrls } : {}),
+                // A typed address links alone: only this app's own addresses name a machine.
+                ...(machine === null || needsAddress
+                  ? {}
+                  : { expectedEnvironmentId: machine.environmentId, expectedLabel: machine.label }),
+                pairingCode: code,
+                access,
+              },
+            });
     // The link back is its own link, made on the other machine: it never undoes this one.
     const back =
       result?._tag === "Success" &&
@@ -398,6 +488,8 @@ export function LinkEnvironmentDialog({
           <DialogTitle>
             {source === null ? (
               <T>Link an environment</T>
+            ) : through !== null ? (
+              gt("Link {source} to {target}", { source: source.label, target: through.label })
             ) : machine === null ? (
               gt("Link {label} to another machine", { label: source.label })
             ) : (
@@ -421,7 +513,7 @@ export function LinkEnvironmentDialog({
               void submit();
             }}
           >
-            {machines.length > 0 ? (
+            {machines.length > 0 && (through === null || through !== prefilledThrough) ? (
               <LinkMachineSelect
                 machines={machines}
                 value={selected}
@@ -438,7 +530,15 @@ export function LinkEnvironmentDialog({
                 <T>Already linked. Linking again renews it with the access you pick.</T>
               </p>
             ) : null}
-            {needsAddress ? (
+            {through !== null ? (
+              <p className="text-caption text-muted-foreground">
+                {gt(
+                  "{via} links to {target} at full access, so it gets the pairing code. No code to paste.",
+                  { via: via?.label ?? "", target: through.label },
+                )}
+              </p>
+            ) : null}
+            {needsAddress && through === null ? (
               <label className="block space-y-1.5">
                 <span className="block text-caption text-foreground">
                   <T>Address</T>
@@ -466,8 +566,10 @@ export function LinkEnvironmentDialog({
                 ) : null}
               </label>
             ) : null}
-            {needsAddress && address.trim() ? <LinkAddressWarning address={address} /> : null}
-            {selected === null || canMint ? null : (
+            {needsAddress && through === null && address.trim() ? (
+              <LinkAddressWarning address={address} />
+            ) : null}
+            {selected === null || canMint || through !== null ? null : (
               <label className="block space-y-1.5">
                 <span className="block text-caption text-foreground">
                   <T>Pairing code</T>
@@ -497,20 +599,20 @@ export function LinkEnvironmentDialog({
             )}
             <LinkAccessPicker value={access} onChange={setAccess} disabled={busy} />
             {machine === null || source === null ? null : backOffer.kind === "offered" ? (
-              <label className="flex cursor-pointer items-start gap-2.5 text-sm has-data-disabled:cursor-default">
+              <label className="flex cursor-pointer items-start gap-2.5 text-meta has-data-disabled:cursor-default">
                 <Checkbox
                   checked={alsoLinkBack}
                   disabled={busy}
                   onCheckedChange={setAlsoLinkBack}
                 />
                 <span className="min-w-0 space-y-0.5">
-                  <span className="block font-medium text-foreground">
+                  <span className="block text-meta text-foreground">
                     {gt("Also link {target} back to {source}", {
                       source: source.label,
                       target: machine.label,
                     })}
                   </span>
-                  <span className="block text-xs text-muted-foreground">
+                  <span className="block text-caption text-muted-foreground">
                     {gt("Agents on {target} can then work on {source} too.", {
                       source: source.label,
                       target: machine.label,
@@ -519,7 +621,7 @@ export function LinkEnvironmentDialog({
                 </span>
               </label>
             ) : backOffer.kind === "blocked" ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {linkBackBlockLabel(
                   backOffer.reason,
                   { source: source.label, target: machine.label },
@@ -566,7 +668,7 @@ export function useForgetPeerLink(environmentId: EnvironmentId, link: PeerLinkSu
   const forget = async () => {
     const confirmed = await (requestConfirmDialog(
       gt(
-        "Forget {label}? Agents here stop working there. Revoke \"T3 Code · …\" in {label}''s Sharing & access to end the session there too.",
+        "Forget {label}? Agents here stop working there. Revoke \"T3 Code - …\" in {label}''s Sharing & access to end the session there too.",
         { label: link.label },
       ),
       { variant: "destructive" },

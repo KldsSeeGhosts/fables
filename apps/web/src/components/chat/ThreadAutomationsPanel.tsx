@@ -17,6 +17,7 @@ import {
 
 import { Switch } from "../ui/switch";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
+import { useClientSettings } from "../../hooks/useSettings";
 import { ScheduledRelativeLabel } from "../settings/ScheduledTasksSettings";
 import { scheduleLabel } from "../settings/scheduledTasksSettings.logic";
 import { useEnvironmentQuery } from "../../state/query";
@@ -62,6 +63,7 @@ export function ThreadAutomationsPanel(props: {
   const runTaskNow = useAtomCommand(serverEnvironment.runScheduledTaskNow, {
     label: "thread automation run now",
   });
+  const timestampFormat = useClientSettings((settings) => settings.timestampFormat);
   const navigate = useNavigate();
   const gt = useGT();
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
@@ -173,7 +175,12 @@ export function ThreadAutomationsPanel(props: {
                       ? gt("Paused", { $context: "automation state" })
                       : task.lastRunStatus === "running"
                         ? gt("Running", { $context: "automation state" })
-                        : scheduleLabel(task.schedule, tasksQuery.data?.timeZone, task.nextRunAt))}
+                        : scheduleLabel(
+                            task.schedule,
+                            timestampFormat,
+                            tasksQuery.data?.timeZone,
+                            task.nextRunAt,
+                          ))}
                 </span>
               </span>
             </ThreadDetailsControl>

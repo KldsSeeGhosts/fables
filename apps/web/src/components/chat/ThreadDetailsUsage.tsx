@@ -1,20 +1,16 @@
 import type {
   ProviderInstanceId,
   ServerProvider,
+  ServerProviderUsageLimits,
   ServerProviderUsageWindow,
   UsageLimitSourceSnapshots,
 } from "@t3tools/contracts";
 import {
-  displayLimitWindows,
-  elapsedShare,
-  limitPoolNotice,
+  type LimitPace,
+  type LimitPoolWindow,
   paceOf,
   paceRemainingPercent,
   remainingPercent,
-  type LimitPace,
-  type LimitPoolWindow,
-  resolveProviderLimitPool,
-  resolveProviderUsageLimits,
 } from "@t3tools/shared/usageLimits";
 import { formatDuration, limitsNotice } from "@t3tools/shared/usageLimitsCopy";
 import { Link } from "@tanstack/react-router";
@@ -38,6 +34,7 @@ import { ThreadDetailsControl } from "./ThreadDetailsControl";
 import { ContextWindowSegments } from "./ContextWindowSegments";
 import { contextWindowSegments } from "./compaction.logic";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
+import { nextPoolReset, poolSources, resolveThreadDetailsLimits } from "./ThreadDetailsUsage.logic";
 
 const USAGE_ROW_CLASS =
   "col-span-full grid min-w-0 grid-cols-subgrid items-center gap-x-1.5 text-meta";
@@ -49,69 +46,67 @@ const PACE_LABEL: Record<LimitPace, string> = {
 };
 export interface ThreadDetailsUsageInput {
   readonly providerInstanceId: ProviderInstanceId | null;
+  readonly model: string | null;
   readonly providers: readonly ServerProvider[];
   readonly sources: UsageLimitSourceSnapshots;
   readonly contextWindow: ContextWindowSnapshot | null;
 }
 type UsageTone = "error" | "warning" | null;
 
+function limitTone(left: number): UsageTone {
+  if (left <= 10) return "error";
+  if (left <= 20) return "warning";
+  return null;
+}
+
 /** Provider limits share the canvas's icon and label columns. */
 export function ThreadDetailsUsage({
   providerInstanceId,
+  model,
   providers,
   sources,
 }: Omit<ThreadDetailsUsageInput, "contextWindow">) {
   const gt = useGT();
-  const m = useMessages();
   const nowMinute = useNowMinute();
   const now = Date.parse(`${nowMinute}:00Z`);
-  const limits =
-    providerInstanceId !== null
-      ? resolveProviderUsageLimits(providerInstanceId, providers, sources)
-      : undefined;
-  const ownNotice = limits
-    ? limitsNotice(limits, m)
-    : gt("This provider has not reported usage limits.");
-  const pool =
-    providerInstanceId !== null && ownNotice !== null
-      ? resolveProviderLimitPool(providerInstanceId, providers, sources, now)
-      : undefined;
-  const rows = pool
-    ? displayLimitWindows(pool).map((pooled) => ({
-        window: pooledWindow(pooled, now),
-        accounts: pooled.members.length,
-      }))
-    : (limits?.windows ?? []).map((window) => ({ window, accounts: 1 }));
-  const poolNotice =
-    providerInstanceId !== null && ownNotice !== null && !pool
-      ? limitPoolNotice(providerInstanceId, providers, sources)
-      : null;
-  const notice = pool ? null : (poolNotice ?? ownNotice);
+  const resolved = resolveThreadDetailsLimits(providerInstanceId, model, providers, sources, now);
+  if (!resolved) return null;
+
   return (
     <ThreadDetailsSection title={gt("Usage limits")} variant="usage">
-      {notice || !rows.length ? (
-        <UsageRow
-          label={gt("Limits", { $context: "usage limits row label" })}
-          icon={<TimerIcon />}
-          fill={null}
-          tone={null}
-          value={
-            poolNotice && !sources.some((source) => source.error)
-              ? gt("Not linked")
-              : gt("Unavailable")
-          }
-          tooltip={notice ?? gt("No usage windows reported.")}
-          opensUsage
-        />
+      {resolved.kind === "pool" ? (
+        resolved.windows.map((window) => <PoolRow key={window.id} window={window} now={now} />)
       ) : (
-        <>
-          {rows.map(({ window, accounts }) => (
-            <LimitRow key={window.id} window={window} now={now} pooledAccounts={accounts} />
-          ))}
-        </>
+        <InstanceRows limits={resolved.limits} now={now} />
       )}
     </ThreadDetailsSection>
   );
+}
+
+function InstanceRows({
+  limits,
+  now,
+}: {
+  readonly limits: ServerProviderUsageLimits;
+  readonly now: number;
+}) {
+  const gt = useGT();
+  const m = useMessages();
+  const notice = limitsNotice(limits, m);
+  if (notice) {
+    return (
+      <UsageRow
+        label={gt("Limits", { $context: "usage limits row label" })}
+        icon={<TimerIcon />}
+        fill={null}
+        tone={null}
+        value={gt("Unavailable")}
+        tooltip={<span className="text-foreground">{notice}</span>}
+        opensUsage
+      />
+    );
+  }
+  return limits.windows.map((window) => <LimitRow key={window.id} window={window} now={now} />);
 }
 
 /** Context fills as tokens are used. Compact follows the composer's real provider command. */
@@ -243,17 +238,6 @@ export function ThreadDetailsContext({
   );
 }
 
-/** A pool's row: the share left across its accounts, and the next of their resets. */
-function pooledWindow(pooled: LimitPoolWindow, now: number): ServerProviderUsageWindow {
-  return {
-    id: pooled.id,
-    kind: pooled.kind,
-    label: pooled.label,
-    usedPercent: 100 - pooled.remainingPercent,
-    resetsAt: pooled.resets.find((reset) => reset.at > now)?.member.window.resetsAt,
-  };
-}
-
 function resetLabel(
   window: ServerProviderUsageWindow,
   now: number,
@@ -274,18 +258,17 @@ function isWeeklyWindow(window: ServerProviderUsageWindow): boolean {
 function LimitRow({
   window,
   now,
-  pooledAccounts,
+  pooledAccounts = 1,
 }: {
   readonly window: ServerProviderUsageWindow;
   readonly now: number;
-  readonly pooledAccounts: number;
+  readonly pooledAccounts?: number;
 }) {
   const gt = useGT();
   const m = useMessages();
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const left = remainingPercent(window);
   const pace = paceOf(window, now);
-  const elapsed = elapsedShare(window, now);
   const timeLeft = paceRemainingPercent(window, now);
   const resetsAt = window.resetsAt ? Date.parse(window.resetsAt) : Number.NaN;
   const remainingMs = resetsAt - now;
@@ -301,8 +284,8 @@ function LimitRow({
       shortLabel={weekly && !modelLabel ? window.label.replace(/\s*·\s*Weekly$/i, "") : undefined}
       icon={modelLabel ? <BoxIcon /> : weekly ? <CalendarRangeIcon /> : <TimerIcon />}
       fill={left}
-      tick={elapsed === null ? null : (1 - elapsed) * 100}
-      tone={left <= 10 ? "error" : left <= 20 ? "warning" : null}
+      tone={limitTone(left)}
+      tick={timeLeft}
       value={`${left}%`}
       ariaValue={gt("{left}% left", { left })}
       trailing={
@@ -338,6 +321,67 @@ function LimitRow({
           ) : null}
           {pooledAccounts > 1 ? (
             <span>{gt("Across {count} accounts", { count: pooledAccounts })}</span>
+          ) : null}
+        </>
+      }
+    />
+  );
+}
+
+function PoolRow({ window, now }: { readonly window: LimitPoolWindow; readonly now: number }) {
+  const gt = useGT();
+  const m = useMessages();
+  const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
+  const left = window.remainingPercent;
+  const accounts = window.members.length;
+  const from = poolSources(window);
+  const sourceLabels = [...from.hubs, ...(from.signedIn ? [gt("Signed-in accounts")] : [])];
+  const next = nextPoolReset(window, now);
+  const resetsAt = next?.member.window.resetsAt;
+  const reset =
+    next && resetsAt
+      ? {
+          duration: formatDuration(next.at - now, m),
+          time: formatUpcomingTimestamp(resetsAt, timestampFormat, now, undefined, m),
+        }
+      : null;
+  return (
+    <UsageRow
+      label={window.label}
+      icon={<TimerIcon />}
+      fill={left}
+      tone={limitTone(left)}
+      value={`${left}%`}
+      ariaValue={gt("{left}% left", { left })}
+      opensUsage
+      tooltip={
+        <>
+          <span className="text-foreground">
+            {accounts > 1
+              ? gt("{label}: {left}% left across {accounts} accounts", {
+                  label: window.label,
+                  left,
+                  accounts,
+                })
+              : gt("{label}: {left}% left", { label: window.label, left })}
+          </span>
+          {window.pace ? (
+            <span className="text-muted-foreground">{m(PACE_LABEL[window.pace])}</span>
+          ) : null}
+          {next && reset ? (
+            <span className="text-muted-foreground">
+              {accounts > 1
+                ? gt("+{percent}% in {duration}, {time}", {
+                    percent: next.restoresPercent,
+                    ...reset,
+                  })
+                : gt("Resets in {duration}, {time}", reset)}
+            </span>
+          ) : null}
+          {sourceLabels.length > 0 ? (
+            <span className="text-muted-foreground">
+              {gt("From {sources}", { sources: sourceLabels.join(", ") })}
+            </span>
           ) : null}
         </>
       }

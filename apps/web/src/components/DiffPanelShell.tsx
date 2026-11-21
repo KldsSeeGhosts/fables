@@ -11,7 +11,8 @@ function getDiffPanelHeaderRowClassName(mode: DiffPanelMode) {
   const shouldUseDragRegion = isElectron && mode !== "sheet" && mode !== "embedded";
   return cn(
     // diff-toolbar: DiffPanel folds its actions into a menu in narrow panes.
-    "@container/diff-toolbar flex items-center justify-between gap-2",
+    // diff-header is upstream's name for the same row; both query families target it.
+    "@container/diff-toolbar [container-name:diff-toolbar_diff-header] flex items-center justify-between gap-2",
     mode === "embedded" ? "px-2" : "px-4",
     shouldUseDragRegion
       ? "drag-region h-[var(--workspace-topbar-height)] border-b border-border wco:pr-(--workspace-native-controls-inset)"
