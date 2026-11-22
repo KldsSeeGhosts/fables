@@ -377,6 +377,7 @@ const hub = (
     models?: ReadonlyArray<string>;
     windows?: ReadonlyArray<ServerProviderUsageWindow>;
     unavailable?: true;
+    disabled?: true;
   }>,
 ): UsageLimitSourceSnapshot => ({
   id: UsageLimitSourceId.make("hub"),
@@ -387,6 +388,7 @@ const hub = (
     id: `account-${index}`,
     driver: ProviderDriverKind.make(account.driver ?? "claudeAgent"),
     ...(account.models ? { models: account.models } : {}),
+    ...(account.disabled ? { disabled: true } : {}),
     usageLimits: {
       checkedAt: at(0),
       windows: account.windows ?? [],
@@ -498,7 +500,7 @@ it.each([
     expected: at(24),
   },
   {
-    name: "an own-driver account whose model list was unread still counts",
+    name: "an unread model list does not override a confirmed route",
     accounts: [
       { windows: [spent("five_hour", 1)] },
       {
@@ -506,6 +508,15 @@ it.each([
         models: ["claude-sonnet-4-6"],
         windows: [spent("3p-5h", 8)],
       },
+    ],
+    model: "claude-sonnet-4-6",
+    expected: at(8),
+  },
+  {
+    name: "disabled listings do not override an enabled account with no model list",
+    accounts: [
+      { windows: [spent("five_hour", 1)] },
+      { disabled: true as const, models: ["claude-sonnet-4-6"], windows: [] },
     ],
     model: "claude-sonnet-4-6",
     expected: at(1),
@@ -533,45 +544,50 @@ it.each([
   ).toBe(expected);
 });
 
-it.effect("the reset fallback refreshes its hub, and a stalled hub cannot hold the failure", () =>
-  Effect.gen(function* () {
-    yield* TestClock.setTime(NOW);
-    const roomLeft = { ...hub([{ windows: [spent("five_hour", 2)] }]), origin: "http://hub.test" };
-    const cached = {
-      ...roomLeft,
-      accounts: roomLeft.accounts.map((account) => ({
-        ...account,
-        usageLimits: {
-          ...account.usageLimits,
-          windows: account.usageLimits.windows.map((window) => ({ ...window, usedPercent: 99 })),
-        },
-      })),
-    };
-    let current: ReadonlyArray<UsageLimitSourceSnapshot> = [cached];
-    let refresh: Effect.Effect<void> = Effect.sync(() => {
-      current = [roomLeft];
-    });
-    const lookup = UsageLimitSources.UsageLimitResetFallback.pipe(
-      Effect.flatMap((fallback) =>
-        fallback.resetAt(ProviderDriverKind.make("claudeAgent"), "http://hub.test", null),
-      ),
-      Effect.provide(
-        UsageLimitSources.layerResetFallback.pipe(
-          Layer.provide(
-            Layer.mock(UsageLimitSources.UsageLimitSources)({
-              current: Effect.sync(() => current),
-              refresh: Effect.suspend(() => refresh),
-            }),
+it.effect.each([
+  ["cliproxy", "http://hub.test", "http://hub.test"],
+  ["cpa-manager", "https://manager.test", "http://127.0.0.1:8317"],
+] as const)(
+  "the reset fallback refreshes a %s hub within its deadline",
+  ([kind, origin, endpoint]) =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(NOW);
+      const roomLeft = { ...hub([{ windows: [spent("five_hour", 2)] }]), kind, origin };
+      const cached = {
+        ...roomLeft,
+        accounts: roomLeft.accounts.map((account) => ({
+          ...account,
+          usageLimits: {
+            ...account.usageLimits,
+            windows: account.usageLimits.windows.map((window) => ({ ...window, usedPercent: 99 })),
+          },
+        })),
+      };
+      let current: ReadonlyArray<UsageLimitSourceSnapshot> = [cached];
+      let refresh: Effect.Effect<void> = Effect.sync(() => {
+        current = [roomLeft];
+      });
+      const lookup = UsageLimitSources.UsageLimitResetFallback.pipe(
+        Effect.flatMap((fallback) =>
+          fallback.resetAt(ProviderDriverKind.make("claudeAgent"), endpoint, null),
+        ),
+        Effect.provide(
+          UsageLimitSources.layerResetFallback.pipe(
+            Layer.provide(
+              Layer.mock(UsageLimitSources.UsageLimitSources)({
+                current: Effect.sync(() => current),
+                refresh: Effect.suspend(() => refresh),
+              }),
+            ),
           ),
         ),
-      ),
-    );
-    // The last poll saw room; the account was spent after it.
-    expect(yield* lookup).toBe(at(2));
-    current = [cached];
-    refresh = Effect.never;
-    const stalled = yield* Effect.forkChild(lookup);
-    yield* TestClock.adjust("5 seconds");
-    expect(yield* Fiber.join(stalled)).toBeNull();
-  }),
+      );
+      // The last poll saw room; the account was spent after it.
+      expect(yield* lookup).toBe(at(2));
+      current = [cached];
+      refresh = Effect.never;
+      const stalled = yield* Effect.forkChild(lookup);
+      yield* TestClock.adjust("5 seconds");
+      expect(yield* Fiber.join(stalled)).toBeNull();
+    }),
 );

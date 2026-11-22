@@ -11,6 +11,7 @@ import {
 import { AsyncResult, Atom } from "effect/reactivity";
 import * as Dialog from "../../components/ui/Dialog";
 import { useAtomMount, useAtomValue } from "@effect/atom-react";
+import { environmentPresentations } from "../../state/presentation";
 import { mobilePreferencesAtom } from "../../state/preferences";
 import { parseThreadKey, threadKey } from "@t3tools/client-runtime/state/entities";
 import { createThreadVisitTracker } from "@t3tools/client-runtime/state/thread-visits";
@@ -48,6 +49,7 @@ import type {
   RuntimeRequestId,
   ScopedThreadRef,
   ServerConfig as T3ServerConfig,
+  UsageLimitSourceSnapshots,
   UsageLimitsReport,
   RunId,
 } from "@t3tools/contracts";
@@ -85,6 +87,7 @@ import {
   useCallback,
   useEffect,
   useEffectEvent,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -127,7 +130,10 @@ import {
 import { useNativeWorkspaceColumnsSupported } from "../../native/NativeWorkspaceColumns";
 import { useDeviceType, useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
-import { collectProviderUsageLimits } from "@t3tools/shared/usageLimits";
+import {
+  collectProviderUsageLimits,
+  resolveEffectiveUsageLimitSources,
+} from "@t3tools/shared/usageLimits";
 import type { ComposerEditorHandle } from "../../components/ComposerEditor";
 import type { StatusTone } from "../../components/StatusPill";
 import {
@@ -224,6 +230,8 @@ import { useOpenLinkedThread } from "./useOpenLinkedThread";
 import { useGlobalVoiceInput } from "../voice-input/VoiceInputProvider";
 import type { OrchestrationV2ProviderSession } from "@t3tools/contracts";
 import { voiceInputBlocksSubmission } from "@t3tools/client-runtime/voice-input";
+
+const EMPTY_USAGE_LIMIT_SOURCES: UsageLimitSourceSnapshots = [];
 
 export interface ThreadDetailScreenProps {
   readonly header?: React.ReactNode;
@@ -995,6 +1003,24 @@ function ThreadDetailBody(
       { openQuestionCount: activeUserInputRequestId === null ? 0 : 1 },
       messages,
     ) !== null;
+  const usageProvider = props.serverConfig?.providers.find(
+    (provider) => provider.instanceId === props.selectedThread.modelSelection.instanceId,
+  );
+  const presentations = useAtomValue(environmentPresentations.presentationsAtom);
+  const ownUsageLimitSources = props.serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES;
+  const canUseLinkedQuota = usageProvider?.auth.endpoint !== undefined;
+  const usageLimitSources = useMemo(
+    () =>
+      canUseLinkedQuota
+        ? resolveEffectiveUsageLimitSources(
+            ownUsageLimitSources,
+            [...presentations.values()]
+              .filter(({ entry, connection }) => entry.enabled && connection.phase === "connected")
+              .map(({ serverConfig }) => serverConfig),
+          )
+        : ownUsageLimitSources,
+    [canUseLinkedQuota, ownUsageLimitSources, presentations],
+  );
   const [usageLimitsPanel, setUsageLimitsPanel] = useState<{
     readonly key: string;
     readonly threadKey: string;
@@ -1015,7 +1041,7 @@ function ThreadDetailBody(
       ? collectProviderUsageLimits(
           props.selectedThread.modelSelection.instanceId,
           props.serverConfig?.providers ?? [],
-          props.serverConfig?.usageLimitSources ?? [],
+          usageLimitSources,
           usageLimitsPanel.now,
           props.selectedThread.modelSelection.model,
         )
@@ -1949,6 +1975,7 @@ function ThreadDetailBody(
                           props.activePendingUserInput === null
                         }
                         serverConfig={props.serverConfig}
+                        usageLimitSources={usageLimitSources}
                         queueCount={props.selectedThreadQueueCount}
                         activeThreadBusy={props.activeThreadBusy}
                         redirectsApproval={

@@ -12,6 +12,7 @@ import {
   collectLimitAccounts,
   collectLimitPools,
   collectProviderUsageLimits,
+  instanceHubs,
   isLowLimit,
   remainingPercent,
   tightestSessionLimit,
@@ -30,6 +31,7 @@ import { Popover, PopoverPopup, PopoverTitle, PopoverTrigger } from "../ui/popov
 import { providerClients } from "../settings/providerDriverMeta";
 import { RedactedSensitiveText } from "../settings/RedactedSensitiveText";
 import { LimitWindows, ResetCredits } from "../usage/UsageLimits";
+import { collectRoutedHubLimitAccounts } from "./ThreadDetailsUsage.logic";
 import { ComposerBanner } from "./ComposerBanner";
 import type { ComposerBannerStackItem } from "./ComposerBannerStack";
 import { Badge } from "../ui/badge";
@@ -377,17 +379,24 @@ export function resolveLowLimitSignal(
   now = Date.now(),
 ): LowLimitSignal | null {
   if (!provider) return null;
-  const accounts = collectLimitAccounts(
-    new Map([
-      [
-        environmentId,
-        {
-          entry: { target: { label: "" } },
-          serverConfig: { providers, usageLimitSources: sources },
-        },
-      ],
-    ]),
-  ).filter((account) => account.driver === provider.driver);
+  const hubs = instanceHubs(provider, sources);
+  const routesThroughHub = hubs.length > 0;
+  const accounts = routesThroughHub
+    ? collectRoutedHubLimitAccounts(provider.driver, model ?? null, providers, hubs, environmentId)
+    : collectLimitAccounts(
+        new Map([
+          [
+            environmentId,
+            {
+              entry: { target: { label: "" } },
+              serverConfig: {
+                providers,
+                usageLimitSources: provider.auth.endpoint === undefined ? sources : [],
+              },
+            },
+          ],
+        ]),
+      ).filter((account) => account.driver === provider.driver);
   const active = accounts.map((account) => ({
     ...account,
     limits: {
@@ -401,10 +410,9 @@ export function resolveLowLimitSignal(
   const selected = `_${normalize(model ?? "")}_`;
   const scoped = new Set(
     active
-      .flatMap((account) => account.limits.windows)
+      .flatMap((account) => (account.driver === "claudeAgent" ? account.limits.windows : []))
       .filter(
         (window) =>
-          provider.driver === "claudeAgent" &&
           window.id.startsWith("seven_day_") &&
           selected.includes(`_${window.id.slice("seven_day_".length)}_`),
       )
@@ -416,18 +424,17 @@ export function resolveLowLimitSignal(
       ...account.limits,
       windows: account.limits.windows.filter(
         (window) =>
-          provider.driver !== "claudeAgent" ||
+          account.driver !== "claudeAgent" ||
           (window.id.startsWith("seven_day_")
             ? scoped.has(window.id)
             : window.id !== "seven_day" || scoped.size === 0),
       ),
     },
   }));
-  const pool = collectLimitPools(applicable, now)[0];
-  const pooled = pool?.windows.toSorted(
-    (left, right) => left.remainingPercent - right.remainingPercent,
-  )[0];
-  const single = accounts.length <= 1 ? ownSessionLimit(provider) : null;
+  const pooled = collectLimitPools(applicable, now)
+    .flatMap((pool) => pool.windows)
+    .sort((left, right) => left.remainingPercent - right.remainingPercent)[0];
+  const single = !routesThroughHub && accounts.length <= 1 ? ownSessionLimit(provider) : null;
   const window: ServerProviderUsageWindow | undefined =
     single?.window ??
     (pooled
@@ -456,7 +463,7 @@ export function resolveLowLimitSignal(
   return {
     // Which account is tightest and its reported reset time both shift between usage reads.
     key: [environmentId, provider.instanceId, window.id].join("\u0000"),
-    driver: provider.driver,
+    driver: pooled?.members[0]?.account.driver ?? provider.driver,
     window,
     checkedAt,
   };

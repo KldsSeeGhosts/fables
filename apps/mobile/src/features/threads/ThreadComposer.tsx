@@ -17,6 +17,7 @@ import {
   type MessageId,
   type ModelSelection,
   type ServerConfig as T3ServerConfig,
+  type UsageLimitSourceSnapshots,
   type UsageLimitsReport,
 } from "@t3tools/contracts";
 import {
@@ -155,6 +156,7 @@ export interface ThreadComposerProps {
   readonly onFreshSession?: () => void;
   readonly offersSideChat?: boolean;
   readonly serverConfig: T3ServerConfig | null;
+  readonly usageLimitSources: UsageLimitSourceSnapshots;
   readonly queueCount: number;
   readonly activeThreadBusy: boolean;
   /** Sending declines a pending approval and redirects the agent, so `/side` is plain text. */
@@ -369,9 +371,10 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   const usageLimitsOffered =
     selectedProviderStatus !== null &&
     hasProviderUsageLimits(
-      selectedProviderStatus.driver,
+      selectedProviderStatus,
       props.serverConfig?.providers ?? [],
-      props.serverConfig?.usageLimitSources ?? [],
+      props.usageLimitSources,
+      currentModelSelection.model,
     );
   const draftRunsLocally = composerRunsDraftLocally({
     text: draftMessage,
@@ -399,7 +402,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     const report = collectProviderUsageLimits(
       currentModelSelection.instanceId,
       props.serverConfig?.providers ?? [],
-      props.serverConfig?.usageLimitSources ?? [],
+      props.usageLimitSources,
       Date.now(),
       currentModelSelection.model,
     );

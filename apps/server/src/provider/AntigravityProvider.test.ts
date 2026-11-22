@@ -136,6 +136,7 @@ const makeHarness = Effect.fn("makeAntigravityProviderHarness")(function* (
   options: {
     readonly auth?: { readonly type: string; readonly label: string };
     readonly enabled?: boolean;
+    readonly gatewayUrl?: string;
     readonly safe?: boolean;
     readonly probeUsage?: Effect.Effect<ServerProviderUsageLimits>;
   } = {},
@@ -148,7 +149,13 @@ const makeHarness = Effect.fn("makeAntigravityProviderHarness")(function* (
   );
   const safety = yield* Ref.make<Effect.Effect<boolean>>(Effect.succeed(options.safe ?? true));
   const provider = yield* makeAntigravityProvider(
-    decodeSettings({ enabled: options.enabled ?? true, customModels: ["do-not-seed-me"] }),
+    decodeSettings({
+      enabled: options.enabled ?? true,
+      customModels: ["do-not-seed-me"],
+      ...(options.gatewayUrl === undefined
+        ? {}
+        : { authMethod: "gateway", gatewayUrl: options.gatewayUrl }),
+    }),
     {
       stampIdentity: (snapshot) => Effect.succeed({ ...snapshot, instanceId, driver }),
       ...(options.auth ? { auth: options.auth } : {}),
@@ -496,6 +503,31 @@ it.layer(layerTest)("Antigravity provider snapshots", (it) => {
           models: [],
         });
         expect(yield* Ref.get(harness.probeCalls)).toBe(1);
+      }
+    }),
+  );
+
+  it.effect("publishes the gateway origin through session start and auth resets", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({
+        auth: { type: "gateway", label: "Gateway" },
+        gatewayUrl: " http://127.0.0.1:8317/antigravity-gateway ",
+      });
+      const auth = harness.provider.snapshot.getSnapshot.pipe(
+        Effect.map((snapshot) => snapshot.auth),
+      );
+      for (const clear of [harness.provider.onSignedOut, harness.provider.onAuthRequired]) {
+        expect((yield* auth).endpoint).toBe("http://127.0.0.1:8317");
+        yield* harness.provider.onSessionStarted(started);
+        expect(yield* auth).toMatchObject({
+          status: "authenticated",
+          endpoint: "http://127.0.0.1:8317",
+        });
+        yield* clear;
+        expect(yield* auth).toMatchObject({
+          status: "unauthenticated",
+          endpoint: "http://127.0.0.1:8317",
+        });
       }
     }),
   );

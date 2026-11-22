@@ -88,6 +88,20 @@ describe("mobile slash commands", () => {
     ).toEqual({ text: "/plan ", cursor: 6 });
   });
 
+  it("offers client-side usage limits when the server catalog omits the command", () => {
+    const items = buildComposerSlashCommandItems({
+      query: "usage",
+      atMessageStart: true,
+      hasThread: true,
+      offersUsageLimits: true,
+      selectedProviderStatus: {
+        driver: ProviderDriverKind.make("antigravity"),
+        slashCommands: [],
+      },
+    });
+    expect(items.map((item) => item.id)).toEqual(["pcmd:usage-limits"]);
+  });
+
   it("offers T3's /clear in place of the provider's, only at the message start", () => {
     const claude = {
       driver: ProviderDriverKind.make("claudeAgent"),

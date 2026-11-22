@@ -2,6 +2,8 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe, expect, it } from "@effect/vitest";
 import { UsageLimitSourceSnapshot, UsageLimitSourceId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as TestClock from "effect/testing/TestClock";
 import * as Schema from "effect/Schema";
 import { HttpClient, HttpClientResponse } from "effect/http";
 
@@ -54,14 +56,23 @@ function fixture(
     files?: unknown[];
     summaryStatus?: number;
     inventoryStatus?: number;
+    models?: (name: string) => Effect.Effect<Response>;
   } = {},
 ) {
   const requests: Array<{ method: string; url: string }> = [];
   const http = HttpClient.make((request) =>
-    Effect.sync(() => {
+    Effect.gen(function* () {
       requests.push({ method: request.method, url: request.url });
       expect(request.headers.authorization).toBe("Bearer manager-admin-secret");
-      const inventory = request.url.endsWith("/auth-files");
+      const url = new URL(request.url);
+      if (url.pathname.endsWith("/auth-files/models")) {
+        const name = url.searchParams.get("name")!;
+        const response = yield* (
+          options.models?.(name) ?? Effect.succeed(new Response(null, { status: 404 }))
+        );
+        return HttpClientResponse.fromWeb(request, response);
+      }
+      const inventory = url.pathname.endsWith("/auth-files");
       return HttpClientResponse.fromWeb(
         request,
         Response.json(
@@ -85,7 +96,12 @@ describe("CPA Manager usage source", () => {
     "joins cached quotas to inventory without requesting provider tokens or forcing a refresh",
     () =>
       Effect.gen(function* () {
-        const test = fixture();
+        const test = fixture({
+          models: (name) => {
+            expect(name).toBe("codex-first.json");
+            return Effect.succeed(Response.json({ models: [{ id: " gpt-5.6-sol " }] }));
+          },
+        });
         const api = yield* test.api;
         const result = yield* api.readManager(config);
         expect(result.accounts).toMatchObject([
@@ -97,6 +113,7 @@ describe("CPA Manager usage source", () => {
             email: "first@example.com",
             plan: "pro",
             workspaceId: "workspace-first",
+            models: ["gpt-5.6-sol"],
             usageLimits: {
               checkedAt: refreshedAt,
               windows: [{ kind: "session", usedPercent: 25, windowDurationMins: 300 }],
@@ -106,6 +123,10 @@ describe("CPA Manager usage source", () => {
         expect(test.requests).toEqual([
           { method: "GET", url: "https://manager.test/prefix/v0/management/quota/summary" },
           { method: "GET", url: "https://manager.test/prefix/v0/management/auth-files" },
+          {
+            method: "GET",
+            url: "https://manager.test/prefix/v0/management/auth-files/models?name=codex-first.json",
+          },
         ]);
         const snapshot = yield* encodeSnapshot({
           id: UsageLimitSourceId.make("cpa-test"),
@@ -173,6 +194,10 @@ describe("CPA Manager usage source", () => {
         usageLimits: { windows: [], unavailable: { reason: "unsupported" } },
       });
       expect(JSON.stringify(result)).not.toContain("secret");
+      expect(
+        test.requests.flatMap(({ url }) => new URL(url).searchParams.get("name") ?? []),
+      ).toEqual(["codex-first.json", "gemini.json"]);
+      expect(result.accounts[0]?.models).toBeUndefined();
     }),
   );
 
@@ -302,6 +327,82 @@ describe("CPA Manager usage source", () => {
           synthetic: true,
           usageLimits: { windows: [{ estimated: true }] },
         });
+      }),
+  );
+
+  it.effect("keeps quotas when an auth-file model list times out", () =>
+    Effect.gen(function* () {
+      const test = fixture({ models: () => Effect.never });
+      const api = yield* test.api;
+      const reading = yield* Effect.forkChild(api.readManager(config));
+      yield* TestClock.adjust("2 seconds");
+      const result = yield* Fiber.join(reading);
+      expect(test.requests).toHaveLength(3);
+      expect(result.accounts[0]?.models).toBeUndefined();
+      expect(result.accounts[0]?.usageLimits.windows).toHaveLength(1);
+    }),
+  );
+
+  it.effect(
+    "classifies Antigravity session and weekly windows and Devin daily and weekly windows",
+    () =>
+      Effect.gen(function* () {
+        const antigravity = [
+          "gemini-5h",
+          "3p-5h",
+          "gemini-weekly",
+          "3p-weekly",
+          "gemini-argon-wtu-weekly",
+        ];
+        const devin = ["daily", "wtu-daily", "weekly"];
+        const test = fixture({
+          files: [],
+          summary: {
+            ...summary,
+            providers: [
+              {
+                id: "antigravity",
+                label: "Antigravity",
+                accounts: [
+                  {
+                    ...account,
+                    windows: antigravity.map((id) => ({ ...window, id })),
+                  },
+                ],
+              },
+              {
+                id: "devin",
+                label: "Devin",
+                accounts: [
+                  {
+                    ...account,
+                    windows: devin.map((id) => ({ ...window, id })),
+                  },
+                ],
+              },
+            ],
+          },
+        });
+        const api = yield* test.api;
+        const result = yield* api.readManager(config);
+        expect(
+          result.accounts.map(({ usageLimits }) =>
+            usageLimits.windows.map(({ id, kind, windowDurationMins }) => [
+              id,
+              kind,
+              windowDurationMins,
+            ]),
+          ),
+        ).toEqual([
+          antigravity.map((id) =>
+            id.endsWith("-5h") ? [id, "session", 300] : [id, "weekly", 10080],
+          ),
+          [
+            ["daily", "other", 1440],
+            ["wtu-daily", "other", 1440],
+            ["weekly", "weekly", 10080],
+          ],
+        ]);
       }),
   );
 

@@ -14,6 +14,9 @@ import {
   displayLimitWindows,
   cursorUsageWindowDetails,
   collectProviderUsageLimits,
+  instanceHubs,
+  hasProviderUsageLimits,
+  resolveEffectiveUsageLimitSources,
   limitPoolNotice,
   resolveProviderLimitPool,
   resolveProviderUsageLimits,
@@ -1639,6 +1642,122 @@ describe("/usage-limits", () => {
     },
   ];
 
+  it("matches the inference origin first and only falls back to CPA Manager", () => {
+    const exact = sources[0]!;
+    const manager = {
+      ...exact,
+      id: UsageLimitSourceId.make("manager"),
+      kind: "cpa-manager" as const,
+      origin: "https://manager.test",
+    };
+    const tunneled = { ...selected, auth: { ...selected.auth, endpoint: "http://127.0.0.1:8317" } };
+    expect(instanceHubs(tunneled, [exact])).toEqual([]);
+    const unreported = { ...tunneled, usageLimits: undefined };
+    expect(
+      collectProviderUsageLimits(unreported.instanceId, [unreported], [exact], now),
+    ).toBeNull();
+    expect(hasProviderUsageLimits(unreported, [unreported], [exact], null)).toBe(false);
+    expect(instanceHubs(tunneled, [exact, manager])).toEqual([manager]);
+    expect(
+      instanceHubs({ ...tunneled, auth: { ...tunneled.auth, endpoint: exact.origin } }, [
+        manager,
+        exact,
+      ]),
+    ).toEqual([exact]);
+    expect(instanceHubs(selected, [manager])).toEqual([]);
+  });
+
+  it("inherits unique CPA Managers from other connected environments unless one is local", () => {
+    const local = sources[0]!;
+    const manager = {
+      ...local,
+      id: UsageLimitSourceId.make("manager"),
+      kind: "cpa-manager" as const,
+      origin: "https://manager.test",
+    };
+    const other = {
+      ...manager,
+      id: UsageLimitSourceId.make("other"),
+      origin: "https://other.test",
+    };
+    const localSources = [local];
+    const ownManager = [local, manager];
+    const environments = [
+      null,
+      { usageLimitSources: [local] },
+      { usageLimitSources: [manager] },
+      {
+        usageLimitSources: [{ ...manager, id: UsageLimitSourceId.make("duplicate-origin") }, other],
+      },
+      { usageLimitSources: [{ ...other, origin: undefined }] },
+    ];
+    expect(resolveEffectiveUsageLimitSources(localSources, environments)).toEqual([
+      local,
+      manager,
+      other,
+    ]);
+    expect(resolveEffectiveUsageLimitSources(ownManager, environments)).toBe(ownManager);
+    expect(resolveEffectiveUsageLimitSources(localSources, environments.slice(0, 2))).toBe(
+      localSources,
+    );
+  });
+
+  it.each([
+    ["devin-gemini-4-neon", "devin", ["daily", "weekly"]],
+    ["3p-opus", "antigravity", ["3p-weekly"]],
+    ["gemini-4-argon-high", "antigravity", ["gemini-5h", "gemini-argon-wtu-weekly"]],
+    ["unknown-alias", "unlisted", ["gemini-5h", "gemini-argon-wtu-weekly", "3p-weekly"]],
+  ] as const)(
+    "reports only serving OAuth files and windows for %s",
+    (model, accountId, windows) => {
+      const antigravity = ProviderDriverKind.make("antigravity");
+      const devin = ProviderDriverKind.make("devin");
+      const proxy = provider({
+        driver: antigravity,
+        auth: { status: "authenticated", type: "gateway", endpoint: "http://127.0.0.1:8317" },
+      });
+      const quota = (ids: readonly string[]) => ({
+        ...limits,
+        windows: ids.map((id) => ({ ...window, id })),
+      });
+      const gemini = {
+        driver: antigravity,
+        usageLimits: quota(["gemini-5h", "gemini-argon-wtu-weekly", "3p-weekly"]),
+      };
+      const manager = {
+        ...sources[0]!,
+        kind: "cpa-manager" as const,
+        origin: "https://manager.test",
+        accounts: [
+          { ...gemini, id: "antigravity", models: ["gemini-4-argon", "3p-opus"] },
+          { ...gemini, id: "disabled", models: ["devin-gemini-4-neon"], disabled: true },
+          { ...gemini, id: "unlisted" },
+          {
+            id: "devin",
+            driver: devin,
+            models: ["devin-gemini-4-neon-low", "devin-gemini-4-neon-high"],
+            usageLimits: quota(["daily", "weekly"]),
+          },
+        ],
+      };
+      if (accountId === "devin") {
+        const devinOnly = {
+          ...manager,
+          accounts: manager.accounts.filter((account) => account.driver === devin),
+        };
+        expect(hasProviderUsageLimits(proxy, [proxy], [devinOnly], model)).toBe(true);
+      }
+      expect(hasProviderUsageLimits(proxy, [proxy], [manager], model)).toBe(true);
+      const report = collectProviderUsageLimits(proxy.instanceId, [proxy], [manager], now, model);
+      expect(
+        report?.accounts.map((account) => [
+          account.id,
+          account.limits.windows.map((window) => window.id),
+        ]),
+      ).toEqual([[`hub:${accountId}`, windows]]);
+    },
+  );
+
   it("uses hub credit balances and redemption targets in the composer, including native duplicates", () => {
     const hubs = sources.map((source) => ({
       ...source,
@@ -1821,7 +1940,7 @@ describe("/usage-limits", () => {
         now,
         model,
       )?.accounts.map((account) => account.id);
-    expect(ids(proxy, "gpt-5.6-sol[1m]")).toEqual(["codex", "hub:oss"]);
+    expect(ids(proxy, "gpt-5.6-sol[1m]")).toEqual(["hub:oss"]);
     // regression: #30778 another hub's model list does not decide this hub's routing
     const other = {
       ...routed[0]!,
@@ -1844,7 +1963,7 @@ describe("/usage-limits", () => {
         now,
         "gpt-5.6-sol",
       )?.accounts.map((account) => account.id),
-    ).toEqual(["codex", "hub:oss"]);
+    ).toEqual(["hub:oss"]);
     // regression: #30778 a custom endpoint other than the hub does not follow the hub's routing
     const elsewhere = { ...proxy, auth: { ...proxy.auth, endpoint: "http://other:8317" } };
     expect(

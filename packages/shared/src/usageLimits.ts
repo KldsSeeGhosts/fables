@@ -995,22 +995,48 @@ export const USAGE_LIMITS_COMMAND = {
   description: "Show this provider's usage limits",
 } satisfies ServerProviderSlashCommand;
 
+export function ensureUsageLimitsCommand(
+  commands: readonly ServerProviderSlashCommand[],
+): readonly ServerProviderSlashCommand[] {
+  return commands.some((command) => command.name === USAGE_LIMITS_COMMAND.name)
+    ? commands
+    : [...commands, USAGE_LIMITS_COMMAND];
+}
+
 export function isUsageLimitsCommand(prompt: string): boolean {
   return prompt.trim().toLowerCase() === "/usage-limits";
 }
 
-export function hasProviderUsageLimits(
+function hasUsageLimitCoverage(
   driver: ServerProvider["driver"],
   providers: readonly ServerProvider[],
   sources: UsageLimitSourceSnapshots,
+  routes: (account: UsageLimitSourceAccount) => boolean,
 ): boolean {
   return (
     providersWithLimits(providers).some((provider) => provider.driver === driver) ||
     sources.some(
       (source) =>
-        source.accounts.some((account) => !account.disabled && account.driver === driver) ||
+        source.accounts.some(routes) ||
         (source.error !== undefined && source.accounts.length === 0),
     )
+  );
+}
+
+export function hasProviderUsageLimits(
+  provider: ServerProvider,
+  providers: readonly ServerProvider[],
+  sources: UsageLimitSourceSnapshots,
+  model: string | null,
+): boolean {
+  const hubs = instanceHubs(provider, sources);
+  const routes =
+    hubs.length > 0 ? hubRoutes(hubs, provider.driver, model) : driverRoutes(provider.driver);
+  return hasUsageLimitCoverage(
+    provider.driver,
+    providers,
+    provider.auth.endpoint === undefined ? sources : hubs,
+    routes,
   );
 }
 
@@ -1066,16 +1092,51 @@ export function withUsageLimitsCommands(
   });
 }
 
-/** The hubs an instance sends its requests through: those whose address is its endpoint. */
+export function resolveEffectiveUsageLimitSources(
+  ownSources: UsageLimitSourceSnapshots,
+  connectedConfigs: Iterable<{
+    readonly usageLimitSources?: UsageLimitSourceSnapshots | undefined;
+  } | null>,
+): UsageLimitSourceSnapshots {
+  if (ownSources.some((source) => source.kind === "cpa-manager")) return ownSources;
+
+  const seenOrigins = new Set<string>();
+  const seenIds = new Set<string>();
+  const inherited: UsageLimitSourceSnapshot[] = [];
+  for (const config of connectedConfigs) {
+    for (const source of config?.usageLimitSources ?? []) {
+      if (
+        source.kind !== "cpa-manager" ||
+        seenIds.has(source.id) ||
+        (source.origin !== undefined && seenOrigins.has(source.origin))
+      ) {
+        continue;
+      }
+      seenIds.add(source.id);
+      if (source.origin !== undefined) seenOrigins.add(source.origin);
+      inherited.push(source);
+    }
+  }
+  return inherited.length > 0 ? [...ownSources, ...inherited] : ownSources;
+}
+
+export function usageLimitHubsAtEndpoint(
+  endpoint: string | undefined,
+  sources: UsageLimitSourceSnapshots,
+): UsageLimitSourceSnapshots {
+  if (endpoint === undefined) return [];
+  const exact = sources.filter((source) => source.origin === endpoint);
+  // CPA Manager's dashboard can have a different address from its inference proxy.
+  return exact.length > 0 ? exact : sources.filter((source) => source.kind === "cpa-manager");
+}
+
 export function instanceHubs(
   provider: ServerProvider,
   sources: UsageLimitSourceSnapshots,
 ): UsageLimitSourceSnapshots {
-  const endpoint = provider.auth.endpoint;
-  return endpoint === undefined ? [] : sources.filter((source) => source.origin === endpoint);
+  return usageLimitHubsAtEndpoint(provider.auth.endpoint, sources);
 }
 
-// Antigravity meters Gemini Argon, Gemini Carbon, other Gemini, and Claude/GPT models apart.
 function antigravityQuotaFamily(id: string) {
   if (!id.startsWith("gemini")) return "shared";
   return id.includes("argon") ? "argon" : id.includes("carbon") ? "carbon" : "gemini";
@@ -1089,34 +1150,63 @@ export function antigravityWindowLimitsModel(
   // A hub can prefix model ids, such as "ag/gemini-3.1-pro".
   const base = model?.slice(model.lastIndexOf("/") + 1);
   // An alias such as "fast" may route to either quota, so both hold it back.
-  if (base === undefined || !/^(gemini|claude|gpt)/.test(base)) return true;
-  return antigravityQuotaFamily(window.id) === antigravityQuotaFamily(base);
+  if (base === undefined || !/^(gemini|claude|gpt|3p-)/.test(base)) return true;
+  const family = antigravityQuotaFamily(base);
+  const quota = antigravityQuotaFamily(window.id);
+  return quota === family || (family === "argon" && quota === "gemini");
 }
 
-/** The hub accounts that serve a model: those that list it, else every account of the driver. */
+export function usageLimitsForModel(
+  driver: ServerProvider["driver"],
+  limits: ServerProviderUsageLimits,
+  model: string | null,
+): ServerProviderUsageLimits {
+  return driver === "antigravity" && model !== null
+    ? {
+        ...limits,
+        windows: limits.windows.filter((window) => antigravityWindowLimitsModel(window, model)),
+      }
+    : limits;
+}
+
+function driverRoutes(driver: ServerProvider["driver"]) {
+  return (account: UsageLimitSourceAccount) => !account.disabled && account.driver === driver;
+}
+
+const ROUTED_EFFORT_SUFFIX = /-(minimal|low|medium|high|xhigh|max)$/;
+
+/** Prefer advertised routes. An unread model list only counts when no enabled file lists the model. */
 export function hubRoutes(
   sources: UsageLimitSourceSnapshots,
   driver: ServerProvider["driver"],
   model: string | null,
 ): (account: UsageLimitSourceAccount) => boolean {
+  const sameDriver = driverRoutes(driver);
+  if (model === null) return (account) => sameDriver(account) && account.models?.length !== 0;
+
   // Claude Code's 1M-context suffix is not part of the model id a hub routes.
-  const full = model?.replace(/\[1m\]$/i, "");
-  // The hub routes a thinking suffix such as "gpt-5.2(high)" by its base model when one lists it.
-  const base = full?.replace(/\([^)]*\)$/, "");
-  const lists = (id: string | undefined) =>
-    sources.some((source) => source.accounts.some((account) => account.models?.includes(id ?? "")));
-  const slug = lists(base) ? base : full;
-  const listed = (account: UsageLimitSourceAccount) =>
-    slug !== undefined && account.models?.includes(slug) === true;
-  const serving = new Set(
-    sources.flatMap((source) => source.accounts.filter(listed).map((account) => account.driver)),
-  );
-  // Model ids such as "opus" are aliases no hub lists, so no listing falls back to the driver.
-  if (serving.size === 0)
-    return (account) => account.driver === driver && account.models?.length !== 0;
-  // An account whose model list was unreadable may serve the model too.
-  return (account) =>
-    account.models ? listed(account) : serving.has(account.driver) || account.driver === driver;
+  const full = model.replace(/\[1m\]$/i, "");
+  const base = full.replace(/\([^)]*\)$/, "");
+  const listed = (slug: string) => {
+    const family = slug.replace(ROUTED_EFFORT_SUFFIX, "");
+    return (account: UsageLimitSourceAccount) =>
+      !account.disabled &&
+      account.models?.some(
+        (id) =>
+          id === slug ||
+          (driver === "antigravity" && id.replace(ROUTED_EFFORT_SUFFIX, "") === family),
+      ) === true;
+  };
+  const hasRoute = (matches: (account: UsageLimitSourceAccount) => boolean) =>
+    sources.some((source) => source.accounts.some(matches));
+  if (base !== full) {
+    const matchesBase = listed(base);
+    if (hasRoute(matchesBase)) return matchesBase;
+  }
+  const matches = listed(full);
+  return hasRoute(matches)
+    ? matches
+    : (account) => sameDriver(account) && account.models === undefined;
 }
 
 export function collectProviderUsageLimits(
@@ -1131,31 +1221,23 @@ export function collectProviderUsageLimits(
   // Only an instance sent to a hub is known to reach the accounts that hub routes its model to.
   const hubs = instanceHubs(selected, sources);
   const routes =
-    hubs.length > 0
-      ? hubRoutes(hubs, selected.driver, model)
-      : (account: UsageLimitSourceAccount) => account.driver === selected.driver;
-  const shownHubs = hubs.length > 0 ? hubs : sources;
+    hubs.length > 0 ? hubRoutes(hubs, selected.driver, model) : driverRoutes(selected.driver);
+  const shownHubs = selected.auth.endpoint === undefined ? sources : hubs;
   const drivers = new Set(
     shownHubs.flatMap((source) => source.accounts.filter(routes).map((account) => account.driver)),
   );
   if (drivers.size === 0) drivers.add(selected.driver);
-  if (![...drivers].some((driver) => hasProviderUsageLimits(driver, providers, sources))) {
+  if (!hasUsageLimitCoverage(selected.driver, providers, shownHubs, routes)) {
     return null;
   }
   const resolveKey = accountKeyResolver([
     ...providers.filter((provider) => provider.enabled).map(nativeReport),
-    ...sources.flatMap((source) => source.accounts.filter((account) => !account.disabled)),
+    ...shownHubs.flatMap((source) => source.accounts.filter((account) => !account.disabled)),
   ]);
   // Behind a hub, a local login counts only when it is one of the accounts the hub routes to.
   const routedKeys =
     hubs.length > 0
-      ? new Set(
-          hubs.flatMap((source) =>
-            source.accounts
-              .filter((account) => !account.disabled && routes(account))
-              .map(resolveKey),
-          ),
-        )
+      ? new Set(hubs.flatMap((source) => source.accounts.filter(routes).map(resolveKey)))
       : null;
   type NativeSnapshot = { provider: ServerProvider; limits: ServerProviderUsageLimits };
   const nativeByAccount = new Map<
@@ -1242,12 +1324,16 @@ export function collectProviderUsageLimits(
       ...(provider.displayName ? { displayName: provider.displayName } : {}),
       ...(provider.accentColor ? { accentColor: provider.accentColor } : {}),
       ...(provider.auth.email ? { email: provider.auth.email } : {}),
-      limits: shownCredits ? { ...limits, resetCredits: shownCredits } : limits,
+      limits: usageLimitsForModel(
+        provider.driver,
+        shownCredits ? { ...limits, resetCredits: shownCredits } : limits,
+        hubs.length > 0 ? model : null,
+      ),
     });
   }
   let proxyAccountNumber = 0;
   for (const source of shownHubs) {
-    const matching = source.accounts.filter((account) => !account.disabled && routes(account));
+    const matching = source.accounts.filter(routes);
     for (const account of matching) {
       const key = resolveKey(account);
       if (key && nativeAccountKeys.has(key)) continue;
@@ -1276,7 +1362,11 @@ export function collectProviderUsageLimits(
           : {}),
         ...(account.plan ? { plan: account.plan } : {}),
         ...(account.email ? { email: account.email } : {}),
-        limits: account.usageLimits,
+        limits: usageLimitsForModel(
+          account.driver,
+          account.usageLimits,
+          hubs.length > 0 ? model : null,
+        ),
       });
       if (account.notice) notices.push(`${source.label}: ${account.notice}`);
     }
@@ -1287,7 +1377,10 @@ export function collectProviderUsageLimits(
       notices.push(`${source.label}: Showing CPA's last cached quota reading.`);
     }
   }
-  const poolNotice = limitPoolNotice(instanceId, providers, sources);
+  const poolNotice =
+    hubs.length > 0 && accounts.length > 0
+      ? null
+      : limitPoolNotice(instanceId, providers, shownHubs);
   if (poolNotice && !notices.includes(poolNotice)) notices.push(poolNotice);
   return { createdAt: DateTime.formatIso(DateTime.makeUnsafe(now)), accounts, notices };
 }

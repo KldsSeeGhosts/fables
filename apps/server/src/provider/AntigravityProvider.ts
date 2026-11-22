@@ -242,6 +242,11 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
 ) {
   const usesCredentials =
     options.auth?.type === "gemini-api-key" || options.auth?.type === "agent-platform";
+  const gateway = settings.authMethod === "gateway" ? URL.parse(settings.gatewayUrl.trim()) : null;
+  const gatewayAuth =
+    gateway?.protocol === "http:" || gateway?.protocol === "https:"
+      ? { endpoint: gateway.origin }
+      : {};
   const gatewayModels = settings.authMethod === "gateway" ? settings.gatewayModels : undefined;
   const signInMessage = usesCredentials
     ? `Connect with ${options.auth.label} to use Antigravity and load models.`
@@ -264,7 +269,11 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
         installed: false,
         version: null,
         status: "warning",
-        auth: { status: "unknown", ...(options.auth ? { type: options.auth.type } : {}) },
+        auth: {
+          status: "unknown",
+          ...(options.auth ? { type: options.auth.type } : {}),
+          ...gatewayAuth,
+        },
         message: settings.enabled
           ? "Checking Antigravity availability."
           : "Antigravity is disabled in T3 Code settings.",
@@ -467,6 +476,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
             status: "authenticated",
             type: options.auth?.type ?? "oauth-personal",
             label: options.auth?.label ?? "Google account",
+            ...gatewayAuth,
           },
           checkedAt: updatedAt,
           models: buildAntigravityModelsFromSession(
@@ -561,6 +571,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
             auth: {
               status: "unauthenticated",
               ...(usesCredentials ? options.auth : {}),
+              ...gatewayAuth,
             },
             status: "warning",
             message: signInMessage,

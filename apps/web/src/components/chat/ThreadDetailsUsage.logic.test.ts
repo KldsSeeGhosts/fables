@@ -1,4 +1,5 @@
 import {
+  EnvironmentId,
   ProviderDriverKind,
   ProviderInstanceId,
   type ServerProvider,
@@ -8,6 +9,7 @@ import {
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
+import { resolveLowLimitSignal } from "./ComposerUsageLimits";
 import { poolSources, resolveThreadDetailsLimits } from "./ThreadDetailsUsage.logic";
 
 const now = Date.parse("2026-10-30T12:00:00.000Z");
@@ -38,7 +40,7 @@ const unsupported: ServerProviderUsageLimits = {
   unavailable: { reason: "unsupported" },
 };
 
-function claudeInstance(usageLimits: ServerProviderUsageLimits): ServerProvider {
+function claudeInstance(usageLimits: ServerProviderUsageLimits | undefined): ServerProvider {
   return {
     instanceId,
     driver: claude,
@@ -88,7 +90,7 @@ function hub(
 }
 
 function shown(
-  own: ServerProviderUsageLimits,
+  own: ServerProviderUsageLimits | undefined,
   sources: readonly UsageLimitSourceSnapshot[],
   model: string | null,
 ) {
@@ -132,6 +134,77 @@ describe("resolveThreadDetailsLimits", () => {
     });
   });
 
+  it.each([undefined, unsupported])(
+    "pools CPA Manager quotas without a readable native snapshot (%j)",
+    (own) => {
+      const source = {
+        ...hub(
+          "CPA Manager",
+          [
+            { id: "a.json", limits: limitsAt(10) },
+            { id: "b.json", limits: limitsAt(30) },
+          ],
+          "https://manager.test",
+        ),
+        kind: "cpa-manager" as const,
+      };
+      expect(shown(own, [source], "claude-opus-5-5")).toEqual({
+        kind: "pool",
+        rows: [
+          {
+            label: "Session",
+            left: 80,
+            accounts: 2,
+            from: { hubs: ["CPA Manager"], signedIn: false },
+          },
+        ],
+      });
+    },
+  );
+
+  it("shows the daily and weekly quota of a routed Devin account", () => {
+    const windows = [
+      { id: "daily", label: "Daily", kind: "other", usedPercent: 40, windowDurationMins: 1440 },
+      { id: "weekly", label: "Weekly", kind: "weekly", usedPercent: 10, windowDurationMins: 10080 },
+    ] as const;
+    const provider = {
+      ...claudeInstance(undefined),
+      driver: ProviderDriverKind.make("antigravity"),
+    };
+    const source = {
+      ...hub(
+        "CPA Manager",
+        [
+          { id: "antigravity.json", driver: provider.driver, limits: limitsAt(20) },
+          {
+            id: "devin.json",
+            driver: ProviderDriverKind.make("devin"),
+            models: ["devin-gemini-4-neon-high"],
+            limits: { checkedAt, windows },
+          },
+        ],
+        "https://manager.test",
+      ),
+      kind: "cpa-manager" as const,
+    };
+    const result = resolveThreadDetailsLimits(
+      instanceId,
+      "devin-gemini-4-neon",
+      [provider],
+      [source],
+      now,
+    );
+    expect(
+      result?.kind === "pool" &&
+        result.windows
+          .map((window) => [window.label, window.members.length, window.remainingPercent])
+          .sort(),
+    ).toEqual([
+      ["Daily", 1, 60],
+      ["Weekly", 1, 90],
+    ]);
+  });
+
   it("pools only the accounts the hub routes the model to, even of another driver", () => {
     const sources = [
       hub("Hub", [
@@ -144,4 +217,34 @@ describe("resolveThreadDetailsLimits", () => {
       rows: [{ label: "Session", left: 70, accounts: 1, from: { hubs: ["Hub"], signedIn: false } }],
     });
   });
+});
+
+it("warns the composer about the routed CPA account when another driver serves the model", () => {
+  const provider = { ...claudeInstance(undefined), driver: ProviderDriverKind.make("antigravity") };
+  const source = {
+    ...hub(
+      "CPA Manager",
+      [
+        { id: "antigravity.json", driver: provider.driver, limits: limitsAt(10) },
+        {
+          id: "devin.json",
+          driver: ProviderDriverKind.make("devin"),
+          models: ["devin-gemini-4-neon-high"],
+          limits: limitsAt(95),
+        },
+      ],
+      "https://manager.test",
+    ),
+    kind: "cpa-manager" as const,
+  };
+  expect(
+    resolveLowLimitSignal(
+      provider,
+      [provider],
+      [source],
+      EnvironmentId.make("remote"),
+      "devin-gemini-4-neon",
+      now,
+    ),
+  ).toMatchObject({ window: { usedPercent: 95 } });
 });

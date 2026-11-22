@@ -29,7 +29,7 @@ import {
   setComposerDraftContext,
   useComposerDraftSelection,
 } from "../../state/use-composer-drafts";
-import { USAGE_LIMITS_COMMAND } from "@t3tools/shared/usageLimits";
+import { ensureUsageLimitsCommand, USAGE_LIMITS_COMMAND } from "@t3tools/shared/usageLimits";
 import {
   detectComposerTrigger,
   replaceTextRange,
@@ -159,7 +159,12 @@ export function buildComposerSlashCommandItems(
       description: resolve(msg("Start a fresh session")),
     });
   }
-  for (const command of input.selectedProviderStatus?.slashCommands ?? []) {
+  const providerCommands = input.selectedProviderStatus?.slashCommands ?? [];
+  const commands =
+    input.offersUsageLimits && input.hasThread
+      ? ensureUsageLimitsCommand(providerCommands)
+      : providerCommands;
+  for (const command of commands) {
     if (!command.name.toLowerCase().includes(query)) continue;
     if (command.name === "clear" && input.offersFreshSession) continue;
     if (command.name === "compact" && !input.hasCompactableConversation) continue;

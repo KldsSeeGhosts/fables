@@ -6,13 +6,13 @@ import {
   type UsageLimitSourceSnapshots,
 } from "@t3tools/contracts";
 import {
-  antigravityWindowLimitsModel,
   collectLimitAccounts,
   collectLimitPools,
   collectProviderUsageLimits,
   displayLimitWindows,
   hubRoutes,
   instanceHubs,
+  usageLimitsForModel,
   type LimitPoolWindow,
 } from "@t3tools/shared/usageLimits";
 import { limitsNotice } from "@t3tools/shared/usageLimitsCopy";
@@ -33,17 +33,28 @@ export function resolveThreadDetailsLimits(
 ): ThreadDetailsLimits | null {
   const provider = providers.find((entry) => entry.instanceId === providerInstanceId);
   if (!provider) return null;
-  const report = collectProviderUsageLimits(provider.instanceId, providers, sources, now, model);
-  // Only this instance's data: the report keeps one instance per login, and any other entry may be
-  // a different login or workspace, so fall back to the instance's own snapshot.
-  const own =
-    report?.accounts.find((entry) => entry.instanceId === provider.instanceId)?.limits ??
-    provider.usageLimits;
-  if (!own) return null;
+  const own = provider.usageLimits;
+  if (own && limitsNotice(own) === null) {
+    const report = collectProviderUsageLimits(provider.instanceId, providers, sources, now, model);
+    return {
+      kind: "instance",
+      limits:
+        report?.accounts.find((account) => account.instanceId === provider.instanceId)?.limits ??
+        own,
+    };
+  }
+
   const hubs = instanceHubs(provider, sources);
-  if (limitsNotice(own) === null || hubs.length === 0) return { kind: "instance", limits: own };
-  // An instance sent to a hub reads no limits of its own; its hub pools the accounts it spends.
-  return hubPool(provider.driver, model, providers, hubs, now) ?? { kind: "instance", limits: own };
+  const accounts = collectRoutedHubLimitAccounts(
+    provider.driver,
+    model,
+    providers,
+    hubs,
+    CARD_ENVIRONMENT,
+  );
+  const windows = collectLimitPools(accounts, now).flatMap(displayLimitWindows);
+  if (windows.length > 0) return { kind: "pool", windows };
+  return own ? { kind: "instance", limits: own } : null;
 }
 
 export function nextPoolReset(window: LimitPoolWindow, now: number) {
@@ -53,55 +64,55 @@ export function nextPoolReset(window: LimitPoolWindow, now: number) {
   );
 }
 
-function hubPool(
+export function collectRoutedHubLimitAccounts(
   driver: ServerProvider["driver"],
   model: string | null,
   providers: readonly ServerProvider[],
   sources: UsageLimitSourceSnapshots,
-  now: number,
-): ThreadDetailsLimits | null {
+  environmentId: EnvironmentId,
+) {
   const routes = hubRoutes(sources, driver, model);
   const routed = sources.map((source) => ({
     ...source,
-    accounts: source.accounts.filter(routes).map((account) =>
-      account.driver === "antigravity"
-        ? {
-            ...account,
-            usageLimits: {
-              ...account.usageLimits,
-              windows: account.usageLimits.windows.filter((window) =>
-                antigravityWindowLimitsModel(window, model),
-              ),
-            },
-          }
-        : account,
-    ),
+    accounts: source.accounts.filter(routes).map((account) => ({
+      ...account,
+      usageLimits: usageLimitsForModel(account.driver, account.usageLimits, model),
+    })),
   }));
   const readable = routed
     .flatMap((source) => source.accounts)
     .filter((account) => limitsNotice(account.usageLimits) === null);
-  if (readable.length === 0) return null;
+  if (readable.length === 0) return [];
   // A signed-in login joins the pool only as a fresher reading of an account the hub routes to.
-  const signedIn = providers.filter((provider) =>
-    readable.some(
-      (account) =>
-        account.driver === provider.driver &&
-        account.workspaceId === provider.auth.workspaceId &&
-        account.email !== undefined &&
-        account.email.toLowerCase() === provider.auth.email?.toLowerCase(),
-    ),
+  const signedIn = providers
+    .filter((provider) =>
+      readable.some(
+        (account) =>
+          account.driver === provider.driver &&
+          account.workspaceId === provider.auth.workspaceId &&
+          account.email !== undefined &&
+          account.email.toLowerCase() === provider.auth.email?.toLowerCase(),
+      ),
+    )
+    .map((provider) =>
+      provider.usageLimits
+        ? {
+            ...provider,
+            usageLimits: usageLimitsForModel(provider.driver, provider.usageLimits, model),
+          }
+        : provider,
+    );
+  return collectLimitAccounts(
+    new Map([
+      [
+        environmentId,
+        {
+          entry: { target: { label: "" } },
+          serverConfig: { providers: signedIn, usageLimitSources: routed },
+        },
+      ],
+    ]),
   );
-  const presentations = new Map([
-    [
-      CARD_ENVIRONMENT,
-      {
-        entry: { target: { label: "" } },
-        serverConfig: { providers: signedIn, usageLimitSources: routed },
-      },
-    ],
-  ]);
-  const pools = collectLimitPools(collectLimitAccounts(presentations), now);
-  return pools.length > 0 ? { kind: "pool", windows: pools.flatMap(displayLimitWindows) } : null;
 }
 
 export function poolSources(window: LimitPoolWindow) {

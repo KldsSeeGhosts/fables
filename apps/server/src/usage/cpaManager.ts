@@ -147,20 +147,26 @@ function windowFromSummary(
             window.id
           ] ?? window.id)
         : window.id;
+  const antigravitySession = provider === "antigravity" && window.id.endsWith("-5h");
   const kind = /monthly|month|^(auto|api)$/.test(window.id)
     ? "monthly"
     : /weekly|seven[-_]day/.test(window.id)
       ? "weekly"
-      : /five[-_]hour|session/.test(window.id)
+      : antigravitySession || /five[-_]hour|session/.test(window.id)
         ? "session"
         : "other";
   const reset = DateTime.make(window.resetAt);
   const duration =
-    window.id === "five-hour"
+    window.id === "five-hour" || antigravitySession
       ? 300
-      : window.id === "weekly" || window.id === "seven-day" || window.id.startsWith("seven-day-")
+      : window.id === "weekly" ||
+          window.id === "seven-day" ||
+          window.id.startsWith("seven-day-") ||
+          ((provider === "antigravity" || provider === "devin") && window.id.endsWith("-weekly"))
         ? 10080
-        : undefined;
+        : provider === "devin" && /(?:^|-)daily$/.test(window.id)
+          ? 1440
+          : undefined;
   return {
     id,
     label: window.label.trim() || window.id,

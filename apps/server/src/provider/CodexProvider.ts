@@ -757,17 +757,27 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
   const version = versionMatch ? versionMatch[1] : undefined;
 
   const accountResponse = yield* client.request("account/read", {});
+  // Optional discovery must finish before the outer timeout can discard the account result.
+  const deadlineMs = spawnedAtMs + input.probeTimeoutMs - CODEX_DISCOVERY_MARGIN_MS;
+  // The shared catalog must exclude config from the server's launch project.
+  const readConfig = withCodexDiscoveryDeadline(
+    client.request("config/read", { includeLayers: false }),
+    deadlineMs,
+    CODEX_CONFIG_PROBE_TIMEOUT_MS,
+  ).pipe(
+    Effect.catch(() => Effect.logDebug("Codex config read failed.").pipe(Effect.as(undefined))),
+  );
   if (!accountResponse.account && accountResponse.requiresOpenaiAuth) {
+    const config = yield* readConfig;
     return {
       account: accountResponse,
+      endpoint: codexCustomEndpoint(config?.config),
       version,
       models: [],
       skills: [],
     } satisfies CodexAppServerProviderSnapshot;
   }
 
-  // Optional discovery must finish before the outer timeout can discard the account result.
-  const deadlineMs = spawnedAtMs + input.probeTimeoutMs - CODEX_DISCOVERY_MARGIN_MS;
   const [skillsResponse, models, { config, nativeUsage, rateLimits }] = yield* Effect.all(
     [
       withCodexDiscoveryDeadline(client.request("skills/list", { cwds: [input.cwd] }), deadlineMs),
@@ -779,13 +789,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
             deadlineMs,
           })
         : withCodexDiscoveryDeadline(requestAllCodexModels(client), deadlineMs),
-      // The shared catalog must exclude config from the server's launch project.
-      withCodexDiscoveryDeadline(
-        client.request("config/read", { includeLayers: false }),
-        deadlineMs,
-        CODEX_CONFIG_PROBE_TIMEOUT_MS,
-      ).pipe(
-        Effect.catch(() => Effect.logDebug("Codex config read failed.").pipe(Effect.as(undefined))),
+      readConfig.pipe(
         Effect.flatMap((config) => {
           // Only a confirmed native route may probe or publish the login's quota.
           const nativeUsage =

@@ -446,6 +446,21 @@ export const makeCliproxyApi = Effect.gen(function* () {
     return (yield* decodeAuthFiles(response)).files;
   });
 
+  // Older hubs may lack model inventories.
+  const routedModels = Effect.fn("CliproxyApi.routedModels")(
+    function* (hub: CliproxyHub, fileName: string) {
+      const response = yield* management(
+        hub,
+        `auth-files/models?name=${encodeURIComponent(fileName)}`,
+      );
+      return (yield* decodeAuthFileModels(response)).models.flatMap(({ id }) =>
+        id.trim() ? [id.trim()] : [],
+      );
+    },
+    Effect.timeoutOption("2 seconds"),
+    Effect.orElseSucceed(() => Option.none()),
+  );
+
   const readManager = Effect.fn("CliproxyApi.readManager")(function* (config: CliproxyHub) {
     const raw = yield* management(config, "quota/summary");
     const summary = yield* decodeCpaSummary(raw).pipe(
@@ -464,8 +479,21 @@ export const makeCliproxyApi = Effect.gen(function* () {
       summary,
       files._tag === "Success" ? files.success.files : [],
     ).pipe(Effect.provideService(Digest.Digest, digest));
+    const accounts = yield* Effect.forEach(
+      result.accounts,
+      (account) =>
+        account.disabled || account.fileName === undefined
+          ? Effect.succeed(account)
+          : routedModels(config, account.fileName).pipe(
+              Effect.map((models) =>
+                Option.isSome(models) ? { ...account, models: models.value } : account,
+              ),
+            ),
+      { concurrency: 4 },
+    );
     return {
       ...result,
+      accounts,
       ...(files._tag === "Failure"
         ? {
             error: [result.error, "Auth-file metadata could not be read from CPA Manager."]
@@ -474,20 +502,6 @@ export const makeCliproxyApi = Effect.gen(function* () {
           }
         : {}),
     };
-  });
-
-  // Older hubs lack this endpoint; the account then counts for every model of its driver.
-  const routedModels = Effect.fn("CliproxyApi.routedModels")(function* (
-    hub: CliproxyHub,
-    account: AuthFile,
-  ) {
-    const response = yield* management(
-      hub,
-      `auth-files/models?name=${encodeURIComponent(account.id)}`,
-    );
-    return (yield* decodeAuthFileModels(response)).models.flatMap(({ id }) =>
-      id.trim() ? [id.trim()] : [],
-    );
   });
 
   const apiCall = Effect.fn("CliproxyApi.apiCall")(function* (
@@ -561,15 +575,9 @@ export const makeCliproxyApi = Effect.gen(function* () {
         Effect.forEach(readable, ({ account, provider }) => readAccount(hub, account, provider), {
           concurrency: 4,
         }),
-        Effect.forEach(
-          readable,
-          ({ account }) =>
-            routedModels(hub, account).pipe(
-              Effect.timeoutOption("2 seconds"),
-              Effect.orElseSucceed(() => Option.none()),
-            ),
-          { concurrency: "unbounded" },
-        ),
+        Effect.forEach(readable, ({ account }) => routedModels(hub, account.id), {
+          concurrency: "unbounded",
+        }),
       ],
       { concurrency: 2 },
     );

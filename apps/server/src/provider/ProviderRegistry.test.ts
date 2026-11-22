@@ -938,7 +938,13 @@ it.layer(
       }),
     );
 
-    it.effect("shows Codex usage that answers after three seconds inside the probe budget", () =>
+    it.effect.each([
+      {
+        name: "shows Codex usage that answers after three seconds inside the probe budget",
+        signedOut: false,
+      },
+      { name: "keeps the configured Codex endpoint when signed out", signedOut: true },
+    ])("$name", ({ signedOut }) =>
       Effect.gen(function* () {
         const usageRequested = yield* Deferred.make<void>();
         const spawner = ChildProcessSpawner.make(() =>
@@ -955,10 +961,15 @@ it.layer(
                 platformOs: "linux",
               },
               "account/read": {
-                account: { type: "chatgpt", email: "test@example.com", planType: "pro" },
+                account: signedOut
+                  ? null
+                  : { type: "chatgpt", email: "test@example.com", planType: "pro" },
                 requiresOpenaiAuth: true,
               },
-              "config/read": { config: {}, origins: {} },
+              "config/read": {
+                config: signedOut ? { openai_base_url: "http://127.0.0.1:8317/v1" } : {},
+                origins: {},
+              },
               "skills/list": { data: [] },
               "model/list": { data: [] },
             };
@@ -1008,6 +1019,12 @@ it.layer(
           Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
           Effect.forkChild,
         );
+        if (signedOut) {
+          const status = yield* Fiber.join(fiber);
+          assert.strictEqual(status.auth.status, "unauthenticated");
+          assert.strictEqual(status.auth.endpoint, "http://127.0.0.1:8317");
+          return;
+        }
         yield* Deferred.await(usageRequested);
         yield* TestClock.adjust("25 seconds");
         const status = yield* Fiber.join(fiber);
@@ -4810,6 +4827,26 @@ it.layer(
         assert.strictEqual(status.auth.status, "authenticated");
         assert.strictEqual(status.auth.type, "customEndpoint");
         assert.strictEqual(status.auth.label, "Custom API endpoint");
+      }).pipe(
+        Effect.provide(
+          layerMockSpawner((args) => {
+            const joined = args.join(" ");
+            if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
+            throw new Error(`Unexpected args: ${joined}`);
+          }),
+        ),
+      ),
+    );
+
+    it.effect("reports the configured Claude endpoint when account discovery is unavailable", () =>
+      Effect.gen(function* () {
+        const status = yield* checkClaudeProviderStatus(
+          defaultClaudeSettings,
+          () => Effect.undefined,
+          { ANTHROPIC_BASE_URL: "http://127.0.0.1:8317/anthropic" },
+        );
+        assert.strictEqual(status.auth.status, "unknown");
+        assert.strictEqual(status.auth.endpoint, "http://127.0.0.1:8317");
       }).pipe(
         Effect.provide(
           layerMockSpawner((args) => {

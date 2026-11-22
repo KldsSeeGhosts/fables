@@ -5,7 +5,10 @@ import { ChildThreadApprovals } from "./chat/ChildThreadApprovals";
 import { ComposerTaskStatus } from "./chat/ComposerTaskStatus";
 import { isReturnedSurfaceFocus, workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
-import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
+import {
+  resolveEffectiveUsageLimitSources,
+  resolveNewThreadModelSelection,
+} from "@t3tools/shared/usageLimits";
 import { queuedRunEditBlockedReason } from "@t3tools/client-runtime/queued-run-edit";
 import { ScrollToEndButton } from "./chat/TimelineOverlays";
 import { usePasteToFocusComposer } from "./chat/usePasteToFocusComposer";
@@ -524,7 +527,7 @@ export default function ChatView(props: ChatViewProps) {
     label: "load earlier thread history",
     reportFailure: false,
   });
-  const { environments } = useEnvironments();
+  const { environments, presentationById } = useEnvironments();
   const providersByEnvironment = useEnvironmentProviders();
   const primaryEnvironment = usePrimaryEnvironment();
   const environmentById = new Map(
@@ -1518,7 +1521,16 @@ export default function ChatView(props: ChatViewProps) {
           activeThread?.latestRun?.runId ?? "",
           activePendingApproval?.requestId ?? activePendingUserInput?.requestId ?? "",
         ].join(":");
-  const usageLimitSources = serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES;
+  const ownUsageLimitSources = serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES;
+  const usageLimitSources =
+    activeProviderStatus?.auth.endpoint === undefined
+      ? ownUsageLimitSources
+      : resolveEffectiveUsageLimitSources(
+          ownUsageLimitSources,
+          [...presentationById.values()]
+            .filter(({ entry, connection }) => entry.enabled && connection.phase === "connected")
+            .map(({ serverConfig }) => serverConfig),
+        );
   const {
     banner: usageLimitsBanner,
     offered: usageLimitsOffered,
@@ -1530,7 +1542,7 @@ export default function ChatView(props: ChatViewProps) {
     panelKey: usageLimitsKey,
     providerInstanceId: activeProviderInstanceId,
     model: activeUsageModel,
-    providerDriver: activeProviderStatus?.driver ?? null,
+    provider: activeProviderStatus,
     providers: providerStatuses,
     sources: usageLimitSources,
   });
@@ -3307,7 +3319,7 @@ export default function ChatView(props: ChatViewProps) {
     activeProviderStatus,
     selectedModel: composerSelectedModelSelection?.model ?? activeThread?.modelSelection.model,
     providerStatuses,
-    usageLimitSources: serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
+    usageLimitSources,
     canSwitchProvider: lockedProvider === null || supportsProviderSwitchingViaHandoff,
     providerStatus: visibleProviderStatus,
     providerStatusDismissalKey,
@@ -4290,7 +4302,7 @@ export default function ChatView(props: ChatViewProps) {
                     providerInstanceId: activeProviderInstanceId,
                     model: activeUsageModel,
                     providers: providerStatuses,
-                    sources: serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
+                    sources: usageLimitSources,
                     contextWindow: activeContextWindow,
                   }}
                 />
