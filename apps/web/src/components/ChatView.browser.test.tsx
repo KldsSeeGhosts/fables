@@ -671,6 +671,7 @@ it("answers a pending question while an oversized message draft is set aside", a
 it.each(["new", "existing"] as const)(
   "Enter while an image compresses shows a cancellable banner, cancels on edit or Esc, and still sends after leaving a %s thread",
   async (kind) => {
+    await page.viewport(1400, 900);
     const thread = threadWithHistory(`upload-wait-${kind}`, 1);
     const other = threadWithHistory(`upload-wait-other-${kind}`, 1);
     using _environment = installFakeEnvironment(kind === "existing" ? [thread, other] : [other], {
@@ -1162,6 +1163,13 @@ it("selecting a side-chat tab focuses that side chat's composer", async () => {
 });
 
 it("a subagent tab shows its read-only bar under no header of its own", async () => {
+  // Side chats an earlier test left in the pane layout and panel store stay open here.
+  const resetStores = () => {
+    useLayoutStore.getState().reset();
+    useRightPanelStore.setState({ byThreadKey: {}, threadPanelVisibilityByThreadKey: {} });
+  };
+  resetStores();
+  using _stores = { [Symbol.dispose]: resetStores };
   const parent = threadWithHistory("subagent-parent", 1);
   const subagent = {
     ...threadWithHistory("subagent-child", 1),
@@ -1183,6 +1191,9 @@ it("a subagent tab shows its read-only bar under no header of its own", async ()
   await using screen = await render(<AppRoot router={router} />, {
     // AppRoot brings its own router.
     router: false,
+  });
+  await act(() => {
+    useRightPanelStore.getState().openThread(parentRef, subagent.id);
   });
   const pane = screen.getByTestId("side-thread-pane");
   // No header of its own: the tab names it, and only a side chat has actions to put in one.
