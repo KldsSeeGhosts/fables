@@ -248,24 +248,12 @@ it("opens a linked Linear issue from an inactive thread's sidebar badge", async 
   await userEvent.hover(badge);
   const issueName = `Issue ${issue.displayKey}: ${liveTitle}`;
   const previewLink = page.getByRole("link", { name: issueName });
-  await userEvent.hover(previewLink.getByText("sam", { exact: true }));
+  await userEvent.hover(previewLink);
   await expect.element(previewLink).toBeVisible();
   const contextMenu = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
   await act(() => previewLink.element().dispatchEvent(contextMenu));
   expect(contextMenu.defaultPrevented).toBe(false);
   await userEvent.click(badge);
-  // Each open lands as a surface tab beside the chat, but the route sync refocuses the chat
-  // tab, so the test focuses the surface tab the way a tab click would.
-  const activateSurfaceTab = (surfaceIdPrefix: string) => {
-    const { layout, focusTab } = useLayoutStore.getState();
-    const tab = layout.workspaces
-      .flatMap((workspace) =>
-        workspace.columns.flatMap((column) => column.panes.flatMap((pane) => pane.tabs)),
-      )
-      .find((t) => t.content.kind === "surface" && t.content.surfaceId.startsWith(surfaceIdPrefix));
-    if (tab) focusTab(tab.id);
-  };
-  await act(() => activateSurfaceTab("pull-requests"));
   const issueRow = page
     .getByRole("region", { name: "Linked issues" })
     .getByRole("link", { name: issueName });
@@ -275,14 +263,7 @@ it("opens a linked Linear issue from an inactive thread's sidebar badge", async 
   await expect.element(issueRow.getByText(issue.scope, { exact: true })).toBeVisible();
   await userEvent.click(issueRow);
   expect(router.history.location.pathname).toBe(`/${ENVIRONMENT_ID}/${linked.id}`);
-  // The open registers the issue surface; its detail view lives on the issues page, not a tab.
-  await vi.waitFor(() => {
-    const panel = selectThreadRightPanelState(
-      useRightPanelStore.getState().byThreadKey,
-      scopeThreadRef(ENVIRONMENT_ID, linked.id),
-    );
-    expect(panel.activeSurfaceId?.startsWith("issue:")).toBe(true);
-  });
+  await expect.element(page.getByRole("heading", { name: liveTitle })).toBeVisible();
   await act(() => useRightPanelStore.getState().close(scopeThreadRef(ENVIRONMENT_ID, linked.id)));
   await expect
     .element(
@@ -1016,9 +997,6 @@ it("a shortcut conditioned on rightPanelOpen sees the thread's open right panel"
 
 it("selecting a side-chat tab focuses that side chat's composer", async () => {
   const parent = threadWithHistory("focus-parent", 1);
-  // Surfaces opened by earlier tests persist in these stores; this test starts clean.
-  useLayoutStore.getState().reset();
-  useRightPanelStore.setState({ byThreadKey: {}, threadPanelVisibilityByThreadKey: {} });
   // The shell loaded by the file's first test stays; a family read serves side chats added later.
   const sideChat = (name: string) => ({
     ...threadWithHistory(name, 1),
@@ -1034,6 +1012,8 @@ it("selecting a side-chat tab focuses that side chat's composer", async () => {
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const parentRef = scopeThreadRef(ENVIRONMENT_ID, parent.id);
+  useRightPanelStore.getState().openThread(parentRef, otherSide.id);
+  useRightPanelStore.getState().openThread(parentRef, side.id);
   const router = getRouter(
     createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${parent.id}`] }),
   );
@@ -1042,13 +1022,11 @@ it("selecting a side-chat tab focuses that side chat's composer", async () => {
     // AppRoot brings its own router.
     router: false,
   });
-  // The surface sync clamps unplaced surfaces shut when a later host mounts, so the opens
-  // happen after render, the way a user's would.
+  using _focus = { [Symbol.dispose]: startWorkspaceFocus(router) };
   await act(() => {
     useRightPanelStore.getState().openThread(parentRef, otherSide.id);
     useRightPanelStore.getState().openThread(parentRef, side.id);
   });
-  using _focus = { [Symbol.dispose]: startWorkspaceFocus(router) };
   const mainEditor = screen.getByRole("textbox", { name: `Message ${parent.title}`, exact: true });
   const sideEditor = screen.getByRole("textbox", { name: `Message ${side.title}`, exact: true });
   await expect.element(sideEditor).toBeVisible();
@@ -1077,9 +1055,6 @@ it("selecting a side-chat tab focuses that side chat's composer", async () => {
 
 it("a subagent tab shows its read-only bar under no header of its own", async () => {
   const parent = threadWithHistory("subagent-parent", 1);
-  // Surfaces opened by earlier tests persist in these stores; this test starts clean.
-  useLayoutStore.getState().reset();
-  useRightPanelStore.setState({ byThreadKey: {}, threadPanelVisibilityByThreadKey: {} });
   const subagent = {
     ...threadWithHistory("subagent-child", 1),
     providerSubagentOf: parent.id,
@@ -1092,6 +1067,7 @@ it("a subagent tab shows its read-only bar under no header of its own", async ()
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const parentRef = scopeThreadRef(ENVIRONMENT_ID, parent.id);
+  useRightPanelStore.getState().openThread(parentRef, subagent.id);
   const router = getRouter(
     createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${parent.id}`] }),
   );
@@ -1100,9 +1076,6 @@ it("a subagent tab shows its read-only bar under no header of its own", async ()
     // AppRoot brings its own router.
     router: false,
   });
-  // The surface sync clamps unplaced surfaces shut when a later host mounts, so the open
-  // happens after render, the way a user's would.
-  await act(() => useRightPanelStore.getState().openThread(parentRef, subagent.id));
   const pane = screen.getByTestId("side-thread-pane");
   // No header of its own: the tab names it, and only a side chat has actions to put in one.
   await expect.element(pane.getByRole("heading", { name: subagent.title })).not.toBeInTheDocument();
@@ -1118,9 +1091,9 @@ it("a subagent tab shows its read-only bar under no header of its own", async ()
 
 it("/side sends the draft's attachments and context, and keeps them when it does not start", async () => {
   await page.viewport(1400, 900);
-  // Side chats opened by earlier tests persist in these stores; count this test's own.
+  // Side chats an earlier test left in the pane layout would count as open tabs.
   useLayoutStore.getState().reset();
-  useRightPanelStore.setState({ byThreadKey: {}, threadPanelVisibilityByThreadKey: {} });
+  using _layout = { [Symbol.dispose]: () => useLayoutStore.getState().reset() };
   const thread = threadWithHistory("side-attachments", 1);
   let holdFork = false;
   using _environment = installFakeEnvironment([thread], {
@@ -1159,24 +1132,14 @@ it("/side sends the draft's attachments and context, and keeps them when it does
     await expect.element(image).not.toBeInTheDocument();
   };
   // The tab opens once the start finished; until then `/side` refuses another side chat.
-  // A side chat is a surface tab, mirrored into several pane groups, so count unique surfaces.
-  const sideChatTabCount = () => {
-    const surfaceIds = new Set<string>();
-    for (const workspace of useLayoutStore.getState().layout.workspaces)
-      for (const column of workspace.columns)
-        for (const pane of column.panes)
-          for (const tab of pane.tabs)
-            if (tab.content.kind === "surface" && tab.content.surfaceId.startsWith("thread:"))
-              surfaceIds.add(tab.content.surfaceId);
-    return surfaceIds.size;
-  };
+  const sideChatTabs = page.getByRole("button", { name: "Side chat", exact: true });
   const sentMessage = async (fields: Record<string, unknown>, openTabs: number) => {
     await vi.waitFor(() =>
       expect(dispatchedCommands()).toContainEqual(
         expect.objectContaining({ type: "message.dispatch", ...fields }),
       ),
     );
-    await vi.waitFor(() => expect(sideChatTabCount()).toBe(openTabs));
+    await expect.element(sideChatTabs).toHaveLength(openTabs);
   };
 
   await sendImageToSideChat();

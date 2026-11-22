@@ -43,6 +43,7 @@ import { environmentThreadDetails } from "../../state/threads";
 import { act, fakeTimers, render, stubGlobal } from "../../../test/render";
 import { ChangedFilesCard } from "./ChangedFilesTree";
 import { MessagesTimeline } from "./MessagesTimeline";
+import { timelineGapDevApi } from "./TimelineGapRecorder";
 import { createWorkspaceFocusController, workspaceAreaProps } from "../../lib/workspaceFocus";
 import { ComposerApprovalPanel } from "./ComposerApprovalPanel";
 import { usePendingThreadRequests } from "./usePendingThreadRequests";
@@ -1006,6 +1007,45 @@ describe("MessagesTimeline messages", () => {
     await expectHeadingInView("Last turn", "Turn 118:");
   });
 
+  it("reports missing slots even when no buffered rows remain mounted", async () => {
+    setup();
+    const props = baseProps();
+    const entries = Array.from({ length: 120 }, (_, index) =>
+      message(`Turn ${index}:\n\n${"x ".repeat(200)}`, {}, `gap-${index}`),
+    );
+    await using screen = await renderElement(
+      <MessagesTimeline {...props} timelineEntries={entries} />,
+    );
+    const snapshot = () =>
+      timelineGapDevApi.checkGapsNow().find((report) => report.threadKey === props.routeThreadKey)!;
+    await vi.waitFor(() => expect(screen.text()).toContain("Turn 119:"));
+    const state = props.listRef.current!.getState();
+    const slots = Array.from({ length: state.endBuffered - state.startBuffered + 1 }, (_, i) => {
+      const index = state.startBuffered + i;
+      const slot = state.elementAtIndex(index)!;
+      return { index, slot, parent: slot.parentNode!, next: slot.nextSibling };
+    });
+    expect(snapshot().findings).toEqual([]);
+    try {
+      for (const { slot } of slots) slot.remove();
+      const report = snapshot();
+      expect(report.rows).toEqual([]);
+      expect(report.findings!.filter((finding) => finding.type === "missing-slot")).toHaveLength(
+        slots.length,
+      );
+      expect(report.missingRows!.map((row) => row.index)).toEqual(slots.map(({ index }) => index));
+      expect(report.missingRows![0]).toMatchObject({
+        reason: "no slot mounted for a row in range",
+        inBufferedRange: true,
+        key: state.data[state.startBuffered].id,
+      });
+      expect(report.slots!.some((slot) => slot.key === state.data[0].id)).toBe(true);
+    } finally {
+      for (const { slot, parent, next } of slots.toReversed()) parent.insertBefore(slot, next);
+    }
+    expect(snapshot().findings).toEqual([]);
+  });
+
   it("scrolls from the keyboard once F6 moves into the conversation", async () => {
     setup();
     const props = baseProps();
@@ -1747,7 +1787,7 @@ describe("MessagesTimeline citations", () => {
     });
   });
 
-  it("opens the superseded attempt that folds the cited response", async () => {
+  it("opens the superseded attempt that folds the replied-to response", async () => {
     const runId = RunId.make("run-steered");
     const attempt = (id: string, ordinal: number, status: "superseded" | "running") => ({
       id: RunAttemptId.make(id),
@@ -2572,80 +2612,6 @@ describe("compact reasoning math", () => {
   });
 });
 
-describe("live reasoning groups", () => {
-  it("shows the reasoning once when expanding tools followed by thinking", async () => {
-    setup();
-    const runId = RunId.make("pi-thinking-run");
-    const thought = "Interesting! The HOME role already belongs to FreeMyTV.";
-    const work = (
-      id: string,
-      entry: Omit<Extract<Entry, { kind: "work" }>["entry"], "id" | "createdAt" | "runId">,
-    ): Entry => ({
-      id,
-      kind: "work",
-      createdAt: CREATED_AT,
-      entry: { id, createdAt: CREATED_AT, runId, ...entry },
-    });
-    await using screen = await renderTimeline(
-      [
-        message("Checking the Home role and installation instructions.", {
-          role: "assistant",
-          runId,
-        }),
-        work("check-role", {
-          label: "bash",
-          itemType: "command_execution",
-          command: "adb shell dumpsys role",
-          tone: "tool",
-          toolLifecycleStatus: "completed",
-        }),
-        work("read-instructions", {
-          label: "bash",
-          itemType: "command_execution",
-          command: "cat README.md",
-          tone: "tool",
-          toolLifecycleStatus: "completed",
-        }),
-        work("thinking", {
-          label: "Thinking",
-          itemType: "reasoning",
-          detail: thought,
-          tone: "thinking",
-          toolLifecycleStatus: "inProgress",
-        }),
-      ],
-      {
-        isWorking: true,
-        latestRun: {
-          runId,
-          status: "running",
-          startedAt: CREATED_AT,
-          completedAt: null,
-        },
-      },
-    );
-
-    await click(screen.button(/Interesting!/));
-
-    await expect.element(screen.getByText("adb shell dumpsys role", { exact: true })).toBeVisible();
-    await expect.element(screen.getByText("cat README.md", { exact: true })).toBeVisible();
-    await vi.waitFor(() => expect(screen.text().split(thought)).toHaveLength(2));
-    await expect
-      .element(screen.getByRole("button", { name: "Thinking", exact: true }))
-      .toHaveAttribute("aria-expanded", "true");
-
-    await userEvent.click(screen.getByRole("button", { name: "Thinking", exact: true }));
-
-    await vi.waitFor(() => {
-      expect(screen.text()).not.toContain("adb shell dumpsys role");
-      expect(screen.text()).not.toContain("cat README.md");
-    });
-    await expect
-      .element(screen.getByRole("button", { name: /Interesting!/ }))
-      .toHaveAttribute("aria-expanded", "false");
-  });
-});
-
 it("renders automatic compaction as one live divider that finishes with its reason and token delta", async () => {
   setup();
   const fixture = makeStreamingTimelineFixture();
@@ -2724,6 +2690,7 @@ function TimelineChangedFilesCard() {
   const [expanded, setExpanded] = useState(true);
   return (
     <ChangedFilesCard
+      threadRef={null}
       runId={RunId.make("run-1")}
       files={["src/a.ts", "src/b.ts", "src/c.ts"].map((path) => ({
         path,

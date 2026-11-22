@@ -11,7 +11,7 @@ import { requestLayoutSurfacePlacement } from "../../layout/surfaceSync";
 import { getLayoutBehavior } from "../../layout/layoutBehavior";
 import { toggleThreadSidePane, toggleThreadSurfaceTab } from "../../layout/openRules";
 import type { useChatTerminalActions } from "./useChatTerminalActions";
-import { isPreviewSupportedInRuntime, setActivePreviewTab } from "../../previewStateStore";
+import { isPreviewSupportedInRuntime } from "../../previewStateStore";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import type { ThreadPreviewState } from "../../previewStateStore";
 import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-actions";
@@ -34,12 +34,13 @@ import {
   useRightPanelStore,
 } from "../../rightPanelStore";
 import { requestWorkspaceContentFocus, requestWorkspaceFocus } from "../../lib/workspaceFocus";
+import { setActivePreviewTab } from "../../previewStateStore";
 import { isBrowserSettingsReadError } from "../../browser/openFileInPreview";
 import { addBrowserSurface } from "../preview/addBrowserSurface";
+import { focusTerminal } from "../../lib/terminalFocus";
 import { subscribePreviewAction } from "../preview/previewActionBus";
 import { floatDeviceSurface } from "../preview/agentOpenedPreviews";
 import { browserMiniPlayerSource, usePreviewMiniPlayerStore } from "../../previewMiniPlayerStore";
-import { focusTerminal } from "../../lib/terminalFocus";
 import type { threadPullRequestPanelTarget } from "../pullRequest/pullRequestDetail.logic";
 import type { useDeviceState } from "../../state/device";
 import { stackedThreadToast, toastManager } from "../ui/toast";
@@ -68,8 +69,6 @@ interface RightPanelActionsInput {
   readonly previewPanelOpen: boolean;
   readonly supportsPullRequests: boolean;
   readonly pullRequestsSurfaceAvailable: boolean;
-  readonly gitCwd: string | null;
-  readonly activeProjectCwd: string | null;
   readonly onDiffPanelOpen: (() => void) | undefined;
 }
 
@@ -97,8 +96,6 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
     previewPanelOpen,
     supportsPullRequests,
     pullRequestsSurfaceAvailable,
-    gitCwd,
-    activeProjectCwd,
     onDiffPanelOpen,
   } = input;
 
@@ -123,7 +120,6 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
       useRightPanelStore.getState().toggle(activeThreadRef, "pull-requests");
     });
   };
-
   const createBrowserSurface = (profileId?: string, duplicateFrom?: PreviewSessionSnapshot) => {
     if (!activeThreadRef || !canOperatePreview) return;
     void addBrowserSurface({
@@ -242,7 +238,6 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
     }
   };
   const activateRightPanelSurfaceStable = useStableCallback(activateRightPanelSurface);
-
   const toggleThreadPanel = () => {
     if (!activeThreadRef) return;
     const store = useRightPanelStore.getState();
@@ -266,12 +261,13 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
   };
   const addPullRequestSurfaceStable = useStableCallback(addPullRequestSurface);
   const moveRightPanelSurface = (surfaceId: string, toIndex: number) => {
-    if (activeThreadRef)
+    if (activeThreadRef) {
       useRightPanelStore.getState().moveSurface(activeThreadRef, surfaceId, toIndex);
+    }
   };
   const moveRightPanelSurfaceStable = useStableCallback(moveRightPanelSurface);
   const copyRightPanelFilePath = (relativePath: string) => {
-    if (typeof window === "undefined" || !navigator.clipboard?.writeText) {
+    if (!navigator.clipboard?.writeText) {
       toastManager.add(
         stackedThreadToast({
           type: "error",
@@ -281,10 +277,10 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
       );
       return;
     }
-
+    const workspaceRoot = activeProject?.workspaceRoot ?? "";
     const clipboardPath = formatFilePathForClipboard(
       relativePath,
-      resolvePathLinkTarget(relativePath, gitCwd ?? activeProjectCwd ?? ""),
+      resolvePathLinkTarget(relativePath, workspaceRoot),
     );
     void navigator.clipboard.writeText(clipboardPath).then(undefined, (error) => {
       toastManager.add(
@@ -323,7 +319,6 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
   const browserBesideAvailable = canOperatePreview && browserAvailable;
   const diffBesideAvailable = isServerThread && diffAvailable;
   const projectBesideAvailable = activeProject !== null;
-  // Also what the header's "+" offers after a new thread.
   const besideAvailable = (() => {
     const available = new Set<LayoutBesideKind>();
     if (diffBesideAvailable) available.add("diff");
@@ -342,7 +337,7 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
   ) => {
     if (activeThreadRef === null) return;
     const targetPaneId = paneId === undefined ? layoutPane.paneId : paneId;
-    // The palette and the "+" menu open the surface as a tab of their pane.
+    // The palette opens the surface as a tab of its pane.
     if (targetPaneId !== null) {
       requestLayoutSurfacePlacement(activeThreadRef, { kind: "pane", paneId: targetPaneId });
     }
@@ -405,14 +400,12 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
     addFilesSurfaceStable,
     addPullRequestSurfaceStable,
     addPullRequestsSurfaceStable,
-    besideAvailable,
     closePreviewPanelStable,
     copyRightPanelFilePathStable,
     createBrowserSurface,
     createBrowserSurfaceStable,
     duplicateBrowserSurfaceStable,
     moveRightPanelSurfaceStable,
-    openBesideStable,
     onOpenToolDiffStable,
     onOpenTurnDiffStable,
     openChangesFromThreadPanelStable,

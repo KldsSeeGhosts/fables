@@ -386,11 +386,7 @@ function BrowserViewportSetting({ disabled }: { readonly disabled: boolean }) {
       }
       control={
         <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
-          <Select
-            value={viewportSelectValue(viewport)}
-            onValueChange={selectViewport}
-            disabled={disabled}
-          >
+          <Select value={selectedViewport} onValueChange={selectViewport} disabled={disabled}>
             <SelectTrigger
               variant="well"
               size="compact"
@@ -661,12 +657,12 @@ function BrowserRecordingFrameRateSetting({ disabled }: { readonly disabled: boo
             size="compact"
             aria-label={gt("Browser recording frame rate")}
           >
-            <SelectValue>{gt("{rate} fps", { rate: frameRate })}</SelectValue>
+            <SelectValue>{frameRate} fps</SelectValue>
           </SelectTrigger>
           <SelectPopup align="end" alignItemWithTrigger={false}>
             {BROWSER_RECORDING_FRAME_RATES.map((rate) => (
               <SelectItem key={rate} value={String(rate)}>
-                {gt("{rate} fps", { rate })}
+                {rate} fps
               </SelectItem>
             ))}
           </SelectPopup>
@@ -1419,8 +1415,8 @@ function BrowserProfilesSetting({ disabled }: { readonly disabled: boolean }) {
             >
               <DownloadIcon />
               {quickImportSource
-                ? gt("Import from {source}", { source: quickImportSource.name })
-                : gt("Import")}
+                ? gt("Import from {browser}", { browser: quickImportSource.name })
+                : gt("Import", { $context: "verb, imports cookies and logins" })}
             </Button>
           </ManagedControl>
           <Menu onOpenChange={(open) => open && loadSources()}>

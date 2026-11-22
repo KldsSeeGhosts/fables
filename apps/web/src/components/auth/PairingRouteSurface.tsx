@@ -1,7 +1,7 @@
 import { Link2Icon, OctagonAlertIcon, UnlinkIcon, XIcon } from "lucide-react";
 import type { AuthSessionState } from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import React, { startTransition, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { connectPairing } from "../../connection/onboarding";
@@ -61,7 +61,7 @@ export function PairingRouteSurface({
   const [autoPairToken] = useState(peekPairingTokenFromUrl);
   const [credential, setCredential] = useState(autoPairToken ?? "");
   const [failure, setFailure] = useState<PairingFailure | null>(() =>
-    initialErrorMessage ? { title: "Could not pair", message: initialErrorMessage } : null,
+    initialErrorMessage ? { title: m(msg("Could not pair")), message: initialErrorMessage } : null,
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const autoSubmitAttemptedRef = useRef(false);
@@ -164,7 +164,7 @@ export function PairingRouteSurface({
           </Button>
           <Button disabled={isSubmitting} size="standard" type="submit">
             {isSubmitting ? <Spinner /> : null}
-            {isSubmitting ? <T>Pairing…</T> : failed ? <T>Try again</T> : <T>Continue</T>}
+            {isSubmitting ? gt("Pairing…") : failed ? gt("Try again") : gt("Continue")}
             {isSubmitting ? null : <Kbd>⏎</Kbd>}
           </Button>
         </div>
@@ -191,7 +191,7 @@ export function HostedPairingRouteSurface() {
       ? m(msg("Connecting to this backend."))
       : m(msg("This pairing link is missing its backend host or token.")),
   );
-  const [errorTitle, setErrorTitle] = useState(() => gt("Pairing link incomplete"));
+  const [errorTitle, setErrorTitle] = useState(() => m(msg("Pairing link incomplete")));
   const [canRetry, setCanRetry] = useState(false);
   const submitAttemptedRef = useRef(false);
   const tokenSubmittedRef = useRef(false);
@@ -236,7 +236,7 @@ export function HostedPairingRouteSurface() {
 
     tokenSubmittedRef.current = false;
     setStatus("error");
-    setErrorTitle("Could not pair");
+    setErrorTitle(gt("Could not pair"));
     setCanRetry(true);
     setMessage(
       gt(
@@ -289,7 +289,12 @@ export function HostedPairingRouteSurface() {
 
       {request ? (
         <div className="rounded-control surface-well px-3 py-2.5 text-meta leading-relaxed text-muted-foreground">
-          Host: <span className="font-mono text-foreground">{request.host}</span>
+          <T>
+            Host:{" "}
+            <span className="font-mono text-foreground">
+              <Var>{request.host}</Var>
+            </span>
+          </T>
         </div>
       ) : null}
 
@@ -341,30 +346,43 @@ function describePairingFailure(error: unknown): PairingFailure {
   switch (tag) {
     case "PrimaryEnvironmentPairingCredentialRejectedError":
       return {
-        title: "Token not accepted",
-        message:
-          "This token is invalid, expired, or already used. Request a new pairing link and try again.",
+        title: m(msg("Token not accepted")),
+        message: m(
+          msg(
+            "This token is invalid, expired, or already used. Request a new pairing link and try again.",
+          ),
+        ),
       };
     case "PrimaryEnvironmentPairingCredentialRequiredError":
-      return { title: "Token required", message: "Paste a pairing token to continue." };
+      return {
+        title: m(msg("Token required")),
+        message: m(msg("Paste a pairing token to continue.")),
+      };
     case "PrimaryEnvironmentAuthSessionTimeoutError":
       return {
-        title: "Session did not start",
-        message: "The server accepted the token but the session did not start. Reload the app.",
+        title: m(msg("Session did not start")),
+        message: m(
+          msg("The server accepted the token but the session did not start. Reload the app."),
+        ),
       };
     case "PrimaryEnvironmentRequestError":
       return isPrimaryEnvironmentRequestError(error) && error.responded
         ? {
-            title: `Server error (HTTP ${error.status})`,
-            message: "This T3 Code server answered with an error. Try again, or check its logs.",
+            title: m(msg("Server error (HTTP {status})", { status: error.status })),
+            message: m(
+              msg("This T3 Code server answered with an error. Try again, or check its logs."),
+            ),
           }
         : {
-            title: "Server unreachable",
-            message:
-              "Could not reach this T3 Code server. Check that it is running and reachable from this browser.",
+            title: m(msg("Server unreachable")),
+            message: m(
+              msg(
+                "Could not reach this T3 Code server. Check that it is running and reachable from this browser.",
+              ),
+            ),
           };
     default:
-      return { title: "Could not pair", message: errorMessageFromUnknown(error) };
+      return { title: m(msg("Could not pair")), message: errorMessageFromUnknown(error) };
   }
 }
 

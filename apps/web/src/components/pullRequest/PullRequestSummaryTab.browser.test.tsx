@@ -59,8 +59,8 @@ function setup() {
 }
 
 import "~/index.css";
-import { workspaceAreaProps } from "~/lib/workspaceFocus";
 import { act, fakeTimers, render as renderUi } from "../../../test/render";
+import { workspaceAreaProps } from "~/lib/workspaceFocus";
 import { PullRequestSummaryTab } from "./PullRequestSummaryTab";
 
 const detail: PullRequestDetailView = {

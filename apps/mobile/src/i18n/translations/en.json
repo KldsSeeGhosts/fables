@@ -118,9 +118,9 @@
   "c4eb2b21c8c58a54": "Normal",
   "f42c2a36b3507308": "{label} On",
   "77cc5f738cb7d459": "{label} Off",
-  "2159a4897d4a4d73": "{runtime, select, codex {Update the Codex CLI to {version} or newer to use {names}.} other {Update {providerName} to {version} or newer to use {names}.}}",
-  "a0854b0f9604fc7b": "{runtime, select, codex {Using {names} requires the Codex CLI {version} or newer, but the newest this install can update to is {latestVersion}. Install the Codex CLI another way or wait for a newer release.} other {Using {names} requires {providerName} {version} or newer, but the newest this install can update to is {latestVersion}. Install {providerName} another way or wait for a newer release.}}",
   "aba3bb73ce212f0c": "Using {names} requires {providerName} {version} or newer, but the claude-code Homebrew cask only has {latestVersion}. Switch to the claude-code@latest cask: {command}",
+  "a0854b0f9604fc7b": "{runtime, select, codex {Using {names} requires the Codex CLI {version} or newer, but the newest this install can update to is {latestVersion}. Install the Codex CLI another way or wait for a newer release.} other {Using {names} requires {providerName} {version} or newer, but the newest this install can update to is {latestVersion}. Install {providerName} another way or wait for a newer release.}}",
+  "2159a4897d4a4d73": "{runtime, select, codex {Update the Codex CLI to {version} or newer to use {names}.} other {Update {providerName} to {version} or newer to use {names}.}}",
   "d887bea446534de5": "No project in this environment can read {host}/{repository}.",
   "4e466d60e2f7736b": "Paste the full pull request URL; this thread has no repository to resolve the number against.",
   "302625058bacbe38": "Paste a full URL; this project's host has no known {changeRequest} URL.",
@@ -367,9 +367,7 @@
   "638678077ba2e050": "{count, plural, one {Tried to review {count} pull request} other {Tried to review {count} pull requests}}",
   "420bea546d5f8802": "Thread copied",
   "2efb2dd3bf170f67": "Failed to copy thread",
-  "6c03545936b55e0b": "PR link copied",
   "18786351520c79d5": "{shortLabel} link copied",
-  "1b88f6a5e9fdeea7": "Failed to copy PR link",
   "ff8d722c3ae4d1fa": "Failed to copy {shortLabel} link",
   "b063ecd06059857f": "Compacting before the cache expires…",
   "071ab90b0e0f5e76": "Compacting…",
@@ -919,6 +917,8 @@
   "eb3de8871016043c": "{count, plural, =1 {Used {names} integration} other {Used {names} integrations}}",
   "7ed2bff150997c76": "Used {names}",
   "7136ebec3019a2ed": "{count, plural, one {Performed {count} other action} other {Performed {count} other actions}}",
+  "ba392a6319fd43e0": "{seconds}s",
+  "7a7d66eb860047d1": "for {duration}",
   "551df12aeaf5ba83": "{status, select, inProgress {Linking a pull request} completed {Linked a pull request} failed {Failed to link a pull request} declined {Declined to link a pull request} stopped {Stopped linking a pull request} other {Linking a pull request}}",
   "cbb12c435f68cb2f": "{status, select, inProgress {Linking {changeRequest} #{number}} completed {Linked {changeRequest} #{number}} failed {Failed to link {changeRequest} #{number}} declined {Declined to link {changeRequest} #{number}} stopped {Stopped linking {changeRequest} #{number}} other {Linking {changeRequest} #{number}}}",
   "2f2917c28f02a36e": "{status, select, inProgress {Linking pull requests} completed {Linked pull requests} failed {Failed to link pull requests} declined {Declined to link pull requests} stopped {Stopped linking pull requests} other {Linking pull requests}}",
@@ -1085,7 +1085,6 @@
   "1def3827b7403ac6": "Email template",
   "9ed38458996c973a": "Slack template",
   "0eb8cb19daf61b59": "{ms}ms",
-  "ba392a6319fd43e0": "{seconds}s",
   "40bc7efea699741f": "{minutes}m {seconds}s",
   "93918bb7fbf62e92": "{hours}h {minutes}m {seconds}s",
   "d3a9046187e04d81": "{hours}h {seconds}s",
@@ -1951,9 +1950,9 @@
   "a5e3ff0d1a60b766": "Could not configure environment relay access: {detail}",
   "7d508fe978cb0f3b": "Off",
   "3ae222ec888dd171": "Trace ID:",
-  "be00d572b18076d8": "Long press to remove from this device",
   "46e2a0e828785d97": "Manage {environment}",
   "5392155ec0c8b0be": "Remove {environment} from this device",
+  "be00d572b18076d8": "Long press to remove from this device",
   "782a518513f0777a": "Enable {environment}",
   "a35685d9ad9de747": "Loading linked cloud environments.",
   "91ca3ba7b2f9d6b6": "No additional linked cloud environments.",
@@ -4810,10 +4809,10 @@
   "068c8b6f9a2c1b4f": "Input",
   "bd39c2eea85979f7": "Request",
   "ad78fae7d373cf21": "Working",
-  "945e6659afae60d5": "Monitoring",
+  "14a1bb9a179e17b0": "Monitoring",
   "37ffec8201f153c1": "Failed",
   "2277fa5e14ffd3b0": "Limited",
-  "1aad28e9abe4c5eb": "Merged",
+  "6a8e0b2604df7fc3": "Merged",
   "6583fff72f2231e8": "Done",
   "bb58e9ed3a2d0e54": "Settle",
   "474876386e3b8977": "Delete",
@@ -5003,6 +5002,42 @@
     },
     ". Open ChatGPT with the account you connected."
   ],
+  "d55c0f672b8e61c2": "Hide accounts",
+  "5e55c1ee3fe9524a": "Show accounts",
+  "54423a35bd50c696": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " CPA accounts"
+  ],
+  "d9eeb418e1fb35f5": "Hide accounts",
+  "325c31ce889c6aba": "Show accounts",
+  "1c1ddbbd4567f2ab": "Disabled",
+  "8c63db26cd80bbc9": "Dashboard account",
+  "bd1485b065fd7d76": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " (estimated)"
+  ],
+  "933fa7740fe8c681": {
+    "i": 1,
+    "k": "_gt_value_1",
+    "v": "v"
+  },
+  "412e3b93454812aa": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    "% left"
+  ],
+  "76f33bfd46f00759": "Quota unavailable.",
   "a3d040c4ef4fc6e9": "Ahead of pace",
   "b16fdf56b16d99c9": "On pace",
   "90f977e97ae8b6c6": "Under pace",
@@ -5045,14 +5080,6 @@
     " could not refresh limits. Showing the last known values."
   ],
   "726ece0c7139ce8a": "This account is no longer reporting limits on the selected environments.",
-  "412e3b93454812aa": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    "% left"
-  ],
   "82d204e1a9e7da17": [
     "Resets",
     " ",
@@ -5084,6 +5111,7 @@
   "fb7be23247bbe5ec": "ahead of pace",
   "05c53f9e062392da": "on pace",
   "5216fc7e035af55c": "under pace",
+  "9da3a17289293930": "Usage unavailable for this API connection",
   "0fd14331cbecbfc6": "Reset applied. Your windows have cleared.",
   "1a92fa2f744401bc": "Nothing to reset right now.",
   "fff9b7f838279ee3": "No reset credit left.",
@@ -5098,7 +5126,6 @@
   "f8a9ced202b79202": "Hide account label",
   "e4b6c8eab1e48ee2": "Reveal account label",
   "1f76510e608a9292": "Using…",
-  "9da3a17289293930": "Usage unavailable for this API connection",
   "fd121a8a212b5242": "This connection cannot manage provider accounts.",
   "43e655305262c0c7": "Cost",
   "88151c994a23d697": "Tokens",

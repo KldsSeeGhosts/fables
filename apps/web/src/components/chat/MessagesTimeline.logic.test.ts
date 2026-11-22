@@ -26,7 +26,7 @@ import {
   withStreamedText,
 } from "../../test-fixtures";
 import type { TurnDiffSummary } from "../../types";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { MessageId, RunId } from "@t3tools/contracts";
 import {
   applyWorkingWindow,
@@ -50,6 +50,47 @@ import {
 } from "./MessagesTimeline.logic";
 import { workEntryIconName } from "./TimelineWorkEntryRow.logic";
 import { presentSlashCommand } from "./timelineSlashCommands";
+
+it.each([null, "0", "1", "true", "blocked"])(
+  "reads the production gap recorder switch once with stored value %s",
+  async (value) => {
+    const getItem = vi.fn(() => {
+      if (value === "blocked") throw new Error("Storage blocked");
+      return value;
+    });
+    vi.stubEnv("DEV", false);
+    vi.stubGlobal("localStorage", { getItem });
+    vi.resetModules();
+    try {
+      const first = await import("./timelineGapRecorderEnabled");
+      expect(first.timelineGapRecorderEnabled).toBe(value === "1");
+      getItem.mockReturnValue(value === "1" ? null : "1");
+      const second = await import("./timelineGapRecorderEnabled");
+      expect(second.timelineGapRecorderEnabled).toBe(first.timelineGapRecorderEnabled);
+      expect(getItem).toHaveBeenCalledExactlyOnceWith("t3:timeline-gap-recorder");
+    } finally {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
+  },
+);
+
+it("always enables gap diagnostics in dev without reading storage", async () => {
+  const getItem = vi.fn();
+  vi.stubEnv("DEV", true);
+  vi.stubGlobal("localStorage", { getItem });
+  vi.resetModules();
+  try {
+    const { timelineGapRecorderEnabled } = await import("./timelineGapRecorderEnabled");
+    expect(timelineGapRecorderEnabled).toBe(true);
+    expect(getItem).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  }
+});
 
 it.each([
   "prompt",
@@ -1809,17 +1850,13 @@ describe("deriveMessagesTimelineRows", () => {
             projectedItem: { item: { type: "subagent", status: "completed", runId } } as never,
           },
         ],
-        // A later wake run is the latest, so this turn's times come from its
-        // entries; an interrupt marks this run stopped instead.
-        latestRun:
-          status === "interrupted"
-            ? { runId, status, startedAt: time(0), completedAt: time(30) }
-            : {
-                runId: RunId.make("wake-run"),
-                status: "completed",
-                startedAt: time(55),
-                completedAt: time(58),
-              },
+        // A later wake run is the latest, so this turn's times come from its entries.
+        latestRun: {
+          runId: RunId.make("wake-run"),
+          status: "completed",
+          startedAt: time(55),
+          completedAt: time(58),
+        },
         isWorking: false,
         expandedRunIds,
         turnDiffSummaries: [
@@ -1867,7 +1904,6 @@ describe("deriveMessagesTimelineRows", () => {
       `turn-fold:${runId}`,
       "work-toggle:edit-before-steers",
       "final",
-      "late-subagent",
     ]);
     expect(expanded[6]).toMatchObject({ hiddenCount: 3 });
 

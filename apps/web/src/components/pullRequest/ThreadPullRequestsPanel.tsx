@@ -212,7 +212,7 @@ function LinkRowImpl({
                   <span>{link.repository}</span>
                   <span>{resolve(SOURCE_LABELS[link.source])}</span>
                   <span>
-                    <T>
+                    <T context="followed by a relative time such as 5m ago or just now">
                       linked{" "}
                       <Var>
                         <RelativeTime timestamp={link.linkedAt} />
@@ -452,7 +452,7 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
   const capabilities = useServerConfigs().get(threadRef.environmentId)?.environment.capabilities;
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const opensInApp = useClientSettings((settings) => settings.pullRequestLinksOpenInApp);
-  const prefetch = usePullRequestIntentPrefetch((target) =>
+  const { prefetch, reads: intentReads } = usePullRequestIntentPrefetch((target) =>
     links.some(
       (link) =>
         link.number === target.number &&
@@ -523,14 +523,17 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
       <div className="flex h-full flex-col">
         <PanelEmptyState
           icon={<PullRequestGlyph.link />}
-          title={gt("No linked pull requests")}
-          description={gt(
-            "Pull requests the agent opens from this thread land here. Link one yourself from a URL or a number.",
-          )}
+          title={<T>No linked pull requests</T>}
+          description={
+            <T>
+              Pull requests the agent opens from this thread land here. Link one yourself from a URL
+              or a number.
+            </T>
+          }
           action={
             <Button size="sm" variant="secondary" onClick={openLinkDialog}>
               <PlusIcon className="size-3.5" />
-              {gt("Link pull request")}
+              <T>Link pull request</T>
             </Button>
           }
         />
@@ -540,6 +543,7 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
 
   return (
     <PullRequestSpeedModeContext value={speedMode}>
+      {intentReads}
       {/* The list scrolls up under a pane's tab row (--surface-top-inset). */}
       <div
         className="flex h-[calc(100%+var(--surface-top-inset,0px))] min-h-0 flex-col"
@@ -555,18 +559,18 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
             issues.length > 0 ? (
               <>
                 <section aria-label={gt("Linked issues")} className="flex flex-col">
-                  <h2 className="px-2 py-1 text-label text-muted-foreground">
+                  <h2 className="px-2.5 pt-1 pb-1 text-meta text-muted-foreground">
                     <T>Issues</T>
                   </h2>
                   <ThreadDetailsIssueRows
                     links={issues}
                     threadRef={threadRef}
-                    compact={false}
+                    variant="panel"
                     mountScope="linked-items"
                   />
                 </section>
                 {linkCount > 0 ? (
-                  <h2 className="mt-2 border-t border-border/60 px-3 pt-2 pb-1 text-label text-muted-foreground">
+                  <h2 className="mt-2 border-t border-border px-2.5 pt-2 pb-1 text-meta text-muted-foreground">
                     <T>Pull requests</T>
                   </h2>
                 ) : null}
@@ -598,16 +602,20 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
         <footer className="flex items-center justify-between border-t border-border py-1.5 ps-4 pe-2.25 text-meta text-muted-foreground">
           <Tooltip>
             <TooltipTrigger render={<span className="flex min-w-0 flex-wrap gap-x-2" />}>
-              <span>
-                {gt("{count, plural, one {{count} linked} other {{count} linked}}", {
-                  count: linkCount,
-                })}
-              </span>
-              <span>
-                {gt("{count, plural, one {{count} open} other {{count} open}}", {
-                  count: openCount,
-                })}
-              </span>
+              {linkCount > 0 ? (
+                <>
+                  <span>
+                    {gt("{count, plural, one {{count} linked} other {{count} linked}}", {
+                      count: linkCount,
+                    })}
+                  </span>
+                  <span>
+                    {gt("{count, plural, one {{count} open} other {{count} open}}", {
+                      count: openCount,
+                    })}
+                  </span>
+                </>
+              ) : null}
               {lastSynced ? (
                 <span>
                   <T context="followed by a relative time such as 5m ago or just now">
@@ -621,11 +629,13 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
             </TooltipTrigger>
             <TooltipPopup>
               <span className="flex flex-col gap-0.5">
-                <span>
-                  {gt("{count, plural, one {{count} open} other {{count} open}}", {
-                    count: openCount,
-                  })}
-                </span>
+                {linkCount > 0 ? (
+                  <span>
+                    {gt("{count, plural, one {{count} open} other {{count} open}}", {
+                      count: openCount,
+                    })}
+                  </span>
+                ) : null}
                 {lastSynced ? (
                   <span>
                     <T context="followed by a relative time such as 5m ago or just now">

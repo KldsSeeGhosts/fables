@@ -1,19 +1,16 @@
-import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import {
   pullRequestLinkProject,
   resolveLinkPullRequestInput,
 } from "@t3tools/client-runtime/pull-request-link-input";
 import { useAtomValue } from "@effect/atom-react";
-import {
-  capitalizeTerm,
-  sourceControlClients,
-} from "@t3tools/client-runtime/source-control-clients";
+import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { useLayoutEffect, useRef, useState } from "react";
-import { observeResize } from "~/lib/observeResize";
-import { msg, useGT } from "gt-react";
 import { m } from "~/i18n/messages";
+import { observeResize } from "~/lib/observeResize";
 
 import { usePullRequestPreviewTarget } from "~/lib/openPullRequestLink";
 import { cn } from "~/lib/utils";
@@ -31,6 +28,7 @@ import { Dialog, DialogDescription, DialogPopup, DialogTitle } from "../ui/dialo
 import { InputGroup, InputGroupAddon, InputGroupInput } from "../ui/input-group";
 import { resolvePullRequestState } from "./pullRequestPresentation";
 import { PullRequestGlyph } from "./pullRequestIcons";
+import { changeRequestTermKind } from "./changeRequestTerm";
 
 // Host in chat to survive command palette dismissal.
 const linkPullRequestDialogThreadAtom = Atom.make<ScopedThreadRef | null>(null).pipe(
@@ -98,6 +96,7 @@ function LinkPullRequestPreview({
   environmentId: EnvironmentId;
   link: ResolvedLink;
 }) {
+  const messages = useMessages();
   // Typing a URL resolves a new number per keystroke; only ask the host once it settles.
   const settledUrl = useDebouncedValue(link.url, 300);
   const target = usePullRequestPreviewTarget(environmentId, settledUrl);
@@ -111,10 +110,13 @@ function LinkPullRequestPreview({
       </p>
     );
   }
-  const state = resolvePullRequestState({
-    state: preview.state,
-    isDraft: preview.isDraft ?? false,
-  });
+  const state = resolvePullRequestState(
+    {
+      state: preview.state,
+      isDraft: preview.isDraft ?? false,
+    },
+    messages,
+  );
   const stateKey = preview.state === "open" && preview.isDraft ? "draft" : preview.state;
   const author = preview.author?.login ?? "ghost";
   return (
@@ -125,7 +127,9 @@ function LinkPullRequestPreview({
         <div className="flex min-w-0 items-baseline gap-1.5 text-dim-foreground text-meta">
           <span className="shrink-0">#{preview.number}</span>
           <p className="truncate">
-            {author} wants to merge into {preview.baseBranch}
+            <T>
+              <Var>{author}</Var> wants to merge into <Var>{preview.baseBranch}</Var>
+            </T>
           </p>
         </div>
       </div>
@@ -200,7 +204,12 @@ function LinkPullRequestDialog({
       const error = squashAtomCommandFailure(result);
       setSubmitError(
         thrownErrorMessage(error, m) ??
-          m(msg("Could not link the {term}.", { term: terminology.singular })),
+          m(
+            msg(
+              "Could not link the {term, select, mr {merge request} cr {change request} other {pull request}}.",
+              { term: changeRequestTermKind(terminology) },
+            ),
+          ),
       );
       return;
     }
@@ -210,9 +219,15 @@ function LinkPullRequestDialog({
   const validation = !dirty
     ? null
     : reference.trim().length === 0
-      ? gt("Paste a {term} URL or enter 123 / #123.", { term: terminology.singular })
+      ? gt(
+          "Paste a {term, select, mr {merge request} cr {change request} other {pull request}} URL or enter 123 / #123.",
+          { term: changeRequestTermKind(terminology) },
+        )
       : resolved === null
-        ? gt("Use a {term} URL, 123, or #123.", { term: terminology.singular })
+        ? gt(
+            "Use a {term, select, mr {merge request} cr {change request} other {pull request}} URL, 123, or #123.",
+            { term: changeRequestTermKind(terminology) },
+          )
         : "error" in resolved
           ? resolved.error
           : null;
@@ -229,10 +244,18 @@ function LinkPullRequestDialog({
         <div className="flex min-h-0 flex-col gap-4 px-5 pt-5 pb-4 [--type-body:0.8125rem] [--type-label:0.8125rem] [--type-prompt:0.8125rem]">
           <div className="flex flex-col gap-1">
             <div className="[--type-label:0.9375rem]">
-              <DialogTitle>{gt("Link {term}", { term: terminology.singular })}</DialogTitle>
+              <DialogTitle>
+                {gt(
+                  "Link {term, select, mr {merge request} cr {change request} other {pull request}}",
+                  { term: changeRequestTermKind(terminology) },
+                )}
+              </DialogTitle>
             </div>
             <DialogDescription>
-              {gt("Paste a {term} URL or enter 123 / #123.", { term: terminology.singular })}
+              {gt(
+                "Paste a {term, select, mr {merge request} cr {change request} other {pull request}} URL or enter 123 / #123.",
+                { term: changeRequestTermKind(terminology) },
+              )}
             </DialogDescription>
           </div>
           <div className="flex flex-col gap-4">
@@ -244,13 +267,15 @@ function LinkPullRequestDialog({
                 ref={inputRef}
                 size="sm"
                 aria-invalid={validation !== null || submitError !== null}
-                aria-label={gt("{term} URL or number", {
-                  term: capitalizeTerm(terminology.singular),
-                })}
+                aria-label={gt(
+                  "{term, select, mr {Merge request} cr {Change request} other {Pull request}} URL or number",
+                  { term: changeRequestTermKind(terminology) },
+                )}
                 font="mono"
-                placeholder={gt("{term} URL or #42", {
-                  term: capitalizeTerm(terminology.singular),
-                })}
+                placeholder={gt(
+                  "{term, select, mr {Merge request} cr {Change request} other {Pull request}} URL or #42",
+                  { term: changeRequestTermKind(terminology) },
+                )}
                 value={reference}
                 onChange={(event) => {
                   setDirty(true);
@@ -283,7 +308,7 @@ function LinkPullRequestDialog({
               onClick={() => onOpenChange(false)}
               disabled={pending}
             >
-              {gt("Cancel")}
+              <T>Cancel</T>
             </Button>
             <Button
               type="button"

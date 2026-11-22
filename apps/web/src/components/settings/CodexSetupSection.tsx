@@ -654,20 +654,14 @@ function ManagedCodexSetup({
     ) : installation?.phase === "verifying" ? (
       gt("Checking Codex.")
     ) : installed ? (
-      installation?.installedVersion ? (
-        <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span>
-            {installation?.source === "local"
-              ? gt("Using your installed Codex.")
-              : gt("Managed by T3 Code.")}
-          </span>
-          <span>v{installation.installedVersion}</span>
+      <span className="flex flex-col gap-0.5">
+        <span>
+          {installation?.source === "local"
+            ? gt("Using your installed Codex.")
+            : gt("Managed by T3 Code.")}
         </span>
-      ) : installation?.source === "local" ? (
-        gt("Using your installed Codex.")
-      ) : (
-        gt("Managed by T3 Code.")
-      )
+        {installation?.installedVersion ? <span>v{installation.installedVersion}</span> : null}
+      </span>
     ) : (
       (installation?.message ?? gt("T3 Code downloads and manages Codex for you."))
     );

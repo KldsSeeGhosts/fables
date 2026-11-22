@@ -63,9 +63,8 @@ import {
 } from "lucide-react";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { useId, useRef, useState, type ReactNode } from "react";
+import type { MessageResolver } from "~/i18n/messages";
 import { flushSync } from "react-dom";
-
-import type { MessageResolver } from "../../i18n/messages";
 
 import { useArchivedThreadSnapshots } from "../../lib/archivedThreadsState";
 import { buildThreadRouteParams } from "../../threadRoutes";
@@ -116,7 +115,6 @@ import {
 // Page inline relationships and previous agents so long histories stay bounded inside the card.
 const THREAD_LINEAGE_INITIAL_COUNT = 6;
 const THREAD_LINEAGE_PAGE_COUNT = 12;
-const PREVIOUS_AGENTS_LABEL = msg("Previous agents");
 // Two lines fill the 40px row; the multiline variant's padding on top would space the rows apart.
 const THREAD_LINEAGE_ROW_CLASS = "h-auto min-h-10 flex-1 sm:h-auto sm:min-h-10";
 
@@ -183,9 +181,8 @@ function ThreadLineageGroup<Row extends LineageRow>(props: {
   readonly rows: ReadonlyArray<Row>;
   readonly children: (rows: ReadonlyArray<Row>) => ReactNode;
 }) {
-  const listId = useId();
   const gt = useGT();
-  const messages = useMessages();
+  const listId = useId();
   const [expanded, setExpanded] = useState(false);
   const [visibleCount, setVisibleCount] = useState(THREAD_LINEAGE_INITIAL_COUNT);
   const { visibleRows, hiddenCount } = resolveThreadLineageWindow(props.rows, visibleCount);
@@ -210,18 +207,16 @@ function ThreadLineageGroup<Row extends LineageRow>(props: {
         part="choice"
         chevronAlign="icon"
         className="h-8 min-h-8 sm:min-h-8 aria-expanded:[&>svg:last-child]:rotate-90"
-        aria-label={gt("Previous agents")}
+        aria-label={props.label}
         aria-expanded={expanded}
         aria-controls={expanded ? listId : undefined}
         onClick={() => setExpanded((open) => !open)}
       >
         <HistoryIcon />
         <MenuItemLabel className="min-w-0 flex-1">
-          {props.label === PREVIOUS_AGENTS_LABEL
-            ? gt("{count, plural, one {{count} previous agent} other {{count} previous agents}}", {
-                count: props.rows.length,
-              })
-            : `${props.rows.length} ${messages(props.label).toLowerCase()}`}
+          {gt("{count, plural, one {{count} previous agent} other {{count} previous agents}}", {
+            count: props.rows.length,
+          })}
         </MenuItemLabel>
         {failedCount > 0 ? (
           <span className={`${THREAD_DETAILS_PANEL_META_CLASS} text-destructive-foreground`}>
@@ -239,10 +234,8 @@ function ThreadLineageGroup<Row extends LineageRow>(props: {
 function relationshipLabel(
   edge: ThreadRelationshipEdge,
   currentThreadId: ThreadId,
-  sideChat: boolean,
   resolve: MessageResolver,
 ) {
-  if (sideChat) return resolve(msg("Side chat"));
   if (edge.kind === "transfer") return resolve(msg("Context transfer"));
   if (edge.kind === "subagent") {
     return edge.sourceThreadId === currentThreadId
@@ -250,7 +243,7 @@ function relationshipLabel(
       : resolve(msg("Parent agent"));
   }
   return edge.sourceThreadId === currentThreadId
-    ? resolve(msg("Fork"))
+    ? resolve(msg("Fork", { $context: "noun, a forked thread" }))
     : resolve(msg("Parent thread"));
 }
 
@@ -333,6 +326,7 @@ function RemoteSubagentRow(props: {
   readonly anyInstanceBadge: boolean;
 }) {
   const gt = useGT();
+  const m = useMessages();
   const { remoteChild } = props.agent;
   const status = props.agent.status;
   const failed = status === "failed";
@@ -402,9 +396,15 @@ function RemoteSubagentRow(props: {
               {failed || running ? (
                 <span className={THREAD_DETAILS_PANEL_META_CLASS}>
                   {failed ? (
-                    <span className="text-destructive-foreground">Failed</span>
+                    <span className="text-destructive-foreground">
+                      <T context="agent status">Failed</T>
+                    </span>
                   ) : (
-                    <Spinner size="xs" tone="muted" aria-label="Running" />
+                    <Spinner
+                      size="xs"
+                      tone="muted"
+                      aria-label={gt("Running", { $context: "agent status" })}
+                    />
                   )}
                 </span>
               ) : null}
@@ -417,7 +417,7 @@ function RemoteSubagentRow(props: {
                   {timing && deriveSubagentElapsedMs(timing, 0) !== null ? (
                     <AgentElapsed agent={timing} compact />
                   ) : running ? null : (
-                    threadRelationshipStatusLabel(status)
+                    threadRelationshipStatusLabel(status, m)
                   )}
                 </span>
               )}
@@ -719,7 +719,7 @@ function useThreadLineage(props: {
   }> = [
     { id: "related", label: null, rows: related },
     { id: "active", label: null, rows: [...active, ...remoteActive] },
-    { id: "previous", label: PREVIOUS_AGENTS_LABEL, rows: [...previous, ...remotePrevious] },
+    { id: "previous", label: gt("Previous agents"), rows: [...previous, ...remotePrevious] },
   ];
   const unlinkedRunningCount =
     projection?.subagents.filter(
@@ -928,9 +928,9 @@ export function ThreadRelationshipsPanel(props: {
     stopWorkflow,
     stopSubagent,
   } = useThreadLineage(props);
-
   const gt = useGT();
   const m = useMessages();
+
   const delegatedFrom = currentThread?.delegatedFrom;
 
   // The card lists this thread's relatives, never the thread itself. Its menu keeps a card with
@@ -1015,11 +1015,19 @@ export function ThreadRelationshipsPanel(props: {
       ? "group-hover:opacity-0 group-focus-within:opacity-0 pointer-coarse:opacity-0 [@media(hover:none)]:opacity-0"
       : "";
     const project = projects.find((project) => project.id === node?.thread?.projectId);
-    const isSideChatChild = node?.thread?.lineage.sideChat === true && !isParent;
-    const relationship = relationshipLabel(edge, props.threadId, isSideChatChild, m);
-    const hint = relationshipHint(edge, props.threadId, isSideChatChild, m);
+    const relationship =
+      node?.thread?.lineage.sideChat === true && !isParent
+        ? gt("Side chat")
+        : relationshipLabel(edge, props.threadId, m);
+    const hint = relationshipHint(
+      edge,
+      props.threadId,
+      node?.thread?.lineage.sideChat === true && !isParent,
+      m,
+    );
+    const isSideChat = node?.thread?.lineage.sideChat === true && !isParent;
     const openProps =
-      isSideChatChild || (isSubagent && !isParent)
+      isSideChat || (isSubagent && !isParent)
         ? trigger((intent) => openSideThreadRow(threadId, intent))
         : { onClick: () => openThread(threadId) };
     const RelationshipPopup = agent ? ThreadHoverCardPopup : TooltipPopup;
@@ -1090,9 +1098,15 @@ export function ThreadRelationshipsPanel(props: {
             {childFailed || running ? (
               <span className={`${THREAD_DETAILS_PANEL_META_CLASS} ${trailingVisibilityClass}`}>
                 {childFailed ? (
-                  <span className="text-destructive-foreground">Failed</span>
+                  <span className="text-destructive-foreground">
+                    <T context="agent status">Failed</T>
+                  </span>
                 ) : (
-                  <Spinner size="xs" tone="muted" aria-label="Running" />
+                  <Spinner
+                    size="xs"
+                    tone="muted"
+                    aria-label={gt("Running", { $context: "agent status" })}
+                  />
                 )}
               </span>
             ) : null}
@@ -1278,6 +1292,7 @@ export function ThreadRelationshipsPanel(props: {
                   count:
                     unlinkedRunningCount +
                     (groups.find((group) => group.id === "active")?.rows.length ?? 0),
+                  $context: "running agents",
                 })
               : undefined
           }
@@ -1292,7 +1307,9 @@ export function ThreadRelationshipsPanel(props: {
                 <MenuPopup align="end">
                   <MenuItem disabled={busyAction !== null} onClick={() => void detach()}>
                     <UnplugIcon />
-                    <MenuItemLabel>{gt("Disconnect agent session")}</MenuItemLabel>
+                    <MenuItemLabel>
+                      <T>Disconnect agent session</T>
+                    </MenuItemLabel>
                   </MenuItem>
                 </MenuPopup>
               </Menu>
@@ -1331,7 +1348,7 @@ export function ThreadRelationshipsPanel(props: {
                 <div className="flex items-center gap-2 px-2 py-1 text-caption text-muted-foreground">
                   <Spinner size="xs" tone="muted" />
                   {gt(
-                    "{count, plural, one {{count} running agent} other {{count} running agents}} preparing threads",
+                    "{count, plural, one {{count} running agent preparing threads} other {{count} running agents preparing threads}}",
                     { count: unlinkedRunningCount },
                   )}
                 </div>
@@ -1344,7 +1361,9 @@ export function ThreadRelationshipsPanel(props: {
         <ThreadDetailsSection
           title={gt("Side chats")}
           summary={
-            runningSideChats > 0 ? gt("{count} running", { count: runningSideChats }) : undefined
+            runningSideChats > 0
+              ? gt("{count} running", { count: runningSideChats, $context: "running side chats" })
+              : undefined
           }
           data-thread-side-chats-panel
         >

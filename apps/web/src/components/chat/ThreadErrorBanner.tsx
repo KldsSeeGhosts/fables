@@ -4,7 +4,7 @@ import {
   CHATGPT_WORKSPACE_ADMIN_REQUEST,
   CHATGPT_WORKSPACE_USAGE_LIMIT_CODE,
 } from "@t3tools/shared/usageLimits";
-import { msg, T } from "gt-react";
+import { msg } from "gt-react";
 import { CircleAlertIcon } from "lucide-react";
 import { m, type MessageResolver } from "../../i18n/messages";
 import { writeTextToClipboard } from "../../hooks/useCopyToClipboard";
@@ -82,25 +82,26 @@ export function isThreadErrorBannerDismissedForSession(bannerKey: string | null)
  * exact diagnostics open in the notice's details popover. Retry sends the failed
  * run's prompt again when the thread can run.
  */
-export function threadErrorBannerItem({
-  bannerKey,
-  error,
-  errorClass,
-  errorCode,
-  onDismiss,
-  onRetry,
-  retrying = false,
-  resolve = m,
-}: {
-  bannerKey: string | null;
-  error: string | null;
-  errorClass?: OrchestrationV2ProviderFailureClass | null;
-  errorCode?: string | null;
-  onDismiss?: () => void;
-  onRetry?: (() => void) | null;
-  retrying?: boolean;
-  resolve?: MessageResolver;
-}): ComposerBannerStackItem | null {
+export function threadErrorBannerItem(
+  {
+    bannerKey,
+    error,
+    errorClass,
+    errorCode,
+    onDismiss,
+    onRetry,
+    retrying = false,
+  }: {
+    bannerKey: string | null;
+    error: string | null;
+    errorClass?: OrchestrationV2ProviderFailureClass | null;
+    errorCode?: string | null;
+    onDismiss?: () => void;
+    onRetry?: (() => void) | null;
+    retrying?: boolean;
+  },
+  resolve: MessageResolver = m,
+): ComposerBannerStackItem | null {
   if (!error) return null;
   const message = getThreadErrorBannerMessage(error);
   const workspaceLimit = errorCode === CHATGPT_WORKSPACE_USAGE_LIMIT_CODE;
@@ -126,13 +127,13 @@ export function threadErrorBannerItem({
       ) : undefined,
     actions: workspaceLimit ? (
       <Button variant="default" size="xs" onClick={copyAdminRequest}>
-        <T>Copy request for admin</T>
+        {resolve(msg("Copy request for admin"))}
       </Button>
     ) : chatGptLimit ? (
       <ChatGptUsageButton variant="secondary" size="xs" />
     ) : onRetry ? (
       <Button size="xs" variant="default" disabled={retrying} onClick={onRetry}>
-        {retrying ? <T>Retrying...</T> : <T>Retry</T>}
+        {retrying ? resolve(msg("Retrying...")) : resolve(msg("Retry"))}
       </Button>
     ) : undefined,
     dismissLabel: resolve(msg("Dismiss error")),

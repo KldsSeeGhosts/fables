@@ -67,9 +67,9 @@ function Composer({
   skills,
   onChange,
   onCommandKeyDown = () => false,
-  placeholder = "",
   importContextFragment,
   literalText = false,
+  placeholder = "",
   disabled = false,
 }: {
   value: string;

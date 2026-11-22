@@ -5,7 +5,7 @@ import {
   type PullRequestUpdateMethod,
 } from "@t3tools/contracts";
 import { CheckIcon, FolderGit2Icon, GitBranchIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
-import { useGT } from "gt-react";
+import { T, useGT, useMessages } from "gt-react";
 import type { ReactNode } from "react";
 import { cn } from "~/lib/utils";
 import {
@@ -26,6 +26,7 @@ import {
   MenuSeparator,
 } from "../ui/menu";
 import { PullRequestGlyph } from "./pullRequestIcons";
+import { changeRequestTermKind } from "./changeRequestTerm";
 import { type PickableEnvironment } from "./pullRequestProjectAssignment.logic";
 
 export type PerformPullRequestAction = (
@@ -123,7 +124,7 @@ export function PullRequestCheckoutMenuItems({
               : gt("Check out in a worktree")}
           </span>
           <span className="text-meta text-muted-foreground">
-            {gt("Its own folder and thread. Nothing you have open moves.")}
+            <T>Its own folder and thread. Nothing you have open moves.</T>
           </span>
         </span>
       </MenuItem>
@@ -139,7 +140,7 @@ export function PullRequestCheckoutMenuItems({
               : gt("Check out in this repository")}
           </span>
           <span className="text-meta text-muted-foreground">
-            {gt("Switches the branch you are working in.")}
+            <T>Switches the branch you are working in.</T>
           </span>
         </span>
       </MenuItem>
@@ -200,7 +201,7 @@ export function PullRequestPrimaryAction({
         onClick={() => void perform("ready")}
       >
         <PullRequestGlyph.pullRequest aria-hidden className="size-3.5" />
-        {gt("Ready for review")}
+        <T>Ready for review</T>
       </Button>
     ) : primaryAction === "enable-auto-merge" ? (
       <Button
@@ -331,7 +332,10 @@ export function PullRequestFinishedMenuItems({
       {state === "closed" && canReopen ? (
         <MenuItem disabled={actionPending} onClick={() => void perform("reopen")}>
           <PullRequestGlyph.reopen className="size-3.5" />
-          {gt("Reopen {target}", { target: singular })}
+          {gt(
+            "Reopen {term, select, mr {merge request} cr {change request} other {pull request}}",
+            { term: changeRequestTermKind({ singular }) },
+          )}
         </MenuItem>
       ) : null}
       {state === "merged" && canRevert ? (
@@ -402,12 +406,15 @@ export function PullRequestPrimaryActionMenu({
   checkoutMenuItems: ReactNode;
 }) {
   const gt = useGT();
+  const resolve = useMessages();
   const actionPending = pendingAction !== null;
   return (
     <>
       {showsMergeMethods ? (
         <MenuGroup>
-          <MenuGroupLabel>{gt("Merge method")}</MenuGroupLabel>
+          <MenuGroupLabel>
+            <T>Merge method</T>
+          </MenuGroupLabel>
           <MenuRadioGroup
             value={selectedMergeMethod}
             onValueChange={(method) => {
@@ -419,7 +426,7 @@ export function PullRequestPrimaryActionMenu({
               <MenuRadioItem key={method} value={method} disabled={actionPending} closeOnClick>
                 <span className="flex min-w-0 items-center gap-2">
                   <PullRequestGlyph.merged className="size-3.5" />
-                  <span>{PULL_REQUEST_MERGE_METHOD_LABELS[method]}</span>
+                  <span>{resolve(PULL_REQUEST_MERGE_METHOD_LABELS[method])}</span>
                 </span>
               </MenuRadioItem>
             ))}
@@ -443,7 +450,7 @@ export function PullRequestPrimaryActionMenu({
           {autoMergeArmed && can("disable-auto-merge") ? (
             <MenuItem disabled={actionPending} onClick={() => void perform("disable-auto-merge")}>
               <PullRequestGlyph.merged className="size-3.5" />
-              {gt("Disable auto-merge")}
+              <T>Disable auto-merge</T>
             </MenuItem>
           ) : showsAutoMerge ? (
             <MenuItem

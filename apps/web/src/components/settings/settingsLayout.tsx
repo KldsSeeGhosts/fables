@@ -17,7 +17,7 @@ import {
   type ServerSettings,
 } from "@t3tools/contracts";
 import * as Equal from "effect/Equal";
-import { msg, useGT, useMessages } from "gt-react";
+import { T, useGT } from "gt-react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useLayoutPageLocation } from "../../layout/pageNavigation";
 import { useLayoutPane, useLayoutPaneFocusedRef } from "../../layout/layoutPaneContext";
@@ -244,10 +244,6 @@ interface SettingsSectionLock {
 
 const SettingsSectionLockContext = createContext<SettingsSectionLock | null>(null);
 
-const ENVIRONMENT_WIDE_SECTION_MESSAGE = msg(
-  "Environment-wide settings. Select an environment to change them.",
-);
-
 /**
  * At a project scope, a section whose rows all apply to the whole
  * environment locks as one: a lock beside the title explains it once and the
@@ -293,23 +289,26 @@ export function SettingsSection({
   variant?: "grouped" | "plain";
   children: ReactNode;
 }) {
+  const gt = useGT();
   const targetRef = useSettingsSearchTarget<HTMLElement>(sectionProps.id);
   const lock = useSettingsSectionLock();
-  const messages = useMessages();
+  const environmentWideSectionMessage = gt(
+    "Environment-wide settings. Select an environment to change them.",
+  );
   const lockIndicator = lock.locked ? (
     <Tooltip>
       <TooltipTrigger
         render={
           <span
             tabIndex={0}
-            aria-label={messages(ENVIRONMENT_WIDE_SECTION_MESSAGE)}
+            aria-label={environmentWideSectionMessage}
             className="inline-flex size-5 items-center justify-center rounded-badge text-dim-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           />
         }
       >
         <LockIcon aria-hidden className="size-3" />
       </TooltipTrigger>
-      <TooltipPopup side="top">{messages(ENVIRONMENT_WIDE_SECTION_MESSAGE)}</TooltipPopup>
+      <TooltipPopup side="top">{environmentWideSectionMessage}</TooltipPopup>
     </Tooltip>
   ) : null;
 
@@ -318,7 +317,7 @@ export function SettingsSection({
       {...sectionProps}
       ref={targetRef}
       tabIndex={sectionProps.id ? -1 : sectionProps.tabIndex}
-      className={cn(!hideTitle && "space-y-2", className)}
+      className={cn(hideTitle ? "relative" : "space-y-2", className)}
     >
       {hideTitle ? (
         <h2 className="sr-only">{title}</h2>
@@ -899,7 +898,7 @@ export function SettingsNoMatches({
       <SearchIcon aria-hidden className="size-4 text-dim-foreground" />
       <p className="text-body text-muted-foreground">{children}</p>
       <Button size="xs" variant="ghost" onClick={onClear}>
-        Clear search
+        <T>Clear search</T>
       </Button>
     </div>
   );

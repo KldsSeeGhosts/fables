@@ -73,7 +73,9 @@ function NativeChildWorkContent(props: {
         {query.error !== null ? (
           <p className="text-body text-destructive-foreground">{query.error}</p>
         ) : children === undefined ? (
-          <p className="text-body text-muted-foreground">Loading…</p>
+          <p className="text-body text-muted-foreground">
+            <T>Loading…</T>
+          </p>
         ) : children.length === 0 ? (
           <p className="text-body text-muted-foreground">
             <T>The provider has no record of which subagents this call started.</T>

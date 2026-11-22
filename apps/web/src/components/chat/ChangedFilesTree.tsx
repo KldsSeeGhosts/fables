@@ -1,26 +1,40 @@
 import { useSyncLayout } from "@legendapp/list/react";
-import { type OrchestrationV2CheckpointFileTotals, type RunId } from "@t3tools/contracts";
+import {
+  type OrchestrationV2CheckpointFileTotals,
+  type RunId,
+  type ScopedThreadRef,
+} from "@t3tools/contracts";
 import { T, useGT } from "gt-react";
-import { type MouseEvent, type ReactNode, memo, useLayoutEffect, useRef, useState } from "react";
+import {
+  type MouseEvent,
+  type PointerEvent,
+  type ReactNode,
+  memo,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { type TurnDiffFileChange } from "../../types";
 import { buildTurnDiffTree, type TurnDiffTreeNode } from "../../lib/turnDiffTree";
 import {
   ChevronRightIcon,
   FileDiffIcon,
-  FolderIcon,
   ChevronsDownUpIcon,
   ChevronsUpDownIcon,
   FolderGit2Icon,
+  FolderIcon,
 } from "lucide-react";
 
+import { beginLayoutContentDrag } from "~/layout/layoutDrag";
 import { cn } from "~/lib/utils";
 import { DiffStatLabel, hasNonZeroStat } from "./DiffStatLabel";
 import { PierreEntryIcon } from "./PierreEntryIcon";
-import { Button, ContentButton } from "../ui/button";
+import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { observeResize } from "~/lib/observeResize";
 import { repositoryFilePath } from "@t3tools/client-runtime/state/thread-repositories";
+import { ThreadDetailsControl } from "./ThreadDetailsControl";
 
 const EMPTY_DIRECTORY_OVERRIDES: Record<string, boolean> = {};
 const VIRTUALIZE_AFTER_ROWS = 250;
@@ -56,7 +70,22 @@ function groupDiffPath(group: ChangedFilesGroup, filePath: string | undefined) {
     : repositoryFilePath(group.relativePath, filePath);
 }
 
+function beginTurnDiffDrag(
+  event: PointerEvent,
+  threadRef: ScopedThreadRef | null,
+  runId: RunId,
+  filePath: string | undefined,
+) {
+  if (!threadRef) return;
+  beginLayoutContentDrag(event, {
+    kind: "surface",
+    threadRef,
+    surface: { id: "diff", kind: "diff", runId, ...(filePath === undefined ? {} : { filePath }) },
+  });
+}
+
 export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
+  threadRef: ScopedThreadRef | null;
   runId: RunId;
   /** May be a prefix of the changed files; `totals` covers all of them. */
   files: ReadonlyArray<TurnDiffFileChange>;
@@ -70,6 +99,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
   onFileContextMenu?: ChangedFileContextMenuHandler | undefined;
 }) {
   const {
+    threadRef,
     runId,
     files,
     totals,
@@ -99,7 +129,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
         data-changed-files-header=""
         className="sticky top-2 z-10 flex items-center justify-between gap-2 rounded-t-card surface-card px-4 py-2"
       >
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-caption text-foreground">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-foreground">
           <span>
             {gt(
               "{count, plural, one {{formattedCount} changed file} other {{formattedCount} changed files}}",
@@ -111,7 +141,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
               additions={totals.additions}
               deletions={totals.deletions}
               layout="inline"
-              className="text-caption leading-4"
+              className="text-xs leading-4"
             />
           )}
         </div>
@@ -155,6 +185,9 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
                   variant="secondary"
                   aria-label={gt("Open diff")}
                   onClick={() => onOpenTurnDiff(runId, firstFilePath)}
+                  onPointerDown={(event) =>
+                    beginTurnDiffDrag(event, threadRef, runId, firstFilePath)
+                  }
                 />
               }
             >
@@ -169,31 +202,31 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
           </Tooltip>
         </div>
       </div>
-      <div className="p-2">
-        {groups ? (
-          groups.map((group) => (
-            <ChangedFilesGroupSection
-              key={group.key}
-              runId={runId}
-              group={group}
-              allDirectoriesExpanded={allDirectoriesExpanded}
-              resolvedTheme={resolvedTheme}
-              onOpenTurnDiff={onOpenTurnDiff}
-              onFileContextMenu={onFileContextMenu}
-            />
-          ))
-        ) : (
-          <ChangedFilesTree
-            key={`${runId}:${allDirectoriesExpanded}`}
+      {groups ? (
+        groups.map((group) => (
+          <ChangedFilesGroupSection
+            key={group.key}
+            threadRef={threadRef}
             runId={runId}
-            files={files}
+            group={group}
             allDirectoriesExpanded={allDirectoriesExpanded}
             resolvedTheme={resolvedTheme}
             onOpenTurnDiff={onOpenTurnDiff}
             onFileContextMenu={onFileContextMenu}
           />
-        )}
-      </div>
+        ))
+      ) : (
+        <ChangedFilesTree
+          key={`${runId}:${allDirectoriesExpanded}`}
+          threadRef={threadRef}
+          runId={runId}
+          files={files}
+          allDirectoriesExpanded={allDirectoriesExpanded}
+          resolvedTheme={resolvedTheme}
+          onOpenTurnDiff={onOpenTurnDiff}
+          onFileContextMenu={onFileContextMenu}
+        />
+      )}
       {hiddenFileCount > 0 && (
         <div className="px-3 pb-2">
           <Button
@@ -201,6 +234,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
             size="xs"
             variant="ghost-muted"
             onClick={() => onOpenTurnDiff(runId, firstFilePath)}
+            onPointerDown={(event) => beginTurnDiffDrag(event, threadRef, runId, firstFilePath)}
           >
             {gt(
               "{count, plural, one {{formattedCount} more file in the full diff} other {{formattedCount} more files in the full diff}}",
@@ -214,6 +248,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
 });
 
 function ChangedFilesGroupSection(props: {
+  threadRef: ScopedThreadRef | null;
   runId: RunId;
   group: ChangedFilesGroup;
   allDirectoriesExpanded: boolean;
@@ -221,17 +256,24 @@ function ChangedFilesGroupSection(props: {
   onOpenTurnDiff: (runId: RunId, filePath?: string) => void;
   onFileContextMenu?: ChangedFileContextMenuHandler | undefined;
 }) {
-  const { runId, group, allDirectoriesExpanded, resolvedTheme, onOpenTurnDiff, onFileContextMenu } =
-    props;
+  const {
+    threadRef,
+    runId,
+    group,
+    allDirectoriesExpanded,
+    resolvedTheme,
+    onOpenTurnDiff,
+    onFileContextMenu,
+  } = props;
   const [collapsed, setCollapsed] = useState(false);
   const syncTimelineLayout = useSyncLayout();
   return (
     <section data-changed-files-group={group.name}>
-      <ContentButton
-        variant="inset-row"
+      <ThreadDetailsControl
+        part="row"
         data-scroll-anchor-ignore
         aria-expanded={!collapsed}
-        className="group"
+        className="group h-7 w-full justify-start text-left"
         onClick={() => {
           setCollapsed(!collapsed);
           syncTimelineLayout();
@@ -240,23 +282,26 @@ function ChangedFilesGroupSection(props: {
         <ChevronRightIcon
           aria-hidden="true"
           className={cn(
-            "size-3.5 shrink-0 text-muted-foreground/70 transition-transform group-hover:text-foreground/80",
+            "size-3 shrink-0 text-dim-foreground transition-transform group-hover:text-foreground",
             !collapsed && "rotate-90",
           )}
         />
-        <FolderGit2Icon className="size-3.5 shrink-0 text-muted-foreground/75" />
-        <span className="truncate font-mono text-micro text-foreground/90">{group.name}</span>
+        <FolderGit2Icon className="size-3 shrink-0 text-dim-foreground" />
+        <span className="truncate text-2xs text-dim-foreground group-hover:text-foreground">
+          {group.name}
+        </span>
         {hasNonZeroStat(group.totals) && (
-          <span className="ml-auto shrink-0 font-mono text-micro tabular-nums">
+          <span className="ml-auto shrink-0 text-caption tabular-nums">
             <DiffStatLabel additions={group.totals.additions} deletions={group.totals.deletions} />
           </span>
         )}
-      </ContentButton>
+      </ThreadDetailsControl>
       {collapsed ? null : group.note !== undefined ? (
-        <p className="py-1.5 pr-2 pl-9.5 text-micro text-muted-foreground">{group.note}</p>
+        <p className="py-1.5 pr-2 pl-9.5 text-2xs text-muted-foreground">{group.note}</p>
       ) : (
         <ChangedFilesTree
           key={`${runId}:${allDirectoriesExpanded}`}
+          threadRef={threadRef}
           runId={runId}
           files={group.files}
           baseDepth={1}
@@ -275,6 +320,7 @@ function ChangedFilesGroupSection(props: {
 }
 
 const ChangedFilesTree = memo(function ChangedFilesTree(props: {
+  threadRef: ScopedThreadRef | null;
   runId: RunId;
   files: ReadonlyArray<TurnDiffFileChange>;
   /** Rows start this deep, below the row of the folder the files belong to. */
@@ -285,8 +331,15 @@ const ChangedFilesTree = memo(function ChangedFilesTree(props: {
   onFileContextMenu?: ChangedFileContextMenuHandler | undefined;
 }) {
   const baseDepth = props.baseDepth ?? 0;
-  const { files, allDirectoriesExpanded, onOpenTurnDiff, resolvedTheme, runId, onFileContextMenu } =
-    props;
+  const {
+    threadRef,
+    runId,
+    files,
+    allDirectoriesExpanded,
+    onOpenTurnDiff,
+    resolvedTheme,
+    onFileContextMenu,
+  } = props;
   // Place state before tree derivation to preserve its compiler cache.
   const [directoryExpansionState, setDirectoryExpansionState] = useState<{
     key: string | null;
@@ -325,12 +378,12 @@ const ChangedFilesTree = memo(function ChangedFilesTree(props: {
     if (node.kind === "directory") {
       const isExpanded = expandedDirectories[node.path] ?? allDirectoriesExpanded;
       return (
-        <ContentButton
+        <ThreadDetailsControl
           key={`dir:${node.path}`}
-          variant="inset-row"
+          part="row"
           data-scroll-anchor-ignore
           aria-expanded={isExpanded}
-          className="group"
+          className="group h-7 w-full justify-start text-left"
           style={{ paddingLeft: `${leftPadding}px` }}
           onClick={() => toggleDirectory(node.path)}
         >
@@ -342,25 +395,26 @@ const ChangedFilesTree = memo(function ChangedFilesTree(props: {
             )}
           />
           <FolderIcon className="size-3 shrink-0 text-dim-foreground" />
-          <span className="truncate text-micro text-dim-foreground group-hover:text-foreground">
+          <span className="truncate text-2xs text-dim-foreground group-hover:text-foreground">
             {node.name}
           </span>
           {hasNonZeroStat(node.stat) && (
-            <span className="ml-auto shrink-0 text-micro tabular-nums">
+            <span className="ml-auto shrink-0 text-caption tabular-nums">
               <DiffStatLabel additions={node.stat.additions} deletions={node.stat.deletions} />
             </span>
           )}
-        </ContentButton>
+        </ThreadDetailsControl>
       );
     }
 
     return (
-      <ContentButton
+      <ThreadDetailsControl
         key={`file:${node.path}`}
-        variant="inset-row"
-        className="group"
+        part="row"
+        className="group h-7 w-full justify-start text-left"
         style={{ paddingLeft: `${leftPadding}px` }}
         onClick={() => onOpenTurnDiff(runId, node.path)}
+        onPointerDown={(event) => beginTurnDiffDrag(event, threadRef, runId, node.path)}
         onContextMenu={
           onFileContextMenu
             ? (event) => {
@@ -379,15 +433,15 @@ const ChangedFilesTree = memo(function ChangedFilesTree(props: {
           theme={resolvedTheme}
           className="size-3 text-dim-foreground"
         />
-        <span className="flex min-w-0 text-caption text-foreground group-hover:text-foreground">
+        <span className="flex min-w-0 text-body text-foreground group-hover:text-foreground">
           <MiddleTruncate value={node.name} />
         </span>
         {node.stat && (
-          <span className="ml-auto shrink-0 text-micro tabular-nums">
+          <span className="ml-auto shrink-0 text-caption tabular-nums">
             <DiffStatLabel additions={node.stat.additions} deletions={node.stat.deletions} />
           </span>
         )}
-      </ContentButton>
+      </ThreadDetailsControl>
     );
   };
 

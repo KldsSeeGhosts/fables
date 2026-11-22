@@ -117,12 +117,16 @@ export function AddUsageLimitSourceDialog({
               >
                 <SelectTrigger id="usage-source-kind">
                   <SelectValue>
-                    {kind === "cpa-manager" ? "CPA Manager" : "CLIProxyAPI"}
+                    {kind === "cpa-manager" ? gt("CPA Manager") : gt("CLIProxyAPI")}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectPopup>
-                  <SelectItem value="cpa-manager">CPA Manager</SelectItem>
-                  <SelectItem value="cliproxy">CLIProxyAPI</SelectItem>
+                  <SelectItem value="cpa-manager">
+                    <T>CPA Manager</T>
+                  </SelectItem>
+                  <SelectItem value="cliproxy">
+                    <T>CLIProxyAPI</T>
+                  </SelectItem>
                 </SelectPopup>
               </Select>
             </div>

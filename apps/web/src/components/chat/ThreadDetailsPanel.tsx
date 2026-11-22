@@ -14,13 +14,13 @@ import type { ComposerThreadTarget, DraftId } from "../../composerDraftStore";
 import { useT3ProjectFileScripts } from "../../hooks/useT3ProjectFileScripts";
 import { type EnvMode, type EnvironmentOption } from "../BranchToolbar.logic";
 import { BranchToolbar, type BranchToolbarHandle } from "../BranchToolbar";
-import BaseGitActionsControl from "../GitActionsControl";
+import GitActionsControl from "../GitActionsControl";
 import ProjectScriptsControl, {
   type NewProjectScriptInput,
   type ProjectScriptActionResult,
 } from "../ProjectScriptsControl";
 import { T, useGT } from "gt-react";
-import { memo, useImperativeHandle, useRef, useState, type ComponentProps, type Ref } from "react";
+import { useImperativeHandle, useRef, useState, type ComponentProps, type Ref } from "react";
 import { flushSync } from "react-dom";
 import { selectThreadPanelOpen, useRightPanelStore } from "../../rightPanelStore";
 import { requestWorkspaceFocus } from "../../lib/workspaceFocus";
@@ -45,8 +45,6 @@ import { ThreadDetailsThreadPrRows } from "./ThreadDetailsPrRows";
 import { SlidersHorizontalIcon } from "lucide-react";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
 import { Menu, MenuItemLabel, MenuPopup } from "../ui/menu";
-
-const GitActionsControl = memo(BaseGitActionsControl);
 
 export interface ThreadDetailsPanelHandle {
   openBranch: (presentation: "inline" | "popover") => void;
@@ -75,6 +73,9 @@ interface ThreadDetailsPanelProps extends Pick<
   gitCwd: string | null;
   workspaceMutationId: string | null;
   isGitRepo: boolean;
+  /** Whether the panel's git control listens for the commit and push shortcut; see onGitShortcutHostChange. */
+  gitShortcutListening?: boolean;
+  onGitShortcutHostChange?: (hosting: boolean) => void;
   envLocked: boolean;
   availableEnvironments: readonly EnvironmentOption[];
   autoEnvironmentLabel?: string | undefined;
@@ -239,7 +240,11 @@ export function ThreadDetailsPanel({ ref, ...props }: ThreadDetailsPanelProps) {
           <>
             <div className="group/details-items thread-details-stack flex flex-col gap-1">
               {Object.values(show).some(Boolean) || visible.usage || visible.context ? (
-                <section aria-label={gt("Workspace")} className="surface-tray rounded-pane p-1">
+                <section
+                  aria-label={gt("Workspace")}
+                  data-thread-details-card
+                  className="surface-tray rounded-pane p-1"
+                >
                   <div className="surface-composer rounded-lg p-0.5">
                     {show.environment ? (
                       <div className="flex min-w-0 items-center">
@@ -299,7 +304,13 @@ export function ThreadDetailsPanel({ ref, ...props }: ThreadDetailsPanelProps) {
                             showActions={visible.gitActions}
                             showChanges={visible.changes}
                             gitCwd={props.gitCwd}
+                            name={props.activeProjectName ?? ""}
+                            compact={density !== "full"}
                             workspaceMutationId={props.workspaceMutationId}
+                            listenForShortcuts={props.gitShortcutListening ?? false}
+                            {...(props.onGitShortcutHostChange
+                              ? { onShortcutHostChange: props.onGitShortcutHostChange }
+                              : {})}
                             activeThreadRef={activeThreadRef}
                             {...(props.draftId ? { draftId: props.draftId } : {})}
                             {...(props.onOpenChanges ? { onOpenChanges: props.onOpenChanges } : {})}

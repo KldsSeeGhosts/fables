@@ -114,7 +114,7 @@ export function PendingReviewCommentCard({
         stateLabel={
           <Tooltip>
             <TooltipTrigger render={<Badge variant="secondary" />}>
-              <T>Pending</T>
+              <T context="review state">Pending</T>
             </TooltipTrigger>
             <TooltipPopup side="top">
               <T>Sent when you submit the review</T>
@@ -139,6 +139,7 @@ export function PendingReviewCommentCard({
 
 /** The file and line a thread sits on, and the last lines of code it was written against. */
 function ReviewThreadLocation({ thread }: { thread: PullRequestReviewThread }) {
+  const gt = useGT();
   const label = `${thread.path}${thread.line ? `:${thread.line}` : ""}`;
   return (
     <div className="-mx-3 -mt-3 mb-3 border-b border-border bg-foreground/[0.015]">
@@ -156,11 +157,13 @@ function ReviewThreadLocation({ thread }: { thread: PullRequestReviewThread }) {
         </Tooltip>
         {thread.isOutdated ? (
           <Badge variant="secondary">
-            <T>Outdated</T>
+            <T context="review thread state">Outdated</T>
           </Badge>
         ) : null}
         <Badge variant={thread.isResolved ? "success" : "warning"} className="ml-auto">
-          {thread.isResolved ? <T>Resolved</T> : <T>Unresolved</T>}
+          {thread.isResolved
+            ? gt("Resolved", { $context: "review thread state" })
+            : gt("Unresolved", { $context: "review thread state" })}
         </Badge>
       </div>
       {thread.snippet && thread.snippet.length > 0 ? (
@@ -404,7 +407,7 @@ export function ReviewThreadCard({
   const resolveButton = (
     <Button size="xs" variant="secondary" disabled={pending} onClick={onToggleResolved}>
       {thread.isResolved ? null : <CheckIcon />}
-      {thread.isResolved ? "Unresolve" : "Resolve"}
+      {thread.isResolved ? gt("Unresolve") : gt("Resolve")}
     </Button>
   );
 
@@ -437,7 +440,7 @@ export function ReviewThreadCard({
                 </span>
                 {editingId === comment.id ? null : canEditComment(comment) ? (
                   <PullRequestEditButton
-                    aria-label="Edit comment"
+                    aria-label={gt("Edit comment")}
                     onClick={() => setEditingId(comment.id)}
                   />
                 ) : null}
@@ -456,7 +459,7 @@ export function ReviewThreadCard({
                   cwd={workspaceRoot}
                   environmentId={environmentId}
                   completionScope={completionScope}
-                  label="Edit comment"
+                  label={gt("Edit comment")}
                   saving={savingEdit}
                   onSave={(body) => void saveEdit(comment.id, body)}
                   onCancel={() => setEditingId(null)}
@@ -492,7 +495,7 @@ export function ReviewThreadCard({
             disabled={loadingMore}
             onClick={() => void loadMore()}
           >
-            {loadingMore ? "Loading..." : "Load more comments"}
+            {loadingMore ? gt("Loading...") : gt("Load more comments")}
           </Button>
         ) : null}
         {canReply || canResolve || onFix ? (
@@ -503,8 +506,8 @@ export function ReviewThreadCard({
                 rows={1}
                 className="min-w-0 flex-1"
                 value={reply}
-                placeholder="Reply..."
-                aria-label="Reply to this conversation"
+                placeholder={gt("Reply...", { $context: "noun, placeholder" })}
+                aria-label={gt("Reply to this conversation")}
                 onChange={(event) => setReply(event.target.value)}
                 onKeyDown={(event) =>
                   submitKeys({
@@ -520,19 +523,19 @@ export function ReviewThreadCard({
             )}
             {canReply && reply.trim().length > 0 ? (
               <Button size="sm" disabled={pending} onClick={() => void send(reply)}>
-                Reply
+                <T context="verb, button">Reply</T>
               </Button>
             ) : null}
             {onFix ? (
               <Button size="sm" variant="ghost" disabled={pending || fixPending} onClick={onFix}>
                 <HammerIcon className="size-3.5" />
-                {fixPending ? "Preparing..." : fixLabel}
+                {fixPending ? gt("Preparing...") : (fixLabel ?? gt("Fix in a thread"))}
               </Button>
             ) : null}
             {canResolve ? (
               <Button size="sm" variant="secondary" disabled={pending} onClick={onToggleResolved}>
                 <CheckIcon aria-hidden className="size-3.5" />
-                {thread.isResolved ? "Unresolve" : "Resolve"}
+                {thread.isResolved ? gt("Unresolve") : gt("Resolve")}
               </Button>
             ) : null}
           </div>
@@ -558,26 +561,23 @@ export function ReviewThreadCard({
         <InlineButton
           tone="muted"
           aria-expanded={expanded}
-          aria-label={gt(
-            "{state}, {count, plural, one {{count} comment} other {{count} comments}}",
-            {
-              state: thread.isResolved
-                ? gt("Resolved", { $context: "review thread state" })
-                : gt("Open", { $context: "review thread state" }),
-              count: commentCount,
-            },
-          )}
+          aria-label={
+            thread.isResolved
+              ? gt(
+                  "{count, plural, one {Resolved, {count} comment} other {Resolved, {count} comments}}",
+                  { count: commentCount },
+                )
+              : gt("{count, plural, one {Open, {count} comment} other {Open, {count} comments}}", {
+                  count: commentCount,
+                })
+          }
           onClick={() => setExpanded((current) => !current)}
         >
           {gt("{count, plural, one {{count} comment} other {{count} comments}}", {
             count: commentCount,
           })}
         </InlineButton>
-        {thread.isOutdated ? (
-          <span>
-            <T>outdated</T>
-          </span>
-        ) : null}
+        {thread.isOutdated ? <span>outdated</span> : null}
         {onFix ? (
           <Button
             size="compact"
@@ -700,7 +700,7 @@ export function ReviewThreadCard({
                       size="sm"
                       completionScope={completionScope}
                       value={speech.displayText}
-                      placeholder={gt("Reply", { $context: "noun, placeholder" })}
+                      placeholder={gt("Reply…", { $context: "noun, placeholder" })}
                       aria-label={gt("Reply to this conversation")}
                       onValueChange={setReply}
                       onKeyDown={submitKeys({
@@ -740,7 +740,7 @@ export function ReviewThreadCard({
                   size="compact"
                   readOnly
                   value={reply}
-                  placeholder={gt("Reply", { $context: "noun, placeholder" })}
+                  placeholder={gt("Reply…", { $context: "noun, placeholder" })}
                   aria-label={gt("Reply to this conversation")}
                   onFocus={() => setReplying(true)}
                 />

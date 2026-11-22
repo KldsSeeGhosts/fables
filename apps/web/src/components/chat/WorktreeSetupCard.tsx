@@ -1,7 +1,7 @@
 import { toServerClock } from "@t3tools/client-runtime/clock";
 import type { EnvironmentId, WorktreeSetupSnapshot, WorktreeSetupStage } from "@t3tools/contracts";
-import { formatDuration } from "@t3tools/shared/orchestrationTiming";
-import { useGT } from "gt-react";
+import { formatDuration } from "@t3tools/shared/orchestrationTimingCopy";
+import { msg, T, useGT, useMessages } from "gt-react";
 import {
   BrainIcon,
   FolderGit2Icon,
@@ -14,6 +14,7 @@ import { useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { InlineButton } from "~/components/ui/button";
 import { useNowSecond } from "~/hooks/useNowSecond";
+import type { MessageResolver } from "~/i18n/messages";
 import { cn } from "~/lib/utils";
 import { observeVisibleAnimation } from "~/lib/visibleAnimation";
 import { ActivityShimmerOverlay } from "./TimelineRowParts";
@@ -21,10 +22,10 @@ import { failedToolIconClassName } from "./TimelineToolActivityIcon";
 import { formatWorkingTimer } from "./TimelineWorkGroupRows.logic";
 import { WORK_LOG_OUTPUT_CLASS_NAME, WorkLogDetails, WorkLogRow } from "./WorkLog";
 
-function elapsed(startedAt: string | null, endMs: number): string | null {
+function elapsed(startedAt: string | null, endMs: number, resolve: MessageResolver): string | null {
   if (!startedAt) return null;
   const ms = endMs - Date.parse(startedAt);
-  return Number.isFinite(ms) ? formatDuration(Math.max(0, ms)) : null;
+  return Number.isFinite(ms) ? formatDuration(Math.max(0, ms), resolve) : null;
 }
 
 /**
@@ -52,9 +53,10 @@ function Elapsed({
   endedAt: string | null;
   environmentId: EnvironmentId | undefined;
 }) {
+  const m = useMessages();
   if (!startedAt) return null;
   const text = endedAt ? (
-    elapsed(startedAt, Date.parse(endedAt))
+    elapsed(startedAt, Date.parse(endedAt), m)
   ) : (
     <LiveElapsed startedAt={startedAt} environmentId={environmentId} />
   );
@@ -79,45 +81,72 @@ const stopped = (stage: WorktreeSetupStage, snapshot: WorktreeSetupSnapshot) =>
 function stageLabel(
   stage: WorktreeSetupStage,
   snapshot: WorktreeSetupSnapshot,
-  gt: ReturnType<typeof useGT>,
+  resolve: MessageResolver,
 ): string {
-  if (stopped(stage, snapshot)) {
-    const running = stageLabel({ ...stage, status: "running" }, snapshot, gt);
-    return gt("Stopped {step}", {
-      step: `${running.charAt(0).toLowerCase()}${running.slice(1)}`,
-    });
-  }
-  const tense = stage.status === "running" ? 0 : stage.status === "failed" ? 2 : 1;
-  const script = snapshot.setupScript?.name ?? gt("setup script");
+  const tense = stopped(stage, snapshot)
+    ? "stopped"
+    : stage.status === "running"
+      ? "running"
+      : stage.status === "failed"
+        ? "failed"
+        : "done";
+  const baseRef = snapshot.baseRef;
+  const branch = snapshot.branch;
+  const script = snapshot.setupScript?.name;
   switch (stage.id) {
     case "fetch":
-      return tense === 0
-        ? gt("Fetching {reference}", { reference: snapshot.baseRef ?? gt("base branch") })
-        : tense === 2
-          ? gt("Couldn't fetch {reference}", {
-              reference: snapshot.baseRef ?? gt("base branch"),
-            })
-          : gt("Fetched {reference}", { reference: snapshot.baseRef ?? gt("base branch") });
+      return baseRef
+        ? resolve(
+            msg(
+              "{tense, select, running {Fetching {ref}} failed {Couldn't fetch {ref}} stopped {Stopped fetching {ref}} other {Fetched {ref}}}",
+              { tense, ref: baseRef },
+            ),
+          )
+        : resolve(
+            msg(
+              "{tense, select, running {Fetching base branch} failed {Couldn't fetch base branch} stopped {Stopped fetching base branch} other {Fetched base branch}}",
+              { tense },
+            ),
+          );
     case "checkout":
-      return tense === 0
-        ? gt("Checking out {branch}", { branch: snapshot.branch ?? gt("files") })
-        : tense === 2
-          ? gt("Couldn't check out {branch}", { branch: snapshot.branch ?? gt("files") })
-          : gt("Checked out {branch}", { branch: snapshot.branch ?? gt("files") });
+      return branch
+        ? resolve(
+            msg(
+              "{tense, select, running {Checking out {branch}} failed {Couldn't check out {branch}} stopped {Stopped checking out {branch}} other {Checked out {branch}}}",
+              { tense, branch },
+            ),
+          )
+        : resolve(
+            msg(
+              "{tense, select, running {Checking out files} failed {Couldn't check out files} stopped {Stopped checking out files} other {Checked out files}}",
+              { tense },
+            ),
+          );
     case "submodules":
-      return tense === 0
-        ? gt("Initializing submodules")
-        : tense === 2
-          ? gt("Couldn't initialize submodules")
-          : gt("Initialized submodules");
+      return resolve(
+        msg(
+          "{tense, select, running {Initializing submodules} failed {Couldn't initialize submodules} stopped {Stopped initializing submodules} other {Initialized submodules}}",
+          { tense },
+        ),
+      );
     case "setup-script":
-      return tense === 0
-        ? gt("Running {script}", { script })
-        : tense === 2
-          ? gt("Failed {script}", { script })
-          : gt("Ran {script}", { script });
+      return script
+        ? resolve(
+            msg(
+              "{tense, select, running {Running {script}} failed {Failed {script}} stopped {Stopped running {script}} other {Ran {script}}}",
+              { tense, script },
+            ),
+          )
+        : resolve(
+            msg(
+              "{tense, select, running {Running setup script} failed {Failed setup script} stopped {Stopped running setup script} other {Ran setup script}}",
+              { tense },
+            ),
+          );
     case "agent":
-      return gt("Starting agent");
+      return tense === "stopped"
+        ? resolve(msg("Stopped starting agent"))
+        : resolve(msg("Starting agent"));
   }
 }
 
@@ -273,9 +302,9 @@ function StageRow({
   snapshot: WorktreeSetupSnapshot;
   onOpenTerminal: (() => void) | null;
 }) {
-  const gt = useGT();
+  const m = useMessages();
   const icon = STAGE_ICONS[stage.id];
-  const label = stageLabel(stage, snapshot, gt);
+  const label = stageLabel(stage, snapshot, m);
   const terminal =
     stage.id === "setup-script" && onOpenTerminal ? (
       <InlineButton
@@ -286,7 +315,7 @@ function StageRow({
         }}
         onKeyDown={(event) => event.stopPropagation()}
       >
-        {gt("Open terminal")}
+        <T>Open terminal</T>
       </InlineButton>
     ) : null;
   if (stage.status === "running" && snapshot.phase === "running") {

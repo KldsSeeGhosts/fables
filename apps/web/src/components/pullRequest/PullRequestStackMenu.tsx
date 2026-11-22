@@ -201,11 +201,10 @@ export function PullRequestStackMenu({
             <TooltipPopup>
               <span className="flex flex-col gap-0.5">
                 <span>
-                  {gt("View stack #{number}, layer {position} of {size}", {
-                    number: stack.number,
-                    position,
-                    size: stack.layers.length,
-                  })}
+                  <T>
+                    View stack #<Var>{stack.number}</Var>, layer <Var>{position}</Var> of{" "}
+                    <Var>{stack.layers.length}</Var>
+                  </T>
                 </span>
                 {notice ? <span>{notice}</span> : null}
               </span>
@@ -268,9 +267,9 @@ export function PullRequestStackMenu({
                 ) : null}
                 {conflictsWith !== null ? (
                   <p className="px-2 py-1 text-meta text-muted-foreground">
-                    {gt("Resolve the conflicts with {conflictsWith} before merging.", {
-                      conflictsWith,
-                    })}
+                    <T>
+                      Resolve the conflicts with <Var>{conflictsWith}</Var> before merging.
+                    </T>
                   </p>
                 ) : mergeHasClosed || mergeLayers.some((layer) => layer.isDraft) ? (
                   <p className="px-2 py-1 text-meta text-muted-foreground">

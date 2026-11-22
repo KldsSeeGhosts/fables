@@ -332,7 +332,7 @@ function FileViewedToggle({
           <Checkbox
             aria-label={
               stale
-                ? gt("Changed", { $context: "file changed since viewed" })
+                ? gt("Changed since viewed", { $context: "file changed since viewed" })
                 : gt("Viewed", { $context: "file marked as viewed" })
             }
             checked={viewed}
@@ -346,13 +346,11 @@ function FileViewedToggle({
           />
         </TooltipTrigger>
         <TooltipPopup side="bottom">
-          {stale ? (
-            <T context="file changed since viewed">Changed</T>
-          ) : viewed ? (
-            <T context="file marked as viewed">Viewed</T>
-          ) : (
-            <T>Mark as viewed</T>
-          )}
+          {stale
+            ? gt("Changed since viewed", { $context: "file changed since viewed" })
+            : viewed
+              ? gt("Viewed", { $context: "file marked as viewed" })
+              : gt("Mark as viewed")}
         </TooltipPopup>
       </Tooltip>
     </span>
@@ -361,6 +359,7 @@ function FileViewedToggle({
 
 // Viewed state reaches the header through context so changes redraw its status, not every portal.
 function FileHeaderStatus({ item }: { readonly item: CodeViewItem<ReviewAnnotationGroup> }) {
+  const gt = useGT();
   const viewedFiles = use(FileViewedToggleContext);
   if (item.type !== "diff") return null;
   let noteCount = 0;
@@ -374,7 +373,13 @@ function FileHeaderStatus({ item }: { readonly item: CodeViewItem<ReviewAnnotati
   return (
     <span className="flex min-w-0 items-center gap-1.5 @max-2xs:hidden">
       {noteCount > 0 ? (
-        <Badge variant="secondary" aria-label={`${noteCount} comments on this file`}>
+        <Badge
+          variant="secondary"
+          aria-label={gt(
+            "{count, plural, one {{count} comment on this file} other {{count} comments on this file}}",
+            { count: noteCount },
+          )}
+        >
           <MessageSquareIcon aria-hidden />
           {noteCount}
         </Badge>
@@ -382,7 +387,7 @@ function FileHeaderStatus({ item }: { readonly item: CodeViewItem<ReviewAnnotati
       {stale ? (
         <Tooltip>
           <TooltipTrigger render={<Badge variant="warning" />}>
-            <T context="file changed since viewed">Changed</T>
+            <T context="file changed since viewed">Changed since viewed</T>
           </TooltipTrigger>
           <TooltipPopup side="bottom">
             <T>This file has been pushed to since you marked it viewed.</T>
@@ -480,7 +485,7 @@ function PullRequestCodeTab({
   const fixFindingLabel = requestedFixFindingLabel ?? gt("Fix in a thread");
   const resolvedTheme = useRenderedAppearance();
   // Initialize the shared tokenizer and workers while the diff request is still pending.
-  const workerPoolReady = useDiffWorkerPoolReady(useDiffWorkerPool());
+  const workerPoolReady = useDiffWorkerPoolReady(useDiffWorkerPool() ?? undefined);
   const settings = useClientSettings((settings) => ({
     diffFilesCollapsed: settings.diffFilesCollapsed,
     diffIgnoreWhitespace: settings.diffIgnoreWhitespace,

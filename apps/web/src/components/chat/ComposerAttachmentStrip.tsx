@@ -89,10 +89,15 @@ function ComposerTileUploadProgress({
   readonly id: string;
   readonly upload: AttachmentUploadState | undefined;
 }) {
+  const gt = useGT();
   const progress = useAttachmentUploadProgress(id, upload);
   return (
     <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/65 text-white text-meta tabular-nums">
-      {upload?.status === "uploading" ? progress : <T>Preparing</T>}
+      {upload?.status === "uploading"
+        ? progress
+        : gt("Preparing", {
+            $context: "attachment status while an image is being processed",
+          })}
     </span>
   );
 }
@@ -284,10 +289,7 @@ export function ComposerAttachmentMediaRow({
                 <SnapShotAttachmentDetails
                   source={source}
                   onCopySnapshot={ready ? () => onCopySnapshot(ready.id) : undefined}
-                  className={cn(
-                    upload?.status === "uploading" && "bottom-4",
-                    upload?.status === "failed" && "bottom-8",
-                  )}
+                  className={cn(upload?.status === "failed" && "bottom-8")}
                 />
               ) : null}
               {nonPersistedImageIdSet.has(image.id) && (
@@ -568,8 +570,8 @@ export function ComposerFilePreviewDialog({
   readonly onRemove: (fileId: string) => void;
   readonly onPreviewFileIdChange: (fileId: string | null) => void;
 }) {
-  const popupRef = useRef<HTMLDivElement>(null);
   const gt = useGT();
+  const popupRef = useRef<HTMLDivElement>(null);
   const onClose = () => onPreviewFileIdChange(null);
   return (
     <Dialog

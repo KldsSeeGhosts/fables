@@ -1,6 +1,7 @@
 import type { UsageLimitSourceAccount } from "@t3tools/contracts";
 import { collectCpaAccountGroups, remainingPercent } from "@t3tools/shared/usageLimits";
 import { formatResetsIn } from "@t3tools/shared/usageLimitsCopy";
+import { T, useGT, Var } from "gt-react";
 import { useState } from "react";
 
 import { Button } from "../ui/button";
@@ -13,6 +14,7 @@ function Account({
   readonly account: UsageLimitSourceAccount;
   readonly now: number;
 }) {
+  const gt = useGT();
   return (
     <li className="space-y-2 border-t py-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -20,18 +22,18 @@ function Account({
           <p className="break-all text-label">
             <RedactedSensitiveText
               value={account.label ?? account.email ?? account.id}
-              ariaLabel="Reveal CPA account"
-              revealTooltip="Show account"
-              hideTooltip="Hide account"
+              ariaLabel={gt("Reveal CPA account")}
+              revealTooltip={gt("Show account")}
+              hideTooltip={gt("Hide account")}
             />
           </p>
           {account.fileName && account.fileName !== account.label ? (
             <p className="break-all text-meta text-muted-foreground">
               <RedactedSensitiveText
                 value={account.fileName}
-                ariaLabel="Reveal auth filename"
-                revealTooltip="Show auth filename"
-                hideTooltip="Hide auth filename"
+                ariaLabel={gt("Reveal auth filename")}
+                revealTooltip={gt("Show auth filename")}
+                hideTooltip={gt("Hide auth filename")}
               />
             </p>
           ) : null}
@@ -39,25 +41,44 @@ function Account({
         <div className="flex flex-wrap gap-2 text-meta text-muted-foreground">
           <span>{account.providerLabel ?? account.driver}</span>
           {account.plan ? <span>{account.plan}</span> : null}
-          {account.disabled ? <span>Disabled</span> : null}
-          {account.synthetic ? <span>Dashboard account</span> : null}
+          {account.disabled ? (
+            <span>
+              <T>Disabled</T>
+            </span>
+          ) : null}
+          {account.synthetic ? (
+            <span>
+              <T>Dashboard account</T>
+            </span>
+          ) : null}
         </div>
       </div>
       {account.usageLimits.windows.map((window) => (
         <p key={window.id} className="flex flex-wrap justify-between gap-2 text-meta tabular-nums">
           <span>
-            {window.label}
-            {window.estimated ? " (estimated)" : ""}
+            {window.estimated ? (
+              <T>
+                <Var>{window.label}</Var> (estimated)
+              </T>
+            ) : (
+              <T>
+                <Var>{window.label}</Var>
+              </T>
+            )}
           </span>
           <span className="flex gap-2">
-            <span>{remainingPercent(window)}% left</span>
+            <span>
+              <T>
+                <Var>{remainingPercent(window)}</Var>% left
+              </T>
+            </span>
             {window.resetsAt ? <span>{formatResetsIn(window, now)}</span> : null}
           </span>
         </p>
       ))}
       {account.usageLimits.unavailable ? (
         <p className="text-meta text-muted-foreground">
-          {account.usageLimits.unavailable.message ?? "Quota unavailable."}
+          {account.usageLimits.unavailable.message ?? <T>Quota unavailable.</T>}
         </p>
       ) : null}
       {account.notice ? <p className="text-meta text-muted-foreground">{account.notice}</p> : null}
@@ -72,6 +93,7 @@ function Group({
   readonly group: ReturnType<typeof collectCpaAccountGroups>[number];
   readonly now: number;
 }) {
+  const gt = useGT();
   const [expanded, setExpanded] = useState(false);
   const count = group.source.accounts.length;
   return (
@@ -80,16 +102,19 @@ function Group({
         <div className="space-y-1">
           <h2 className="text-label">{group.label}</h2>
           <p className="text-meta text-muted-foreground">
-            {count} CPA accounts, including disabled and unavailable auth files
+            <T>
+              <Var>{count}</Var> CPA accounts, including disabled and unavailable auth files
+            </T>
           </p>
         </div>
         <Button
           variant="secondary"
           size="xs"
           aria-expanded={expanded}
+          aria-label={expanded ? gt("Hide accounts") : gt("Show accounts")}
           onClick={() => setExpanded(!expanded)}
         >
-          {expanded ? "Hide accounts" : "Show accounts"}
+          {expanded ? <T>Hide accounts</T> : <T>Show accounts</T>}
         </Button>
       </div>
       {expanded ? (

@@ -6,8 +6,6 @@ import {
   type PullRequestAnchor,
 } from "@t3tools/shared/pullRequestAnchor";
 import { usePullRequestDetail, pullRequestRefKey } from "./usePullRequestDetail";
-import { msg, T, useGT, useMessages } from "gt-react";
-import { m } from "~/i18n/messages";
 import { PullRequestDetailCrumbs } from "./PullRequestDetailCrumbs";
 import { PullRequestTitleEditor } from "./PullRequestTitleEditor";
 import { PullRequestBaseBranch } from "./PullRequestBaseBranch";
@@ -67,6 +65,10 @@ import {
   useRef,
   useState,
 } from "react";
+import { msg, T, useGT, useMessages } from "gt-react";
+
+import { m } from "~/i18n/messages";
+
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { type PullRequestDetailTab, useRightPanelStore } from "~/rightPanelStore";
 import { useEnvironmentSettings, useScrollingWorkspacesEnabled } from "~/hooks/useSettings";
@@ -95,11 +97,7 @@ import { useAtomCommand } from "~/state/use-atom-command";
 import { PullRequestStackMenu } from "./PullRequestStackMenu";
 import { pullRequestCompletionScope } from "./PullRequestMarkdownTextarea";
 import { PullRequestChangeBreakdownStat } from "./PullRequestChangeBreakdownStat";
-import {
-  capitalizeTerm,
-  sourceControlClients,
-} from "@t3tools/client-runtime/source-control-clients";
-import { resolveFilterOptions } from "./pullRequestListOptions";
+import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { PullRequestThreadLinks } from "./PullRequestThreadLinks";
 import { vcsEnvironment } from "~/state/vcs";
 import { RelativeTime } from "~/components/RelativeTime";
@@ -165,6 +163,7 @@ import {
   summarizePullRequestChecks,
 } from "./pullRequestPresentation";
 import { PullRequestGlyph } from "./pullRequestIcons";
+import { resolveFilterOptions } from "./pullRequestListOptions";
 import { PullRequestGuideTab } from "./PullRequestGuideTab";
 import { guideRunKey, useGuideRunStore } from "./guide/guideRunStore";
 import { useReviewGuideWriter } from "./guide/useReviewGuideWriter";
@@ -535,25 +534,20 @@ export function PullRequestDetailPanel({
     setTabMountState({ key: tabScopeKey, tabs: new Set(tabMountState.tabs).add(tab) });
   }
   // A pointer on the Code tab reads the page it opens on; only intent costs the host a read.
-  // A pointer passing over a tab is not intent; it must rest like a list row does.
   const [codeIntentKey, setCodeIntentKey] = useState<string | null>(null);
-  const codeIntentTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a pending intent timer must not fire after the panel unmounts
-  useEffect(() => () => clearTimeout(codeIntentTimer.current), []);
-  const intendCodeTab = () => {
-    clearTimeout(codeIntentTimer.current);
-    codeIntentTimer.current = setTimeout(() => {
-      void loadCodeTab();
-      setCodeIntentKey(pullRequestKey);
-    }, 150);
-  };
-  const cancelCodeTabIntent = () => clearTimeout(codeIntentTimer.current);
   useEnvironmentQuery(
     codeIntentKey === pullRequestKey && !mountedTabs.has("code")
       ? pullRequestEnvironment.diff({ environmentId, input: { ...reference } })
       : null,
   );
-  // Each tab restores the condensed state its own scrolling left behind.
+  // A pointer passing over the Code tab is not intent; it must rest like a list row does.
+  const codeIntentTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- A rest timer still pending when the panel unmounts must not read for a closed panel.
+  useEffect(() => () => clearTimeout(codeIntentTimer.current), []);
+  const intendCodeTab = () => {
+    void loadCodeTab();
+    setCodeIntentKey(pullRequestKey);
+  };
   const [condensedByTab, setCondensedByTab] = useState<
     Partial<Record<PullRequestDetailTab, boolean>>
   >({});
@@ -651,7 +645,7 @@ export function PullRequestDetailPanel({
       event.preventDefault();
       event.stopPropagation();
       if (!event.repeat)
-        void copyThreadReference(pullRequestCopyTarget(url, terminology.shortLabel));
+        void copyThreadReference(pullRequestCopyTarget(url, terminology.shortLabel, m));
       return;
     }
     if (command !== "pullRequest.copyNumber") return;
@@ -1639,7 +1633,9 @@ export function PullRequestDetailPanel({
           )
         }
         label={
-          finishedState === "merged" ? `Merged into ${detail.baseBranch}` : "Closed without merging"
+          finishedState === "merged"
+            ? gt("Merged into {base}", { base: detail.baseBranch })
+            : gt("Closed without merging")
         }
       />
     ) : null;
@@ -1712,7 +1708,9 @@ export function PullRequestDetailPanel({
                 {showsArmedNote ? (
                   <p className="flex items-center gap-1.5 text-info-foreground">
                     <PullRequestGlyph.merged aria-hidden className="size-3.5" />
-                    {armedAutoMergeLabel} is on: the host merges this once its requirements are met
+                    {gt("{label} is on: the host merges this once its requirements are met", {
+                      label: armedAutoMergeLabel,
+                    })}
                   </p>
                 ) : null}
                 {noteStackMerge}
@@ -1749,8 +1747,11 @@ export function PullRequestDetailPanel({
           unavailableMessage: msg("Clipboard API is unavailable while copying branch name."),
           failureMessage: msg("Failed to copy branch name to the clipboard."),
         }}
-        copyLabel={`Copy ${terminology.singular} branch`}
-        copiedLabel="Branch name copied"
+        copyLabel={gt(
+          "Copy {term, select, mr {merge request} cr {change request} other {pull request}} branch",
+          { term: changeRequestTermKind(terminology) },
+        )}
+        copiedLabel={gt("Branch name copied")}
       />
     </span>
   ) : null;
@@ -1808,13 +1809,19 @@ export function PullRequestDetailPanel({
                 </span>
               ) : supportsStackActions && nativeStackQuery.error ? (
                 <Button variant="ghost" size="micro" onClick={nativeStackQuery.refresh}>
-                  Retry stack lookup
+                  <T>Retry stack lookup</T>
                 </Button>
               ) : null}
               <span className="ml-auto inline-flex shrink-0 items-baseline gap-1.5 text-caption text-muted-foreground @max-[30rem]/pr-header:hidden">
                 <span
                   className="inline-flex items-baseline gap-1 tabular-nums @max-[34rem]/pr-header:hidden"
-                  aria-label={`${detail.changedFiles.toLocaleString()} changed ${detail.changedFiles === 1 ? "file" : "files"}`}
+                  aria-label={gt(
+                    "{count, plural, one {{formattedCount} changed file} other {{formattedCount} changed files}}",
+                    {
+                      count: detail.changedFiles,
+                      formattedCount: detail.changedFiles.toLocaleString(),
+                    },
+                  )}
                 >
                   <FileDiffIcon aria-hidden className="size-3 self-center" />
                   {detail.changedFiles.toLocaleString()}
@@ -2025,7 +2032,10 @@ export function PullRequestDetailPanel({
         {detail ? (
           <nav
             className="col-span-2 flex min-w-0 items-center px-4 pt-1.5 pb-3"
-            aria-label={`${capitalizeTerm(terminology.singular)} tabs`}
+            aria-label={gt(
+              "{term, select, mr {Merge request} cr {Change request} other {Pull request}} tabs",
+              { term: changeRequestTermKind(terminology) },
+            )}
           >
             <ToggleGroup
               className="relative w-full"
@@ -2057,16 +2067,18 @@ export function PullRequestDetailPanel({
                   key={item.value}
                   value={item.value}
                   className="@container/pr-tab flex-1"
-                  onPointerEnter={item.value === "code" ? intendCodeTab : undefined}
-                  onPointerLeave={item.value === "code" ? cancelCodeTabIntent : undefined}
-                  onFocus={
+                  onPointerEnter={
                     item.value === "code"
                       ? () => {
-                          void loadCodeTab();
-                          setCodeIntentKey(pullRequestKey);
+                          clearTimeout(codeIntentTimer.current);
+                          codeIntentTimer.current = setTimeout(intendCodeTab, 150);
                         }
                       : undefined
                   }
+                  onPointerLeave={
+                    item.value === "code" ? () => clearTimeout(codeIntentTimer.current) : undefined
+                  }
+                  onFocus={item.value === "code" ? intendCodeTab : undefined}
                 >
                   <item.icon aria-hidden className="hidden @max-[4.25em]/pr-tab:block" />
                   <span className="@max-[4.25em]/pr-tab:sr-only">{item.label}</span>

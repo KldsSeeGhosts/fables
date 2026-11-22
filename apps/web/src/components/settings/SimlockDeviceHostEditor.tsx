@@ -199,9 +199,7 @@ export function SimlockDeviceHostEditor(props: {
                   gatewayUrl={checkUrl}
                   label={
                     <span className="grid gap-1">
-                      <span>
-                        <T>Agent token</T>
-                      </span>
+                      <span>{gt("Agent token")}</span>
                       {several ? (
                         <span className="text-meta text-muted-foreground">{environment.label}</span>
                       ) : null}

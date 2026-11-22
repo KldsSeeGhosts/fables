@@ -1,4 +1,4 @@
-import { useGT, useMessages } from "gt-react";
+import { msg, useGT, useMessages } from "gt-react";
 import {
   legacyThreadPullRequestKey,
   threadPullRequestKeyOf,
@@ -44,6 +44,7 @@ import {
 } from "~/state/pullRequests";
 import { useEnvironmentQuery } from "~/state/query";
 import { useComposerPathSearch, useDebouncedValue, useThreadSearch } from "~/state/queries";
+import { m, type MessageResolver } from "~/i18n/messages";
 import {
   matchesPullRequestQuery,
   rankPullRequestMatches,
@@ -65,13 +66,16 @@ const EMPTY_PULL_REQUEST_LIST_TARGETS: ReadonlyArray<EnvironmentQueryTarget<Pull
   [];
 
 /** Describes thread matches during render without retaining the composer's render scope. */
-function makeComposerThreadDescription(projects: ReturnType<typeof useProjects>) {
+function makeComposerThreadDescription(
+  projects: ReturnType<typeof useProjects>,
+  resolve: MessageResolver = m,
+) {
   return (shell: ReturnType<typeof useVisibleThreadShells>[number]) => {
     const project = projects.find(
       (candidate) =>
         candidate.environmentId === shell.environmentId && candidate.id === shell.projectId,
     );
-    return project?.title ?? "Thread";
+    return project?.title ?? resolve(msg("Thread"));
   };
 }
 
@@ -158,7 +162,7 @@ export function useComposerMenuItems({
   }));
   const environmentProjects = useProjects();
   // Thread rows show project and age, like the sidebar.
-  const describeComposerThread = makeComposerThreadDescription(environmentProjects);
+  const describeComposerThread = makeComposerThreadDescription(environmentProjects, messages);
   const withThreadAge = (item: Extract<ComposerCommandItem, { type: "thread" }>) => {
     const shell = environmentThreadShells.find(
       (shell) =>
@@ -166,7 +170,7 @@ export function useComposerMenuItems({
     );
     return {
       ...item,
-      description: shell ? describeComposerThread(shell) : "Thread",
+      description: shell ? describeComposerThread(shell) : gt("Thread"),
       environmentLabel:
         item.thread.environmentId === environmentId
           ? undefined
@@ -381,16 +385,19 @@ export function useComposerMenuItems({
     if (composerTrigger.kind === "pull-request") {
       // `#` lists pull requests, then threads. Threads need no git host, so a project without
       // pull requests still gets them, and a bare `#` shows the most recent ones.
-      const threadItems = matchComposerThreadItems({
-        shells: environmentThreadShells,
-        environmentId,
-        linkedEnvironments,
-        excludeThreadId: activeThreadId,
-        query: composerTrigger.query,
-        allowEmptyQuery: true,
-        now,
-        describe: describeComposerThread,
-      }).map(withThreadAge);
+      const threadItems = matchComposerThreadItems(
+        {
+          shells: environmentThreadShells,
+          environmentId,
+          linkedEnvironments,
+          excludeThreadId: activeThreadId,
+          query: composerTrigger.query,
+          allowEmptyQuery: true,
+          now,
+          describe: describeComposerThread,
+        },
+        messages,
+      ).map(withThreadAge);
       if (pullRequestProjectId === null || pullRequestRepository === null) return threadItems;
       const exactPullRequest =
         exactPullRequestLookup.data?.number === pullRequestTriggerNumber

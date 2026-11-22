@@ -22,7 +22,7 @@ import {
   UserRoundIcon,
   UserRoundXIcon,
 } from "lucide-react";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, useGT, useMessages } from "gt-react";
 import { type CSSProperties, type ReactNode, useState } from "react";
 
 import { m, type MessageResolver } from "~/i18n/messages";
@@ -31,6 +31,7 @@ import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
 import { Button, InlineButton } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { RowTooltip } from "../workItem/WorkItemRowTooltip";
 import type { PullRequestReviewOutcome } from "./pullRequestDetail.logic";
 import { pullRequestLabelColor } from "./pullRequestList.logic";
 import {
@@ -56,9 +57,7 @@ export function AddToChatIconButton({ onClick }: { onClick: () => void }) {
       >
         <MessageSquarePlusIcon className="size-3" />
       </TooltipTrigger>
-      <TooltipPopup>
-        <T>Add to chat</T>
-      </TooltipPopup>
+      <TooltipPopup>{gt("Add to chat")}</TooltipPopup>
     </Tooltip>
   );
 }
@@ -94,12 +93,7 @@ export function PullRequestLabelChip({
     </Badge>
   );
   if (!label.description) return badge;
-  return (
-    <Tooltip>
-      <TooltipTrigger render={badge} />
-      <TooltipPopup>{label.description}</TooltipPopup>
-    </Tooltip>
-  );
+  return <RowTooltip render={badge} popup={<TooltipPopup>{label.description}</TooltipPopup>} />;
 }
 
 function reviewDecisionPresentation(decision: PullRequestReviewDecision) {
@@ -194,16 +188,16 @@ export function PullRequestStateGlyph({
   const m = useMessages();
   const presentation = resolvePullRequestState({ state, isDraft }, m);
   return (
-    <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
-        <presentation.Icon
-          role="img"
-          aria-label={presentation.label}
-          className={cn("size-4 shrink-0", presentation.toneClassName, className)}
-        />
-      </TooltipTrigger>
-      <TooltipPopup>{presentation.label}</TooltipPopup>
-    </Tooltip>
+    <RowTooltip
+      render={<span className="inline-flex shrink-0" />}
+      popup={<TooltipPopup>{presentation.label}</TooltipPopup>}
+    >
+      <presentation.Icon
+        role="img"
+        aria-label={presentation.label}
+        className={cn("size-4 shrink-0", presentation.toneClassName, className)}
+      />
+    </RowTooltip>
   );
 }
 
@@ -232,16 +226,16 @@ export function PullRequestConflictGlyph({
   );
   if (presentation === null) return null;
   return (
-    <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
-        <presentation.Icon
-          role="img"
-          aria-label={presentation.label}
-          className={cn("size-4 shrink-0", presentation.toneClassName, className)}
-        />
-      </TooltipTrigger>
-      <TooltipPopup>{presentation.label}</TooltipPopup>
-    </Tooltip>
+    <RowTooltip
+      render={<span className="inline-flex shrink-0" />}
+      popup={<TooltipPopup>{presentation.label}</TooltipPopup>}
+    >
+      <presentation.Icon
+        role="img"
+        aria-label={presentation.label}
+        className={cn("size-4 shrink-0", presentation.toneClassName, className)}
+      />
+    </RowTooltip>
   );
 }
 
@@ -355,7 +349,7 @@ export function pullRequestChecksState(
 const REVIEW_OUTCOME_PRESENTATION = {
   approved: {
     label: msg("Approved", { $context: "review outcome" }),
-    verb: msg("approved", { $context: "review verdict, after the reviewer's name" }),
+    verb: msg("approved", { $context: "review outcome, shown after the reviewer's name" }),
     staleLabel: msg("Approved earlier changes", {
       $context: "tooltip: this approval was given before the latest commits were pushed",
     }),
@@ -368,7 +362,9 @@ const REVIEW_OUTCOME_PRESENTATION = {
   },
   "changes-requested": {
     label: msg("Changes requested"),
-    verb: msg("requested changes", { $context: "review verdict, after the reviewer's name" }),
+    verb: msg("requested changes", {
+      $context: "review outcome, shown after the reviewer's name",
+    }),
     staleLabel: msg("Changes requested earlier changes", {
       $context:
         "tooltip: the reviewer requested changes on an older version, before the latest commits",
@@ -383,7 +379,7 @@ const REVIEW_OUTCOME_PRESENTATION = {
   dismissed: {
     label: msg("Review dismissed"),
     verb: msg("had a review dismissed", {
-      $context: "review verdict, after the reviewer's name",
+      $context: "review outcome, shown after the pull request author's name",
     }),
     staleLabel: msg("Review dismissed earlier changes", {
       $context: "tooltip: a review of an older version, before the latest commits, was dismissed",
@@ -605,20 +601,6 @@ export function PullRequestDiffStat({
     <span className={cn("inline-flex items-baseline gap-1 tabular-nums", className)}>
       <span className="text-diff-addition-foreground">+{formatDiffCount(additions)}</span>
       <span className="text-diff-deletion-foreground">-{formatDiffCount(deletions)}</span>
-    </span>
-  );
-}
-
-export function PullRequestMetaLine({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <span className={cn("flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5", className)}>
-      {children}
     </span>
   );
 }

@@ -1253,7 +1253,7 @@ function EditableFileSurface({
                       createdAt={entry.createdAt}
                       // A saved file comment is the composer's context entry for it.
                       stateLabel={entry.kind === "comment" ? gt("In composer") : undefined}
-                      submitLabel={gt("Done")}
+                      submitLabel={gt("Done", { $context: "button, saves a file comment" })}
                       text={entry.text}
                       onCancel={() => removeAnnotationEntry(entry.id)}
                       onComment={(text) => submitAnnotationEntry(entry.id, text)}
@@ -1803,6 +1803,18 @@ export default function FilePreviewPanel({
                   <MessageSquarePlusIcon className="size-3.5" />
                 </FileSurfaceAction>
               ) : null}
+              {copyableContents !== null && !foldActions ? (
+                <FileSurfaceAction
+                  label={isCopied ? gt("Copied") : gt("Copy contents")}
+                  onPress={() => copyToClipboard(copyableContents, undefined)}
+                >
+                  {isCopied ? (
+                    <CheckIcon className="size-3.5" />
+                  ) : (
+                    <CopyIcon className="size-3.5" />
+                  )}
+                </FileSurfaceAction>
+              ) : null}
               {absolutePath &&
               (environmentId === primaryEnvironmentId ||
                 environmentId === hostEnvironmentId ||
@@ -1818,10 +1830,7 @@ export default function FilePreviewPanel({
                   compact
                 />
               ) : null}
-              {showsRawText ||
-              canOpenInBrowser ||
-              copyableContents !== null ||
-              (foldActions && canAddToChat) ? (
+              {showsRawText || canOpenInBrowser || (foldActions && canAddToChat) ? (
                 <Menu>
                   <Tooltip>
                     <TooltipTrigger
@@ -1841,30 +1850,32 @@ export default function FilePreviewPanel({
                     >
                       <EllipsisIcon className="size-3.5" />
                     </TooltipTrigger>
-                    <TooltipPopup>{gt("More file actions")}</TooltipPopup>
+                    <TooltipPopup>
+                      <T>More file actions</T>
+                    </TooltipPopup>
                   </Tooltip>
                   <MenuPopup align="end">
                     {foldActions && canAddToChat ? (
                       <MenuItem onClick={addToChat}>
                         <MessageSquarePlusIcon aria-hidden />
-                        {gt("Add to chat")}
+                        <T>Add to chat</T>
+                      </MenuItem>
+                    ) : null}
+                    {foldActions && copyableContents !== null ? (
+                      <MenuItem onClick={() => copyToClipboard(copyableContents, undefined)}>
+                        <CopyIcon aria-hidden />
+                        {isCopied ? <T>Copied</T> : <T>Copy contents</T>}
                       </MenuItem>
                     ) : null}
                     {showsRawText ? (
                       <MenuCheckboxItem checked={wordWrap} onCheckedChange={setWordWrapOverride}>
-                        {gt("Word wrap")}
+                        <T>Word wrap</T>
                       </MenuCheckboxItem>
-                    ) : null}
-                    {copyableContents !== null ? (
-                      <MenuItem onClick={() => copyToClipboard(copyableContents, undefined)}>
-                        {isCopied ? <CheckIcon aria-hidden /> : <CopyIcon aria-hidden />}
-                        {isCopied ? gt("Copied") : gt("Copy contents")}
-                      </MenuItem>
                     ) : null}
                     {canOpenInBrowser ? (
                       <MenuItem onClick={handleOpenInBrowser}>
                         <Globe2 aria-hidden />
-                        {gt("Open file in preview browser")}
+                        <T>Open file in preview browser</T>
                       </MenuItem>
                     ) : null}
                   </MenuPopup>

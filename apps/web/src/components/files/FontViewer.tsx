@@ -1,5 +1,5 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { msg, T, useGT, Var } from "gt-react";
+import { msg, T, useGT } from "gt-react";
 import { useEffect, useState } from "react";
 
 import { m } from "~/i18n/messages";
@@ -80,9 +80,7 @@ export default function FontViewer(props: { readonly src: string; readonly name:
           <T>No preview for this file</T>
         </p>
         <p className="max-w-sm text-meta leading-relaxed text-muted-foreground">
-          <T>
-            <Var>{error}</Var> Save it to open in another app.
-          </T>
+          {gt("{error} Save it to open in another app.", { error })}
         </p>
       </div>
     );

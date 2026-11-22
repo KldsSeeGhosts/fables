@@ -80,13 +80,13 @@ function endpointStatus(
     case "Accepted":
       return {
         label: resolve(msg("Connected")),
-        detail: `${Math.round(result.latencyMs)} ms`,
+        detail: resolve(msg("{ms} ms", { ms: Math.round(result.latencyMs) })),
         tone: "success",
       } as const;
     case "Rejected":
       return {
         label: resolve(msg("Rejected")),
-        detail: `HTTP ${result.status}`,
+        detail: resolve(msg("HTTP {status}", { status: result.status })),
         tone: "danger",
       } as const;
     case "Unreachable":

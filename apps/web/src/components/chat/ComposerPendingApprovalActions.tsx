@@ -29,17 +29,20 @@ interface ComposerPendingApprovalActionsProps {
   ) => Promise<unknown>;
 }
 
-const DENY_LABEL = msg("Deny", { $context: "verb, response to an approval request" });
-const ALLOW_LABEL = msg("Allow", { $context: "verb, response to an approval request" });
-
 export const DEFAULT_APPROVAL_OPTIONS = [
   {
     decision: "cancel",
     label: msg("Cancel", { $context: "verb, response to an approval request" }),
   },
-  { decision: "decline", label: DENY_LABEL },
+  {
+    decision: "decline",
+    label: msg("Deny", { $context: "verb, response to an approval request" }),
+  },
   { decision: "acceptForSession", label: msg("Always allow this session") },
-  { decision: "accept", label: ALLOW_LABEL },
+  {
+    decision: "accept",
+    label: msg("Allow", { $context: "verb, response to an approval request" }),
+  },
 ] satisfies ReadonlyArray<ProviderApprovalOption>;
 
 /**
@@ -76,7 +79,8 @@ export function ComposerPendingApprovalActions({
   const gt = useGT();
   const m = useMessages();
   // Provider options carry server-authored labels; only the built-in defaults are translated.
-  const optionLabel = (label: string) => (options === DEFAULT_APPROVAL_OPTIONS ? m(label) : label);
+  const defaultOptions = options === DEFAULT_APPROVAL_OPTIONS;
+  const optionLabel = (label: string) => (defaultOptions ? m(label) : label);
   const accept = options.find((option) => option.decision === "accept");
   const acceptForSession = options.find((option) => option.decision === "acceptForSession");
   // Offer the session toggle only when it changes what Allow sends.
@@ -159,7 +163,7 @@ export function ComposerPendingApprovalActions({
               >
                 {decline.warning ? <TriangleAlertIcon className="size-3 shrink-0" /> : null}
                 <span className="max-w-40 truncate">
-                  {designLabels && (decline.label === DENY_LABEL || decline.label === "Deny")
+                  {designLabels && (defaultOptions || decline.label === "Deny")
                     ? gt("Decline", { $context: "verb, response to an approval request" })
                     : optionLabel(decline.label)}
                 </span>
@@ -179,7 +183,7 @@ export function ComposerPendingApprovalActions({
               >
                 {allowWarning ? <TriangleAlertIcon className="size-3 shrink-0" /> : null}
                 <span className="max-w-40 truncate">
-                  {designLabels && (primary.label === ALLOW_LABEL || primary.label === "Allow")
+                  {designLabels && (defaultOptions || primary.label === "Allow")
                     ? gt("Approve", { $context: "verb, response to an approval request" })
                     : optionLabel(primary.label)}
                 </span>

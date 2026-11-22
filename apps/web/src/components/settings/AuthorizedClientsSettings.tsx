@@ -1,3 +1,6 @@
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { m as resolveMessage } from "~/i18n/messages";
+import { managedCapabilityDenial } from "@t3tools/client-runtime/contract-labels";
 import { AUTH_SCOPE_OPTIONS as PAIRING_SCOPE_OPTIONS } from "@t3tools/shared/authScopeOptions";
 import {
   PlugIcon,
@@ -9,7 +12,7 @@ import {
   TabletIcon,
 } from "lucide-react";
 import { memo, useId, useRef, useState } from "react";
-import { T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "gt-react";
 import {
   AuthAccessWriteScope,
   AuthDiagnosticsReadScope,
@@ -19,7 +22,6 @@ import {
   AuthStandardClientScopes,
   AuthTerminalOperateScope,
   AuthTerminalReadScope,
-  managedCapabilityDenial,
   type AuthEnvironmentScope,
   type AuthGrantScope,
   type AuthPairingCredentialResult,
@@ -91,7 +93,10 @@ function AccessScopeSummary({
   readonly scopes: ReadonlyArray<AuthEnvironmentScope>;
   readonly label: string;
 }) {
-  const scopeCountLabel = `${scopes.length} ${scopes.length === 1 ? "scope" : "scopes"}`;
+  const gt = useGT();
+  const scopeCountLabel = gt("{count, plural, one {{count} scope} other {{count} scopes}}", {
+    count: scopes.length,
+  });
 
   return (
     <Popover>
@@ -102,7 +107,7 @@ function AccessScopeSummary({
         render={
           <button
             type="button"
-            aria-label={`${label}: show ${scopeCountLabel}`}
+            aria-label={gt("{label}: show {scopes}", { label, scopes: scopeCountLabel })}
             className="cursor-help underline decoration-border underline-offset-2 outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           />
         }
@@ -115,7 +120,9 @@ function AccessScopeSummary({
         tooltipStyle
         className="w-max max-w-80 whitespace-normal"
       >
-        <p className="mb-1 font-medium">Granted scopes</p>
+        <p className="mb-1 font-medium">
+          <T>Granted scopes</T>
+        </p>
         <div className="flex flex-col gap-0.5">
           {scopes.map((scope) => (
             <code key={scope} className="font-mono text-foreground/85">
@@ -162,6 +169,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
   canRevoke,
 }: PairingLinkListRowProps) {
   const gt = useGT();
+  const m = useMessages();
   const nowMs = useNowSecond();
   const expiresAtMs = new Date(pairingLink.expiresAt).getTime();
   const [isRevealDialogOpen, setIsRevealDialogOpen] = useState(false);
@@ -200,7 +208,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
         preferenceKey: endpointDefaultPreferenceKey(endpoint),
         label: endpoint.label,
         url,
-        detail: endpointShareHint(endpoint, url),
+        detail: endpointShareHint(endpoint, url, m),
         qrShareable: isQrShareableEndpoint(endpoint),
       });
     }
@@ -291,7 +299,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
           <p className="grid justify-items-start gap-1 text-meta text-muted-foreground">
             <Tooltip>
               <TooltipTrigger render={<span />}>
-                {formatExpiresInLabel(pairingLink.expiresAt, nowMs)}
+                {formatExpiresInLabel(pairingLink.expiresAt, nowMs, m)}
               </TooltipTrigger>
               <TooltipPopup side="top">{expiresAbsolute}</TooltipPopup>
             </Tooltip>
@@ -304,7 +312,8 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
           ) : shareablePairingUrl === null ? (
             <p className="text-caption text-dim-foreground">
               <T>
-                Copy the token and pair from another client using this backend's reachable host.
+                Copy the token and pair from another client using this backend&apos;s reachable
+                host.
               </T>
             </p>
           ) : null}
@@ -337,7 +346,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
               )
             ) : (
               <DialogTrigger render={<Button size="xs" variant="secondary" />}>
-                {shareablePairingUrl ? <T>Show link</T> : <T>Show code</T>}
+                {shareablePairingUrl ? gt("Show link") : gt("Show code")}
               </DialogTrigger>
             )}
             <DialogPopup className="max-w-md">
@@ -405,7 +414,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
             disabled={!canRevoke || revokingPairingLinkId === pairingLink.id}
             onClick={() => void onRevoke(pairingLink.id)}
           >
-            {revokingPairingLinkId === pairingLink.id ? <T>Revoking…</T> : <T>Revoke</T>}
+            {revokingPairingLinkId === pairingLink.id ? gt("Revoking…") : gt("Revoke")}
           </Button>
         </div>
       </div>
@@ -473,11 +482,11 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
                 className="shrink-0"
                 onClick={() => copyPairingValue(qrPairingUrl, copyKindForUrl(qrPairingUrl))}
               >
-                Copy link
+                <T>Copy link</T>
               </Button>
             </div>
             <Button size="xs" variant="ghost" onClick={handleCopyCode}>
-              Copy code only
+              <T>Copy code only</T>
             </Button>
           </div>
           {canRenderQrForSelection ? (
@@ -487,14 +496,16 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
                 size={168}
                 level="M"
                 marginSize={1}
-                title="Pairing link. Scan to open on another device"
+                title={gt("Pairing link. Scan to open on another device")}
               />
             </div>
           ) : (
             <div className="flex size-[192px] shrink-0 items-center justify-center self-center rounded-xl border border-border p-4 sm:self-start">
               <p className="text-center text-caption text-dim-foreground">
-                No QR for this endpoint. Another device scanning a loopback link would dial itself;
-                copy the URL for use on this machine instead.
+                <T>
+                  No QR for this endpoint. Another device scanning a loopback link would dial
+                  itself; copy the URL for use on this machine instead.
+                </T>
               </p>
             </div>
           )}
@@ -518,26 +529,28 @@ const ConnectedClientListRow = memo(function ConnectedClientListRow({
   canRevoke,
 }: ConnectedClientListRowProps) {
   const gt = useGT();
+  const m = useMessages();
   const nowMs = useNowSecond();
   const isLive = clientSession.current || clientSession.connected;
   const lastConnectedAt = clientSession.lastConnectedAt;
   const statusTooltip = isLive
     ? lastConnectedAt
       ? gt("Connected for {duration}", {
-          duration: formatElapsedDurationLabel(lastConnectedAt, nowMs),
+          duration: formatElapsedDurationLabel(lastConnectedAt, nowMs, m),
         })
       : gt("Connected")
     : lastConnectedAt
       ? gt("Last connected at {time}", { time: formatAccessTimestamp(lastConnectedAt) })
       : gt("Not connected yet.");
+  const lastSeenElapsed = lastConnectedAt
+    ? formatElapsedDurationLabel(lastConnectedAt, nowMs, m)
+    : null;
   const lastSeen = isLive
     ? gt("Active now")
-    : lastConnectedAt
-      ? formatElapsedDurationLabel(lastConnectedAt, nowMs) === "just now"
+    : lastSeenElapsed !== null
+      ? lastSeenElapsed === m(msg("just now"))
         ? gt("Last seen just now")
-        : gt("Last seen {duration} ago", {
-            duration: formatElapsedDurationLabel(lastConnectedAt, nowMs),
-          })
+        : gt("Last seen {duration} ago", { duration: lastSeenElapsed })
       : null;
   const deviceInfoBits = [
     lastSeen,
@@ -609,11 +622,7 @@ const ConnectedClientListRow = memo(function ConnectedClientListRow({
               disabled={!canRevoke || revokingClientSessionId === clientSession.sessionId}
               onClick={() => void onRevokeSession(clientSession.sessionId)}
             >
-              {revokingClientSessionId === clientSession.sessionId ? (
-                <T>Revoking…</T>
-              ) : (
-                <T>Revoke</T>
-              )}
+              {revokingClientSessionId === clientSession.sessionId ? gt("Revoking…") : gt("Revoke")}
             </Button>
           ) : null}
         </div>
@@ -643,8 +652,12 @@ export const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHead
   delegatableScopes,
 }: AuthorizedClientsHeaderActionProps) {
   const gt = useGT();
-  const messages = useMessages();
-  const pairingDenial = managedCapabilityDenial(useManagedPolicy(environmentId), "remoteClients");
+  const m = useMessages();
+  const pairingDenial = managedCapabilityDenial(
+    useManagedPolicy(environmentId),
+    "remoteClients",
+    m,
+  );
   const createPairingCredential = useAtomCommand(authEnvironment.createPairingCredential, {
     reportFailure: false,
   });
@@ -691,7 +704,10 @@ export const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHead
       }
     } else if (!isAtomCommandInterrupted(result)) {
       const error = squashAtomCommandFailure(result);
-      const message = error instanceof Error ? error.message : gt("Failed to create pairing URL.");
+      const message =
+        error instanceof Error
+          ? (thrownErrorMessage(error, resolveMessage) ?? error.message)
+          : gt("Failed to create pairing URL.");
       toastManager.add(
         stackedThreadToast({
           type: "error",
@@ -715,15 +731,19 @@ export const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHead
         disabled={isRevokingOtherClients || !canRevokeOtherClients(clientSessions)}
         onClick={() => void onRevokeOtherClients()}
       >
-        {isRevokingOtherClients ? <T>Revoking…</T> : <T>Revoke others</T>}
+        {isRevokingOtherClients ? gt("Revoking…") : gt("Revoke others")}
       </Button>
     );
   }
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
-      <Button size="xs" variant="secondary" onClick={() => openUseInAnotherApp(environmentId)}>
-        <PlugIcon className="size-3" />
+      <Button
+        size="standard"
+        variant="secondary"
+        onClick={() => openUseInAnotherApp(environmentId)}
+      >
+        <PlugIcon />
         <T>Use in another app (MCP)</T>
       </Button>
       {pairingDenial !== undefined ? (
@@ -750,7 +770,9 @@ export const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHead
         ) : null}
         <DialogPopup className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{gt("Create pairing link")}</DialogTitle>
+            <DialogTitle>
+              <T>Create pairing link</T>
+            </DialogTitle>
             <DialogDescription>
               <T>
                 Generate a one-time link that another device can use to pair with this backend as an
@@ -766,7 +788,7 @@ export const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHead
               <Input
                 value={pairingLabel}
                 onChange={(event) => setPairingLabel(event.target.value)}
-                placeholder="e.g. Living room iPad"
+                placeholder={gt("e.g. Living room iPad")}
                 disabled={isCreatingPairingLink}
                 autoFocus
               />
@@ -774,9 +796,11 @@ export const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHead
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-meta text-strong-foreground">Permissions</h3>
+                  <h3 className="text-meta text-strong-foreground">
+                    <T>Permissions</T>
+                  </h3>
                   <p className="text-meta text-muted-foreground">
-                    Limit what the paired client can do.
+                    <T>Limit what the paired client can do.</T>
                   </p>
                 </div>
                 <div className="flex gap-1">
@@ -809,7 +833,7 @@ export const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHead
                       )
                     }
                   >
-                    <T>Standard</T>
+                    {gt("Standard", { $context: "standard permission preset" })}
                   </Button>
                 </div>
               </div>
@@ -827,21 +851,19 @@ export const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHead
                         onCheckedChange={(checked) => togglePairingScope(scope, checked === true)}
                       />
                       <span className="min-w-0">
-                        <span className="block text-meta text-strong-foreground">
-                          {messages(title)}
-                        </span>
+                        <span className="block text-meta text-strong-foreground">{m(title)}</span>
                         <span className="block text-meta leading-snug text-muted-foreground">
-                          {messages(description)}
+                          {m(description)}
                         </span>
                         {terminalSelected && scope === AuthTerminalOperateScope ? (
-                          <span className="block text-meta text-warning">
+                          <span className="block text-meta text-warning-foreground">
                             {gt(
                               "Terminal commands can read or change files within the server account’s permissions.",
                             )}
                           </span>
                         ) : null}
                         {relayAdminSelected && scope === AuthRelayConfigureScope ? (
-                          <span className="block text-meta text-warning">
+                          <span className="block text-meta text-warning-foreground">
                             {gt("This client can change who can issue pairing credentials.")}
                           </span>
                         ) : null}
@@ -875,7 +897,7 @@ export const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHead
               disabled={isCreatingPairingLink || selectedScopes.length === 0}
               onClick={() => void handleCreatePairingLink()}
             >
-              {isCreatingPairingLink ? <T>Creating…</T> : <T>Create link</T>}
+              {isCreatingPairingLink ? gt("Creating…") : gt("Create link")}
             </Button>
           </DialogFooter>
         </DialogPopup>
@@ -982,12 +1004,14 @@ export const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow
   onDisableTailscaleServe,
   isUpdatingTailscaleServe,
 }: AdvertisedEndpointListRowProps) {
+  const gt = useGT();
   const isAvailable = endpoint.status === "available";
   const needsTailscaleSetup = isTailscaleHttpsEndpoint(endpoint) && endpoint.status !== "available";
   const canDisableTailscaleServe =
     isTailscaleHttpsEndpoint(endpoint) && endpoint.status === "available";
   const shouldShowEndpointUrl = !needsTailscaleSetup;
-  const remoteDenial = managedCapabilityDenial(usePrimaryManagedPolicy(), "remoteClients");
+  const m = useMessages();
+  const remoteDenial = managedCapabilityDenial(usePrimaryManagedPolicy(), "remoteClients", m);
   return (
     <div className={endpointRowClassName(isAvailable)}>
       {isDefault ? (
@@ -1017,7 +1041,7 @@ export const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow
         <div className="ml-auto flex min-h-7 shrink-0 items-center justify-end gap-2">
           {isDefault ? (
             <span className="inline-flex h-6 items-center rounded-md border border-primary/30 bg-primary/10 px-1.5 text-micro text-primary">
-              <T>Default</T>
+              {gt("Default", { $context: "default endpoint badge" })}
             </span>
           ) : null}
           {needsTailscaleSetup ? (
@@ -1028,7 +1052,7 @@ export const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow
                 onClick={() => onSetupTailscaleServe(endpoint)}
                 disabled={isUpdatingTailscaleServe || remoteDenial !== undefined}
               >
-                {isUpdatingTailscaleServe ? <T>Restarting…</T> : <T>Setup</T>}
+                {isUpdatingTailscaleServe ? gt("Restarting…") : gt("Setup", { $context: "verb" })}
               </Button>
             </ManagedControl>
           ) : null}
@@ -1039,7 +1063,7 @@ export const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow
               onClick={() => onDisableTailscaleServe(endpoint)}
               disabled={isUpdatingTailscaleServe}
             >
-              {isUpdatingTailscaleServe ? <T>Restarting…</T> : <T>Disable</T>}
+              {isUpdatingTailscaleServe ? gt("Restarting…") : gt("Disable")}
             </Button>
           ) : null}
           {!needsTailscaleSetup && !isDefault ? (
@@ -1089,7 +1113,9 @@ export function ReachableAddressRow({
               onClick={onToggleExpanded}
               aria-expanded={expanded}
             >
-              {expanded ? gt("Hide addresses") : gt("{count} more", { count: hiddenEndpointCount })}
+              {expanded
+                ? gt("Hide addresses")
+                : gt("+{count} more", { count: hiddenEndpointCount })}
             </button>
           </span>
         ) : (
@@ -1103,7 +1129,7 @@ export function ReachableAddressRow({
             type="button"
             size="icon-xs"
             variant="ghost-muted"
-            aria-label="Copy address"
+            aria-label={gt("Copy address")}
             onClick={() => copyToClipboard(url)}
           >
             {isCopied ? <CheckIcon /> : <CopyIcon />}

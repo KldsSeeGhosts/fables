@@ -190,7 +190,7 @@ export function AccountLimits(props: {
   if (!limits) return null;
   const notice =
     limits.unavailable?.reason === "unsupported"
-      ? m("Usage unavailable for this API connection")
+      ? m(msg("Usage unavailable for this API connection"))
       : limitsNotice(limits, m);
   const externalUsage = limits.externalUsage;
   const padding = dense ? "px-4 py-3" : "p-4";

@@ -1,8 +1,9 @@
 import type { ChangeRequestTerminology } from "@t3tools/client-runtime/source-control-clients";
 import type { PullRequestStack } from "@t3tools/contracts";
-import { T, useMessages, Var } from "gt-react";
+import { useGT, useMessages } from "gt-react";
 import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
+import { changeRequestTermKind } from "./changeRequestTerm";
 import { resolvePullRequestState } from "./pullRequestPresentation";
 
 /**
@@ -13,6 +14,7 @@ export function PullRequestStackLayerContent({
   terminology,
   compact = false,
   position,
+
   current = false,
 }: {
   layer: PullRequestStack["layers"][number];
@@ -24,6 +26,7 @@ export function PullRequestStackLayerContent({
   base?: string;
   current?: boolean;
 }) {
+  const gt = useGT();
   const messages = useMessages();
   const state = resolvePullRequestState(
     {
@@ -49,22 +52,16 @@ export function PullRequestStackLayerContent({
 
   const badge = current ? (
     <Badge variant="success">
-      <T>
-        This <Var>{terminology.shortLabel}</Var>
-      </T>
+      {gt("This {term, select, mr {MR} cr {change request} other {PR}}", {
+        term: changeRequestTermKind(terminology),
+      })}
     </Badge>
   ) : layer.state === "merged" ? (
-    <Badge variant="merged">
-      <T>Merged</T>
-    </Badge>
+    <Badge variant="merged">{gt("Merged", { $context: "pull request state" })}</Badge>
   ) : layer.state === "closed" ? (
-    <Badge variant="secondary">
-      <T>Closed</T>
-    </Badge>
+    <Badge variant="secondary">{gt("Closed", { $context: "pull request state" })}</Badge>
   ) : layer.isDraft ? (
-    <Badge variant="secondary">
-      <T>Draft</T>
-    </Badge>
+    <Badge variant="secondary">{gt("Draft", { $context: "pull request state" })}</Badge>
   ) : null;
   return (
     <>

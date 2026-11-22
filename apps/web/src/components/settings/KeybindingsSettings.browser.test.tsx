@@ -21,7 +21,7 @@ function setup() {
 
 vi.mock(import("../../state/use-atom-command"), async (original) => ({
   ...(await original()),
-  useAtomCommand: (() => runCommand) as never,
+  useAtomCommand: vi.fn(() => runCommand) as never,
 }));
 vi.mock(import("./SettingsScopeContext"), async (original) => ({
   ...(await original()),
@@ -131,7 +131,7 @@ it("unassigns a default shortcut and restores its condition when one is assigned
     async () => {
       await using screen = await render(<KeybindingsSettingsPanel />);
 
-      await screen.getByRole("button", { name: "Actions for Sidebar: Toggle" }).click();
+      await screen.getByRole("button", { name: "Actions for Toggle sidebar" }).click();
       await screen.getByRole("menuitem", { name: "Unassign" }).click();
       expect(mutate).toHaveBeenLastCalledWith({
         environmentId: "env",
@@ -144,7 +144,7 @@ it("unassigns a default shortcut and restores its condition when one is assigned
       });
 
       const unassigned = screen.getByRole("button", {
-        name: "Edit shortcut for Composer: Start in Background: Unassigned",
+        name: "Edit shortcut for Start in background: Unassigned",
       });
       const save = screen.getByRole("button", { name: "Save" });
       await unassigned.click();

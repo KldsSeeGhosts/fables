@@ -193,9 +193,12 @@ export function getProviderVersionAdvisoryPresentation(
   }
   if (advisory.status === "unknown") {
     return {
-      title: "Update provider",
-      detail:
-        "The latest version is unknown. Run the provider's installer to check for and apply updates.",
+      title: resolve(msg("Update provider")),
+      detail: resolve(
+        msg(
+          "The latest version is unknown. Run the provider's installer to check for and apply updates.",
+        ),
+      ),
       updateCommand: advisory.updateCommand,
       emphasis: "normal",
       targetVersion: null,

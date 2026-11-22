@@ -1,7 +1,9 @@
+import { Link } from "@tanstack/react-router";
 import { errorDisplayMessage, thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m as resolveMessage } from "~/i18n/messages";
 import { managedCapabilityDenial } from "@t3tools/client-runtime/contract-labels";
-import { Link, useSearch } from "@tanstack/react-router";
+import { SessionPermissions } from "./SessionPermissions";
+import { useSearch } from "@tanstack/react-router";
 import { ChevronRightIcon, EllipsisIcon } from "lucide-react";
 import { useAtom, useAtomValue } from "@effect/atom-react";
 import { type ReactNode, useState } from "react";
@@ -31,7 +33,6 @@ import {
 import * as Cause from "effect/Cause";
 
 import { isLocalEnvironmentDisabled } from "../../localEnvironment";
-import { SessionPermissions } from "./SessionPermissions";
 import {
   applyWslEnableSelection,
   connectDeviceName,
@@ -452,11 +453,11 @@ function ConnectionsSettingsContent({
     reportFailure: false,
   });
   const desktopNetworkAccess = useEnvironmentQuery(
-    showsAccess && canManageLocalBackend && desktopBridge ? desktopNetworkAccessStateAtom : null,
+    canManageLocalBackend && desktopBridge ? desktopNetworkAccessStateAtom : null,
     m,
   );
   const desktopWsl = useEnvironmentQuery(
-    showsAccess && canManageLocalBackend && desktopBridge ? desktopWslAccessStateAtom : null,
+    canManageLocalBackend && desktopBridge ? desktopWslAccessStateAtom : null,
     m,
   );
   const desktopWslState = desktopWsl.data;
@@ -1429,12 +1430,12 @@ function ConnectionsSettingsContent({
                 }
                 control={
                   <Button variant="secondary" size="sm" render={<Link to="/settings/access" />}>
-                    {gt("Manage")}
+                    {gt("Manage", { $context: "button, opens access settings" })}
                   </Button>
                 }
               />
             ) : null}
-            {accessServerConfig?.environment.capabilities.previewTunnelSetting ? (
+            {showsAccess && accessServerConfig?.environment.capabilities.previewTunnelSetting ? (
               <SettingsRow
                 title={searchableSetting("preview-tunnel").title}
                 description={gt(
@@ -1456,7 +1457,9 @@ function ConnectionsSettingsContent({
             {showsAccess && accessEnvironment ? (
               <details className="group px-3 sm:px-4">
                 <summary className="flex min-h-11 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden">
-                  <T>Permissions</T>
+                  <span className="text-label">
+                    <T>Permissions</T>
+                  </span>
                   <ChevronRightIcon
                     aria-hidden
                     className="ms-2 size-3 text-muted-foreground group-open:rotate-90"

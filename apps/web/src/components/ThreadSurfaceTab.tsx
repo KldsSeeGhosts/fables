@@ -5,11 +5,14 @@ import { DEFAULT_RUNTIME_MODE } from "../types";
 /** Resolve surface context independently of ChatView so tabs remain usable after the chat closes,
  * and report when their thread is gone. */
 import { scopedThreadKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
+import { msg, T, useGT, useMessages } from "gt-react";
 import {
   AuthOrchestrationOperateScope,
   AuthPreviewOperateScope,
   AuthTerminalOperateScope,
   AuthTerminalReadScope,
+  type EnvironmentId,
+  type IssueTrackerKind,
   type PreviewAnnotationPayload,
   type ProjectId,
   type ScopedThreadRef,
@@ -107,6 +110,9 @@ import { addBrowserSurface } from "./preview/addBrowserSurface";
 import { closePreviewSession } from "./preview/closePreviewSession";
 import { getConfiguredPreviewUrls } from "./preview/previewEmptyStateLogic";
 import { PullRequestDetailGhost } from "./pullRequest/PullRequestGhosts";
+import { PullRequestsUnavailableState } from "./pullRequest/PullRequestsUnavailableState";
+import { IssueDetailGhost } from "./issue/IssueDetailGhost";
+import { IssueGlyph } from "./issue/issuePresentation";
 import {
   pullRequestPanelContext,
   threadPullRequestPanelTarget,
@@ -120,12 +126,11 @@ import {
 import { Button } from "./ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
 import { stackedThreadToast, toastManager } from "./ui/toast";
+import { LinkedThreadPane } from "./chat/LinkedThreadPane";
+import SideThreadPane from "./chat/SideThreadPane";
+import { m } from "../i18n/messages";
 import { confirmTerminalClose } from "../lib/terminalCloseConfirm";
 
-// SideThreadPane and LinkedThreadPane are not lazy: revealing a suspended tiptap editor
-// tears down its view and crashes the composer.
-import SideThreadPane from "./chat/SideThreadPane";
-import { LinkedThreadPane } from "./chat/LinkedThreadPane";
 const PreviewPanel = lazy(() =>
   import("./preview/PreviewPanel").then((module) => ({ default: module.PreviewPanel })),
 );
@@ -138,6 +143,9 @@ const PullRequestDetailPanel = lazy(() =>
   import("./pullRequest/PullRequestDetailPanel").then((module) => ({
     default: module.PullRequestDetailPanel,
   })),
+);
+const IssueDetailPanel = lazy(() =>
+  import("./issue/IssueDetailPanel").then((module) => ({ default: module.IssueDetailPanel })),
 );
 
 const EMPTY_PENDING: ReadonlySet<string> = new Set();
@@ -202,6 +210,7 @@ function useThreadSurfaceContext(threadRef: ScopedThreadRef) {
  * gives it a tab (surfaceSync.ts).
  */
 export function useThreadSurfaceOpeners(threadRef: ScopedThreadRef) {
+  const gt = useGT();
   const ref = threadRef;
   const context = useThreadSurfaceContext(ref);
   const canOperatePreview = useEnvironmentScope(threadRef.environmentId, AuthPreviewOperateScope);
@@ -234,7 +243,7 @@ export function useThreadSurfaceOpeners(threadRef: ScopedThreadRef) {
       modelSelection: context.serverThread?.modelSelection,
     }),
     onError: (description) =>
-      toastManager.add({ type: "error", title: "Could not open side chat", description }),
+      toastManager.add({ type: "error", title: gt("Could not open side chat"), description }),
   });
   const serverConfigLoaded = context.serverConfig !== null;
   const shell = context.serverThread;
@@ -267,14 +276,14 @@ export function useThreadSurfaceOpeners(threadRef: ScopedThreadRef) {
   // Why the browser cannot open here: each case its own reason.
   const browserUnavailableReason =
     sessionStatus === "Initial"
-      ? "Connecting to the environment."
+      ? gt("Connecting to the environment.")
       : sessionStatus === "Failure"
-        ? "Can't reach the environment."
+        ? gt("Can't reach the environment.")
         : !canOperatePreview
-          ? "Ask the environment owner for preview access."
+          ? gt("Ask the environment owner for preview access.")
           : isPreviewSupportedInRuntime() || serverBrowser
             ? null
-            : "Only available in the desktop app.";
+            : gt("Only available in the desktop app.");
   const available: Record<LauncherSurfaceKind, boolean> = {
     browser: browserUnavailableReason === null,
     terminal: context.gitCwd !== null && canOperateTerminal,
@@ -282,7 +291,10 @@ export function useThreadSurfaceOpeners(threadRef: ScopedThreadRef) {
     // Outside a Git repository it opens on its empty state.
     diff: (context.isServerThread || context.threadless) && context.gitCwd !== null,
     "pull-request": pullRequestTarget !== null,
-    "pull-requests": context.isServerThread && serverConfigLoaded && linkedCount > 0,
+    "pull-requests":
+      context.isServerThread &&
+      serverConfigLoaded &&
+      (linkedCount > 0 || (shell?.issues?.length ?? 0) > 0),
     device: true,
     "side-chat": sideChat.available,
   };
@@ -324,7 +336,7 @@ export function useThreadSurfaceOpeners(threadRef: ScopedThreadRef) {
             toastManager.add(
               stackedThreadToast({
                 type: "error",
-                title: "Unable to open browser",
+                title: gt("Unable to open browser"),
                 description: error.message,
               }),
             );
@@ -362,7 +374,14 @@ export function useThreadSurfaceOpeners(threadRef: ScopedThreadRef) {
       });
     });
   };
-  return { available, browserUnavailableReason, open, runShellCommand };
+  return {
+    available,
+    browserUnavailableReason,
+    pullRequestNumber: pullRequestTarget?.number ?? null,
+    linkedPullRequestCount: linkedCount,
+    open,
+    runShellCommand,
+  };
 }
 
 /** A new shell in a surface's folder: its checkout, or the server's home. */
@@ -446,6 +465,7 @@ function useTerminalShortcutLabels() {
 }
 
 function useTerminalLabels(threadRef: ScopedThreadRef): ReadonlyMap<string, string> {
+  const messages = useMessages();
   const known = useKnownTerminalSessions({
     environmentId: threadRef.environmentId,
     threadId: threadRef.threadId,
@@ -455,7 +475,7 @@ function useTerminalLabels(threadRef: ScopedThreadRef): ReadonlyMap<string, stri
     if (session.target.threadId !== threadRef.threadId) continue;
     labels.set(
       session.target.terminalId,
-      resolveTerminalSessionLabel(session.target.terminalId, session.state.summary),
+      resolveTerminalSessionLabel(session.target.terminalId, session.state.summary, messages),
     );
   }
   return labels;
@@ -500,7 +520,8 @@ function ThreadTerminalTab({ threadRef }: { threadRef: ScopedThreadRef }) {
 function useThreadTitle(threadRef: ScopedThreadRef): string | null {
   const shell = useQuietThreadShell(threadRef);
   const draft = useComposerDraftStore((store) => store.getDraftThreadByRef(threadRef));
-  return shell?.title ?? (draft ? "New thread" : null);
+  const gt = useGT();
+  return shell?.title ?? (draft ? gt("New thread") : null);
 }
 
 function ThreadSurfacePane({
@@ -619,21 +640,22 @@ function ThreadSurfacePane({
 }
 
 function ThreadGoneState({ threadless, onClose }: { threadless: boolean; onClose: () => void }) {
+  const gt = useGT();
   return (
     <Empty className="flex-1">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Unlink2Icon />
         </EmptyMedia>
-        <EmptyTitle>{threadless ? "Its project is gone" : "Its thread is gone"}</EmptyTitle>
+        <EmptyTitle>{threadless ? gt("Its project is gone") : gt("Its thread is gone")}</EmptyTitle>
         <EmptyDescription>
           {threadless
-            ? "The project this was opened in no longer exists."
-            : "The thread this was opened from no longer exists."}
+            ? gt("The project this was opened in no longer exists.")
+            : gt("The thread this was opened from no longer exists.")}
         </EmptyDescription>
         <div className="mt-4 flex justify-center">
           <Button size="sm" variant="secondary" onClick={onClose}>
-            Close tab
+            <T>Close tab</T>
           </Button>
         </div>
       </EmptyHeader>
@@ -665,6 +687,7 @@ function ThreadSurfaceContent({
     isDesktop: boolean;
   };
 }) {
+  const gt = useGT();
   const bridge = useThreadChatBridge(threadRef);
   const { paneId } = useLayoutPane();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
@@ -698,6 +721,7 @@ function ThreadSurfaceContent({
 
   switch (surface.kind) {
     case "thread":
+      // Not lazy: revealing a suspended tiptap editor tears down its view and crashes the composer.
       return (
         <SideThreadPane
           key={surface.id}
@@ -828,6 +852,54 @@ function ThreadSurfaceContent({
           />
         </Suspense>
       );
+    case "issue":
+      if (!context.serverConfig) return <IssueDetailGhost />;
+      if (context.serverConfig.environment.capabilities.issues !== true) {
+        return (
+          <PullRequestsUnavailableState
+            icon={IssueGlyph.issue}
+            title={gt("Issues unavailable")}
+            error={gt("Update this environment's T3 Code server to browse issues.")}
+          />
+        );
+      }
+      return (
+        <Suspense fallback={<IssueDetailGhost />}>
+          <IssueDetailPanel
+            key={`${surface.environmentId ?? threadRef.environmentId}:${surface.id}`}
+            environmentId={
+              (surface.environmentId as EnvironmentId | undefined) ?? threadRef.environmentId
+            }
+            reference={{
+              projectId: surface.projectId as ProjectId,
+              tracker: surface.tracker as IssueTrackerKind,
+              ...(surface.host ? { host: surface.host } : {}),
+              scope: surface.scope,
+              key: surface.key,
+            }}
+            threadRef={context.threadless ? null : threadRef}
+            onSelectPullRequest={(reference) =>
+              useRightPanelStore.getState().openPullRequest(threadRef, {
+                projectId: reference.projectId,
+                repository: reference.repository,
+                number: reference.number,
+                ...(reference.host ? { host: reference.host } : {}),
+              })
+            }
+            // Back to the linked items, as a pull request among several goes back to them.
+            {...(openers.available["pull-requests"] &&
+            visibleThreadPullRequests(shell?.pullRequests ?? []).length +
+              (shell?.issues?.length ?? 0) >
+              1
+              ? {
+                  onBack: () => openInPane("pull-requests"),
+                  backLabel: gt("Back to linked items"),
+                }
+              : {})}
+          />
+        </Suspense>
+      );
+
     case "pull-requests":
       return <ThreadPullRequestsPanel threadRef={threadRef} />;
     case "device":
@@ -839,7 +911,6 @@ function ThreadSurfaceContent({
             key={surface.id}
             surface={surface}
             visible={visible}
-            onDismissSetup={() => void closeThreadSurface(threadRef, surface.id)}
           />
         </Suspense>
       );
@@ -850,8 +921,8 @@ function ThreadSurfaceContent({
         return (
           <FileSurfaceState
             icon={<FolderX />}
-            title="No project folder"
-            description="This thread has no workspace folder, so there are no files to show."
+            title={gt("No project folder")}
+            description={gt("This thread has no workspace folder, so there are no files to show.")}
           />
         );
       }
@@ -913,8 +984,10 @@ async function addTerminalContextFromChat(
   }
   toastManager.add({
     type: "error",
-    title: "Could not add terminal output to chat",
-    description: "The chat is not ready. Your terminal selection is still available to add again.",
+    title: m(msg("Could not add terminal output to chat")),
+    description: m(
+      msg("The chat is not ready. Your terminal selection is still available to add again."),
+    ),
   });
   return false;
 }
@@ -944,8 +1017,8 @@ async function sendAnnotationFromChat(
   toastManager.add(
     stackedThreadToast({
       type: "info",
-      title: "Annotation attached to draft",
-      description: "The chat could not send it yet. Send it from the chat.",
+      title: m(msg("Annotation attached to draft")),
+      description: m(msg("The chat could not send it yet. Send it from the chat.")),
     }),
   );
 }
@@ -1031,7 +1104,9 @@ function readTerminalTabTitles(
       resolveTerminalSessionLabel(
         terminalId,
         sessions?.find((session) => session.target.terminalId === terminalId)?.state.summary,
+        m,
       ),
+      m,
     ),
   );
 }
@@ -1085,7 +1160,10 @@ export async function closeThreadSurface(
     !options.bulk &&
     readEnvironmentScope(threadRef.environmentId, AuthTerminalOperateScope)
   ) {
-    const [first = "Terminal", ...rest] = readTerminalTabTitles(threadRef, surface.terminalIds);
+    const [first = m(msg("Terminal")), ...rest] = readTerminalTabTitles(
+      threadRef,
+      surface.terminalIds,
+    );
     if (!(await confirmTerminalClose([first, ...rest]))) return;
   }
   finish();

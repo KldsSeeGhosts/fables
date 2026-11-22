@@ -32,7 +32,7 @@ import {
   PencilIcon,
   SquareTerminalIcon,
 } from "lucide-react";
-import { Branch, msg, T, useGT, useMessages } from "gt-react";
+import { Branch, msg, T, useGT, useMessages, Var } from "gt-react";
 
 import { useOpenLink } from "~/browser/useOpenLink";
 import { m } from "~/i18n/messages";
@@ -170,7 +170,7 @@ export function PullRequestActionsMenu({
   pendingAction: PullRequestAction | null;
   perform: PerformPullRequestAction;
   openOnHostText: string;
-  copyReference: (value: string, label: string) => void;
+  copyReference: (value: string, failureTitle: string) => void;
   inlineConfirm: ReturnType<typeof useInlineActionConfirm>;
   showCheckout: boolean;
   checkoutMenuItems: ReactNode;
@@ -285,8 +285,8 @@ export function PullRequestActionsMenu({
           <MenuItem onClick={onToggleTimelineOrder}>
             <ArrowDownUpIcon className="size-3.5" />
             {timelineOrder === "newest"
-              ? "Show oldest activity first"
-              : "Show newest activity first"}
+              ? gt("Show oldest activity first")
+              : gt("Show newest activity first")}
           </MenuItem>
         ) : null}
         <MenuItem disabled={handoff !== null} onClick={askAboutPullRequest}>
@@ -341,7 +341,7 @@ export function PullRequestActionsMenu({
           // Its own workspace: the chat with its terminal, and this panel beside it.
           <MenuItem onClick={onOpenAsWorkspace}>
             <LayoutPanelTopIcon className="size-3.5" />
-            Open as workspace
+            <T>Open as workspace</T>
           </MenuItem>
         ) : null}
         {showCheckout ? (
@@ -445,7 +445,9 @@ export function PullRequestActionsMenu({
               <>
                 {showsDraftToggle || showsMergeNow || showsAutoMerge ? <MenuSeparator /> : null}
                 <MenuGroup>
-                  <MenuGroupLabel>{gt("Merge method")}</MenuGroupLabel>
+                  <MenuGroupLabel>
+                    <T>Merge method</T>
+                  </MenuGroupLabel>
                   <MenuRadioGroup
                     value={selectedMergeMethod}
                     onValueChange={(method) => {
@@ -482,7 +484,7 @@ export function PullRequestActionsMenu({
         {canEditPullRequestChangeRequest(detail) ? (
           <MenuItem onClick={() => onEditTitle()}>
             <PencilIcon className="size-3.5" />
-            {gt("Edit title")}
+            <T>Edit title</T>
           </MenuItem>
         ) : null}
         <MenuItem onClick={(event) => void openLink(detail.url, { event }).catch(console.error)}>
@@ -494,7 +496,9 @@ export function PullRequestActionsMenu({
             onClick={(event) => void openLink(repositoryUrl, { event }).catch(console.error)}
           >
             <FolderGit2Icon className="size-3.5" />
-            {gt("Open {repository}", { repository: detail.repository })}
+            <T>
+              Open <Var>{detail.repository}</Var>
+            </T>
           </MenuItem>
         ) : null}
         <MenuItem
@@ -541,9 +545,13 @@ export function PullRequestActionsMenu({
           </MenuShortcut>
         </MenuItem>
         {checkoutCommand ? (
-          <MenuItem onClick={() => copyReference(checkoutCommand, "Checkout command")}>
+          <MenuItem
+            onClick={() =>
+              copyReference(checkoutCommand, resolve(msg("Failed to copy checkout command")))
+            }
+          >
             <SquareTerminalIcon className="size-3.5" />
-            Copy checkout command
+            <T>Copy checkout command</T>
           </MenuItem>
         ) : null}
         {detail.state === "open" && can("close") ? (

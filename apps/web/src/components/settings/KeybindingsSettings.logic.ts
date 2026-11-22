@@ -498,7 +498,7 @@ const COMMAND_LABELS: Partial<Record<string, string>> = {
   "layout.moveToWorkspaceUp": msg("Send pane to the previous workspace"),
   "layout.moveWorkspaceDown": msg("Move workspace down"),
   "layout.moveWorkspaceUp": msg("Move workspace up"),
-  "layout.overview": msg("Overview"),
+  "layout.overview": msg("Overview", { $context: "shortcut, shows every workspace at once" }),
   "usage.open": msg("Open usage"),
   "usage.cost": msg("Show usage by cost"),
   "usage.tokens": msg("Show usage by tokens"),
@@ -507,16 +507,22 @@ const COMMAND_LABELS: Partial<Record<string, string>> = {
   "usage.period.week": msg("Show usage for the past 7 days"),
   "usage.period.month": msg("Show usage for the past 30 days"),
   "usage.period.quarter": msg("Show usage for the past 90 days"),
+  "composer.cycleHost": msg("Composer: Cycle Host"),
+  "composer.increaseEffort": msg("Composer: Increase Effort"),
+  "composer.decreaseEffort": msg("Composer: Decrease Effort"),
+  "thread.regenerateTitle": msg("Thread: Regenerate Title"),
+  "rightPanel.new": msg("Right Panel: New"),
+  "rightPanel.toggleMaximized": msg("Right Panel: Toggle Maximized"),
 };
 
 export function commandLabel(command: KeybindingCommand, resolve: MessageResolver = m): string {
+  const label = COMMAND_LABELS[command];
+  if (label) return resolve(label);
   const raw = String(command);
-  const known = COMMAND_LABELS[raw];
-  if (known) return resolve(known);
   const threadJump = /^thread\.jump\.(\d)$/.exec(raw);
-  if (threadJump) return resolve(msg("Jump to thread {n}", { n: threadJump[1]! }));
+  if (threadJump) return resolve(msg("Jump to thread {n}", { n: threadJump[1] }));
   const modelJump = /^modelPicker\.jump\.(\d)$/.exec(raw);
-  if (modelJump) return resolve(msg("Pick model {n}", { n: modelJump[1]! }));
+  if (modelJump) return resolve(msg("Pick model {n}", { n: modelJump[1] }));
   if (raw.startsWith("script.") && raw.endsWith(".run")) {
     return resolve(
       msg("Run script: {name}", {

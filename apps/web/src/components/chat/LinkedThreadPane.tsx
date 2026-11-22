@@ -50,13 +50,13 @@ function LinkedThreadComposer(props: {
             <ReadOnlyComposerBar actions={props.action}>
               <ReadOnlyComposerLead>
                 <EyeIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 truncate font-medium text-foreground">
+                <span className="min-w-0 truncate text-label text-foreground">
                   <T>Read-only</T>
                 </span>
               </ReadOnlyComposerLead>
               <ReadOnlyComposerStatus role="status">
                 {props.working
-                  ? gt("On {label} via {via} · Working", { label, via })
+                  ? gt("On {label} via {via}, working", { label, via })
                   : gt("On {label} via {via}", { label, via })}
               </ReadOnlyComposerStatus>
             </ReadOnlyComposerBar>
@@ -160,7 +160,7 @@ export function LinkedThread(props: {
   ) : null;
   // A file or visual lives on the linked environment, which this client has no way to ask.
   const renderHtmlRender = useStableCallback(() => (
-    <p className="chat-content-lane text-xs text-muted-foreground">
+    <p className="chat-content-lane text-meta text-muted-foreground">
       {gt("Open this thread on {label} to see this visual.", { label })}
     </p>
   ));
@@ -191,7 +191,7 @@ export function LinkedThread(props: {
           <div className="chat-composer-lane min-h-0 flex-1 overflow-y-auto py-3">
             <div className="chat-content-lane">
               {failure === null ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 text-body text-muted-foreground">
                   <Spinner size="sm" />
                   <T>
                     Reading from <Var>{label}</Var>…

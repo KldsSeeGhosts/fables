@@ -1,8 +1,8 @@
 import {
   CHATGPT_USAGE_URL,
+  collectCpaAccountGroups,
   collectLimitAccounts,
   collectLimitPools,
-  collectCpaAccountGroups,
   displayLimitWindows,
   type LimitAccount,
   type LimitPool,
@@ -12,8 +12,7 @@ import {
   remainingPercent,
   type ResetCreditChoice,
 } from "@t3tools/shared/usageLimits";
-import { formatDuration } from "@t3tools/shared/usageLimitsCopy";
-import { T, useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages, Var } from "gt-react";
 import type { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import { normalizeProviderAccentColor } from "@t3tools/client-runtime/state/provider-instance-display";
 import {
@@ -52,6 +51,7 @@ import {
   collectExternalUsageLinks,
   collectLimitNotices,
   cursorUsageWindowDetails,
+  formatDuration,
   formatResetsIn,
   resetCreditChoices,
 } from "@t3tools/shared/usageLimitsCopy";
@@ -616,6 +616,8 @@ function PoolWindowCard({
   readonly label?: string | null | undefined;
   readonly description?: string | undefined;
 }) {
+  const gt = useGT();
+  const m = useMessages();
   const nextRefill = pool.resets.find((reset) => reset.restoresPercent > 0);
   return (
     <div className="grid items-center gap-x-6 gap-y-3 rounded-card border border-transparent surface-card-settings p-4 md:grid-cols-[11rem_minmax(0,1fr)]">
@@ -638,7 +640,12 @@ function PoolWindowCard({
           <span className="flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
             <RotateCwIcon className="size-3 text-foreground" aria-hidden />
             <span className="font-semibold text-foreground">+{nextRefill.restoresPercent}%</span>
-            {nextRefill.at <= now ? "now" : `in ${formatDuration(nextRefill.at - now)}`}
+            {nextRefill.at <= now
+              ? gt("now", { $context: "a usage refill happens now" })
+              : gt("in {duration}", {
+                  duration: formatDuration(nextRefill.at - now, m),
+                  $context: "time until a usage window resets",
+                })}
           </span>
         ) : null}
       </div>
@@ -672,7 +679,9 @@ function PoolSection({ pool, now }: { readonly pool: LimitPool; readonly now: nu
         {label}
         {pool.accounts.length > 1 ? (
           <span className="text-xs font-normal text-dim-foreground">
-            {pool.accounts.length} accounts, pooled
+            <T>
+              <Var>{pool.accounts.length}</Var> accounts, pooled
+            </T>
           </span>
         ) : null}
       </h2>

@@ -31,6 +31,8 @@ import {
   XIcon,
 } from "lucide-react";
 import * as DateTime from "effect/DateTime";
+import { msg, T, useGT, useMessages } from "gt-react";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import {
   useId,
   useImperativeHandle,
@@ -40,8 +42,6 @@ import {
   type ReactNode,
   type Ref,
 } from "react";
-import { msg, T, useGT, useMessages } from "gt-react";
-import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 
 import { useAssetUrls } from "../../assets/assetUrls";
 import { threadEnvironment } from "../../state/threads";
@@ -51,8 +51,8 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { isImageAttachment, type ChatImageAttachment, type ChatMessage } from "../../types";
 import { cn } from "~/lib/utils";
 import { Button, InlineButton } from "../ui/button";
-import { AttachmentImage } from "../media/AttachmentImage";
 import { toastManager } from "../ui/toast";
+import { AttachmentImage } from "../media/AttachmentImage";
 import { m } from "../../i18n/messages";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import type { TimestampFormat } from "@t3tools/contracts/settings";
@@ -380,7 +380,7 @@ export function QueuedRunsControl({
                 variant="ghost-muted"
                 // Puts the grip's ink, not its padding, on the composer's text line.
                 className="-ms-2 sm:-ms-1.5"
-                aria-label={`Reorder queued message ${position + 1}`}
+                aria-label={gt("Reorder queued message {position}", { position: position + 1 })}
                 disabled={item.runId === null || busyRunId !== null}
                 draggable={item.runId !== null}
                 onDragStart={(event) => {
@@ -434,7 +434,13 @@ export function QueuedRunsControl({
                           }}
                         >
                           <CornerUpRightIcon />
-                          {workflow?.canSendNow ? <T>Send now</T> : <T>Steer</T>}
+                          {workflow?.canSendNow ? (
+                            <T>Send now</T>
+                          ) : (
+                            gt("Steer", {
+                              $context: "verb, steers the running turn with this message",
+                            })
+                          )}
                         </Button>
                       </TooltipTrigger>
                       <TooltipPopup>
@@ -643,7 +649,7 @@ function QueuedMessage(props: {
         />
       }
     >
-      Open automation
+      <T>Open automation</T>
     </InlineButton>
   ) : null;
 

@@ -453,20 +453,6 @@ contextBridge.exposeInMainWorld("desktopBridge", {
         profileId,
         tunnelLoopback,
       }),
-    onTunnelAccessRequest: (listener) => {
-      const wrappedListener = (_event: Electron.IpcRendererEvent, request: unknown) => {
-        if (typeof request !== "object" || request === null) return;
-        listener(request as Parameters<typeof listener>[0]);
-      };
-      ipcRenderer.on(IpcChannels.PREVIEW_TUNNEL_ACCESS_REQUEST_CHANNEL, wrappedListener);
-      return () =>
-        ipcRenderer.removeListener(
-          IpcChannels.PREVIEW_TUNNEL_ACCESS_REQUEST_CHANNEL,
-          wrappedListener,
-        );
-    },
-    resolveTunnelAccess: (requestId, url) =>
-      ipcRenderer.invoke(IpcChannels.PREVIEW_TUNNEL_ACCESS_RESOLVE_CHANNEL, { requestId, url }),
     setForwardedKeyChords: (shortcuts) =>
       ipcRenderer.invoke(IpcChannels.PREVIEW_SET_FORWARDED_KEY_CHORDS_CHANNEL, { shortcuts }),
     onForwardedKeyChord: (listener) => {
@@ -481,6 +467,20 @@ contextBridge.exposeInMainWorld("desktopBridge", {
           wrappedListener,
         );
     },
+    onTunnelAccessRequest: (listener) => {
+      const wrappedListener = (_event: Electron.IpcRendererEvent, request: unknown) => {
+        if (typeof request !== "object" || request === null) return;
+        listener(request as Parameters<typeof listener>[0]);
+      };
+      ipcRenderer.on(IpcChannels.PREVIEW_TUNNEL_ACCESS_REQUEST_CHANNEL, wrappedListener);
+      return () =>
+        ipcRenderer.removeListener(
+          IpcChannels.PREVIEW_TUNNEL_ACCESS_REQUEST_CHANNEL,
+          wrappedListener,
+        );
+    },
+    resolveTunnelAccess: (requestId, url) =>
+      ipcRenderer.invoke(IpcChannels.PREVIEW_TUNNEL_ACCESS_RESOLVE_CHANNEL, { requestId, url }),
     forwardPort: (environmentId, remotePort) =>
       ipcRenderer.invoke(IpcChannels.PORT_FORWARD_START_CHANNEL, { environmentId, remotePort }),
     stopPortForward: (environmentId, remotePort) =>

@@ -26,8 +26,8 @@ export interface ComposerThreadItem {
 }
 
 /**
- * Composer thread references, matched like the command palette. Candidates stay on this
- * server and its linked machines; a bare `@` stays a file picker, `#` lists recent threads.
+ * Threads to reference from the composer, excluding subagents and other threads' side chats.
+ * Candidates come from the composer's server and its linked machines; `#` lists recent threads.
  */
 export function matchComposerThreadItems<Candidate extends ComposerThreadCandidate>(
   input: {
@@ -87,7 +87,7 @@ export function matchComposerThreadItems<Candidate extends ComposerThreadCandida
         : machine === undefined
           ? (description ?? resolve(msg("Thread", { $context: "noun, search result type" })))
           : description === undefined
-            ? resolve(msg("Thread on {machine}"), { machine })
+            ? resolve(msg("Thread on {machine}", { machine }))
             : `${description} · ${machine}`,
     };
   });

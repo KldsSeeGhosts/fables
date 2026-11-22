@@ -55,6 +55,9 @@ import {
 } from "../threadRoutes";
 import { toastManager } from "./ui/toast";
 import { readIssueListPreferences } from "./issue/issueListPreferences";
+import { findLayoutTabByContent, isLayoutPageContent } from "../layout/layoutModel";
+import { useLayoutStore } from "../layout/layoutStore";
+import { layoutPageHref } from "../layout/pageNavigation";
 
 declare module "@tanstack/react-router" {
   interface HistoryState {
@@ -173,6 +176,14 @@ export function ReopenClosedViewShortcut() {
     useClosedViewStore.getState().remove(restore.id);
     if (router.history.location !== request.location) return;
 
+    if (restore.kind === "page") {
+      const content = findLayoutTabByContent(useLayoutStore.getState().layout, {
+        kind: restore.page,
+      })?.tab.content;
+      if (content && isLayoutPageContent(content))
+        await navigate({ href: layoutPageHref(content) });
+      return;
+    }
     let destination;
     if (restore.kind === "chat") {
       const target = closedChatTarget(restore);
@@ -198,14 +209,15 @@ export function ReopenClosedViewShortcut() {
     } else if (globalIssues) {
       destination = linkOptions({ to: "/issues", search: readIssueListPreferences() });
     } else if (!isThreadlessSurfacesRef(ref)) {
+      // A threadless surface has no route; its tab shows it.
       const draftId = thread === null ? drafts.getDraftIdByRef(ref) : null;
       destination =
         draftId !== null
           ? linkOptions({ to: "/draft/$draftId", params: buildDraftThreadRouteParams(draftId) })
           : linkOptions({ to: "/$environmentId/$threadId", params: buildThreadRouteParams(ref) });
+    } else {
+      return;
     }
-    // A threadless surface has no route; its tab shows it.
-    if (destination === undefined) return;
 
     const { history } = router;
     if (router.buildLocation(destination).publicHref === history.location.href) {

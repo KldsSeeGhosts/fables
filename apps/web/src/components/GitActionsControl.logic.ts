@@ -7,13 +7,13 @@ import type {
 } from "@t3tools/contracts";
 import { summarizeChangedFiles } from "@t3tools/shared/changedFileKind";
 import { isTemporaryWorktreeBranch } from "@t3tools/shared/git";
+import { msg } from "gt-react";
+import { m, type MessageResolver } from "../i18n/messages";
+import { changeRequestTermKind } from "./pullRequest/changeRequestTerm";
 import {
   sourceControlClients,
   type ChangeRequestTerminology,
 } from "@t3tools/client-runtime/source-control-clients";
-import { msg } from "gt-react";
-import { m, type MessageResolver } from "../i18n/messages";
-import { changeRequestTermKind } from "./pullRequest/changeRequestTerm";
 import {
   changeRequestTerminologyFor,
   type DefaultBranchActionDialogCopy,
@@ -58,6 +58,18 @@ export interface GitActionResultToastTiming {
 }
 
 export const GIT_ACTION_SUCCESS_VISIBLE_MS = 10_000;
+
+/**
+ * Every chat's git control listens on the window; only the one in the focused pane
+ * (`useLayoutPaneFocusedRef`, false for background threads) commits and pushes.
+ */
+export function commitPushShortcutPressActs(input: {
+  readonly paneFocused: boolean;
+  readonly defaultPrevented: boolean;
+  readonly repeat: boolean;
+}): boolean {
+  return input.paneFocused && !input.defaultPrevented && !input.repeat;
+}
 
 export function resolveGitActionResultToastTiming(
   type: "error" | "success",
@@ -705,18 +717,27 @@ export function resolveChangesTotals(
 export function gitStackedActionTitle(
   action: GitStackedAction,
   terminology: ChangeRequestTerminology = sourceControlClients.get(undefined).changeRequest,
+  resolve: MessageResolver = m,
 ): string {
   switch (action) {
     case "commit":
-      return "Commit";
+      return resolve(msg("Commit", { $context: "verb, git action" }));
     case "push":
-      return "Push";
+      return resolve(msg("Push", { $context: "verb, git action" }));
     case "create_pr":
-      return `Create ${terminology.shortLabel}`;
+      return resolve(
+        msg("Create {term, select, mr {MR} cr {change request} other {PR}}", {
+          term: changeRequestTermKind(terminology),
+        }),
+      );
     case "commit_push":
-      return "Commit & push";
+      return resolve(msg("Commit & push"));
     case "commit_push_pr":
-      return `Commit, push & ${terminology.shortLabel}`;
+      return resolve(
+        msg("Commit, push & {term, select, mr {MR} cr {change request} other {PR}}", {
+          term: changeRequestTermKind(terminology),
+        }),
+      );
   }
 }
 
@@ -745,15 +766,16 @@ export function buildSyncMenuItems(
   gitStatus: VcsStatusResult | null,
   isBusy: boolean,
   hasPrimaryRemote = true,
+  resolve: MessageResolver = m,
 ): {
   readonly commitPush: GitSyncMenuItem | null;
   readonly pull: GitSyncMenuItem | null;
   readonly sync: GitSyncMenuItem | null;
 } {
   if (!gitStatus) return { commitPush: null, pull: null, sync: null };
-  const busyReason = isBusy ? "Git action in progress." : null;
+  const busyReason = isBusy ? resolve(msg("Git action in progress.")) : null;
   const detachedReason =
-    gitStatus.refName === null ? "Detached HEAD: check out a branch first." : null;
+    gitStatus.refName === null ? resolve(msg("Detached HEAD: check out a branch first.")) : null;
   const hasChanges = gitStatus.hasWorkingTreeChanges;
   const isAhead = gitStatus.aheadCount > 0;
   const isBehind = gitStatus.behindCount > 0;
@@ -763,15 +785,15 @@ export function buildSyncMenuItems(
     hasPrimaryRemote || gitStatus.hasUpstream
       ? syncMenuItem(
           "commit_push",
-          "Commit & push",
+          resolve(msg("Commit & push")),
           busyReason ??
             detachedReason ??
             (!hasChanges
-              ? "Worktree is clean. Make changes before committing."
+              ? resolve(msg("Worktree is clean. Make changes before committing."))
               : isBehind
-                ? "Branch is behind upstream. Pull first."
+                ? resolve(msg("Branch is behind upstream. Pull first."))
                 : !gitStatus.hasUpstream && !canPushWithoutUpstream
-                  ? 'Add an "origin" remote before pushing.'
+                  ? resolve(msg('Add an "origin" remote before pushing.'))
                   : null),
         )
       : null;
@@ -780,28 +802,28 @@ export function buildSyncMenuItems(
 
   const pull = syncMenuItem(
     "pull",
-    "Pull",
+    resolve(msg("Pull")),
     busyReason ??
       detachedReason ??
       (isAhead && isBehind
-        ? "Branch has diverged from upstream. Rebase/merge first."
+        ? resolve(msg("Branch has diverged from upstream. Rebase/merge first."))
         : !isBehind
-          ? "Already up to date with upstream."
+          ? resolve(msg("Already up to date with upstream."))
           : hasChanges
-            ? "Commit or stash local changes before pulling."
+            ? resolve(msg("Commit or stash local changes before pulling."))
             : null),
   );
   const sync = syncMenuItem(
     "sync",
-    "Sync ref",
+    resolve(msg("Sync ref")),
     busyReason ??
       detachedReason ??
       (isAhead && isBehind
-        ? "Branch has diverged from upstream. Rebase/merge first."
+        ? resolve(msg("Branch has diverged from upstream. Rebase/merge first."))
         : !isAhead && !isBehind
-          ? "Branch is up to date. No action needed."
+          ? resolve(msg("Branch is up to date. No action needed."))
           : hasChanges
-            ? "Commit or stash local changes before syncing."
+            ? resolve(msg("Commit or stash local changes before syncing."))
             : null),
   );
   return { commitPush, pull, sync };

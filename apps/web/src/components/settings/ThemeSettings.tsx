@@ -60,8 +60,8 @@ import {
   type ThemeMode,
 } from "./ThemePreviewCircles";
 import { ThemeWireframe } from "./ThemeWireframe";
-import { T, useGT } from "gt-react";
 import { useCloseAppModal } from "../sidebar/mainAppLocation";
+import { msg, T, useGT, useMessages } from "gt-react";
 
 /** Built-in palettes with their own card; the default card toggles between new and classic colors. */
 const MAINTAINER_THEMES = BUILT_IN_THEMES.filter((theme) => theme.id !== T3_CODE_CLASSIC_THEME.id);
@@ -111,6 +111,13 @@ function standardThemeDefinition(label: string): ThemeDefinition {
   };
 }
 
+const APPEARANCE_CHOICE_ARIA_LABELS: Readonly<Record<AppearanceChoice, string>> = {
+  system: msg("Follow the system appearance"),
+  light: msg("Use light mode"),
+  "black-chrome": msg("Use light mode with a black window and sidebar"),
+  dark: msg("Use dark mode"),
+};
+
 function ThemeVariantTooltip({ label, children }: { label: string; children: ReactElement }) {
   return (
     <Tooltip>
@@ -134,6 +141,7 @@ function ThemeCardMoreMenu({
   onDownload: (() => void) | undefined;
   onRemove: (() => void) | undefined;
 }) {
+  const gt = useGT();
   if (!onDuplicate && !onDownload && !onRemove) return null;
   return (
     <Menu>
@@ -143,7 +151,7 @@ function ThemeCardMoreMenu({
             <MenuTrigger
               render={
                 <Button
-                  aria-label={`More actions for ${label}`}
+                  aria-label={gt("More actions for {label}", { label })}
                   size="icon-xs"
                   variant="ghost"
                   onClick={(event) => event.stopPropagation()}
@@ -154,20 +162,22 @@ function ThemeCardMoreMenu({
         >
           <EllipsisIcon />
         </TooltipTrigger>
-        <TooltipPopup>More actions</TooltipPopup>
+        <TooltipPopup>
+          <T>More actions</T>
+        </TooltipPopup>
       </Tooltip>
       {/* The popup is portaled but React still bubbles its clicks to the card. */}
       <MenuPopup align="end" onClick={(event) => event.stopPropagation()}>
         {onDuplicate ? (
           <MenuItem onClick={onDuplicate}>
             <CopyIcon />
-            Duplicate theme
+            <T>Duplicate theme</T>
           </MenuItem>
         ) : null}
         {onDownload ? (
           <MenuItem onClick={onDownload}>
             <DownloadIcon />
-            Export theme file
+            <T>Export theme file</T>
           </MenuItem>
         ) : null}
         {onRemove ? (
@@ -258,13 +268,15 @@ function ThemeLibraryCard({
               {rewindNavigation ? (
                 <div className="absolute top-1.5 right-1.5 z-10">
                   <ThemeVariantTooltip
-                    label={rewindNavigation.classic ? "Use new colors" : "Use classic colors"}
+                    label={
+                      rewindNavigation.classic ? gt("Use new colors") : gt("Use classic colors")
+                    }
                   >
                     <Button
                       size="icon-xs"
                       variant={rewindNavigation.classic ? "secondary" : "ghost-muted"}
                       aria-label={
-                        rewindNavigation.classic ? "Use new colors" : "Use classic colors"
+                        rewindNavigation.classic ? gt("Use new colors") : gt("Use classic colors")
                       }
                       aria-pressed={rewindNavigation.classic}
                       onClick={(event) => {
@@ -480,7 +492,7 @@ function ThemeLibraryCard({
                   </button>
                   {rewindNavigation?.classic ? (
                     <Badge size="sm" variant="secondary">
-                      Classic
+                      {gt("Classic", { $context: "classic color theme variant" })}
                     </Badge>
                   ) : null}
                 </div>
@@ -537,7 +549,7 @@ function ThemeLibraryCard({
                   {onEdit ? (
                     <ThemeCardMoreMenu
                       label={collectionNavigation?.collectionLabel ?? theme.label}
-                      removeLabel={collectionNavigation ? "Remove themes" : "Remove theme"}
+                      removeLabel={collectionNavigation ? gt("Remove themes") : gt("Remove theme")}
                       onDuplicate={onDuplicate}
                       onDownload={onDownload}
                       onRemove={onRemove}
@@ -723,6 +735,7 @@ export function ThemeLibrary({
 }) {
   const setting = useSearchableSetting();
   const gt = useGT();
+  const messages = useMessages();
   const startThemeEditor = useThemeEditorStore((store) => store.openThemeEditor);
   const closeAppModal = useCloseAppModal();
   const openThemeEditor: typeof startThemeEditor = (session) => {
@@ -863,13 +876,7 @@ export function ThemeLibrary({
           return (
             <div className="relative" key={mode}>
               <button
-                aria-label={
-                  mode === "system"
-                    ? gt("Follow the system appearance")
-                    : mode === "light"
-                      ? gt("Use light mode")
-                      : gt("Use dark mode")
-                }
+                aria-label={messages(APPEARANCE_CHOICE_ARIA_LABELS[mode])}
                 aria-pressed={isActive}
                 className={cn(
                   "flex w-full cursor-pointer flex-col items-stretch gap-1.75 rounded-card border p-2 outline-none transition-colors focus-visible:outline-2 focus-visible:outline-solid focus-visible:-outline-offset-2 focus-visible:outline-ring",
@@ -894,7 +901,7 @@ export function ThemeLibrary({
                     isActive ? "text-foreground" : "text-muted-foreground",
                   )}
                 >
-                  {mode === "system" ? gt("System") : mode === "dark" ? gt("Dark") : gt("Light")}
+                  {mode === "system" ? gt("System") : mode === "light" ? gt("Light") : gt("Dark")}
                 </span>
               </button>
               {mode === "light" ? (
@@ -916,7 +923,7 @@ export function ThemeLibrary({
                         <T>Light chrome</T>
                       </MenuItem>
                       <MenuItem
-                        aria-label={gt("Use light mode with a black window and sidebar")}
+                        aria-label={messages(APPEARANCE_CHOICE_ARIA_LABELS["black-chrome"])}
                         onClick={() => setMode("black-chrome")}
                       >
                         <T>Black chrome</T>

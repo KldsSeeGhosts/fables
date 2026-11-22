@@ -21,7 +21,7 @@ import {
   CheckIcon,
   CopyIcon,
 } from "lucide-react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, useGT, useMessages } from "gt-react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { m } from "~/i18n/messages";
 
@@ -382,13 +382,11 @@ export function AttachmentFilePreview(props: {
       icon={<FileQuestion />}
       title={gt("No preview for this file")}
       description={
-        props.name.split(".").at(-1) ? (
-          <T>
-            Save it to open in an app that supports <Var>{props.name.split(".").at(-1)}</Var> files.
-          </T>
-        ) : (
-          <T>Save it to open in an app that supports this format files.</T>
-        )
+        props.name.split(".").at(-1)
+          ? gt("Save it to open in an app that supports {extension} files.", {
+              extension: props.name.split(".").at(-1),
+            })
+          : gt("Save it to open in an app that supports this format files.")
       }
     />
   );

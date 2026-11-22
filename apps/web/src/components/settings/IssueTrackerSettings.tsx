@@ -160,7 +160,7 @@ function TrackerRow({
               </Badge>
             ) : null}
           </div>
-          <p className="text-caption text-muted-foreground/80">{summary}</p>
+          <p className="text-meta text-muted-foreground/80">{summary}</p>
         </div>
         <Button
           size="icon-xs"

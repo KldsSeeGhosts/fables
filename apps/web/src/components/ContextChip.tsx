@@ -45,7 +45,7 @@ const contextChipVariants = cva(
       state: {
         unresolved: "data-[state=unresolved]:[--context-chip-accent:currentColor]",
         invalid:
-          "data-[state=invalid]:[--context-chip-accent:var(--context-chip-invalid,var(--error-foreground))] data-[state=invalid]:[--context-chip-ink:var(--context-chip-message-ink,var(--context-chip-accent))]",
+          "data-[state=invalid]:[--context-chip-accent:var(--error-foreground)] data-[state=invalid]:[--context-chip-ink:var(--context-chip-message-ink,var(--context-chip-accent))]",
       },
     },
   },

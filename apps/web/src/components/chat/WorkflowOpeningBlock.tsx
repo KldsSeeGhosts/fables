@@ -144,15 +144,13 @@ function WorkflowMemberRow(props: {
             threadId === null ? (
               <div aria-description={member.status} className={className} />
             ) : (
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm-multiline"
                 aria-label={gt("Open {title}", { title: member.title })}
                 aria-description={member.status}
                 {...trigger((intent) => props.onOpenThread(threadId, intent))}
-                className={cn(
-                  className,
-                  "cursor-pointer transition-colors hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70",
-                )}
+                className="group/subagent w-full min-w-0 justify-start"
               />
             )
           }

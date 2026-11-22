@@ -1,4 +1,4 @@
-import { msg } from "gt-react";
+import { msg, T, useGT } from "gt-react";
 import { GitForkIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -19,6 +19,7 @@ export function SidebarUpstreamUpdatePill({
 } = {}) {
   const update = useAvailableUpstreamNightly(includedVersion);
   const run = useUpdateEverythingRun();
+  const gt = useGT();
   const [open, setOpen] = useState(false);
   const { copyToClipboard, isCopied } = useCopyToClipboard({
     target: {
@@ -30,7 +31,7 @@ export function SidebarUpstreamUpdatePill({
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Could not copy merge prompt",
+          title: gt("Could not copy merge prompt"),
           description: error.message,
         }),
       ),
@@ -38,7 +39,7 @@ export function SidebarUpstreamUpdatePill({
 
   if (update === null || run !== null) return null;
 
-  const label = `Upstream nightly ${update.latestVersion} available`;
+  const label = gt("Upstream nightly {version} available", { version: update.latestVersion });
 
   return (
     <SidebarMenuItem className="ml-auto shrink-0 [&+*]:ml-0">
@@ -66,9 +67,11 @@ export function SidebarUpstreamUpdatePill({
         <PopoverPopup side="top" align="end" width="sm">
           <div className="flex flex-col gap-2 text-meta">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-foreground">Upstream update available</span>
+              <span className="text-foreground">
+                <T>Upstream update available</T>
+              </span>
               <Badge size="sm" variant="info">
-                Nightly
+                <T>Nightly</T>
               </Badge>
             </div>
             <p className="font-mono text-meta text-muted-foreground">
@@ -80,14 +83,14 @@ export function SidebarUpstreamUpdatePill({
                 size="xs"
                 variant="secondary"
               >
-                Review changes
+                <T>Review changes</T>
               </Button>
               <Button
                 size="xs"
                 variant="secondary"
                 onClick={() => copyToClipboard(update.mergePrompt, undefined)}
               >
-                {isCopied ? "Copied" : "Copy merge prompt"}
+                {isCopied ? <T>Copied</T> : <T>Copy merge prompt</T>}
               </Button>
             </div>
           </div>

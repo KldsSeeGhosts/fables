@@ -253,9 +253,7 @@ export default function LargeTextViewer(props: {
                   })}
                 </span>
                 <span className="block">
-                  {gt("{kind} separated", {
-                    kind: props.delimiter === "," ? gt("Comma") : gt("Tab"),
-                  })}
+                  {props.delimiter === "," ? gt("Comma separated") : gt("Tab separated")}
                 </span>
               </>
             ) : null}

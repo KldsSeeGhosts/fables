@@ -93,6 +93,7 @@ function keybindingKeyCaps(value: string): ReadonlyArray<string> {
     .filter((part) => part.length > 0)
     .map((part) => {
       if (part === "mod") return mac ? "\u2318" : "Ctrl";
+      // oxlint-disable-next-line t3code/no-untranslated-copy -- key names stay English
       if (part === "meta") return mac ? "\u2318" : "Meta";
       if (part === "ctrl") return mac ? "\u2303" : "Ctrl";
       if (part === "alt") return mac ? "\u2325" : "Alt";
@@ -112,8 +113,8 @@ function KeybindingField(props: {
   readonly onClear: () => void;
   readonly disabled?: boolean;
 }) {
-  const caps = props.value ? keybindingKeyCaps(props.value) : [];
   const gt = useGT();
+  const caps = props.value ? keybindingKeyCaps(props.value) : [];
   return (
     <div className="relative flex h-8.5 min-w-0 items-center gap-1 rounded-control surface-well kbd-in-control ps-2 pe-1 text-base has-focus-visible:surface-focus sm:h-7.5 sm:text-sm">
       <input
@@ -134,7 +135,7 @@ function KeybindingField(props: {
         ))
       ) : (
         <span className="pointer-events-none truncate text-placeholder">
-          {gt("Press shortcut")}
+          <T>Press shortcut</T>
         </span>
       )}
       {caps.length > 0 ? (

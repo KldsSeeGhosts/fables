@@ -7,10 +7,9 @@ import {
   FileDiffIcon,
   PanelRightIcon,
 } from "lucide-react";
-import { msg, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "gt-react";
 import type { ReactNode } from "react";
 import {
-  capitalizeTerm,
   sourceControlClients,
   type ChangeRequestTerminology,
 } from "@t3tools/client-runtime/source-control-clients";
@@ -34,7 +33,7 @@ import { resolveFilterOptions } from "./pullRequestListOptions";
 import { changeRequestTermKind } from "./changeRequestTerm";
 
 export function GhostBar({ className }: { className?: string | undefined }) {
-  return <span aria-hidden className={cn("block h-3 rounded bg-muted-foreground/15", className)} />;
+  return <div aria-hidden className={cn("h-3 rounded bg-muted-foreground/15", className)} />;
 }
 
 const TITLE_WIDTHS = ["w-3/5", "w-2/5", "w-1/2", "w-2/3", "w-2/5", "w-3/5", "w-1/2"];
@@ -120,6 +119,7 @@ export function PullRequestDetailGhost({
   number?: number;
   onBack?: (() => void) | undefined;
   onClose?: (() => void) | undefined;
+  onCheckoutError?: ((error: Error) => void) | undefined;
   threadRef?: ScopedThreadRef | null | undefined;
 }) {
   const gt = useGT();
@@ -174,7 +174,10 @@ export function PullRequestDetailGhost({
                 variant="ghost-muted"
                 className="-ms-1.25"
                 onClick={onBack}
-                aria-label={`Back to this thread's ${terminology.plural}`}
+                aria-label={gt(
+                  "Back to this thread's {term, select, mr {merge requests} cr {change requests} other {pull requests}}",
+                  { term: changeRequestTermKind(terminology) },
+                )}
               >
                 <ArrowLeftIcon aria-hidden className="size-3.5" />
               </Button>
@@ -264,7 +267,10 @@ export function PullRequestDetailGhost({
                     <MiddleTruncate value={seed.baseBranch} />
                   </code>
                   <ArrowLeftIcon
-                    aria-label={gt("receives changes from")}
+                    aria-label={gt("receives changes from", {
+                      $context:
+                        "screen reader label for an arrow between the base branch, read before it, and the head branch, read after it",
+                    })}
                     className="size-3 shrink-0 @max-sm/pr-header:hidden"
                   />
                   <code className="min-w-0 truncate rounded-kbd bg-secondary px-1.5 py-px text-muted-foreground">
@@ -299,7 +305,10 @@ export function PullRequestDetailGhost({
 
         <nav
           className="col-span-2 flex min-h-12 min-w-0 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2"
-          aria-label={`${capitalizeTerm(terminology.singular)} tabs`}
+          aria-label={gt(
+            "{term, select, mr {Merge request} cr {Change request} other {Pull request}} tabs",
+            { term: changeRequestTermKind(terminology) },
+          )}
           inert
         >
           <ToggleGroup
@@ -366,7 +375,9 @@ export function PullRequestDetailGhost({
         <section>
           <div className="sticky top-0 z-10 flex w-full items-center bg-(--code-surface) pr-4">
             <div className="flex min-w-0 flex-1 items-center gap-1.5 px-4 py-3 text-left text-label text-foreground">
-              <span>{gt("Description")}</span>
+              <span>
+                <T>Description</T>
+              </span>
               <ChevronRightIcon
                 aria-hidden
                 className="size-3.5 rotate-90 text-muted-foreground/60"
@@ -380,6 +391,10 @@ export function PullRequestDetailGhost({
               <GhostBar className="h-4 w-11/12" />
               <GhostBar className="h-4 w-4/5" />
               <GhostBar className="h-4 w-2/3" />
+            </div>
+            {/* The labels line. */}
+            <div className="-mt-1 flex h-6 items-center">
+              <GhostBar className="w-20" />
             </div>
           </div>
         </section>

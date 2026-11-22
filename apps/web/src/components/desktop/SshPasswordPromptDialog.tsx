@@ -30,9 +30,9 @@ function describeSshTarget(request: DesktopSshPasswordPromptRequest): string {
   return request.username ? `${request.username}@${request.destination}` : request.destination;
 }
 
-/** SSH's own prompt when it asks for something other than a password, like a passphrase. */
-function describeSshPrompt(prompt: string): string {
-  return /password:?\s*$/i.test(prompt.trim()) ? "Password" : prompt.trim();
+/** False when SSH asks for something other than a password, like a passphrase; its own prompt shows then. */
+function isSshPasswordPrompt(prompt: string): boolean {
+  return /password:?\s*$/i.test(prompt.trim());
 }
 
 function formatRemainingSeconds(seconds: number): string {
@@ -109,6 +109,7 @@ function ActiveSshPasswordPrompt({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const isRespondingRef = useRef(false);
   const formId = useId();
+  const isPasswordPrompt = isSshPasswordPrompt(request.prompt);
 
   const expiresAtMs = Date.parse(request.expiresAt);
   const now = useNowSecond();
@@ -121,6 +122,7 @@ function ActiveSshPasswordPrompt({
   const remainingSeconds = remainingMs === null ? null : Math.ceil(remainingMs / 1_000);
   const remainingLabel =
     remainingSeconds === null ? null : formatRemainingSeconds(remainingSeconds);
+
   const respond = async (nextPassword: string | null) => {
     if (isRespondingRef.current) {
       return;
@@ -160,7 +162,6 @@ function ActiveSshPasswordPrompt({
   };
 
   const target = describeSshTarget(request);
-  const promptKind = describeSshPrompt(request.prompt);
 
   return (
     <Dialog
@@ -174,18 +175,22 @@ function ActiveSshPasswordPrompt({
       <DialogPopup className="max-w-100" initialFocus={inputRef} showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>
-            {promptKind === "Password"
-              ? gt("SSH Password Required")
-              : gt("SSH verification required")}
+            {isPasswordPrompt ? <T>SSH Password Required</T> : <T>SSH verification required</T>}
           </DialogTitle>
           <DialogDescription>
-            {promptKind === "Password" ? (
+            {isPasswordPrompt ? (
               <T>
-                <Var>{target}</Var> asked for a password to connect.
+                <code>
+                  <Var>{target}</Var>
+                </code>{" "}
+                asked for a password to connect.
               </T>
             ) : (
               <T>
-                <Var>{target}</Var> asked for verification to connect.
+                <code>
+                  <Var>{target}</Var>
+                </code>{" "}
+                asked for verification to connect.
               </T>
             )}
           </DialogDescription>
@@ -201,9 +206,7 @@ function ActiveSshPasswordPrompt({
           >
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`${formId}-password`}>
-                {promptKind === "Password"
-                  ? gt("Password", { $context: "noun, SSH credential" })
-                  : promptKind}
+                {isPasswordPrompt ? gt("Password") : request.prompt.trim()}
               </Label>
               <InputGroup>
                 <InputGroupAddon>
@@ -233,13 +236,9 @@ function ActiveSshPasswordPrompt({
                 }
               >
                 <TimerIcon aria-hidden className="size-3 shrink-0" />
-                {isExpired ? (
-                  <T>Expired. Try connecting again.</T>
-                ) : (
-                  <T>
-                    Expires in <Var>{remainingLabel}</Var>
-                  </T>
-                )}
+                {isExpired
+                  ? gt("Expired. Try connecting again.")
+                  : gt("Expires in {duration}", { duration: remainingLabel })}
               </p>
             ) : null}
             {responseError && !isExpired ? (
@@ -258,7 +257,7 @@ function ActiveSshPasswordPrompt({
             {isExpired ? gt("Dismiss") : gt("Cancel")}
           </Button>
           <Button size="standard" disabled={isResponding || isExpired} form={formId} type="submit">
-            {gt("Connect")}
+            <T>Connect</T>
             <SubmitKbd />
           </Button>
         </DialogFooter>

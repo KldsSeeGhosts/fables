@@ -244,8 +244,8 @@ export default function BinaryViewer(props: {
               </TooltipTrigger>
               <TooltipPopup>
                 {sizeBytes !== null
-                  ? formatAttachmentSize(sizeBytes)
-                  : gt("Size unavailable", { $context: "file size" })}
+                  ? formatAttachmentSize(sizeBytes, messages)
+                  : gt("Size unavailable")}
               </TooltipPopup>
             </Tooltip>
           </span>
@@ -317,7 +317,7 @@ export default function BinaryViewer(props: {
                   {rows ? columnsLabel(rows.columns.length, gt) : gt("… columns")}
                 </span>
                 {sizeBytes !== null ? (
-                  <span className="block">{formatAttachmentSize(sizeBytes)}</span>
+                  <span className="block">{formatAttachmentSize(sizeBytes, messages)}</span>
                 ) : null}
               </TooltipPopup>
             </Tooltip>
@@ -349,13 +349,13 @@ export default function BinaryViewer(props: {
             <thead className="sticky top-0 bg-background text-muted-foreground">
               <tr>
                 <th scope="col" className="px-3 py-2 text-left text-meta">
-                  <T context="column header, file name">Name</T>
+                  <T $context="column header, file name">Name</T>
                 </th>
                 <th scope="col" className="px-3 py-2 text-right text-meta">
-                  <T context="column header, file size">Size</T>
+                  <T $context="column header, file size">Size</T>
                 </th>
                 <th scope="col" className="px-3 py-2 text-right text-meta">
-                  <T context="column header, last modified date">Modified</T>
+                  <T $context="column header, last modified date">Modified</T>
                 </th>
               </tr>
             </thead>

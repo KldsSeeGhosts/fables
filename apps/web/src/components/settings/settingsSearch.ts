@@ -346,48 +346,52 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "layout-template",
-    title: "Your layout",
+    title: msg("Your layout"),
     to: "/settings/layout",
     searchTerms: [
-      "layout panes split columns template chat terminal diff files browser drag resize",
+      msg("layout panes split columns template chat terminal diff files browser drag resize"),
     ],
   },
   {
     id: "layout-terminal-placement",
-    title: "Terminal",
+    title: msg("Terminal"),
     to: "/settings/layout",
-    searchTerms: ["terminal placement where cmd+j opens it below the chat new tab new column"],
+    searchTerms: [msg("terminal placement where cmd+j opens it below the chat new tab new column")],
   },
   {
     id: "layout-side-pane-placement",
-    title: "Side pane",
+    title: msg("Side pane"),
     to: "/settings/layout",
-    searchTerms: ["side pane placement diff files browser pull request beside the chat new column"],
+    searchTerms: [
+      msg("side pane placement diff files browser pull request beside the chat new column"),
+    ],
   },
   {
     id: "layout-side-pane-opens-on",
-    title: "Side pane opens on",
+    title: msg("Side pane opens on"),
     to: "/settings/layout",
-    searchTerms: ["side pane first tab last used diff files browser pull request"],
+    searchTerms: [msg("side pane first tab last used diff files browser pull request")],
   },
   {
     id: "layout-new-tab-position",
-    title: "New tabs",
+    title: msg("New tabs"),
     to: "/settings/layout",
-    searchTerms: ["where new tabs open after the current tab at the end cmd+t"],
+    searchTerms: [msg("where new tabs open after the current tab at the end cmd+t")],
   },
   {
     id: "layout-when-no-room",
-    title: "When it doesn't fit",
+    title: msg("When it doesn't fit"),
     to: "/settings/layout",
-    searchTerms: ["no room shrink then scroll always shrink always scroll strip columns width"],
+    searchTerms: [
+      msg("no room shrink then scroll always shrink always scroll strip columns width"),
+    ],
     scrollingWorkspacesOnly: true,
   },
   {
     id: "layout-three-finger-swipe",
-    title: "Three-finger swipe",
+    title: msg("Three-finger swipe"),
     to: "/settings/layout",
-    searchTerms: ["trackpad gesture swipe between pages column workspace"],
+    searchTerms: [msg("trackpad gesture swipe between pages column workspace")],
     desktopOnly: true,
     macOnly: true,
     scrollingWorkspacesOnly: true,
@@ -447,9 +451,9 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "app-icon",
-    title: "App icon",
+    title: msg("App icon"),
     to: "/settings/appearance",
-    searchTerms: ["dock taskbar favicon logo nightly blueprint sunrise orbital black classic"],
+    searchTerms: [msg("dock taskbar favicon logo nightly blueprint sunrise orbital black classic")],
   },
   {
     id: "math-rendering",
@@ -459,10 +463,12 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "surface-style",
-    title: "Style",
+    title: msg("Style"),
     to: "/settings/appearance",
     searchTerms: [
-      "surface buttons composer finish standard flat soft gloss glossy accent outline aqua gradient rim",
+      msg(
+        "surface buttons composer finish standard flat soft gloss glossy accent outline aqua gradient rim",
+      ),
     ],
   },
   {
@@ -479,9 +485,9 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "hide-window-controls",
-    title: "Hide window controls when the sidebar is collapsed",
+    title: msg("Hide window controls when the sidebar is collapsed"),
     to: "/settings/appearance",
-    searchTerms: ["traffic lights close minimize zoom buttons titlebar"],
+    searchTerms: [msg("traffic lights close minimize zoom buttons titlebar")],
     desktopOnly: true,
     macOnly: true,
   },
@@ -576,10 +582,12 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "scrolling-workspaces",
-    title: "Scrolling workspaces",
+    title: msg("Scrolling workspaces"),
     to: "/settings/labs",
     searchTerms: [
-      "beta labs niri strip scroll sideways workspaces overview layout tour swipe panes shrink",
+      msg(
+        "beta labs redesign niri strip scroll sideways workspaces overview layout tour swipe panes shrink",
+      ),
     ],
   },
   {
@@ -598,10 +606,12 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "turn-work-fold",
-    title: "Fold each turn's work",
+    title: msg("Fold each turn's work"),
     to: "/settings/labs",
     searchTerms: [
-      "beta labs redesign working section window fold collapse turn tool calls open worked for wake-ups timeline",
+      msg(
+        "beta labs redesign working section window fold collapse turn tool calls open worked for wake-ups timeline",
+      ),
     ],
   },
   {
@@ -1023,7 +1033,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "terminal-close-confirmation",
     title: msg("Terminal close confirmation"),
     to: "/settings/general",
-    searchTerms: ["ask before delete stop process shell console history"],
+    searchTerms: [msg("ask before delete stop process shell console history")],
   },
   {
     id: "quit-confirmation",
@@ -1065,9 +1075,9 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "upstream-nightly",
-    title: "Upstream",
+    title: msg("Upstream"),
     to: "/settings/about",
-    searchTerms: ["ksg fork merge sync upstream t3 code nightly check updates review changes"],
+    searchTerms: [msg("ksg fork merge sync upstream t3 code nightly check updates review changes")],
   },
   {
     id: "cli-command",
@@ -1166,7 +1176,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/providers",
     searchTerms: [
       msg(
-        "agents cli codex claude cursor grok fx kiro opencode antigravity google cpa sign in sign out install subscription instances authentication api key models configuration binary path config directory codex_home shadow home endpoint arguments environment variables display name accent color custom favorite hidden auto compact native sessions import resume",
+        "agents cli codex claude cursor grok fx kiro opencode antigravity google sign in sign out install subscription instances authentication api key models configuration binary path config directory codex_home shadow home endpoint arguments environment variables display name accent color custom favorite hidden auto compact native sessions import resume",
       ),
     ],
   },
@@ -1176,7 +1186,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/providers",
     searchTerms: [
       msg(
-        "usage sources CPA Manager CLIProxyAPI CLI proxy hub auth files quota subscription limits management admin key add remove",
+        "usage sources CLIProxyAPI CLI proxy hub quota subscription limits management key add remove",
       ),
     ],
     providerSettingsOnly: true,

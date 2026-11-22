@@ -1,3 +1,5 @@
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { m as resolveMessage } from "~/i18n/messages";
 import { ProcessSignalActions } from "./ProcessSignalActions";
 import { resolveUsageAccess } from "@t3tools/client-runtime/state/usage-access";
 import { environmentSession } from "../../state/session";
@@ -21,7 +23,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { Fragment, useRef, useState, type ReactNode, type ComponentProps } from "react";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
-import { m, type MessageResolver } from "../../i18n/messages";
+import type { MessageResolver } from "../../i18n/messages";
 import type {
   ServerProcessDiagnosticsEntry,
   ServerProcessResourceHistorySummary,
@@ -37,7 +39,7 @@ import { useOpenInPreferredEditor } from "../../editorPreferences";
 import { useRelativeTimeState } from "../../hooks/useRelativeTimeState";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
-import { namedClipboardTarget, useCopyToClipboard } from "../../hooks/useCopyToClipboard";
+import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
@@ -69,7 +71,7 @@ function formatCount(value: number): string {
 function RelativeTimeNoWrap(props: { value: DateTime.Utc }) {
   const relative = useRelativeTimeState(DateTime.formatIso(props.value));
   if (relative.status !== "relative") return null;
-  return relative.suffix ? `${relative.value}\u00a0${relative.suffix}` : relative.value;
+  return relative.label.replaceAll(" ", "\u00a0");
 }
 
 function shortenTraceId(traceId: string): string {
@@ -82,7 +84,6 @@ function isStaleProcessSignalMessage(message: string | undefined): boolean {
 }
 
 function StatTooltip({ label, children }: { label: string; children: ReactNode }) {
-  const gt = useGT();
   return (
     <Tooltip>
       <TooltipTrigger
@@ -90,7 +91,7 @@ function StatTooltip({ label, children }: { label: string; children: ReactNode }
           <button
             type="button"
             className="inline-flex size-3.5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-dim-foreground outline-none hover:text-foreground focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-ring"
-            aria-label={gt("{label} details", { label })}
+            aria-label={`${label} details`}
           >
             <InfoIcon className="size-3" />
           </button>
@@ -251,7 +252,11 @@ function RowDetail({ className, ...props }: ComponentProps<"div">) {
 function TraceIdCell({ traceId }: { traceId: string }) {
   const gt = useGT();
   const { copyToClipboard, isCopied: copied } = useCopyToClipboard({
-    target: namedClipboardTarget("trace ID"),
+    target: {
+      target: "trace ID",
+      unavailableMessage: msg("Clipboard API is unavailable while copying trace ID."),
+      failureMessage: msg("Failed to copy trace ID to the clipboard."),
+    },
     timeout: 1_200,
   });
 
@@ -298,11 +303,12 @@ function formatProcessName(command: string): string {
 
 function formatProcessType(
   process: ServerProcessDiagnosticsEntry,
-  resolve: MessageResolver = m,
+  resolve: MessageResolver,
 ): string {
   if (process.depth > 0) return resolve(msg("Subprocess"));
-  if (/\b(codex|claude|opencode|cursor)\b/i.test(process.command)) return resolve(msg("Agent"));
-  return resolve(msg("Process"));
+  if (/\b(codex|claude|opencode|cursor)\b/i.test(process.command))
+    return resolve(msg("Agent", { $context: "process type" }));
+  return resolve(msg("Process", { $context: "process type" }));
 }
 
 function ProcessNameCell({
@@ -315,7 +321,7 @@ function ProcessNameCell({
   onToggle: (pid: number) => void;
 }) {
   const gt = useGT();
-  const messages = useMessages();
+  const m = useMessages();
   const name = formatProcessName(process.command);
   const hasChildren = process.childPids.length > 0;
 
@@ -347,7 +353,7 @@ function ProcessNameCell({
           <TooltipTrigger render={<RowDetail>{gt("PID {pid}", { pid: process.pid })}</RowDetail>} />
           <TooltipPopup side="top" variant="code">
             <span className="grid gap-1">
-              <span>{formatProcessType(process, messages)}</span>
+              <span>{formatProcessType(process, m)}</span>
               <span>{process.command}</span>
             </span>
           </TooltipPopup>
@@ -437,7 +443,7 @@ function ProcessDiagnosticsTable({
               </th>
               <th className="p-2 font-semibold sm:pr-4">
                 <span className="sr-only">
-                  <T>Signal</T>
+                  <T context="column header for the process signal buttons">Signal</T>
                 </span>
               </th>
             </tr>
@@ -627,6 +633,7 @@ function ProcessResourceHistoryTable({
   processes: ReadonlyArray<ServerProcessResourceHistorySummary>;
   emptyLabel: string;
 }) {
+  const m = useMessages();
   const shallowestChildDepth = processes.reduce<number | null>((minDepth, process) => {
     if (process.isServerRoot) return minDepth;
     return minDepth === null ? process.depth : Math.min(minDepth, process.depth);
@@ -688,7 +695,7 @@ function ProcessResourceHistoryTable({
                   />
                 </td>
                 <td className="px-3 py-2 text-right align-middle font-mono tabular-nums">
-                  {formatCpuTime(process.cpuSecondsApprox)}
+                  {formatCpuTime(process.cpuSecondsApprox, m)}
                 </td>
                 <td className="px-3 py-2 text-right align-middle font-mono tabular-nums">
                   {process.avgCpuPercent.toFixed(1)}%
@@ -736,7 +743,7 @@ function DiagnosticsLastChecked({ checkedAt }: { checkedAt: DateTime.Utc | null 
           <span className="font-mono tabular-nums">
             <Var>{relative.value}</Var>
           </span>{" "}
-          <Var>{relative.suffix}</Var>
+          ago
         </T>
       ) : (
         gt("Checked {time}", { time: relative.value })
@@ -782,6 +789,7 @@ export function DiagnosticsSettingsPanel() {
 
 function DiagnosticsSettingsBody() {
   const gt = useGT();
+  const m = useMessages();
   const { environment } = useSettingsScope();
   const environmentId = environment?.environmentId ?? null;
   const canMaintainEnvironment = useEnvironmentScope(environmentId, AuthEnvironmentMaintainScope);
@@ -790,12 +798,16 @@ function DiagnosticsSettingsBody() {
   const canOpenHostEditor = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const session = useEnvironmentQuery(
     environmentId === null ? null : environmentSession.sessionStateAtom(environmentId),
+    m,
   );
-  const diagnosticsAccess = resolveUsageAccess({
-    connectionPhase: environment?.connection.phase ?? "available",
-    session: session.data,
-    hasSessionError: session.error !== null,
-  });
+  const diagnosticsAccess = resolveUsageAccess(
+    {
+      connectionPhase: environment?.connection.phase ?? "available",
+      session: session.data,
+      hasSessionError: session.error !== null,
+    },
+    m,
+  );
   const canReadDiagnostics = diagnosticsAccess.canReadDiagnostics;
   const signalServerProcess = useAtomCommand(serverEnvironment.signalProcess, {
     reportFailure: false,
@@ -809,6 +821,7 @@ function DiagnosticsSettingsBody() {
     environmentId === null || !canReadDiagnostics
       ? null
       : serverEnvironment.traceDiagnostics({ environmentId, input: {} }),
+    m,
   );
   const {
     data: processData,
@@ -819,6 +832,7 @@ function DiagnosticsSettingsBody() {
     environmentId === null || !canReadDiagnostics
       ? null
       : serverEnvironment.processDiagnostics({ environmentId, input: {} }),
+    m,
   );
   const {
     data: resourceData,
@@ -835,6 +849,7 @@ function DiagnosticsSettingsBody() {
             bucketMs: selectedResourceWindow.bucketMs,
           },
         }),
+    m,
   );
   const [isOpeningLogsDirectory, setIsOpeningLogsDirectory] = useState(false);
   const [openLogsDirectoryError, setOpenLogsDirectoryError] = useState<string | null>(null);
@@ -860,7 +875,9 @@ function DiagnosticsSettingsBody() {
       if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
         setOpenLogsDirectoryError(
-          error instanceof Error ? error.message : m(msg("Unable to open logs folder.")),
+          error instanceof Error
+            ? (thrownErrorMessage(error, resolveMessage) ?? error.message)
+            : gt("Unable to open logs folder."),
         );
       }
     })();
@@ -901,16 +918,18 @@ function DiagnosticsSettingsBody() {
       let confirmed = false;
       try {
         confirmed = await ensureLocalApi().dialogs.confirm(
-          m(msg("Send SIGKILL to process {pid}? This cannot be handled by the process.", { pid })),
+          gt("Send SIGKILL to process {pid}? This cannot be handled by the process.", { pid }),
           { variant: "destructive" },
         );
       } catch (error) {
         clearSignaling();
         toastManager.add({
           type: "error",
-          title: m(msg("Could not confirm signal")),
+          title: gt("Could not confirm signal"),
           description:
-            error instanceof Error ? error.message : m(msg("Failed to send {signal}.", { signal })),
+            error instanceof Error
+              ? (thrownErrorMessage(error, resolveMessage) ?? error.message)
+              : gt("Failed to send {signal}.", { signal }),
         });
         return;
       }
@@ -936,9 +955,11 @@ function DiagnosticsSettingsBody() {
         const error = squashAtomCommandFailure(result);
         toastManager.add({
           type: "error",
-          title: m(msg("Could not send {signal}", { signal })),
+          title: gt("Could not send {signal}", { signal }),
           description:
-            error instanceof Error ? error.message : m(msg("Failed to send {signal}.", { signal })),
+            error instanceof Error
+              ? (thrownErrorMessage(error, resolveMessage) ?? error.message)
+              : gt("Failed to send {signal}.", { signal }),
         });
       }
       return;
@@ -949,9 +970,9 @@ function DiagnosticsSettingsBody() {
       if (isStaleProcessSignalMessage(message)) {
         toastManager.add({
           type: "info",
-          title: m(msg("Process already exited")),
-          description: m(
-            msg("The process is not a child of the T3 Server. It might already have exited."),
+          title: gt("Process already exited"),
+          description: gt(
+            "The process is not a child of the T3 Server. It might already have exited.",
           ),
         });
         return;
@@ -959,8 +980,8 @@ function DiagnosticsSettingsBody() {
 
       toastManager.add({
         type: "error",
-        title: m(msg("Could not send {signal}", { signal })),
-        description: message ?? m(msg("Failed to send {signal}.", { signal })),
+        title: gt("Could not send {signal}", { signal }),
+        description: message ?? gt("Failed to send {signal}.", { signal }),
       });
       return;
     }
@@ -1130,8 +1151,11 @@ function DiagnosticsSettingsBody() {
             data ? (
               <Badge variant={data.failureCount > 0 ? "error" : "secondary"}>
                 {data.failureCount > 0
-                  ? gt("{count} failed", { count: formatCount(data.failureCount) })
-                  : gt("None")}
+                  ? gt("{count, plural, one {{formatted} failed} other {{formatted} failed}}", {
+                      count: data.failureCount,
+                      formatted: formatCount(data.failureCount),
+                    })
+                  : gt("None", { $context: "no failed spans" })}
               </Badge>
             ) : (
               <span className="text-body text-muted-foreground">...</span>
@@ -1213,7 +1237,9 @@ function DiagnosticsSettingsBody() {
                         {formatDiagnosticsDuration(failure.durationMs)}
                       </TooltipTrigger>
                       <TooltipPopup side="top">
-                        Ended <RelativeTimeNoWrap value={failure.endedAt} />
+                        <T>
+                          Ended <RelativeTimeNoWrap value={failure.endedAt} />
+                        </T>
                       </TooltipPopup>
                     </Tooltip>
                   </RowDetail>
@@ -1247,7 +1273,9 @@ function DiagnosticsSettingsBody() {
                     <SpanName name={failure.name} />
                   </div>
                   <RowDetail>
-                    Last <RelativeTimeNoWrap value={failure.lastSeenAt} />
+                    <T context="when this failure was last seen">
+                      Last <RelativeTimeNoWrap value={failure.lastSeenAt} />
+                    </T>
                   </RowDetail>
                 </td>
                 <td className="px-3 py-3 align-top break-words text-muted-foreground">
@@ -1452,7 +1480,7 @@ function DiagnosticsSettingsBody() {
           <div className="border-t border-border/60">
             {/* Live processes already states this reason; do not repeat it. */}
             {resourceNote === processNote ? (
-              <EmptyRows label={gt("Unavailable")} />
+              <EmptyRows label={gt("Unavailable", { $context: "resource history status" })} />
             ) : (
               <SettingsNote icon={<CircleSlashIcon className="text-dim-foreground" />}>
                 {resourceNote}

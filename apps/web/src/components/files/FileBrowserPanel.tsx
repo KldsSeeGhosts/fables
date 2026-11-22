@@ -632,12 +632,14 @@ export default function FileBrowserPanel({
   const trimmedQuery = query.trim();
   const surfaceState =
     directoryEntries.length === 0 && error && !isPending ? (
-      <FileSurfaceFailure title="Can't list files" message={error} onRetry={handleRefresh} />
+      <FileSurfaceFailure title={gt("Can't list files")} message={error} onRetry={handleRefresh} />
     ) : ready && directoryEntries.length === 0 && !isPending && !trimmedQuery ? (
       <FileSurfaceState
         icon={<FolderOpen />}
-        title="No files yet"
-        description={`${projectName} is empty. Files the agent creates show up here.`}
+        title={gt("No files yet")}
+        description={gt("{projectName} is empty. Files the agent creates show up here.", {
+          projectName,
+        })}
       />
     ) : hasNoSearchMatches &&
       ready &&
@@ -647,8 +649,11 @@ export default function FileBrowserPanel({
       !pathSearch.error ? (
       <FileSurfaceState
         icon={<SearchIcon />}
-        title="No matching files"
-        description={`Nothing in ${projectName} matches "${trimmedQuery}".`}
+        title={gt("No matching files")}
+        description={gt('Nothing in {projectName} matches "{query}".', {
+          projectName,
+          query: trimmedQuery,
+        })}
       />
     ) : null;
 
@@ -736,7 +741,7 @@ export default function FileBrowserPanel({
             onClick={handleRefresh}
             className="p-4 text-left text-xs leading-relaxed text-error-foreground outline-none hover:surface-ghost-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
-            {gt("{error} Click to retry.", { error: error ?? pathSearch.error ?? "" })}
+            {gt("{error} Click to retry.", { error: error ?? pathSearch.error })}
           </button>
         ) : null}
         {query.trim() && pathSearch.truncated && !pathSearch.isPending ? (
@@ -753,7 +758,7 @@ export default function FileBrowserPanel({
                 : "px-3 py-1 text-xs text-muted-foreground"
             }
           >
-            Loading files…
+            <T>Loading files…</T>
           </div>
         )}
       </div>

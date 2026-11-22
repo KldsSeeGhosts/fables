@@ -1,7 +1,7 @@
 import { FileWarning, RotateCw } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { useGT } from "gt-react";
+import { T, useGT } from "gt-react";
 import {
   Empty,
   EmptyContent,
@@ -129,8 +129,8 @@ export function FileRenderedViewToggle(props: {
   readonly rendered: boolean;
   readonly onRenderedChange: (rendered: boolean) => void;
 }) {
-  const { mode } = props;
   const gt = useGT();
+  const { mode } = props;
   return (
     <ToggleGroup
       aria-label={gt("File view")}
@@ -153,7 +153,9 @@ export function FileRenderedViewToggle(props: {
         }
         value="rendered"
       >
-        {mode === "table" ? gt("Table") : gt("Preview")}
+        {mode === "table"
+          ? gt("Table", { $context: "view mode, rendered table" })
+          : gt("Preview", { $context: "view mode, rendered file" })}
       </ToggleGroupItem>
       <ToggleGroupItem
         aria-label={
@@ -167,7 +169,7 @@ export function FileRenderedViewToggle(props: {
         }
         value="source"
       >
-        {gt("Source")}
+        {gt("Source", { $context: "view mode, file source" })}
       </ToggleGroupItem>
     </ToggleGroup>
   );
@@ -242,7 +244,7 @@ export function FileSurfaceFailure(props: {
         props.onRetry ? (
           <Button type="button" variant="secondary" size="sm" onClick={props.onRetry}>
             <RotateCw />
-            {gt("Try again")}
+            <T>Try again</T>
           </Button>
         ) : undefined
       }

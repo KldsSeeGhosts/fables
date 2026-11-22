@@ -1260,7 +1260,8 @@ export function collectProviderUsageLimits(
         id: `${source.id}:${account.id}`,
         driver: account.driver,
         label:
-          (source.kind === "cpa-manager" ? account.label : account.email?.trim()) ||
+          (source.kind === "cpa-manager" ? account.label : undefined) ||
+          account.email?.trim() ||
           hubAccountName(account) ||
           `${driverLabel} account ${proxyAccountNumber}`,
         sourceLabel: source.kind === "cpa-manager" ? "CPA Manager" : source.label,

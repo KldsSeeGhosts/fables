@@ -18,8 +18,8 @@ import {
 } from "lucide-react";
 import * as Arr from "effect/Array";
 import * as Result from "effect/Result";
-import { T, useGT, useMessages, Var } from "gt-react";
 import { Fragment, useId, useState, type ReactElement, type ReactNode } from "react";
+import { T, useGT, useMessages, Var } from "gt-react";
 import {
   isProviderDriverKind,
   resolveProviderInstanceEnabled,
@@ -301,9 +301,9 @@ function ProviderEnvironmentFieldRow(props: {
   readonly secretSources: ReadonlyArray<SecretSource>;
   readonly environmentId?: EnvironmentId | undefined;
 }) {
+  const gt = useGT();
   const id = useId();
   const inputId = `${props.idPrefix}-${id}-environment-${props.field.name}`;
-  const gt = useGT();
   const value = props.variable?.valueRedacted ? "" : (props.variable?.value ?? "");
 
   return (
@@ -603,14 +603,11 @@ export function ProviderEnvironmentSection(props: {
             );
           })}
           <p className="text-meta text-muted-foreground">
-            {rows.some((row) => row.valueRedacted === true) ? (
-              <T>
-                Sensitive values are stored separately and never returned to the app. Enter a new
-                value to rename a saved one or make it plain text.
-              </T>
-            ) : (
-              <T>Sensitive values are stored separately and never returned to the app.</T>
-            )}
+            {rows.some((row) => row.valueRedacted === true)
+              ? gt(
+                  "Sensitive values are stored separately and never returned to the app. Enter a new value to rename a saved one or make it plain text.",
+                )
+              : gt("Sensitive values are stored separately and never returned to the app.")}
           </p>
         </div>
       ) : null}
@@ -827,11 +824,7 @@ export function ProviderInstanceCard({
   const statusStyle = PROVIDER_STATUS_STYLES[statusKey];
   const summary = enabled
     ? getProviderSummary(effectiveProvider, m)
-    : {
-        headline: gt("Disabled", { $context: "provider status" }),
-        detail: null,
-        authLabel: null,
-      };
+    : { headline: gt("Disabled", { $context: "provider status" }), detail: null, authLabel: null };
   const authEmail = liveProvider?.auth.email?.trim();
   const isAuthenticated = enabled && liveProvider?.auth.status === "authenticated";
   const authLabel =
@@ -1202,18 +1195,18 @@ export function ProviderInstanceCard({
   if (mode === "list") {
     const statusLine = updateProgress ? (
       <span aria-live="polite" className="line-clamp-2 [overflow-wrap:anywhere]">
-        <span>
-          <T>Updating</T>
-        </span>
+        <span>{gt("Updating")}</span>
         <span className="block">{updateProgress}</span>
       </span>
     ) : isAuthenticated && authEmail ? (
-      <>
-        <span>
-          <T>Authenticated as</T>
-        </span>
-        <ProviderAuthEmail email={authEmail} />
-      </>
+      <span className="min-w-0 max-w-full">
+        <T>
+          Authenticated as{" "}
+          <Var>
+            <ProviderAuthEmail email={authEmail} />
+          </Var>
+        </T>
+      </span>
     ) : (
       <span className="line-clamp-2 [overflow-wrap:anywhere]">
         {enabled ? summary.headline : gt("Disabled", { $context: "provider status" })}
@@ -1245,7 +1238,7 @@ export function ProviderInstanceCard({
           className="absolute inset-0 cursor-pointer rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           onClick={onConfigure}
           aria-current={selected || undefined}
-          aria-label={`Configure ${displayName}`}
+          aria-label={gt("Configure {provider}", { provider: displayName })}
         />
         <span
           className={cn(
@@ -1327,7 +1320,7 @@ export function ProviderInstanceCard({
               deviceEnabled={resolveProviderInstanceEnabled(instance)}
             />
             <SettingResetButton
-              ariaLabel={gt("Reset {displayName} enablement", { displayName })}
+              ariaLabel={gt("Reset {provider} enablement to default", { provider: displayName })}
               tooltip={gt("Reset to the device setting")}
               disabled={readOnly || !canWriteSettings}
               onClick={projectOverride.onReset}

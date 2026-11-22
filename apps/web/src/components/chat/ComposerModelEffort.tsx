@@ -7,8 +7,8 @@ import {
 import type { ProviderOptionDescriptor } from "@t3tools/contracts";
 import type { EffortDisplay } from "@t3tools/contracts/settings";
 import { getProviderOptionCurrentLabel } from "@t3tools/shared/model";
-import { CheckIcon, ChevronRightIcon, GaugeIcon, WorkflowIcon } from "lucide-react";
 import { msg, T, useGT, useMessages } from "gt-react";
+import { CheckIcon, ChevronRightIcon, GaugeIcon, WorkflowIcon } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, use, useRef, useState } from "react";
 
 import { m, type MessageResolver } from "~/i18n/messages";
@@ -143,14 +143,14 @@ export function describeComposerEffort(
             ) ?? (reasoning.id === "thinking" ? reasoning.label : null));
   const fast = display.speedLabel === "Fast" || display.speedLabel === "Ultrafast";
   return {
-    detail: display.label || "Fast mode",
+    detail: display.label || resolve(msg("Fast mode")),
     suffix: (
       <>
         {word || !glyph ? (
           <>
             <GaugeIcon aria-hidden="true" className="size-3" />
             <span data-composer-control-label className="max-w-24 truncate">
-              {word ?? (fast ? display.speedLabel : "Fast mode")}
+              {word ?? (fast ? display.speedLabel : resolve(msg("Fast mode")))}
             </span>
           </>
         ) : glyph ? (
@@ -183,9 +183,11 @@ export function ComposerReasoningPicker(props: {
   size: ComposerControlSize;
   disabled: boolean;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const [open, setOpen] = useComposerMenuState(props.disabled);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const display = describeComposerEffort(props.traits, props.effortDisplay, props.size);
+  const display = describeComposerEffort(props.traits, props.effortDisplay, props.size, messages);
   if (!display.suffix) return null;
   return (
     <Menu
@@ -212,7 +214,10 @@ export function ComposerReasoningPicker(props: {
                   ref={triggerRef}
                   size={props.size}
                   disabled={props.disabled}
-                  aria-label={`Reasoning: ${display.detail ?? "Options"}`}
+                  aria-label={gt("Reasoning: {detail}", {
+                    detail:
+                      display.detail ?? gt("Options", { $context: "heading for model options" }),
+                  })}
                   data-composer-shortcut="composer.effort"
                 />
               }

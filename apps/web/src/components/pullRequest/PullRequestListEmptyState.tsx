@@ -1,9 +1,4 @@
 import { RefreshIcon } from "~/components/ui/refresh-icon";
-import { T, useGT } from "gt-react";
-import { FolderGit2Icon, PlusIcon, SearchIcon, ServerIcon, SettingsIcon } from "lucide-react";
-import type { ElementType, ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
-
 /**
  *
  * A list narrowed to nothing (search, filters) wears the design's small notice: one glyph, a
@@ -12,6 +7,10 @@ import { Link } from "@tanstack/react-router";
  * ghost, a title, a sentence and hint tiles saying how rows get here.
  *
  */
+import { Link } from "@tanstack/react-router";
+import { T, useGT, Var } from "gt-react";
+import { FolderGit2Icon, PlusIcon, SearchIcon, ServerIcon, SettingsIcon } from "lucide-react";
+import type { ElementType, ReactNode } from "react";
 
 import { openCommandPalette } from "../../commandPaletteBus";
 import { PageEmptyState, PageEmptyTile, PageEmptyTiles } from "../PageEmptyState";
@@ -133,8 +132,8 @@ export function PullRequestListEmptyState({
   if (!hasProjects) {
     return (
       <PullRequestPageEmpty
-        title={gt("No projects in this workspace")}
-        description={gt("Add a project, and the pull requests from its repository appear here.")}
+        title={<T>No projects in this workspace</T>}
+        description={<T>Add a project, and the pull requests from its repository appear here.</T>}
         actions={
           <Button
             size="sm"
@@ -148,13 +147,13 @@ export function PullRequestListEmptyState({
       >
         <PageEmptyTile
           icon={<FolderGit2Icon />}
-          title={gt("From its remote")}
-          description={gt("Read from each project's GitHub or GitLab repository.")}
+          title={<T>From its remote</T>}
+          description={<T>Read from each project's GitHub or GitLab repository.</T>}
         />
         <PageEmptyTile
           icon={<ServerIcon />}
-          title={gt("On this server")}
-          description={gt("Uses the host's sign-in where T3 Code runs.")}
+          title={<T context="where the host sign-in lives">On this server</T>}
+          description={<T>Uses the host's sign-in where T3 Code runs.</T>}
         />
       </PullRequestPageEmpty>
     );
@@ -176,13 +175,13 @@ export function PullRequestListEmptyState({
       >
         <PageEmptyTile
           icon={<ServerIcon />}
-          title={gt("On this server")}
-          description={gt("Sign in where T3 Code runs, not in this browser.")}
+          title={<T context="where the host sign-in lives">On this server</T>}
+          description={<T>Sign in where T3 Code runs, not in this browser.</T>}
         />
         <PageEmptyTile
           icon={<SettingsIcon />}
-          title={gt("Source control")}
-          description={gt("Each host's sign-in, in settings.")}
+          title={<T>Source control</T>}
+          description={<T>Each host's sign-in, in settings.</T>}
         >
           <Button
             size="xs"
@@ -190,7 +189,7 @@ export function PullRequestListEmptyState({
             className="-ml-2 mt-1"
             render={<Link to="/settings/source-control" />}
           >
-            {gt("Open settings")}
+            <T>Open settings</T>
           </Button>
         </PageEmptyTile>
       </PullRequestPageEmpty>
@@ -210,14 +209,21 @@ export function PullRequestListEmptyState({
     return (
       <PullRequestListNotice
         icon={SearchIcon}
-        title={gt("Nothing matches “{query}”", { query: shownQuery })}
-        description={gt(
-          "The hosts were searched for it. Try fewer words, or search by number, author or branch.",
-        )}
+        title={
+          <T>
+            Nothing matches “<Var>{shownQuery}</Var>”
+          </T>
+        }
+        description={
+          <T>
+            The hosts were searched for it. Try fewer words, or search by number, author or branch.
+          </T>
+        }
       >
         <Button size="sm" variant="secondary" onClick={onClearQuery}>
-          {gt("Clear search")}
+          <T>Clear search</T>
         </Button>
+        {}
         <CheckAgainButton refreshing={refreshing} onRefresh={onRefresh} />
       </PullRequestListNotice>
     );
@@ -227,11 +233,11 @@ export function PullRequestListEmptyState({
     return (
       <PullRequestListNotice
         icon={PullRequestGlyph.closed}
-        title={gt("No pull requests match")}
-        description={filterSummary ?? gt("Widen the filters to see more.")}
+        title={<T>No pull requests match</T>}
+        description={filterSummary ?? <T>Widen the filters to see more.</T>}
       >
         <Button size="sm" variant="secondary" onClick={onClearFilters}>
-          {gt("Clear filters")}
+          <T>Clear filters</T>
         </Button>
         {/* The filters were only applied to the pages read so far. */}
         {canLoadMore ? (
@@ -245,8 +251,8 @@ export function PullRequestListEmptyState({
 
   return (
     <PullRequestPageEmpty
-      title={gt("No open pull requests")}
-      description={gt("Open pull requests from every project in this workspace appear here.")}
+      title={<T>No open pull requests</T>}
+      description={<T>Open pull requests from every project in this workspace appear here.</T>}
       actions={
         <>
           {canLoadMore ? (
@@ -260,16 +266,16 @@ export function PullRequestListEmptyState({
     >
       <PageEmptyTile
         icon={<PullRequestGlyph.pullRequest />}
-        title={gt("From a thread")}
-        description={gt("Create PR in a thread's git menu, and it lands here.")}
+        title={<T>From a thread</T>}
+        description={<T>Create PR in a thread's git menu, and it lands here.</T>}
       />
       <PageEmptyTile
         icon={<PullRequestGlyph.merged />}
-        title={gt("Closed and merged")}
-        description={gt("Every pull request, not only open ones.")}
+        title={<T>Closed and merged</T>}
+        description={<T>Every pull request, not only open ones.</T>}
       >
         <Button size="xs" variant="ghost" className="-ml-2 mt-1" onClick={onShowAll}>
-          {gt("Show all")}
+          <T>Show all</T>
         </Button>
       </PageEmptyTile>
     </PullRequestPageEmpty>

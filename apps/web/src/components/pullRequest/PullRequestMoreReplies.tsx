@@ -1,5 +1,6 @@
+import { T, useGT } from "gt-react";
+
 import { InlineButton } from "../ui/button";
-import { useGT } from "gt-react";
 
 import type { PullRequestReplyAvailability } from "./pullRequestDetail.logic";
 
@@ -25,7 +26,7 @@ export function PullRequestMoreReplies({
           tone="muted"
           render={<a href={url} target="_blank" rel="noopener noreferrer" />}
         >
-          {gt("View on host")}
+          <T>View on host</T>
         </InlineButton>
       ) : null}
     </div>

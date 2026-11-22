@@ -99,7 +99,6 @@ export function WorkLogVerb({
 }) {
   return (
     <span
-      data-work-verb=""
       className={cn(
         "shrink-0 text-label",
         tone === "error"
@@ -126,12 +125,15 @@ export function WorkLogTarget({ children, mono = false }: { children: ReactNode;
   );
 }
 
+const interactionClassName =
+  "cursor-pointer hover:surface-ghost-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
+
 function useRowClassName(interactive: boolean, focusable = interactive) {
   const grouped = use(GroupedRows);
   return cn(
     "group/timeline-row relative w-full min-w-0 rounded-md pe-1.5 text-left transition-colors",
     grouped ? "py-0" : "py-0.5",
-    interactive && "cursor-pointer hover:surface-ghost-hover",
+    interactive && interactionClassName,
     focusable && focusRingClassName,
   );
 }

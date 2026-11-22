@@ -143,7 +143,7 @@ function UpdateEverythingDialogContent({
           <span className="flex flex-col gap-1">
             {version !== null ? (
               <span>
-                {gt("T3 Code")} <span className="font-mono text-meta">{version}</span>
+                T3 Code <span className="font-mono text-meta">{version}</span>
               </span>
             ) : null}
             {providerCount > 0 ? (

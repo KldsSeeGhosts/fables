@@ -469,7 +469,7 @@ export function ProviderModelsSection({
           />
           <div className="flex shrink-0 gap-2">
             <Button size="sm" variant="secondary" disabled={isSaving} onClick={handleAdd}>
-              <T>Add</T>
+              {gt("Add", { $context: "verb, adds a custom model" })}
             </Button>
             <Button size="sm" variant="ghost" onClick={cancelAdd}>
               <T>Cancel</T>

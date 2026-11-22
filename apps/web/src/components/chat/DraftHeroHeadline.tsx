@@ -3,6 +3,7 @@ import { composerDraftHasUserContent, useComposerDraftStore } from "~/composerDr
 import { resolveEnvironmentMachineKind, type ScopedProjectRef } from "@t3tools/contracts";
 import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
+import { useGT, useMessages } from "gt-react";
 import {
   FolderPlusIcon,
   FoldersIcon,
@@ -10,9 +11,8 @@ import {
   PinIcon,
   PinOffIcon,
 } from "lucide-react";
-import { useGT } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
-import { type KeyboardEventHandler, type ReactNode, useRef } from "react";
+import { type ComponentProps, type KeyboardEventHandler, type ReactNode, useRef } from "react";
 
 import { openCommandPalette } from "~/commandPaletteBus";
 import { shortcutLabelForCommand } from "~/keybindings";
@@ -57,6 +57,7 @@ interface DraftHeroHeadlineProps {
  * way to every project, then the no-project and add-project rows.
  */
 export function useProjectPickerModel(activeProjectRef: ScopedProjectRef | null) {
+  const messages = useMessages();
   const projects = useProjects();
   const { environments } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
@@ -106,6 +107,7 @@ export function useProjectPickerModel(activeProjectRef: ScopedProjectRef | null)
   const scratchWorkspaceRoot = scratchWorkspaceRootFor(scratchTargetEnvironmentId);
   const scratchOffReason = scratchUnavailableReason(
     activeProjectRef?.environmentId ?? primaryEnvironmentId,
+    messages,
   );
 
   const { canPinProjectGroup, toggleProjectGroupPin } = useProjectPin();
@@ -178,8 +180,8 @@ export function ProjectPickerRows({
   /** The launcher offers usable actions without explanatory copy. */
   readonly concise?: boolean;
 }) {
-  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const gt = useGT();
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const renderProjectRow = (entry: ProjectPickerEntry) => {
     const { group, targetProject } = entry;
     const pinned = model.pinnedKeySet.has(group.projectKey);
@@ -218,8 +220,8 @@ export function ProjectPickerRows({
                     size="icon-micro"
                     aria-label={
                       pinned
-                        ? gt("Unpin {project}", { project: group.displayName })
-                        : gt("Pin {project}", { project: group.displayName })
+                        ? gt("Unpin {name}", { name: group.displayName })
+                        : gt("Pin {name}", { name: group.displayName })
                     }
                     aria-pressed={pinned}
                     onClick={() => model.toggleProjectGroupPin(group)}
@@ -245,7 +247,11 @@ export function ProjectPickerRows({
       ) : null}
       {model.recentEntries.length > 0 ? (
         <>
-          {groupLabels ? <DraftProjectGroupLabel>{gt("Recent")}</DraftProjectGroupLabel> : null}
+          {groupLabels ? (
+            <DraftProjectGroupLabel>
+              {gt("Recent", { $context: "recently used projects" })}
+            </DraftProjectGroupLabel>
+          ) : null}
           {model.recentEntries.map(renderProjectRow)}
         </>
       ) : null}
@@ -286,6 +292,7 @@ export function DraftHeroHeadline({
   activeProjectRef,
   activeProjectTitle,
 }: DraftHeroHeadlineProps) {
+  const gt = useGT();
   const model = useProjectPickerModel(activeProjectRef);
   const { projects, environments, activeProjectKey, scratchTargetEnvironmentId } = model;
   const setLogicalProjectDraftThreadId = useComposerDraftStore(
@@ -297,7 +304,6 @@ export function DraftHeroHeadline({
     draftId ? isTriagePrompt(store.getComposerDraft(draftId)?.prompt ?? "") : false,
   );
   const { openScratchProject, scratchWorkspaceRootFor } = useScratchProject();
-  const gt = useGT();
   const openProjectDraft = useNewThreadHandler();
   const hasResolvedProject = activeProjectTitle !== null;
   const activeProject =
@@ -386,7 +392,7 @@ export function DraftHeroHeadline({
       <h1 className="sr-only">{headingLabel}</h1>
       <div
         role="list"
-        aria-label="Projects"
+        aria-label={gt("Projects")}
         className="flex min-h-0 flex-col gap-0.5 overflow-y-auto"
       >
         <ProjectPickerRows
@@ -431,6 +437,38 @@ export function DraftProjectGroupLabel({ children }: { readonly children: string
   );
 }
 
+const DRAFT_PROJECT_ROW_CLASS =
+  "group/row relative flex h-8.5 shrink-0 items-center rounded-item not-data-disabled:hover:surface-ghost-hover has-[>button:focus-visible]:ring-2 has-[>button:focus-visible]:ring-inset has-[>button:focus-visible]:ring-ring data-selected:surface-selected-soft";
+const DRAFT_PROJECT_ROW_BUTTON_CLASS =
+  "flex h-full min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-item px-2.5 text-left outline-none disabled:cursor-default disabled:opacity-64";
+const DRAFT_PROJECT_ROW_LABEL_CLASS =
+  "min-w-0 shrink truncate font-medium text-label text-foreground group-data-selected/row:text-strong-foreground";
+const DRAFT_PROJECT_ROW_ACTION_CLASS =
+  "flex w-0 shrink-0 justify-end overflow-hidden opacity-0 group-hover/row:-ml-1 group-hover/row:w-7 group-hover/row:pe-2 group-hover/row:opacity-100 group-has-focus-visible/row:-ml-1 group-has-focus-visible/row:w-7 group-has-focus-visible/row:pe-2 group-has-focus-visible/row:opacity-100 has-data-popup-open:-ml-1 has-data-popup-open:w-7 has-data-popup-open:pe-2 has-data-popup-open:opacity-100";
+
+function DraftProjectRowRoot(props: Omit<ComponentProps<"div">, "className" | "role">) {
+  return <div role="listitem" {...props} className={DRAFT_PROJECT_ROW_CLASS} />;
+}
+
+function DraftProjectRowButton(props: Omit<ComponentProps<"button">, "className" | "type">) {
+  return <button type="button" {...props} className={DRAFT_PROJECT_ROW_BUTTON_CLASS} />;
+}
+
+function DraftProjectRowLabel(props: { readonly children: ReactNode }) {
+  return <span className={DRAFT_PROJECT_ROW_LABEL_CLASS}>{props.children}</span>;
+}
+
+function DraftProjectRowAction(props: { readonly children: ReactNode }) {
+  return <div className={DRAFT_PROJECT_ROW_ACTION_CLASS}>{props.children}</div>;
+}
+
+export const DraftProjectRowSlots = {
+  Root: DraftProjectRowRoot,
+  Button: DraftProjectRowButton,
+  Label: DraftProjectRowLabel,
+  Action: DraftProjectRowAction,
+};
+
 export function DraftProjectRow(props: {
   readonly icon: ReactNode;
   readonly label: string;
@@ -447,25 +485,21 @@ export function DraftProjectRow(props: {
   readonly onFocus?: () => void;
 }) {
   return (
-    <div
-      role="listitem"
+    <DraftProjectRowRoot
       onKeyDown={props.onKeyDown}
       data-selected={props.selected ? "" : undefined}
       data-disabled={props.disabled ? "" : undefined}
-      className="group/row relative flex h-8.5 shrink-0 items-center rounded-item not-data-disabled:hover:surface-ghost-hover has-[>button:focus-visible]:ring-2 has-[>button:focus-visible]:ring-inset has-[>button:focus-visible]:ring-ring data-selected:surface-selected-soft"
     >
-      <button
-        type="button"
+      <DraftProjectRowButton
         aria-current={props.selected ? "true" : undefined}
         disabled={props.disabled}
         onClick={props.onSelect}
         onFocus={props.onFocus}
-        className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-item px-2.5 text-left outline-none disabled:cursor-default disabled:opacity-64"
       >
         {props.icon}
-        <span className="min-w-0 shrink truncate font-medium text-label text-foreground group-data-selected/row:text-strong-foreground">
+        <DraftProjectRowLabel>
           <DraftProjectName value={props.label} singleLine />
-        </span>
+        </DraftProjectRowLabel>
         {/* Paths keep their folder name; the rest of the row's width goes to it. */}
         <span className="flex min-w-0 flex-1 justify-end text-dim-foreground text-meta">
           {props.detailIsPath ? (
@@ -476,14 +510,12 @@ export function DraftProjectRow(props: {
         </span>
         {props.badge}
         {props.shortcut ? <Kbd>{props.shortcut}</Kbd> : null}
-      </button>
+      </DraftProjectRowButton>
       {props.action ? (
         // Hidden, it takes no width, so the detail ends on the same line as
         // rows without an action.
-        <div className="flex w-0 shrink-0 justify-end overflow-hidden opacity-0 group-focus-within/row:-ml-1 group-focus-within/row:w-7 group-focus-within/row:pe-2 group-focus-within/row:opacity-100 group-hover/row:-ml-1 group-hover/row:w-7 group-hover/row:pe-2 group-hover/row:opacity-100">
-          {props.action}
-        </div>
+        <DraftProjectRowAction>{props.action}</DraftProjectRowAction>
       ) : null}
-    </div>
+    </DraftProjectRowRoot>
   );
 }

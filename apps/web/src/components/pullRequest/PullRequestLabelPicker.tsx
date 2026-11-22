@@ -1,12 +1,11 @@
 import { useAtomCommand } from "~/state/use-atom-command";
 /**
  * Putting labels on, and taking them off, from the row that says which it already wears. Presses
- * only tick the boxes; the changes are sent in batches when the menu closes, first what was put on
- * and then what was taken off.
+ * only tick the boxes; the changes are sent together when the menu closes.
  */
 import type { EnvironmentId, PullRequestLabelCandidate, PullRequestRef } from "@t3tools/contracts";
-import { msg, useGT, useMessages } from "gt-react";
 import { TagIcon } from "lucide-react";
+import { msg, T, useGT, useMessages } from "gt-react";
 import { useState } from "react";
 
 import { m } from "~/i18n/messages";
@@ -41,10 +40,12 @@ export function PullRequestLabelPicker({
   environmentId,
   reference,
   allowed,
+  text,
 }: {
   environmentId: EnvironmentId;
   reference: PullRequestRef;
   allowed: boolean;
+  text?: string | undefined;
 }) {
   const gt = useGT();
   const [open, setOpen] = useState(false);
@@ -105,6 +106,7 @@ export function PullRequestLabelPicker({
     <PullRequestCandidatePicker
       icon={<TagIcon className="size-3.5" />}
       label={gt("Change labels")}
+      text={text}
       allowed={allowed}
       disabledReason={gt("Changing labels needs triage access on this repository")}
       open={open}
@@ -132,8 +134,15 @@ export function PullRequestLabelPicker({
       footer={
         candidatesQuery.data ? (
           <span className="flex flex-col gap-0.5">
-            <span>{gt("{count} applied", { count: appliedCount.toLocaleString() })}</span>
-            <span>{gt("Changes save when you close")}</span>
+            <span>
+              {gt("{count, plural, other {{formatted} applied}}", {
+                count: appliedCount,
+                formatted: appliedCount.toLocaleString(),
+              })}
+            </span>
+            <span>
+              <T>Changes save when you close</T>
+            </span>
           </span>
         ) : null
       }
@@ -162,7 +171,7 @@ export function PullRequestLabelPicker({
             <span className="sr-only">
               {isChecked(candidate)
                 ? gt("Applied", { $context: "label is applied" })
-                : gt("Not applied")}
+                : gt("Not applied", { $context: "label is applied" })}
             </span>
           </>
         );

@@ -118,8 +118,8 @@ const MAX_RETENTION_DAYS = 3650;
 // Opening a custom draft must not enable cleanup before its first save.
 const DEFAULT_RETENTION_DAYS = 8;
 
-function formatRetentionDays(days: number): string {
-  return `After ${days} ${days === 1 ? "day" : "days"}`;
+function formatRetentionDays(days: number, resolve: MessageResolver = m): string {
+  return resolve(msg("{days, plural, one {After {days} day} other {After {days} days}}", { days }));
 }
 
 /**
@@ -138,6 +138,7 @@ function RetentionControl({
   minimum?: number;
 }) {
   const gt = useGT();
+  const messages = useMessages();
   const [customRequested, setCustomRequested] = useState(false);
   const [draft, setDraft] = useState(String(value ?? DEFAULT_RETENTION_DAYS));
   const [savedValue, setSavedValue] = useState(value);
@@ -221,10 +222,10 @@ function RetentionControl({
         >
           <SelectValue>
             {selected === "off"
-              ? gt("Off", { $context: "retention control state" })
+              ? gt("Off")
               : selected === "custom"
-                ? gt("Custom", { $context: "retention control state" })
-                : formatRetentionDays(Number(selected))}
+                ? gt("Custom")
+                : formatRetentionDays(Number(selected), messages)}
           </SelectValue>
         </SelectTrigger>
         <SelectPopup
@@ -232,14 +233,16 @@ function RetentionControl({
           alignItemWithTrigger={false}
           finalFocus={custom ? input : undefined}
         >
-          <SelectItem value="off">{gt("Off", { $context: "retention control state" })}</SelectItem>
+          <SelectItem value="off">
+            <T>Off</T>
+          </SelectItem>
           {RETENTION_PRESET_DAYS.map((days) => (
             <SelectItem key={days} value={String(days)}>
-              {formatRetentionDays(days)}
+              {formatRetentionDays(days, messages)}
             </SelectItem>
           ))}
           <SelectItem value="custom">
-            {gt("Custom", { $context: "retention control state" })}
+            <T>Custom</T>
           </SelectItem>
         </SelectPopup>
       </Select>
@@ -272,7 +275,7 @@ function RetentionControl({
               }
             }}
           />
-          <InputGroupUnit>{gt("days", { $context: "retention unit" })}</InputGroupUnit>
+          <InputGroupUnit>days</InputGroupUnit>
         </InputGroup>
       ) : null}
     </div>
@@ -388,10 +391,14 @@ function CleanupResults({
       })}
       {report.omittedCount > 0 && (
         <p className="px-3 py-2.5 text-meta text-muted-foreground sm:px-4">
-          {gt("{environment}: {count} more results.", {
-            environment: environmentLabel,
-            count: report.omittedCount.toLocaleString(),
-          })}
+          {gt(
+            "{omitted, plural, one {{environment}: {count} more results.} other {{environment}: {count} more results.}}",
+            {
+              omitted: report.omittedCount,
+              environment: environmentLabel,
+              count: report.omittedCount.toLocaleString(),
+            },
+          )}
         </p>
       )}
       {report.entries.length === 0 && report.omittedCount === 0 && (
@@ -617,9 +624,9 @@ function StorageCleanupScopeNotice() {
 }
 
 export function WorktreeCleanupSection({ title }: { title?: string }) {
-  const gt = useGT();
   const messages = useMessages();
   const setting = useSearchableSetting();
+  const gt = useGT();
   const sectionTitle = title ?? gt("Cleanup");
   const { scope, environments, connectedEnvironments, targets, target } = useSettingsScope();
   const scopedSettings = useScopedSettings();

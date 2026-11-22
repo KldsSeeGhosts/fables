@@ -1,7 +1,8 @@
 diff --git a/react.d.ts b/react.d.ts
+index 08cb3e9..3669a06 100644
 --- a/react.d.ts
 +++ b/react.d.ts
-@@ -315,6 +315,7 @@
+@@ -315,6 +315,7 @@ interface LegendListSpecificProps<ItemT, TItemType extends string | undefined> {
       * @default 0.1
       */
      maintainScrollAtEndThreshold?: number;
@@ -10,9 +11,10 @@ diff --git a/react.d.ts b/react.d.ts
       * Maintains visibility of content.
       * - size (default: true) stabilizes during size/layout changes while scrolling.
 diff --git a/react.js b/react.js
+index 24cc605..ad3c0b2 100644
 --- a/react.js
 +++ b/react.js
-@@ -3590,6 +3590,12 @@
+@@ -3590,6 +3590,12 @@ function abortBootstrapInitialScroll(ctx) {
  
  // src/core/containerLayoutBaseline.ts
  var containerLayoutBaselines = /* @__PURE__ */ new WeakMap();
@@ -25,7 +27,7 @@ diff --git a/react.js b/react.js
  function getContainerLayoutBaseline(element) {
    return containerLayoutBaselines.get(element);
  }
-@@ -6405,7 +6411,7 @@
+@@ -6405,7 +6411,7 @@ function useOnLayoutSync({
      };
      let prevRect;
      if (measureInLayoutEffect) {
@@ -34,7 +36,7 @@ diff --git a/react.js b/react.js
        emit(toLayout(rect), true);
        prevRect = rect;
      }
-@@ -6418,7 +6424,7 @@
+@@ -6418,7 +6424,7 @@ function useOnLayoutSync({
          left: entry.contentRect.left,
          top: entry.contentRect.top,
          width: borderBoxSize.inlineSize
@@ -43,7 +45,7 @@ diff --git a/react.js b/react.js
        const previousRect = prevRect != null ? prevRect : getContainerLayoutBaseline(element);
        const didSizeChange = previousRect === void 0 || rectObserved.width !== previousRect.width || rectObserved.height !== previousRect.height;
        prevRect = rectObserved;
-@@ -6481,7 +6487,7 @@
+@@ -6481,7 +6487,7 @@ function processContainerLayout({ containerId, ctx, rectangle, ref, state }) {
        size: layout
      });
    };
@@ -52,7 +54,7 @@ diff --git a/react.js b/react.js
    if (shouldDeferWebShrinkLayoutUpdate) {
      scheduleWebShrinkMeasurement(state, () => {
        if (state.itemKey === currentItemKey) {
-@@ -9348,6 +9354,7 @@
+@@ -9348,6 +9354,7 @@ var LegendListInner = typedForwardRef(function LegendListInner2(props, forwarded
      getFixedItemSize,
      getItemType,
      horizontal,
@@ -60,7 +62,7 @@ diff --git a/react.js b/react.js
      rtl,
      estimatedHeaderSize,
      initialScrollAtEnd = false,
-@@ -9646,6 +9653,7 @@
+@@ -9646,6 +9653,7 @@ var LegendListInner = typedForwardRef(function LegendListInner2(props, forwarded
      hasExternalScroll,
      hideItemsUntilMeasured: experimental_hideItemsUntilMeasured,
      horizontal: !!horizontal,
@@ -69,9 +71,10 @@ diff --git a/react.js b/react.js
      keyExtractor: useWrapIfItem(keyExtractor),
      maintainScrollAtEnd: maintainScrollAtEndConfig,
 diff --git a/react.mjs b/react.mjs
+index 2cf1995..d432f4d 100644
 --- a/react.mjs
 +++ b/react.mjs
-@@ -3569,6 +3569,12 @@
+@@ -3569,6 +3569,12 @@ function abortBootstrapInitialScroll(ctx) {
  
  // src/core/containerLayoutBaseline.ts
  var containerLayoutBaselines = /* @__PURE__ */ new WeakMap();
@@ -84,7 +87,7 @@ diff --git a/react.mjs b/react.mjs
  function getContainerLayoutBaseline(element) {
    return containerLayoutBaselines.get(element);
  }
-@@ -6384,7 +6390,7 @@
+@@ -6384,7 +6390,7 @@ function useOnLayoutSync({
      };
      let prevRect;
      if (measureInLayoutEffect) {
@@ -93,7 +96,7 @@ diff --git a/react.mjs b/react.mjs
        emit(toLayout(rect), true);
        prevRect = rect;
      }
-@@ -6397,7 +6403,7 @@
+@@ -6397,7 +6403,7 @@ function useOnLayoutSync({
          left: entry.contentRect.left,
          top: entry.contentRect.top,
          width: borderBoxSize.inlineSize
@@ -102,7 +105,7 @@ diff --git a/react.mjs b/react.mjs
        const previousRect = prevRect != null ? prevRect : getContainerLayoutBaseline(element);
        const didSizeChange = previousRect === void 0 || rectObserved.width !== previousRect.width || rectObserved.height !== previousRect.height;
        prevRect = rectObserved;
-@@ -6460,7 +6466,7 @@
+@@ -6460,7 +6466,7 @@ function processContainerLayout({ containerId, ctx, rectangle, ref, state }) {
        size: layout
      });
    };
@@ -111,7 +114,7 @@ diff --git a/react.mjs b/react.mjs
    if (shouldDeferWebShrinkLayoutUpdate) {
      scheduleWebShrinkMeasurement(state, () => {
        if (state.itemKey === currentItemKey) {
-@@ -9327,6 +9333,7 @@
+@@ -9327,6 +9333,7 @@ var LegendListInner = typedForwardRef(function LegendListInner2(props, forwarded
      getFixedItemSize,
      getItemType,
      horizontal,
@@ -119,7 +122,7 @@ diff --git a/react.mjs b/react.mjs
      rtl,
      estimatedHeaderSize,
      initialScrollAtEnd = false,
-@@ -9625,6 +9632,7 @@
+@@ -9625,6 +9632,7 @@ var LegendListInner = typedForwardRef(function LegendListInner2(props, forwarded
      hasExternalScroll,
      hideItemsUntilMeasured: experimental_hideItemsUntilMeasured,
      horizontal: !!horizontal,

@@ -17,7 +17,7 @@ import { isScrollingWorkspaceCommand } from "../../layout/layoutBehavior";
 import { useLayoutPageLocation } from "../../layout/pageNavigation";
 import { type KeyboardEvent, type ReactNode, useEffect, useReducer, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import {
   AuthOrchestrationOperateScope,
   AuthSettingsWriteScope,
@@ -839,7 +839,8 @@ function KeybindingKeyControl({
   row: KeybindingRow;
   editor: KeybindingRowEditor;
 }) {
-  const { keyDraft, isRecording, isDirty, setDraft, captureKeybinding, pillRef } = editor;
+  const { keyDraft, isRecording, isDirty, setDraft, setKeyDraft, captureKeybinding, pillRef } =
+    editor;
   const gt = useGT();
   const m = useMessages();
   const showPill = !isRecording && keyDraft === row.key && row.key.length > 0 && !isDirty;
@@ -851,11 +852,19 @@ function KeybindingKeyControl({
       onClick={() => setDraft({ isRecording: true })}
       aria-label={gt("Edit shortcut for {command}: {shortcut}", {
         command: commandLabel(row.command, m),
-        shortcut: formatShortcutLabel(row.binding.shortcut),
+        shortcut: row.isUnassigned
+          ? gt("Unassigned", { $context: "keyboard shortcut with no key assigned" })
+          : formatShortcutLabel(row.binding.shortcut),
       })}
       className="-ml-1.5 inline-flex h-7 max-w-full cursor-pointer items-center rounded-md border border-transparent px-1.5 outline-none transition-colors hover:border-border/70 hover:surface-ghost-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
-      <KeybindingPill value={row.key} />
+      {row.isUnassigned ? (
+        <span className="text-body text-muted-foreground">
+          <T context="keyboard shortcut with no key assigned">Unassigned</T>
+        </span>
+      ) : (
+        <KeybindingPill value={row.key} />
+      )}
     </button>
   ) : (
     <Input
@@ -868,7 +877,7 @@ function KeybindingKeyControl({
       font="mono"
       onFocus={() => setDraft({ isRecording: true })}
       onBlur={() => setDraft({ isRecording: false })}
-      onChange={(event) => setDraft({ keyDraft: event.currentTarget.value })}
+      onChange={(event) => setKeyDraft(event.currentTarget.value)}
       onKeyDown={captureKeybinding}
     />
   );
@@ -1037,6 +1046,7 @@ const KEYBINDING_TABLE_COMMAND = "min-w-0 @max-lg/keybindings:col-span-full";
 const KEYBINDING_TABLE_TAIL = "flex min-w-0 items-center gap-1";
 
 function KeybindingTableHead() {
+  const gt = useGT();
   return (
     <div
       role="row"
@@ -1045,9 +1055,15 @@ function KeybindingTableHead() {
         "py-2 text-meta text-dim-foreground @max-lg/keybindings:sr-only",
       )}
     >
-      <span role="columnheader">Command</span>
-      <span role="columnheader">Keys</span>
-      <span role="columnheader">When</span>
+      <span role="columnheader">
+        <T context="keybindings table column">Command</T>
+      </span>
+      <span role="columnheader">
+        <T context="keybindings table column">Keys</T>
+      </span>
+      <span role="columnheader">
+        {gt("When", { $context: "heading for keybinding conditions" })}
+      </span>
     </div>
   );
 }
@@ -1056,14 +1072,18 @@ function KeybindingTableHead() {
 function KeybindingSettingsRow(props: KeybindingRowProps & { activate: boolean }) {
   const [editing, setEditing] = useState<"shortcut" | "when" | null>(null);
   const [focused, setFocused] = useState(false);
+  const gt = useGT();
+  const m = useMessages();
   if (editing) return <EditableKeybindingSettingsRow {...props} initialEditor={editing} />;
   const { row, anchorId, allRows, isSaving, onReset, onUnassign, onRemove } = props;
   const active = props.activate || focused;
+  const label = commandLabel(row.command, m);
+  const unassignedLabel = <T context="keyboard shortcut with no key assigned">Unassigned</T>;
   const title = active ? (
     <KeybindingRowTitle row={row} />
   ) : (
     <span className="flex min-w-0 items-center gap-2 text-body text-foreground">
-      <span className="truncate">{commandLabel(row.command)}</span>
+      <span className="truncate">{label}</span>
       <KeybindingSourceBadge source={row.source} />
     </span>
   );
@@ -1083,33 +1103,42 @@ function KeybindingSettingsRow(props: KeybindingRowProps & { activate: boolean }
           <Button
             variant="ghost"
             size="sm"
-            aria-label={`Edit shortcut for ${commandLabel(row.command)}: ${formatShortcutLabel(row.binding.shortcut)}`}
+            aria-label={gt("Edit shortcut for {command}: {shortcut}", {
+              command: label,
+              shortcut: row.isUnassigned
+                ? gt("Unassigned", { $context: "keyboard shortcut with no key assigned" })
+                : formatShortcutLabel(row.binding.shortcut),
+            })}
             onClick={() => setEditing("shortcut")}
           >
-            {row.key ? <KeybindingPill value={row.key} /> : "Unassigned"}
+            {row.key && !row.isUnassigned ? <KeybindingPill value={row.key} /> : unassignedLabel}
           </Button>
-        ) : row.key ? (
+        ) : row.key && !row.isUnassigned ? (
           <KeybindingPill value={row.key} />
         ) : (
-          "Unassigned"
+          unassignedLabel
         )}
       </span>
       <div role="presentation" className={KEYBINDING_TABLE_TAIL}>
         <span role="cell" className="-ml-1.5 flex min-w-0 flex-1 items-center">
-          {active ? (
+          {row.isUnassigned ? (
+            <span className="text-meta text-muted-foreground">
+              <T>No keyboard shortcut assigned. Click Unassigned to set one.</T>
+            </span>
+          ) : active ? (
             <Button
               variant={row.when ? "ghost" : "ghost-muted"}
               size="micro"
               className="min-w-0 shrink"
-              aria-label={`Edit when clause for ${commandLabel(row.command)}`}
+              aria-label={gt("Edit when clause for {command}", { command: label })}
               onClick={() => setEditing("when")}
             >
-              <span className="truncate font-mono text-meta">{row.when || "Always"}</span>
+              <span className="truncate font-mono text-meta">{row.when || gt("Always")}</span>
               <ChevronDownIcon className="size-3.5 shrink-0 opacity-0 group-focus-within/row:opacity-60 group-hover/row:opacity-60 pointer-coarse:opacity-60" />
             </Button>
           ) : (
             <span className="truncate font-mono text-meta text-muted-foreground">
-              {row.when || "Always"}
+              {row.when || gt("Always")}
             </span>
           )}
         </span>
@@ -1117,11 +1146,16 @@ function KeybindingSettingsRow(props: KeybindingRowProps & { activate: boolean }
           {active ? (
             <>
               <KeybindingConflictWarning
-                labels={keybindingConflictLabels(allRows, {
-                  rowId: row.id,
-                  key: row.key,
-                  when: row.when,
-                })}
+                labels={keybindingConflictLabels(
+                  allRows,
+                  {
+                    rowId: row.id,
+                    key: row.key,
+                    when: row.when,
+                  },
+                  navigator.platform,
+                  m,
+                )}
               />
               <KeybindingHoverRowMenu
                 row={row}
@@ -1143,14 +1177,14 @@ function EditableKeybindingSettingsRow(
 ) {
   const { row, isSaving, anchorId, allRows, variables, onSave, onReset, onUnassign, onRemove } =
     props;
+  const gt = useGT();
+  const m = useMessages();
   const editor = useKeybindingRowEditor({
     row,
     allRows,
     onSave,
     initialRecording: props.initialEditor === "shortcut",
   });
-  const gt = useGT();
-  const m = useMessages();
 
   return (
     <SettingsSearchTarget
@@ -1166,17 +1200,23 @@ function EditableKeybindingSettingsRow(
       </span>
       <div role="presentation" className={KEYBINDING_TABLE_TAIL}>
         <span role="cell" className="-ml-1.5 flex min-w-0 flex-1 items-center">
-          <WhenClauseControl
-            defaultOpen={props.initialEditor === "when"}
-            editLabel={gt("Edit when clause for {command}", {
-              command: commandLabel(row.command, m),
-            })}
-            expression={editor.whenDraftExpression}
-            value={editor.whenDraft}
-            variables={variables}
-            onChange={(whenDraft) => editor.setDraft({ whenDraft })}
-            onValidityChange={(isWhenDraftValid) => editor.setDraft({ isWhenDraftValid })}
-          />
+          {row.isUnassigned && !editor.isDirty ? (
+            <span className="text-meta text-muted-foreground">
+              <T>No keyboard shortcut assigned. Click Unassigned to set one.</T>
+            </span>
+          ) : (
+            <WhenClauseControl
+              defaultOpen={props.initialEditor === "when"}
+              editLabel={gt("Edit when clause for {command}", {
+                command: commandLabel(row.command, m),
+              })}
+              expression={editor.whenDraftExpression}
+              value={editor.whenDraft}
+              variables={variables}
+              onChange={(whenDraft) => editor.setDraft({ whenDraft })}
+              onValidityChange={(isWhenDraftValid) => editor.setDraft({ isWhenDraftValid })}
+            />
+          )}
         </span>
         <span role="cell" className="flex shrink-0 items-center gap-1">
           <KeybindingConflictWarning labels={editor.conflictLabels} />
@@ -1558,8 +1598,8 @@ function KeybindingsList(props: KeybindingsListProps) {
   };
   const anchorIds = keybindingAnchorIds(rows);
   const targetId = useSettingsSearchTargetId();
-  const gt = useGT();
   const { tableRef, activeRows } = useActiveKeybindingRows(rows);
+  const gt = useGT();
   return (
     <Tooltip<KeybindingCommand>>
       {({ payload }) => (
@@ -1567,7 +1607,7 @@ function KeybindingsList(props: KeybindingsListProps) {
           <div
             ref={tableRef}
             role="table"
-            aria-label={gt("Shortcuts")}
+            aria-label={gt("Shortcuts", { $context: "keyboard shortcuts section title" })}
             className={cn(
               KEYBINDING_TABLE_GRID,
               "*:not-first:border-t *:not-first:border-divider dark:*:not-first:border-divider/60",
@@ -1590,7 +1630,9 @@ function KeybindingsList(props: KeybindingsListProps) {
             {rows.length === 0 && !isAddingBinding ? (
               <div className="col-span-full">
                 <SettingsNoMatches onClear={onClearQuery}>
-                  No keybindings match “{query.trim()}”.
+                  <T>
+                    No keybindings match “<Var>{query.trim()}</Var>”.
+                  </T>
                 </SettingsNoMatches>
               </div>
             ) : null}
@@ -1623,10 +1665,10 @@ function useKeybindingCatalog() {
   const serverKeybindings = useSettingsScope().environment?.serverConfig?.keybindings;
   const scrollingWorkspaces = useScrollingWorkspacesEnabled();
   const merged = mergeWithDefaultKeybindings(serverKeybindings ?? []);
+  const m = useMessages();
   // Shortcuts that only drive scrolling workspaces stay hidden until the Labs toggle is on.
   const listed = (command: KeybindingCommand) =>
     scrollingWorkspaces || !isScrollingWorkspaceCommand(command);
-  const m = useMessages();
   return {
     commandOptions: buildKeybindingCommandOptions(merged, m).filter(listed),
     allRows: buildKeybindingRows(merged, navigator.platform, sendShortcut, m).filter((row) =>
@@ -1673,7 +1715,7 @@ export function KeybindingsSettingsPanel() {
   }
   const whenVariables = buildWhenVariableOptions();
   const { commandOptions, allRows } = useKeybindingCatalog();
-  const rows = filterKeybindingRows(allRows, query);
+  const rows = filterKeybindingRows(allRows, query, m);
 
   const openKeybindingsFile = () => {
     if (
@@ -1856,7 +1898,7 @@ export function KeybindingsSettingsPanel() {
       </SettingsToolbar>
       <SettingsSection
         {...searchableSetting("keybindings")}
-        title={gt("Shortcuts")}
+        title={gt("Shortcuts", { $context: "keyboard shortcuts section title" })}
         warning={isElectron ? undefined : m(BROWSER_KEYBINDING_WARNING)}
       >
         {!canWriteSettings ? (

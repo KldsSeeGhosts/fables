@@ -894,31 +894,40 @@ function useChatMarkdownState({
     }
     return findAgentDirectoryMatch(workspaceRelativePath, agentRoots, searchRoot);
   };
-  const openFileInPanel = (fileLinkMeta: MarkdownFileLinkMeta, panelPath: string) => {
-    if (!threadRef) return;
-    const openAt = (path: string) =>
-      useRightPanelStore.getState().openFile(threadRef, path, fileLinkMeta.line);
+  const resolvePanelPath = (
+    fileLinkMeta: MarkdownFileLinkMeta,
+    panelPath: string,
+  ): string | Promise<string> => {
     if (
       fileLinkMeta.workspaceLookupPath === null ||
       !cwd ||
       workspaceLinkLookupQuery(panelPath, cwd) === null
     ) {
-      openAt(panelPath);
+      return panelPath;
+    }
+    return findWorkspaceFileMatch(fileLinkMeta).then((match) => match ?? panelPath);
+  };
+  const openFileInPanel = (fileLinkMeta: MarkdownFileLinkMeta, panelPath: string) => {
+    if (!threadRef) return;
+    const openAt = (path: string) =>
+      useRightPanelStore.getState().openFile(threadRef, path, fileLinkMeta.line);
+    const path = resolvePanelPath(fileLinkMeta, panelPath);
+    if (typeof path === "string") {
+      openAt(path);
       return;
     }
     // Anything the user opens in this panel meanwhile, such as a file from the picker, wins.
     const panelRef = rightPanelHostRef(threadRef);
     const panelKey = scopedThreadKey(panelRef);
     const userActionRevision = useRightPanelStore.getState().markUserAction(panelRef);
-    void (async () => {
-      const match = await findWorkspaceFileMatch(fileLinkMeta);
+    void path.then((resolved) => {
       if (
         scopedThreadKey(rightPanelHostRef(threadRef)) !== panelKey ||
         useRightPanelStore.getState().getUserActionRevision(panelRef) !== userActionRevision
       )
         return;
-      openAt(match ?? panelPath);
-    })();
+      openAt(resolved);
+    });
   };
   const fileLinkChip = (
     fileLinkMeta: MarkdownFileLinkMeta,
@@ -994,6 +1003,7 @@ function useChatMarkdownState({
           markdownFileCopyPaths(fileLinkMeta, await resolveHostPath(), cwd)
         }
         onOpenInPanel={(path) => openFileInPanel(fileLinkMeta, path)}
+        resolvePanelPath={(path) => resolvePanelPath(fileLinkMeta, path)}
         onOpenMedia={
           threadRef && canPreviewMedia
             ? () => openMarkdownMedia(mediaPath, fileLinkMeta.filePath)

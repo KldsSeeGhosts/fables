@@ -1,4 +1,7 @@
-import { THOUGHT_PREVIEW_SOURCE_MAX_LENGTH } from "./TimelineWorkEntryRow.logic";
+import {
+  thoughtPreviewPlugins,
+  THOUGHT_PREVIEW_SOURCE_MAX_LENGTH,
+} from "./TimelineWorkEntryRow.logic";
 import { TimelinePendingApprovalRow } from "./TimelinePendingApprovalRow";
 import { MESSAGE_HEADING_LEVEL, TimelineRowTimestamp } from "./TimelineRowParts";
 import {
@@ -14,7 +17,6 @@ import {
 } from "./TimelineToolActivityIcon";
 import {
   buildToolCallExpandedBody,
-  thoughtPreviewPlugins,
   workEntryIconName,
   workToneIcon,
 } from "./TimelineWorkEntryRow.logic";
@@ -53,7 +55,7 @@ import type { ExpandedImagePreview } from "./ExpandedImagePreview";
 import { workGroupImageGallery } from "./markdownImageGallery";
 import { McpSignInAction } from "./McpSignInAction";
 import * as DateTime from "effect/DateTime";
-import { CircleAlertIcon, XIcon, RotateCcwIcon } from "lucide-react";
+import { ChevronRightIcon, CircleAlertIcon, XIcon, RotateCcwIcon } from "lucide-react";
 import { Button, InlineButton } from "../ui/button";
 import { useAssetUrls } from "../../assets/assetUrls";
 import { observeResize } from "../../lib/observeResize";
@@ -444,7 +446,7 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
     (expanded || !inspectedItem) && !isReasoning
       ? plainOutput !== undefined
         ? plainOutput
-        : buildToolCallExpandedBody(workEntry, workspaceRoot, previewText)
+        : buildToolCallExpandedBody(workEntry, workspaceRoot, previewText, m)
       : null;
   const plainOutputFetches =
     plainOutput !== undefined &&
@@ -484,10 +486,10 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
   const accessiblePreview = [
     [threadLabel?.text ?? previewText, answerPreview].filter(Boolean).join(": "),
     editCounts
-      ? gt("{additions} additions, {deletions} deletions", {
-          additions: editCounts.additions,
-          deletions: editCounts.deletions,
-        })
+      ? gt(
+          "{additions, plural, one {{additions} addition} other {{additions} additions}}, {deletions, plural, one {{deletions} deletion} other {{deletions} deletions}}",
+          editCounts,
+        )
       : null,
   ]
     .filter(Boolean)
@@ -648,7 +650,16 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
           !toolIconAcceptsTint(entryToolIcon) ? (
             <XIcon aria-hidden className={cn("size-3 shrink-0", failedToolIconClassName)} />
           ) : null}
-          {canExpandProjectedItem ? <span aria-hidden className="size-3 shrink-0" /> : null}
+          {canExpandProjectedItem ? (
+            <span className="flex size-4 shrink-0 items-center justify-center" aria-hidden>
+              <ChevronRightIcon
+                className={cn(
+                  "size-3 shrink-0 text-icon-muted opacity-70 transition-transform duration-200",
+                  expanded && "rotate-90",
+                )}
+              />
+            </span>
+          ) : null}
         </>
       }
     >

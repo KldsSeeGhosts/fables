@@ -184,8 +184,8 @@ export function ProjectActionsSettings() {
         settingKeys={["defaultProjectScripts"]}
         mixed={mixed}
         leading={<PlusIcon />}
-        title="Add action"
-        description="Runs in this checkout or its worktree, with an optional shortcut."
+        title={gt("Add action")}
+        description={gt("Runs in this checkout or its worktree, with an optional shortcut.")}
         onResetOverride={() => void persist(() => null)}
         control={
           <Button
@@ -195,7 +195,7 @@ export function ProjectActionsSettings() {
             onClick={() => setRequest({ scriptId: null, initial: EMPTY_PROJECT_SCRIPT_INPUT })}
           >
             <PlusIcon />
-            Add
+            {gt("Add", { $context: "verb, adds a project action" })}
           </Button>
         }
       />

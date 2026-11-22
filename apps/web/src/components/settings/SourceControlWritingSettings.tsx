@@ -236,8 +236,8 @@ export function SourceControlWritingSettingsSection() {
               variant="well"
               size="compact"
               className="w-full sm:w-56"
-              leadingIcon={<GitCommitHorizontalIcon />}
               aria-label={gt("Commit and pull request writing")}
+              leadingIcon={<GitCommitHorizontalIcon />}
             >
               <SelectValue>
                 {(value: SourceControlWritingStyleMode | null) =>

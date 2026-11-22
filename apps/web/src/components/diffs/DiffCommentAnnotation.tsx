@@ -53,13 +53,15 @@ interface DiffCommentAnnotationProps {
   stateLabel?: string | undefined;
 }
 
-/** Comments written here are the reader's own; there is no other author to name. */
-const LOCAL_AUTHOR = "You";
-
 /** A relative time that moves on by itself, once a minute, instead of freezing at "just now". */
 function RelativeCommentTime({ createdAt }: { createdAt: string }) {
   const now = useNowMinute();
-  return <span className="shrink-0">{formatElapsedDurationLabel(createdAt, Date.parse(now))}</span>;
+  const messages = useMessages();
+  return (
+    <span className="shrink-0">
+      {formatElapsedDurationLabel(createdAt, Date.parse(now), messages)}
+    </span>
+  );
 }
 
 /** Avatar, author, then a range or time, and the comment's state at the far end. */
@@ -72,15 +74,18 @@ export function CommentCardHead({
   stateLabel?: ReactNode;
   action?: ReactNode;
 }) {
+  const gt = useGT();
+  // Comments written here are the reader's own; there is no other author to name.
+  const localAuthor = gt("You", { $context: "author of the user's own message" });
   return (
     <div className="flex min-w-0 items-center gap-1.5">
       <span
         aria-hidden="true"
         className="flex size-4 shrink-0 items-center justify-center rounded-full bg-merged text-micro leading-none text-white"
       >
-        {LOCAL_AUTHOR.charAt(0)}
+        {localAuthor.charAt(0)}
       </span>
-      <span className="shrink-0 text-meta text-foreground">{LOCAL_AUTHOR}</span>
+      <span className="shrink-0 text-meta text-foreground">{localAuthor}</span>
       {meta ? (
         <span className="min-w-0 truncate text-caption text-dim-foreground">{meta}</span>
       ) : null}
@@ -149,7 +154,13 @@ export function DiffCommentAnnotation({
       >
         <div className="px-2.5 pt-2">
           <CommentCardHead
-            meta={createdAt ? <RelativeCommentTime createdAt={createdAt} /> : rangeLabel}
+            meta={
+              createdAt ? (
+                <RelativeCommentTime createdAt={createdAt} />
+              ) : (
+                reviewCommentRangeText(rangeLabel, messages)
+              )
+            }
             stateLabel={stateLabel}
             action={
               onDelete ? (
@@ -197,7 +208,10 @@ export function DiffCommentAnnotation({
       contentEditable={false}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      <CommentCardHead meta={rangeLabel} stateLabel={stateLabel} />
+      <CommentCardHead
+        meta={reviewCommentRangeText(rangeLabel, messages)}
+        stateLabel={stateLabel}
+      />
       <PullRequestMarkdownTextarea
         ref={textareaRef}
         completionScope={completionScope}

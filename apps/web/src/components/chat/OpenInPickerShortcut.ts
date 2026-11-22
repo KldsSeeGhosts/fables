@@ -5,9 +5,9 @@ import {
   type ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
 import { msg } from "gt-react";
+import { useLayoutPaneOwnsThreadRef } from "../../layout/layoutPaneContext";
 import { useEffect } from "react";
 
-import { useLayoutPaneOwnsThreadRef } from "../../layout/layoutPaneContext";
 import { usePreferredEditor } from "../../editorPreferences";
 import { editorLabelForPlatform } from "../../editorLabels";
 import { isOpenFavoriteEditorShortcut } from "../../keybindings";

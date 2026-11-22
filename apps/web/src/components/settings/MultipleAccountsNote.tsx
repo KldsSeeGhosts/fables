@@ -37,13 +37,13 @@ export function MultipleAccountsNote({
       <AlertDescription>
         <p>
           <T>
-            We do not recommend managing multiple <Var>{providerName}</Var> accounts in T3 Code.
-          </T>{" "}
-          <InlineButton
-            render={<a href={MULTIPLE_ACCOUNTS_FAQ_URL} target="_blank" rel="noreferrer" />}
-          >
-            <T>More info</T>
-          </InlineButton>
+            We do not recommend managing multiple <Var>{providerName}</Var> accounts in T3 Code.{" "}
+            <InlineButton
+              render={<a href={MULTIPLE_ACCOUNTS_FAQ_URL} target="_blank" rel="noreferrer" />}
+            >
+              More info
+            </InlineButton>
+          </T>
         </p>
       </AlertDescription>
     </Alert>

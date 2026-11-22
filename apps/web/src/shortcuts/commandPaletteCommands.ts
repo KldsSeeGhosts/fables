@@ -83,9 +83,9 @@ export function installCommandPaletteCommands(
           id: "appearance-cycle",
           title: m(
             msg(
-              "{choice, select, system {Appearance: System} light {Appearance: Light} blackChrome {Appearance: Black chrome} other {Appearance: Dark}}",
+              "{mode, select, system {Appearance: System} light {Appearance: Light} blackChrome {Appearance: Black chrome} other {Appearance: Dark}}",
             ),
-            { choice: next.choice === "black-chrome" ? "blackChrome" : next.choice },
+            { mode: next.choice === "black-chrome" ? "blackChrome" : next.choice },
           ),
           timeout: 1500,
         });

@@ -183,6 +183,7 @@ describe("root reopen shortcut", () => {
     expect(state.openPreview).toHaveBeenCalledOnce();
     expect(useClosedViewStore.getState().entries).toEqual([]);
   });
+
   it.each([
     { action: "switch routes", goBack: false, expectedPath: "/newer" },
     { action: "leave and return", goBack: true, expectedPath: "/" },
@@ -386,20 +387,6 @@ describe("root reopen shortcut", () => {
   );
   it("forwards address-bar focus, zoom, and panel new and close from a focused desktop page", async () => {
     setup();
-    state.keybindings = [
-      ...DEFAULT_RESOLVED_KEYBINDINGS,
-      {
-        command: "rightPanel.close",
-        shortcut: {
-          key: "w",
-          modKey: true,
-          altKey: false,
-          ctrlKey: false,
-          metaKey: false,
-          shiftKey: false,
-        },
-      },
-    ];
     await using _shortcut = await renderShortcut();
     expect(state.setShortcuts).toHaveBeenLastCalledWith(
       expect.arrayContaining(

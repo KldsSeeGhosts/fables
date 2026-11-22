@@ -17,7 +17,7 @@ import {
   tightestSessionLimit,
 } from "@t3tools/shared/usageLimits";
 import { formatResetsIn, formatRunsOutIn, limitsNotice } from "@t3tools/shared/usageLimitsCopy";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { GaugeIcon, InfoIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -278,9 +278,15 @@ function UsageLimitsAccounts({
                         <TooltipPopup>
                           <div className="flex flex-col gap-1">
                             <Text variant="meta">
-                              {gt("Source: {source}", { source: account.sourceLabel })}
+                              <T>
+                                Source: <Var>{account.sourceLabel}</Var>
+                              </T>
                             </Text>
-                            <Text variant="meta">{gt("Account ID: {id}", { id: account.id })}</Text>
+                            <Text variant="meta">
+                              <T>
+                                Account ID: <Var>{account.id}</Var>
+                              </T>
+                            </Text>
                           </div>
                         </TooltipPopup>
                       </Tooltip>
@@ -521,7 +527,7 @@ function LowLimitTiming({ window }: { readonly window: ServerProviderUsageWindow
       </TooltipTrigger>
       <TooltipPopup>
         <div className="flex flex-col gap-1">
-          <Text variant="meta">{gt("{label} window", { label: window.label })}</Text>
+          <Text variant="meta">{gt("{window} window", { window: window.label })}</Text>
           {[formatResetsIn(window, now, messages), formatRunsOutIn(window, now, messages)]
             .filter((part) => part !== null)
             .map((part) => (
@@ -548,7 +554,7 @@ function LimitsPopover({ source }: { readonly source: LimitsSource }) {
   return (
     <Popover>
       <PopoverTrigger render={<Button size="xs" variant="ghost" />}>
-        {gt("Limits", { $context: "usage limits popover trigger" })}
+        {gt("Limits", { $context: "button that opens usage limits" })}
       </PopoverTrigger>
       <PopoverPopup
         ref={popupRef}
@@ -566,7 +572,6 @@ function LimitsPopover({ source }: { readonly source: LimitsSource }) {
 }
 
 function LimitsPopoverReport({ source }: { readonly source: LimitsSource }) {
-  const gt = useGT();
   const [openedAt] = useState(Date.now);
   const report = collectProviderUsageLimits(
     source.instanceId,
@@ -576,12 +581,14 @@ function LimitsPopoverReport({ source }: { readonly source: LimitsSource }) {
   );
   return (
     <div className="flex flex-col gap-3">
-      <PopoverTitle>{gt("Usage limits")}</PopoverTitle>
+      <PopoverTitle>
+        <T>Usage limits</T>
+      </PopoverTitle>
       {report ? (
         <UsageLimitsAccounts report={report} environmentId={source.environmentId} />
       ) : (
         <span className="text-meta text-muted-foreground">
-          {gt("Usage limits are unavailable")}
+          <T>Usage limits are unavailable</T>
         </span>
       )}
     </div>
@@ -589,22 +596,21 @@ function LimitsPopoverReport({ source }: { readonly source: LimitsSource }) {
 }
 
 /** The notice for a session under a quarter left, with a way over to another provider. */
-export function lowLimitBannerItem(
-  {
-    signal,
-    switchTarget,
-    onSwitch,
-    limits,
-    onDismissed,
-  }: {
-    readonly signal: LowLimitSignal;
-    readonly switchTarget: ServerProvider | null;
-    readonly onSwitch: (provider: ServerProvider) => void;
-    readonly limits: LimitsSource | null;
-    readonly onDismissed: (dismissals: LowLimitDismissals) => void;
-  },
-  resolve: MessageResolver = m,
-): ComposerBannerStackItem {
+export function lowLimitBannerItem({
+  signal,
+  switchTarget,
+  onSwitch,
+  limits,
+  onDismissed,
+  resolve = m,
+}: {
+  readonly signal: LowLimitSignal;
+  readonly switchTarget: ServerProvider | null;
+  readonly onSwitch: (provider: ServerProvider) => void;
+  readonly limits: LimitsSource | null;
+  readonly onDismissed: (dismissals: LowLimitDismissals) => void;
+  readonly resolve?: MessageResolver;
+}): ComposerBannerStackItem {
   return {
     id: `low-limit:${signal.key}`,
     variant: "warning",

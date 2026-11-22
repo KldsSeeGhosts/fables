@@ -1,3 +1,4 @@
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { FileUpIcon, FileXIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import type { ChangeEvent, DragEvent, UIEvent } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -6,9 +7,8 @@ import { cn } from "../../lib/utils";
 import {
   getCustomThemes,
   installCustomTheme,
-  parseThemeFile,
   removeCustomTheme,
-  THEME_FILE_VERSION,
+  renameTheme,
   updateCustomTheme,
   type ThemeDefinition,
 } from "../../themePalette";
@@ -52,6 +52,10 @@ function describeOversizedThemeFile(bytes: number): string | null {
       { size: formatBytes(bytes), limit: formatBytes(MAX_THEME_FILE_BYTES) },
     ),
   );
+}
+
+function isThemeIdTaken(themeId: string): boolean {
+  return getCustomThemes().some((existing) => existing.id === themeId);
 }
 
 function escapeJsonHtml(value: string): string {
@@ -136,6 +140,7 @@ function ThemeJsonEditor({
         onChange={(event) => onChange(event.currentTarget.value)}
         onScroll={syncScroll}
         placeholder={
+          // oxlint-disable-next-line t3code/no-untranslated-copy -- example theme JSON
           '{ "name": "Aurora", "type": "dark",\n  "colors": { "editor.background": "#0b0e14", … } }'
         }
         spellCheck={false}
@@ -174,47 +179,45 @@ async function stageThemeFile(file: ImportableThemeFile): Promise<StagedThemeFil
       fileName: file.name,
       text: null,
       theme: null,
-      error: "Could not read that file. Paste the JSON below instead.",
+      error: m(msg("Could not read that file. Paste the JSON below instead.")),
     };
   }
   try {
     return { fileName: file.name, text, theme: parseThemeText(text), error: null };
   } catch {
-    return { fileName: file.name, text, theme: null, error: "That theme file is invalid." };
+    return {
+      fileName: file.name,
+      text,
+      theme: null,
+      error: m(msg("That theme file is invalid.")),
+    };
   }
 }
 
-const isInstalledTheme = (theme: ThemeDefinition) =>
-  getCustomThemes().some((existing) => existing.id === theme.id);
+const isInstalledTheme = (theme: ThemeDefinition) => isThemeIdTaken(theme.id);
 
 function versionedCopy(theme: ThemeDefinition, preferredName?: string | null): ThemeDefinition {
-  // The collection stays behind: updating a collection replaces every theme in it.
-  const copyNamed = (name: string) =>
-    parseThemeFile({
-      version: THEME_FILE_VERSION,
-      name,
-      appearance: theme.appearance,
-      colors: theme.colors,
-      ...(theme.variants ? { variants: theme.variants } : {}),
-      ...(theme.managed ? { managed: true } : {}),
-      ...(theme.css ? { css: theme.css } : {}),
-    });
+  // renameTheme leaves the collection behind: updating a collection replaces every theme in it.
   if (preferredName && preferredName.toLowerCase() !== theme.label.toLowerCase()) {
-    const candidate = copyNamed(preferredName.slice(0, 48));
-    if (!isInstalledTheme(candidate)) return candidate;
+    const candidate = renameTheme(theme, preferredName.slice(0, 48));
+    if (!isThemeIdTaken(candidate.id)) return candidate;
   }
   for (let copy = 1; copy < 100; copy += 1) {
-    const candidate = copyNamed(`${theme.label.slice(0, 48 - ` (${copy})`.length)} (${copy})`);
-    if (!isInstalledTheme(candidate)) return candidate;
+    const candidate = renameTheme(
+      theme,
+      `${theme.label.slice(0, 48 - ` (${copy})`.length)} (${copy})`,
+    );
+    if (!isThemeIdTaken(candidate.id)) return candidate;
   }
-  throw new Error(`Too many copies of "${theme.label}".`);
+  throw new Error(m(msg('Too many copies of "{label}".', { label: theme.label })));
 }
 
 function StagedThemeRow({ file, onRemove }: { file: StagedThemeFile; onRemove: () => void }) {
+  const gt = useGT();
   const { theme } = file;
   const removeButton = (
     <Button
-      aria-label={`Remove ${file.fileName}`}
+      aria-label={gt("Remove {name}", { name: file.fileName })}
       onClick={onRemove}
       size="icon-xs"
       variant="ghost-muted"
@@ -249,7 +252,7 @@ function StagedThemeRow({ file, onRemove }: { file: StagedThemeFile; onRemove: (
         <p className="truncate text-muted-foreground text-meta">{file.fileName}</p>
       </div>
       <Badge size="lg" variant={installed ? "unavailable" : "secondary"}>
-        {installed ? <T>Already installed</T> : <T context="a file holding a theme">Theme file</T>}
+        {installed ? gt("Already installed") : gt("Theme file")}
       </Badge>
       {removeButton}
     </li>
@@ -442,7 +445,7 @@ function ThemeImportBody({
         try {
           entries.push({ theme: parseThemeText(json), sourceName: jsonSource ?? undefined });
         } catch (cause) {
-          jsonError = cause instanceof Error ? cause.message : "That theme file is invalid.";
+          jsonError = cause instanceof Error ? cause.message : gt("That theme file is invalid.");
         }
       }
     }
@@ -479,7 +482,7 @@ function ThemeImportBody({
         );
       } catch (cause) {
         failures.push(
-          `${theme.label}: ${cause instanceof Error ? cause.message : gt("failed", { $context: "theme import result" })}`,
+          `${theme.label}: ${cause instanceof Error ? (thrownErrorMessage(cause, m) ?? cause.message) : gt("failed", { $context: "theme import result" })}`,
         );
       }
     }
@@ -510,12 +513,16 @@ function ThemeImportBody({
           try {
             removeCustomTheme(installedTheme.id);
           } catch {}
-          setError("Theme added, but it could not be selected. Try again.");
+          setError(gt("Theme added, but it could not be selected. Try again."));
           return;
         }
         onClose();
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "That theme file is invalid.");
+        setError(
+          cause instanceof Error
+            ? (thrownErrorMessage(cause, m) ?? cause.message)
+            : gt("That theme file is invalid."),
+        );
       }
       return;
     }
@@ -526,7 +533,7 @@ function ThemeImportBody({
         installed.push(installCustomTheme(theme));
       } catch (cause) {
         failures.push(
-          `${theme.label}: ${cause instanceof Error ? cause.message : "could not install"}`,
+          `${theme.label}: ${cause instanceof Error ? (thrownErrorMessage(cause, m) ?? cause.message) : gt("could not install")}`,
         );
       }
     }
@@ -567,10 +574,19 @@ function ThemeImportBody({
   const invalidCount = staged.filter((file) => !file.theme).length;
   const footerNote = [
     pending.newCount > 0
-      ? `${pending.newCount} new ${pending.newCount === 1 ? "theme" : "themes"}`
+      ? gt("{count, plural, one {{count} new theme} other {{count} new themes}}", {
+          count: pending.newCount,
+        })
       : null,
-    installedCount > 0 ? `${installedCount} already installed` : null,
-    invalidCount > 0 ? `${invalidCount} invalid` : null,
+    installedCount > 0
+      ? gt("{count} already installed", {
+          count: installedCount,
+          $context: "theme files that are already installed",
+        })
+      : null,
+    invalidCount > 0
+      ? gt("{count} invalid", { count: invalidCount, $context: "theme files that failed to parse" })
+      : null,
   ].filter((note) => note !== null);
 
   return (
@@ -603,12 +619,10 @@ function ThemeImportBody({
               {...dropHandlers}
             >
               <FileUpIcon className="size-5 text-muted-foreground" />
-              <p className="text-label">
-                <T>Drop T3 Code or VS Code .json files</T>
-              </p>
+              <p className="text-label">{gt("Drop T3 Code or VS Code .json files")}</p>
               <div className="flex flex-wrap justify-center gap-2">
                 <Button disabled={isReading} size="sm" variant="secondary" onClick={openFilePicker}>
-                  {isReading ? <T>Reading…</T> : <T>Choose files</T>}
+                  {isReading ? gt("Reading…") : gt("Choose files")}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={openSearch}>
                   <SearchIcon />

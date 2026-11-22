@@ -1,4 +1,4 @@
-import { T, msg, useGT } from "gt-react";
+import { T, msg, useGT, useMessages } from "gt-react";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m, type MessageResolver } from "~/i18n/messages";
 import {
@@ -41,22 +41,23 @@ type RecoveryProps = {
   onDismiss?: () => void;
 };
 
-function isAutoResumeScheduled({ runId, resetAt, recovery }: RecoveryProps): boolean {
-  return Boolean(recovery?.runId === runId && recovery.resetAt === resetAt && recovery.autoResume);
+function formatTimeUntil(ms: number, resolve: MessageResolver = m): string {
+  const minutes = Math.max(1, Math.ceil(ms / 60_000));
+  const hours = Math.floor(minutes / 60);
+  return hours > 0
+    ? resolve(msg("in {hours}h {minutes}m", { hours, minutes: minutes % 60 }))
+    : resolve(msg("in {minutes}m", { minutes }));
 }
 
 /** Counts down to the reset. It re-renders once a minute, never per frame. */
 function ResetCountdown({ resetAt }: { resetAt: string }) {
-  const gt = useGT();
+  const messages = useMessages();
   const deadline = Date.parse(resetAt);
   const passed = useDeadlinePassed(deadline);
   const remainingMs = deadline - Date.parse(`${useNowMinute()}:00.000Z`);
-  if (passed || remainingMs <= 0) return <T>now</T>;
-  const minutes = Math.max(1, Math.ceil(remainingMs / 60_000));
-  const hours = Math.floor(minutes / 60);
-  return hours > 0
-    ? gt("in {hours}h {minutes}m", { hours, minutes: minutes % 60 })
-    : gt("in {minutes}m", { minutes });
+  return !passed && remainingMs > 0
+    ? formatTimeUntil(remainingMs, messages)
+    : messages(msg("now", { $context: "the usage limit resets now" }));
 }
 
 function parseEpochMs(isoDate: string | null): number | null {
@@ -124,7 +125,7 @@ export function usageLimitRecoveryBannerItem(
     ? formatUpcomingTimestamp(shownAt, timestampFormat, undefined, undefined, resolve)
     : null;
   const resetDescription =
-    resumesUpcoming && displayAt !== null ? (
+    resumesUpcoming && displayAt ? (
       <ResetCountdown resetAt={displayAt} />
     ) : formattedTime !== null ? (
       resetPassed ? (
@@ -145,7 +146,7 @@ export function usageLimitRecoveryBannerItem(
       group: "environment",
       icon: resumes ? <TimerIcon /> : <GaugeIcon />,
       title:
-        resumes && displayAt
+        resumesUpcoming && displayAt
           ? resolve(
               msg("Resumes {time}", {
                 time: formatUpcomingTimestamp(
@@ -193,9 +194,10 @@ export function usageLimitRecoveryBannerItem(
 
 function RecoveryActions(props: RecoveryProps) {
   const { runId, resetAt, recovery, snoozedUntil, onChange } = props;
+  const gt = useGT();
   const [pending, setPending] = useState(false);
 
-  const scheduled = isAutoResumeScheduled(props);
+  const scheduled = limitRecoveryScheduleState(props).resumes;
   // The server leaves snoozedUntil in place after the timer wakes the thread,
   // so a snooze whose reset has passed is no longer active.
   const resetPassed = useDeadlinePassed(resetAt === null ? null : Date.parse(resetAt));
@@ -235,32 +237,27 @@ function RecoveryActions(props: RecoveryProps) {
   // Inline errors would widen the actions column and crush the title.
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {/* An active snooze must stay reversible while auto-resume is scheduled. */}
-      {snoozed || !scheduled ? (
-        <Button
-          size="xs"
-          variant="secondary"
-          disabled={pending || (!snoozed && resetPassed)}
-          onClick={() => void toggle("snooze")}
-        >
-          {pending ? <T>Saving...</T> : snoozed ? <T>Wake now</T> : <T>Snooze until reset</T>}
-        </Button>
-      ) : null}
+      <Button
+        size="xs"
+        variant="secondary"
+        disabled={pending || (!snoozed && resetPassed)}
+        onClick={() => void toggle("snooze")}
+      >
+        {pending ? gt("Saving...") : snoozed ? gt("Wake now") : gt("Snooze until reset")}
+      </Button>
       <Button
         size="xs"
         variant={scheduled ? "secondary" : "default"}
         disabled={pending}
         onClick={() => void toggle("resume")}
       >
-        {pending ? (
-          <T>Saving...</T>
-        ) : scheduled ? (
-          <T>Cancel auto-resume</T>
-        ) : resetPassed ? (
-          <T>Resume now</T>
-        ) : (
-          <T>Resume at reset</T>
-        )}
+        {pending
+          ? gt("Saving...")
+          : scheduled
+            ? gt("Cancel auto-resume")
+            : resetPassed
+              ? gt("Resume now")
+              : gt("Resume at reset")}
       </Button>
     </div>
   );

@@ -2,7 +2,6 @@ import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
 import { ChevronDownIcon } from "lucide-react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { useState, type ReactNode } from "react";
 import type {
   SourceControlDiscoveryResult,
@@ -19,7 +18,6 @@ import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { sourceControlEnvironment } from "../../state/sourceControl";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { m, type MessageResolver } from "~/i18n/messages";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
@@ -34,6 +32,8 @@ import { Collapsible, CollapsibleContent } from "../ui/collapsible";
 import { Skeleton } from "../ui/skeleton";
 import { Switch } from "../ui/switch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { m, type MessageResolver } from "../../i18n/messages";
 
 import { GitIcon, JujutsuIcon, type Icon } from "../Icons";
 import { IssueTrackerSettings } from "./IssueTrackerSettings";
@@ -50,8 +50,9 @@ import {
   SettingsSection,
   useSettingsSearchTargetId,
 } from "./settingsLayout";
-import { searchableSetting, sourceControlHostSettingsSearchId } from "./settingsSearch";
+import { useSearchableSetting, sourceControlHostSettingsSearchId } from "./settingsSearch";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
+import { sourceControlInstallHintText } from "@t3tools/client-runtime/contract-labels";
 import { isSourceControlProviderOffered } from "@t3tools/client-runtime/operations/projects";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { sourceControlIcon } from "~/sourceControlPresentation";
@@ -92,12 +93,19 @@ function itemChip(
   if (isVcsNotReady(item)) return { label: resolve(msg("Coming soon")), variant: "warning" };
   if (item.status !== "available")
     return { label: resolve(msg("Not installed")), variant: "unavailable" };
-  if (!isProviderDiscoveryItem(item)) return { label: resolve(msg("Ready")), variant: "success" };
+  if (!isProviderDiscoveryItem(item))
+    return {
+      label: resolve(msg("Ready", { $context: "source control tool status" })),
+      variant: "success",
+    };
   if (item.auth.status === "authenticated")
     return { label: resolve(msg("Authenticated")), variant: "success" };
   if (item.auth.status === "unauthenticated")
     return { label: resolve(msg("Not authenticated")), variant: "secondary" };
-  return { label: resolve(msg("Available")), variant: "secondary" };
+  return {
+    label: resolve(msg("Available", { $context: "source control tool status" })),
+    variant: "secondary",
+  };
 }
 
 function RedactedAccount(props: { readonly account: string | null }) {
@@ -127,19 +135,20 @@ function itemSummary({
   auth,
   authAccount,
   version,
-  resolve = m,
+  resolve,
 }: {
   readonly item: VcsDiscoveryItem | SourceControlProviderDiscoveryItem;
   readonly auth: SourceControlProviderAuth | null;
   readonly authAccount: string | null;
   readonly version: string | null;
-  readonly resolve?: MessageResolver;
+  readonly resolve: MessageResolver;
 }) {
   const toolVersion = version
     ? auth && item.executable
       ? `${item.executable} ${version}`
       : version
     : null;
+  const installHint = sourceControlInstallHintText(item.installHint, resolve);
   if (isVcsNotReady(item)) {
     return (
       <span>
@@ -154,7 +163,7 @@ function itemSummary({
     return (
       <span>
         <T>
-          Not available on this server: <Var>{item.installHint}</Var>
+          Not available on this server: <Var>{installHint}</Var>
         </T>
       </span>
     );
@@ -187,7 +196,7 @@ function itemSummary({
       return (
         <span>
           <T>
-            Available. <Var>{item.installHint}</Var>
+            Available. <Var>{installHint}</Var>
           </T>
         </span>
       );
@@ -196,8 +205,11 @@ function itemSummary({
     if (auth.status === "unauthenticated" && auth.accounts?.some((entry) => entry.authenticated)) {
       return (
         <span>
-          {optionLabel(auth.detail) ??
-            resolve(msg("Every {host} host is turned off.", { host: item.label }))}
+          {optionLabel(auth.detail) ?? (
+            <T>
+              Every <Var>{item.label}</Var> host is turned off.
+            </T>
+          )}
         </span>
       );
     }
@@ -234,9 +246,7 @@ function itemSummary({
     );
   }
 
-  return (
-    <span>{toolVersion ?? resolve(msg("Available", { $context: "source control tool" }))}</span>
-  );
+  return <span>{toolVersion ?? <T>Available</T>}</span>;
 }
 
 function DiscoveryItemRow({
@@ -253,12 +263,12 @@ function DiscoveryItemRow({
   };
   readonly children?: ReactNode;
 }) {
+  const messages = useMessages();
   const gt = useGT();
   const version = optionLabel(item.version);
   const auth = isProviderDiscoveryItem(item) ? item.auth : null;
   const authAccount = auth ? optionLabel(auth.account) : null;
-  const resolve = useMessages();
-  const chip = itemChip(item, resolve);
+  const chip = itemChip(item, messages);
   const [isExpanded, setIsExpanded] = useState(false);
   const hasDetails = children !== undefined;
   const searchTargetId = useSettingsSearchTargetId();
@@ -288,7 +298,7 @@ function DiscoveryItemRow({
         }
         description={
           <span className="flex min-w-0 flex-wrap items-center gap-x-1">
-            {itemSummary({ item, auth, authAccount, version: null })}
+            {itemSummary({ item, auth, authAccount, version: null, resolve: messages })}
           </span>
         }
         trailing={
@@ -371,6 +381,7 @@ function EmptySourceControlDiscovery({
   readonly isPending: boolean;
   readonly onScan: () => void;
 }) {
+  const searchableSetting = useSearchableSetting();
   const gt = useGT();
   const hasError = error !== null;
 
@@ -382,7 +393,7 @@ function EmptySourceControlDiscovery({
         </EmptyMedia>
         <EmptyHeader>
           <EmptyTitle>
-            {hasError ? <T>Could not scan the server environment</T> : <T>Nothing detected yet</T>}
+            {hasError ? gt("Could not scan the server environment") : gt("Nothing detected yet")}
           </EmptyTitle>
           <EmptyDescription>
             {hasError
@@ -404,6 +415,7 @@ function EmptySourceControlDiscovery({
 }
 
 export function SourceControlSettingsPanel() {
+  const searchableSetting = useSearchableSetting();
   const gt = useGT();
   const { scope, environment, connectedEnvironments } = useSettingsScope();
 
@@ -421,6 +433,7 @@ export function SourceControlSettingsPanel() {
           environmentId,
           input: {},
         }),
+    useMessages(),
   );
   const result = discovery.data ?? EMPTY_DISCOVERY_RESULT;
   const hasVersionControlSystems = result.versionControlSystems.length > 0;
@@ -469,7 +482,7 @@ export function SourceControlSettingsPanel() {
             {credentials.appSignIn && item.appSignIn === true ? (
               <div className="flex items-center gap-3 text-caption text-muted-foreground">
                 <span aria-hidden className="h-px flex-1 bg-border" />
-                Or use your own credentials
+                <T>Or use your own credentials</T>
                 <span aria-hidden className="h-px flex-1 bg-border" />
               </div>
             ) : null}
@@ -528,14 +541,14 @@ export function SourceControlSettingsPanel() {
     </Tooltip>
   );
 
-  const providersTitle = gt("Source Control Providers");
+  const providersTitle = gt("Source control providers");
   return (
     <SettingsPageContainer className="max-w-[688px]">
       <ProjectDefaultsSettings category="source-control" />
       {environmentId === null ? (
         <SettingsSection
           id={searchableSetting("source-control").id}
-          title={gt("Source Control Providers")}
+          title={gt("Source control providers")}
         >
           <p className="px-4 py-3 text-sm text-muted-foreground">
             <T>
@@ -550,7 +563,7 @@ export function SourceControlSettingsPanel() {
           {hasVersionControlSystems ? (
             <SettingsSection
               id={searchableSetting("source-control").id}
-              title={gt("Version Control")}
+              title={gt("Version control")}
               titleAction={environmentContext}
               headerAction={scanButton}
             >
@@ -563,7 +576,7 @@ export function SourceControlSettingsPanel() {
           {result.sourceControlProviders.length > 0 ? (
             <SettingsSection
               id={hasVersionControlSystems ? undefined : searchableSetting("source-control").id}
-              title={gt("Source Control Providers")}
+              title={gt("Source control providers")}
               titleAction={hasVersionControlSystems ? null : environmentContext}
               headerAction={hasVersionControlSystems ? null : scanButton}
             >

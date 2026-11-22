@@ -1,20 +1,27 @@
 import type { VoiceInputState } from "@t3tools/client-runtime/voice-input";
+import { useNavigate } from "@tanstack/react-router";
 import { msg, useGT, useMessages } from "gt-react";
-import { CheckIcon, MicIcon, XIcon } from "lucide-react";
-import { useEffect, useRef, useState, type PointerEvent, type ReactElement } from "react";
+import { CircleAlertIcon, MicIcon } from "lucide-react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
+} from "react";
 
 import {
+  COMPOSER_PILL_SLOT_BUTTON_ACTIVE_CLASS_NAME,
   COMPOSER_PILL_SLOT_BUTTON_CLASS_NAME,
   COMPOSER_PILL_SLOT_BUTTON_UNAVAILABLE_CLASS_NAME,
 } from "./ComposerPrimaryActions";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
-import { VoiceInputErrorPill } from "./VoiceInputErrorPill";
-import { VoiceInputPill, VoiceWaveform } from "./VoiceInputPill";
 import { m, type MessageResolver } from "~/i18n/messages";
+import { readLocalApi } from "~/localApi";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
-import { Text } from "../ui/text";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 type DownloadProgress = { downloaded: number; total: number } | null;
@@ -55,117 +62,45 @@ export function resolveSpeechPresentation(
   }
 }
 
-function formatElapsed(seconds: number) {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-}
-
-function RecordingStatus(props: {
-  level: number;
-  preparing: boolean;
-  recordingStartedAt?: number | null | undefined;
-  recordingLimitSeconds?: number | undefined;
-}) {
-  const { preparing, recordingStartedAt } = props;
-  const [elapsedSeconds, setElapsedSeconds] = useState(() =>
-    recordingStartedAt ? Math.max(0, Math.floor((Date.now() - recordingStartedAt) / 1_000)) : 0,
-  );
-
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- owns the timer displaying the native recording duration
-  useEffect(() => {
-    if (preparing) return;
-    const startedAt = recordingStartedAt ?? Date.now();
-    const timer = window.setInterval(
-      () => setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1_000)),
-      250,
-    );
-    return () => window.clearInterval(timer);
-  }, [preparing, recordingStartedAt]);
-
-  return (
-    <>
-      <span
-        aria-hidden
-        className={cn(
-          "size-2 shrink-0 rounded-full",
-          preparing ? "bg-muted-foreground/40" : "bg-destructive",
-        )}
-      />
-      <Text variant="meta" tone="muted" numeric>
-        {formatElapsed(preparing ? 0 : elapsedSeconds)}
-        {props.recordingLimitSeconds !== undefined
-          ? ` / ${formatElapsed(props.recordingLimitSeconds)}`
-          : ""}
-      </Text>
-      <div className="me-1.5 flex w-16 min-w-0 shrink grow">
-        <VoiceWaveform level={props.level} />
-      </div>
-    </>
-  );
-}
-
-function ShortcutTooltip(props: {
-  label: string;
-  shortcut?: string | null | undefined;
-  children: ReactElement;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger render={props.children} />
-      <TooltipPopup side="top">
-        {props.label}
-        {props.shortcut ? ` (${props.shortcut})` : ""}
-      </TooltipPopup>
-    </Tooltip>
-  );
-}
-
-function ComposerSpeechCancelButton(props: {
-  inPill?: boolean;
-  size?: "default" | "compact" | undefined;
-  state: VoiceInputState;
-  shortcutLabel?: string | null;
-  onCancel(): void;
-}) {
-  const gt = useGT();
-  if (props.state.phase === "idle") return null;
-  const label =
-    props.state.phase === "error" ? gt("Dismiss voice input error") : gt("Cancel voice input");
-
-  return (
-    <ShortcutTooltip label={label} shortcut={props.shortcutLabel}>
-      {props.inPill ? (
-        <button
-          type="button"
-          className={COMPOSER_PILL_SLOT_BUTTON_CLASS_NAME}
-          aria-label={label}
-          onPointerDown={keepFocus}
-          onClick={props.onCancel}
-        >
-          <XIcon className="size-3.5 text-composer-icon" />
-        </button>
-      ) : (
-        <Button
-          type="button"
-          size={props.size === "compact" ? "icon-xs" : "icon-sm-pill"}
-          variant="ghost"
-          aria-label={label}
-          onPointerDown={keepFocus}
-          onClick={props.onCancel}
-          className="shrink-0"
-        >
-          <XIcon />
-        </Button>
-      )}
-    </ShortcutTooltip>
-  );
-}
-
 // Each bar reads the level a sample apart, so the three never move in lockstep, and the
 // middle bar reaches highest so loud speech reads as a wave rather than a flat block.
 const SPEECH_BAR_SAMPLE_OFFSETS = [1, 0, 2] as const;
 const SPEECH_BAR_GAINS = [0.7, 1, 0.85] as const;
 const SPEECH_BAR_RESTING_SCALE = 0.25;
 const SPEECH_BAR_STATIC_SCALE = 0.6;
+
+function formatElapsed(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+export function SpeechRecordingElapsed(props: {
+  readonly recordingStartedAt?: number | null | undefined;
+  readonly recordingLimitSeconds?: number | undefined;
+}) {
+  const [elapsedSeconds, setElapsedSeconds] = useState(() =>
+    props.recordingStartedAt
+      ? Math.max(0, Math.floor((Date.now() - props.recordingStartedAt) / 1_000))
+      : 0,
+  );
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- owns the elapsed recording clock
+  useEffect(() => {
+    const startedAt = props.recordingStartedAt ?? Date.now();
+    const timer = window.setInterval(
+      () => setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1_000)),
+      250,
+    );
+    return () => window.clearInterval(timer);
+  }, [props.recordingStartedAt]);
+  return (
+    <span className="shrink-0 text-meta text-muted-foreground tabular-nums">
+      {formatElapsed(elapsedSeconds)}
+      {props.recordingLimitSeconds === undefined
+        ? null
+        : ` / ${formatElapsed(props.recordingLimitSeconds)}`}
+    </span>
+  );
+}
 
 /** The mic glyph while recording: three bars whose heights follow the microphone level. */
 function ComposerSpeechBars(props: { level: number; inPill: boolean }) {
@@ -194,7 +129,7 @@ function ComposerSpeechBars(props: { level: number; inPill: boolean }) {
     <span
       aria-hidden
       className={cn(
-        "flex items-center justify-center gap-0.5 text-composer-icon",
+        "flex items-center justify-center gap-0.5 text-foreground",
         props.inPill ? "size-3.5" : "size-4",
       )}
     >
@@ -214,7 +149,11 @@ function ComposerSpeechBars(props: { level: number; inPill: boolean }) {
   );
 }
 
-// In the send pill the mic is one of its 32px slots; elsewhere it is a quiet icon button.
+/**
+ * The one dictation control. Its own glyph and tone show the phase: mic, spinner, level bars,
+ * or an alert. Clicking it starts, finishes, skips cleanup or retries; Esc and its context menu
+ * cancel or dismiss. In the send pill it is one 32px slot; elsewhere a quiet icon button.
+ */
 export function ComposerSpeechButton(props: {
   inPill?: boolean;
   state: VoiceInputState;
@@ -224,25 +163,31 @@ export function ComposerSpeechButton(props: {
   size?: "default" | "compact";
   /** Set when voice input cannot start here yet: the mic shows dimmed and the tooltip says why. */
   unavailableReason?: string | null | undefined;
-  /**
-   * Keeps the mic in place while dictation runs: level bars while recording (click finishes),
-   * a spinner while busy (click skips post-processing). Without it the mic hides and the
-   * recording pill takes over.
-   */
-  dictation?:
-    | { level: number; onStop(): void; onCancel(): void; onSkipPostProcessing(): void }
-    | undefined;
+  dictation: {
+    level: number;
+    recordingStartedAt?: number | null | undefined;
+    recordingLimitSeconds?: number | undefined;
+    onStop(): void;
+    onCancel(): void;
+    onSkipPostProcessing(): void;
+  };
   onStart(): void;
 }) {
   const gt = useGT();
+  const messages = useMessages();
+  const navigate = useNavigate();
   const inPill = props.inPill ?? false;
-  const { phase } = props.state;
-  const { dictation } = props;
-  if (phase === "error" || (phase !== "idle" && !dictation)) return null;
+  const { state, dictation } = props;
+  const { phase } = state;
 
   const unavailable = phase === "idle" ? (props.unavailableReason ?? null) : null;
+  const isError = phase === "error";
   const isRecording = phase === "recording";
   const isBusy = phase === "preparing" || phase === "transcribing";
+  const isActive = phase !== "idle" && !isError;
+  const openSettings = isError && state.errorAction === "settings";
+  const errorMessage = state.error ?? gt("Voice input failed");
+
   const label = isRecording
     ? gt("Finish voice input")
     : phase === "preparing"
@@ -251,13 +196,25 @@ export function ComposerSpeechButton(props: {
         ? gt("Transcribing")
         : phase === "post-processing"
           ? gt("Skip post-processing")
-          : gt("Start voice input");
+          : openSettings
+            ? gt("Open voice settings")
+            : isError
+              ? state.errorCode === "transcription-failed"
+                ? gt("Retry transcription")
+                : gt("Record again")
+              : gt("Start voice input");
   const showsShortcut = (phase === "idle" || isRecording) && !unavailable;
+  const cancelLabel = isError ? gt("Dismiss voice input error") : gt("Cancel voice input");
 
   const glyph = isRecording ? (
-    <ComposerSpeechBars level={dictation?.level ?? 0} inPill={inPill} />
+    <ComposerSpeechBars level={dictation.level} inPill={inPill} />
+  ) : isError ? (
+    <CircleAlertIcon
+      aria-hidden
+      className={cn("text-destructive-foreground", inPill ? "size-3.5" : "size-4")}
+    />
   ) : phase === "idle" ? (
-    <MicIcon className={cn("text-composer-icon", inPill && "size-3.5")} />
+    <MicIcon aria-hidden className={cn("text-composer-icon", inPill && "size-3.5")} />
   ) : (
     // The spinner draws in currentColor, so the wrapper gives it the mic glyph's colour.
     <span aria-hidden className="flex text-composer-icon">
@@ -270,9 +227,36 @@ export function ComposerSpeechButton(props: {
       ? ({ "aria-disabled": true, "aria-label": label } as const)
       : { "aria-label": label };
   const onClick = () => {
-    if (isRecording) dictation?.onStop();
-    else if (phase === "post-processing") dictation?.onSkipPostProcessing();
-    else if (phase === "idle" && !props.disabled && !unavailable) props.onStart();
+    if (isRecording) dictation.onStop();
+    else if (phase === "post-processing") dictation.onSkipPostProcessing();
+    else if (openSettings) {
+      dictation.onCancel();
+      void navigate({ to: "/settings/voice" });
+    } else if ((phase === "idle" || isError) && !props.disabled && !unavailable) props.onStart();
+  };
+  // Right-click or long-press reaches cancel without a second button in the pill.
+  const onContextMenu = async (event: MouseEvent) => {
+    if (phase === "idle") return;
+    event.preventDefault();
+    const api = readLocalApi();
+    if (!api) return;
+    const clicked = await api.contextMenu.show(
+      [
+        ...(isRecording ? ([{ id: "finish", label: gt("Finish voice input") }] as const) : []),
+        { id: "cancel", label: cancelLabel },
+      ] as const,
+      { x: event.clientX, y: event.clientY },
+    );
+    if (clicked === "finish") dictation.onStop();
+    else if (clicked === "cancel") dictation.onCancel();
+  };
+  const disabled = ((phase === "idle" || isError) && props.disabled) || isBusy;
+  // Focus on the mic itself keeps Esc meaningful wherever it sits, even without a window shortcut.
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== "Escape" || phase === "idle") return;
+    event.preventDefault();
+    event.stopPropagation();
+    dictation.onCancel();
   };
 
   return (
@@ -284,24 +268,34 @@ export function ComposerSpeechButton(props: {
               <button
                 type="button"
                 {...accessibilityProps}
-                disabled={phase === "idle" && props.disabled}
+                aria-pressed={isActive}
+                data-voice-phase={phase}
+                disabled={disabled}
                 onPointerDown={keepFocus}
                 onClick={onClick}
+                onContextMenu={(event) => void onContextMenu(event)}
+                onKeyDown={onKeyDown}
                 className={
                   unavailable
                     ? COMPOSER_PILL_SLOT_BUTTON_UNAVAILABLE_CLASS_NAME
-                    : COMPOSER_PILL_SLOT_BUTTON_CLASS_NAME
+                    : isActive
+                      ? COMPOSER_PILL_SLOT_BUTTON_ACTIVE_CLASS_NAME
+                      : COMPOSER_PILL_SLOT_BUTTON_CLASS_NAME
                 }
               />
             ) : (
               <Button
                 type="button"
                 size={props.size === "compact" ? "icon-xs" : "icon-sm"}
-                variant="ghost"
+                variant={isActive ? "secondary" : "ghost"}
                 {...accessibilityProps}
-                disabled={phase === "idle" && props.disabled}
+                aria-pressed={isActive}
+                data-voice-phase={phase}
+                disabled={disabled}
                 onPointerDown={keepFocus}
                 onClick={onClick}
+                onContextMenu={(event) => void onContextMenu(event)}
+                onKeyDown={onKeyDown}
                 className="shrink-0"
               />
             )
@@ -310,133 +304,26 @@ export function ComposerSpeechButton(props: {
           {glyph}
         </TooltipTrigger>
         <TooltipPopup side="top">
-          {unavailable ?? label}
-          {showsShortcut && props.shortcutLabel ? ` (${props.shortcutLabel})` : ""}
+          {isError ? <div>{errorMessage}</div> : null}
+          <div>
+            {unavailable ?? label}
+            {showsShortcut && props.shortcutLabel ? ` (${props.shortcutLabel})` : ""}
+          </div>
+          {phase !== "idle" ? (
+            <div>
+              {isError ? gt("Dismiss ({shortcut})", { shortcut: "Esc" }) : `${cancelLabel} (Esc)`}
+            </div>
+          ) : null}
         </TooltipPopup>
       </Tooltip>
-      {phase !== "idle" && dictation ? (
-        <ComposerSpeechCancelButton
-          inPill={inPill}
-          size={props.size}
-          state={props.state}
-          shortcutLabel="Esc"
-          onCancel={dictation.onCancel}
-        />
-      ) : null}
+      {/* The button's name says what a click does; this says what is happening. */}
+      <span role="status" className="sr-only">
+        {isError
+          ? errorMessage
+          : isBusy || phase === "post-processing"
+            ? resolveSpeechPresentation(state, null, messages).status
+            : ""}
+      </span>
     </>
-  );
-}
-
-export function ComposerSpeechRecordingPill(props: {
-  state: VoiceInputState;
-  progress: DownloadProgress;
-  finishShortcutLabel?: string | null;
-  cancelShortcutLabel?: string | null;
-  level: number;
-  recordingStartedAt?: number | null | undefined;
-  recordingLimitSeconds?: number | undefined;
-  /** Compact matches the `xs` buttons beside text-field editors. */
-  size?: "default" | "compact";
-  onStart(): void;
-  disabled?: boolean;
-  onStop(): void;
-  onCancel(): void;
-  onSkipPostProcessing(): void;
-}) {
-  const gt = useGT();
-  const m = useMessages();
-  const { phase } = props.state;
-  const compact = props.size === "compact";
-  if (phase === "error") {
-    return (
-      <VoiceInputErrorPill
-        size={props.size}
-        error={props.state.error}
-        errorAction={props.state.errorAction}
-        errorCode={props.state.errorCode}
-        disabled={props.disabled ?? false}
-        cancelShortcutLabel={props.cancelShortcutLabel ?? null}
-        onRetry={props.onStart}
-        onDismiss={props.onCancel}
-      />
-    );
-  }
-  const presentation = resolveSpeechPresentation(props.state, props.progress, m);
-  if (!presentation.active) return null;
-  const recording = phase === "recording";
-  const starting = phase === "preparing" && props.progress === null;
-  const showRecordingLayout = starting || recording;
-  const trailing = showRecordingLayout || phase === "post-processing";
-
-  return (
-    <VoiceInputPill size={props.size}>
-      <ShortcutTooltip label={gt("Cancel voice input")} shortcut={props.cancelShortcutLabel}>
-        <Button
-          type="button"
-          size={compact ? "icon-xs" : "icon-sm-pill"}
-          variant="ghost"
-          aria-label={gt("Cancel voice input")}
-          onPointerDown={keepFocus}
-          onClick={props.onCancel}
-          className="shrink-0"
-        >
-          <XIcon />
-        </Button>
-      </ShortcutTooltip>
-      <div
-        className={cn(
-          "flex min-w-0 flex-1 items-center gap-2 overflow-hidden",
-          !trailing && "pe-2.5",
-        )}
-        role="status"
-        aria-live={recording ? "off" : "polite"}
-        aria-label={presentation.status ?? undefined}
-      >
-        {showRecordingLayout ? (
-          <>
-            {starting && <span className="sr-only">{presentation.status}</span>}
-            <RecordingStatus
-              preparing={starting}
-              level={starting ? 0 : props.level}
-              recordingStartedAt={props.recordingStartedAt}
-              recordingLimitSeconds={props.recordingLimitSeconds}
-            />
-          </>
-        ) : (
-          <>
-            <Spinner aria-hidden size="sm" tone="muted" className="shrink-0" />
-            <Text tone="muted" truncate>
-              {presentation.status}
-            </Text>
-          </>
-        )}
-      </div>
-      {phase === "post-processing" ? (
-        <Button
-          type="button"
-          size={compact ? "xs" : "sm-pill"}
-          variant="ghost"
-          onPointerDown={keepFocus}
-          onClick={props.onSkipPostProcessing}
-          className="shrink-0"
-        >
-          {gt("Skip", { $context: "verb, skips cleaning up the transcript" })}
-        </Button>
-      ) : showRecordingLayout ? (
-        <ShortcutTooltip label={gt("Finish voice input")} shortcut={props.finishShortcutLabel}>
-          <Button
-            type="button"
-            size={compact ? "icon-xs" : "icon-sm-pill"}
-            aria-label={gt("Finish voice input")}
-            disabled={starting}
-            onPointerDown={keepFocus}
-            onClick={props.onStop}
-            className="shrink-0"
-          >
-            {starting ? <Spinner aria-hidden /> : <CheckIcon />}
-          </Button>
-        </ShortcutTooltip>
-      ) : null}
-    </VoiceInputPill>
   );
 }

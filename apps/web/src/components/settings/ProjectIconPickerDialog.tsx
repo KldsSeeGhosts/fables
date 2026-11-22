@@ -1,8 +1,8 @@
 import { deriveProjectIdentity } from "../../projectIdentity";
 import { ProjectMonogram } from "../ProjectMonogram";
 import type { ProjectIconColor, ProjectIconOverride } from "@t3tools/contracts";
-import { SearchIcon } from "lucide-react";
 import { T, useGT, useMessages } from "gt-react";
+import { SearchIcon } from "lucide-react";
 import { createElement, useState } from "react";
 import {
   filterProjectIconNames,

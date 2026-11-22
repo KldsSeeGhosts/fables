@@ -1,5 +1,5 @@
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import {
@@ -513,7 +513,6 @@ export function ThemeSearchSection({
               (theme) => theme.collection?.id === extension.collectionId,
             );
             const action = isInstalled ? gt("Update") : gt("Install");
-            const progressAction = isInstalled ? gt("Updating") : gt("Installing");
             return (
               <li className="flex min-w-0 items-center gap-2.5 px-3 py-2.5" key={extension.id}>
                 <ThemeExtensionIcon key={extension.iconUrl} extension={extension} />
@@ -530,9 +529,9 @@ export function ThemeSearchSection({
                     <TooltipPopup side="top">
                       <span className="grid gap-1">
                         <span>
-                          {gt("{count} downloads", {
-                            count: DOWNLOAD_FORMAT.format(extension.downloadCount),
-                          })}
+                          <T>
+                            <Var>{DOWNLOAD_FORMAT.format(extension.downloadCount)}</Var> downloads
+                          </T>
                         </span>
                         {extension.description ? <span>{extension.description}</span> : null}
                       </span>
@@ -550,17 +549,22 @@ export function ThemeSearchSection({
                   </Button>
                 ) : null}
                 <Button
-                  aria-label={gt("{action} {name}", {
-                    action: isInstalling ? progressAction : action,
-                    name: extension.name,
-                  })}
+                  aria-label={
+                    isInstalled
+                      ? isInstalling
+                        ? gt("Updating {name}", { name: extension.name })
+                        : gt("Update {name}", { name: extension.name })
+                      : isInstalling
+                        ? gt("Installing {name}", { name: extension.name })
+                        : gt("Install {name}", { name: extension.name })
+                  }
                   disabled={installingId !== null}
                   size="xs"
                   variant="secondary"
                   onClick={() => void handleInstall(extension, false)}
                 >
                   {isInstalling ? <Spinner /> : isInstalled ? <RefreshIcon /> : <PackagePlusIcon />}
-                  {isInstalling ? gt("{action}…", { action: progressAction }) : action}
+                  {isInstalling ? (isInstalled ? gt("Updating...") : gt("Installing...")) : action}
                 </Button>
               </li>
             );
@@ -589,7 +593,6 @@ export function ThemeSearchSection({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="secondary" />}>Cancel</AlertDialogClose>
             <AlertDialogClose render={<Button variant="secondary" />}>
               <T>Cancel</T>
             </AlertDialogClose>

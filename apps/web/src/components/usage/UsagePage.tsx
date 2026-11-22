@@ -9,8 +9,6 @@ import {
   type UsageProviderKind,
   type UsageSummaryInput,
 } from "@t3tools/contracts";
-import { msg, T, useGT, useLocale, useMessages, Var } from "gt-react";
-import type { MessageResolver } from "~/i18n/messages";
 import {
   ChartNoAxesColumnIcon,
   CircleAlertIcon,
@@ -19,6 +17,7 @@ import {
   ServerIcon,
   SlidersHorizontalIcon,
 } from "lucide-react";
+import { T, useGT, useLocale, useMessages, Var } from "gt-react";
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
@@ -370,11 +369,11 @@ export function UsagePage() {
 
   const windowLabel =
     shownHourly && shownWindow.sinceTime !== undefined && shownWindow.untilTime !== undefined
-      ? gt("{start} to {end}", {
+      ? gt("{start} – {end}", {
           start: formatDateTimeShort(shownWindow.sinceTime, shownWindow.timeZone, hour12, locale),
           end: formatDateTimeShort(shownWindow.untilTime, shownWindow.timeZone, hour12, locale),
         })
-      : gt("{start} to {end}", {
+      : gt("{start} – {end}", {
           start: formatDayShort(shownWindow.sinceDay, locale),
           end: formatDayShort(shownWindow.untilDay, locale),
         });
@@ -569,7 +568,10 @@ export function UsagePage() {
                     .filter((environment) => environment.error !== null)
                     .map((environment) =>
                       selectedEnvironments.length > 1
-                        ? `${environment.label}: ${environment.error}`
+                        ? gt("{environment}: {error}", {
+                            environment: environment.label,
+                            error: environment.error,
+                          })
                         : environment.error,
                     )
                     .join(" ") || gt("Checking access to usage.")
@@ -580,12 +582,17 @@ export function UsagePage() {
                 icon={CircleAlertIcon}
                 title={gt("Could not read usage")}
                 description={selectedEnvironments
-                  .map((environment) => `${environment.label}: ${environment.error}`)
+                  .map((environment) =>
+                    gt("{environment}: {error}", {
+                      environment: environment.label,
+                      error: environment.error,
+                    }),
+                  )
                   .join(" ")}
               >
                 <Button size="sm" variant="secondary" onClick={() => void refresh()}>
                   <RefreshIcon size="sm" />
-                  {gt("Retry")}
+                  <T>Retry</T>
                 </Button>
               </UsageNotice>
             ) : (
@@ -727,8 +734,17 @@ function UsageOverview({
       <PageEmptyState
         fill
         icon={<ChartNoAxesColumnIcon />}
-        title={gt("No usage in the {period}", { period: periodPhrase(windowDays, m) })}
-        description="Sessions from your providers show up here once they run. Pick a longer period to look further back."
+        title={
+          windowDays === 1
+            ? gt("No usage in the past 24 hours")
+            : gt(
+                "{days, plural, one {No usage in the past {days} day} other {No usage in the past {days} days}}",
+                { days: windowDays },
+              )
+        }
+        description={gt(
+          "Sessions from your providers show up here once they run. Pick a longer period to look further back.",
+        )}
       />
     );
   }
@@ -757,10 +773,13 @@ function UsageOverview({
               <Tooltip>
                 <TooltipTrigger render={<span tabIndex={0} />}>
                   <span className={figureClass(loadingPartial)}>
-                    {gt("{count, plural, one {{formatted} session} other {{formatted} sessions}}", {
-                      count: merged.sessions,
-                      formatted: formatCount(merged.sessions, locale),
-                    })}
+                    {gt(
+                      "{count, plural, one {{formatted} sessions} other {{formatted} sessions}}",
+                      {
+                        count: merged.sessions,
+                        formatted: formatCount(merged.sessions, locale),
+                      },
+                    )}
                   </span>
                 </TooltipTrigger>
                 <TooltipPopup>
@@ -866,9 +885,7 @@ function UsageOverview({
                     </TooltipTrigger>
                     <TooltipPopup>
                       {metric === "cost"
-                        ? gt("{tokens} tokens", {
-                            tokens: formatTokens(totals?.totalTokens ?? 0),
-                          })
+                        ? gt("{tokens} tokens", { tokens: formatTokens(totals?.totalTokens ?? 0) })
                         : formatUsd(totals?.costUsd ?? 0, locale)}
                     </TooltipPopup>
                   </Tooltip>
@@ -1433,10 +1450,6 @@ function UsageNotice({
       {children}
     </Empty>
   );
-}
-
-function periodPhrase(days: number, resolve: MessageResolver): string {
-  return days === 1 ? resolve(msg("past 24 hours")) : resolve(msg("past {days} days", { days }));
 }
 
 function UsageProviderFilter({

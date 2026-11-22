@@ -1,6 +1,6 @@
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { CircleCheckIcon, CircleIcon, DownloadIcon } from "lucide-react";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { useSyncExternalStore } from "react";
 import type { RelayClientInstallProgressStage } from "@t3tools/contracts";
 
@@ -13,7 +13,6 @@ import {
   subscribeRelayClientInstallDialog,
 } from "../../cloud/relayClientInstallDialog";
 import { Button } from "../ui/button";
-import type { MessageResolver } from "~/i18n/messages";
 import {
   Dialog,
   DialogDescription,
@@ -25,6 +24,7 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { Spinner } from "../ui/spinner";
+import type { MessageResolver } from "../../i18n/messages";
 
 // The checklist shows five steps. The lock wait and the extract stage are
 // short and ride on the neighbouring step, whose label switches while they run.
@@ -54,17 +54,17 @@ function stepMeta(
   resolve: MessageResolver,
 ): string | null {
   if (index === 1 && view.downloadedBytes !== undefined) {
-    return formatAttachmentSize(view.downloadedBytes, resolve);
+    return formatAttachmentSize(view.downloadedBytes);
   }
   if (index === 2 && view.checksumVerified) {
-    return "sha256 ok";
+    return resolve(msg("sha256 ok"));
   }
   return null;
 }
 
 function RelayClientInstallChecklist({ view }: { readonly view: RelayClientInstallingState }) {
   const gt = useGT();
-  const resolve = useMessages();
+  const m = useMessages();
   const activeIndex = installSteps.findIndex(({ stages }) => stages.includes(view.stage));
   // Half a step for the running one, so the bar moves as each step starts.
   const progress = Math.max(0, activeIndex + 0.5) / installSteps.length;
@@ -77,7 +77,7 @@ function RelayClientInstallChecklist({ view }: { readonly view: RelayClientInsta
       >
         {installSteps.map((step, index) => {
           const state = index < activeIndex ? "done" : index === activeIndex ? "active" : "pending";
-          const meta = stepMeta(index, view, resolve);
+          const meta = stepMeta(index, view, m);
           return (
             <li
               key={step.label}
@@ -97,7 +97,7 @@ function RelayClientInstallChecklist({ view }: { readonly view: RelayClientInsta
                 aria-live={state === "active" ? "polite" : undefined}
                 className={`min-w-0 flex-1 truncate ${state === "pending" ? "text-dim-foreground" : "text-foreground"}`}
               >
-                {resolve(
+                {m(
                   (state === "active" ? step.activeLabels?.[view.stage] : undefined) ?? step.label,
                 )}
               </span>
@@ -214,7 +214,7 @@ export function RelayClientInstallDialog() {
                 onClick={cancelRelayClientInstall}
                 variant="secondary"
               >
-                {installingView.cancelling ? gt("Cancelling…") : <T>Cancel</T>}
+                {installingView.cancelling ? gt("Cancelling…") : gt("Cancel")}
               </Button>
               <Button size="standard" disabled>
                 <T>Installing…</T>

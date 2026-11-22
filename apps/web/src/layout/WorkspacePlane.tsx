@@ -67,8 +67,8 @@ export function WorkspacePlane({ children }: { children: ReactNode }) {
         <ThreadLinkPrompt threadRef={threadTarget.threadRef} />
       ) : null}
       <BackgroundThreadContext value={modalOpen}>{host}</BackgroundThreadContext>
-      <GlobalVoiceInputIndicator hidden={modalOpen} />
       {modalOpen ? children : null}
+      <GlobalVoiceInputIndicator hidden={modalOpen} />
       {promotedThreadRef && !modalOpen ? (
         <Navigate
           to="/$environmentId/$threadId"

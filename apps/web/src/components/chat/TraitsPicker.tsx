@@ -22,6 +22,7 @@ import {
   getProviderOptionDescriptors,
   isClaudeUltrathinkPrompt,
   normalizeModelSlug,
+  resolveSelectableModel,
 } from "@t3tools/shared/model";
 import { msg, T, useMessages } from "gt-react";
 import { BrainIcon, ChevronDownIcon } from "lucide-react";
@@ -103,7 +104,7 @@ function buildUnavailableModelOptionDescriptors(
       type: "select" as const,
       options:
         choices?.some((choice) => choice.id === value) === true
-          ? choices.map(({ id, label }) => ({ id, label }))
+          ? choices.map(({ id, label }) => ({ id, label: resolve(label) }))
           : [{ id: value, label: value }],
       currentValue: value,
     };
@@ -143,9 +144,9 @@ function getSelectedTraits(
   resolve: MessageResolver = m,
 ) {
   const caps = getProviderModelCapabilities(models, model, provider, includePlanAgent);
-  const modelIsUnavailable =
-    keepsUnavailableModelOptions(provider, model) &&
-    !models.some((candidate) => candidate.slug === normalizeModelSlug(model, provider));
+  const modelIsUnavailable = keepsUnavailableModelOptions(provider, model)
+    ? !models.some((candidate) => candidate.slug === normalizeModelSlug(model, provider))
+    : resolveSelectableModel(provider, model, models) === null;
   const descriptors = modelIsUnavailable
     ? buildUnavailableModelOptionDescriptors(
         includePlanAgent

@@ -93,7 +93,7 @@ import {
   APPLE_SPEECH_LABEL,
   useVoiceTranscriptionDestination,
 } from "../../speech/useEnvironmentSpeechInput";
-import { ComposerSpeechRecordingPill } from "../chat/ComposerSpeechButton";
+import { ComposerSpeechButton } from "../chat/ComposerSpeechButton";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { ProviderPackageIcon } from "../chat/ProviderPackageIcon";
@@ -242,7 +242,7 @@ function ModelCard(props: ModelCardProps) {
             <span className="text-label">{model.name}</span>
             {props.recommendation ? (
               <ModelBadge
-                icon={<StarIcon className="mr-1 size-3" />}
+                icon={<StarIcon />}
                 label={
                   props.recommendation === "recommended"
                     ? gt("Recommended")
@@ -1240,17 +1240,19 @@ function TranscriptionTest(props: {
         stacked={showTranscript}
         testControls={
           <div className="order-last flex min-w-0 max-w-full basis-full items-center gap-1 @min-[28rem]/model:order-none @min-[28rem]/model:basis-auto">
-            <ComposerSpeechRecordingPill
-              state={speech.state}
-              progress={null}
-              level={speech.level}
-              onStart={() => void speech.start()}
-              onStop={() => void speech.stop()}
-              onCancel={() => speech.cancel()}
-              onSkipPostProcessing={() => speech.skipPostProcessing()}
-            />
             {speech.available ? (
-              speech.state.phase === "idle" ? (
+              speech.state.phase !== "idle" ? (
+                <ComposerSpeechButton
+                  state={speech.state}
+                  onStart={() => void speech.start()}
+                  dictation={{
+                    level: speech.level,
+                    onStop: () => void speech.stop(),
+                    onCancel: () => speech.cancel(),
+                    onSkipPostProcessing: () => speech.skipPostProcessing(),
+                  }}
+                />
+              ) : (
                 <Button
                   size="sm"
                   variant="secondary"
@@ -1262,7 +1264,7 @@ function TranscriptionTest(props: {
                   <MicIcon />
                   <T>Test model</T>
                 </Button>
-              ) : null
+              )
             ) : (
               <span className="text-meta text-muted-foreground">
                 {speech.status?.supported === false

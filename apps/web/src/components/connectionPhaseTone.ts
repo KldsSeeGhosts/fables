@@ -21,17 +21,3 @@ export function connectionPhaseTone(phase: EnvironmentConnectionPhase): StatusDo
 export function connectionPhasePings(phase: EnvironmentConnectionPhase): boolean {
   return phase === "connecting" || phase === "reconnecting";
 }
-
-/** The same mapping for call sites that only need the dot's class. */
-export function connectionPhaseDotClassName(phase: EnvironmentConnectionPhase): string {
-  const toneClassName: Record<StatusDotTone, string> = {
-    neutral: "bg-dim-foreground",
-    success: "bg-success",
-    warning: "bg-warning",
-    danger: "bg-destructive",
-    info: "bg-info",
-    merged: "bg-merged",
-    foreground: "bg-foreground",
-  };
-  return toneClassName[connectionPhaseTone(phase)];
-}

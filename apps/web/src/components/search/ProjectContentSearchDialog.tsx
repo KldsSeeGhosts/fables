@@ -90,11 +90,7 @@ function EmptyContentSearchDialog(props: { readonly escapeLabel: string }) {
       aria-label={gt("Search project contents")}
       escapeLabel={props.escapeLabel}
       footerActionLabel={gt("Open file")}
-      inputProps={{
-        disabled: true,
-        placeholder: gt("Search project contents…"),
-        iconSize: "sm",
-      }}
+      inputProps={{ disabled: true, placeholder: gt("Search project contents…"), iconSize: "sm" }}
       mode="none"
       panelSize="fill"
       testId="project-content-search"
@@ -177,10 +173,24 @@ function OpenContentSearchDialog(props: {
     search.canReadFiles && (search.isPending || search.error !== null || search.invalidRegex);
   const resultCount =
     search.canReadFiles && search.hasQuery && !showSearchStatus
-      ? gt("{results} results in {files} files", {
-          results: `${matches.length.toLocaleString()}${search.truncated ? "+" : ""}`,
-          files: fileCount.toLocaleString(),
-        })
+      ? search.truncated
+        ? gt(
+            "{fileCount, plural, one {{results}+ results in {files} file} other {{results}+ results in {files} files}}",
+            {
+              fileCount,
+              results: matches.length.toLocaleString(),
+              files: fileCount.toLocaleString(),
+            },
+          )
+        : gt(
+            "{resultCount, plural, one {{results} result} other {{results} results}} in {fileCount, plural, one {{files} file} other {{files} files}}",
+            {
+              resultCount: matches.length,
+              results: matches.length.toLocaleString(),
+              fileCount,
+              files: fileCount.toLocaleString(),
+            },
+          )
       : null;
 
   return (

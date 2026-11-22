@@ -1,5 +1,5 @@
 import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { T, useGT } from "gt-react";
 import { memo } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
@@ -26,15 +26,15 @@ import {
   useSidebar,
 } from "../ui/sidebar";
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
+import { beginLayoutContentDrag } from "../../layout/layoutDrag";
 import { useOpenLayoutPage } from "../../layout/pageNavigation";
-import { readIssueListPreferences } from "../issue/issueListPreferences";
 import { IssueGlyph } from "../issue/issuePresentation";
 import { isSidebarUtilityPage, useNavigateToMainApp } from "./mainAppLocation";
 import { SidebarHeaderIconButton } from "./SidebarThreadHeader";
 import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
-import { SidebarUpstreamUpdatePill } from "./SidebarUpstreamUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
+import { SidebarUpstreamUpdatePill } from "./SidebarUpstreamUpdatePill";
 
 const SIDEBAR_BRAND_OFFSET = "ml-[var(--workspace-titlebar-content-left)]";
 
@@ -104,6 +104,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
 }) {
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   const backdropVariant = useSidebarStageBackdropVariant(environmentIdentificationMode);
+  const gt = useGT();
 
   return (
     // The sidebar's share of the window chrome row, not a padded SidebarHeader.
@@ -121,7 +122,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         <SidebarTrigger
           variant={backdropVariant ? "media-navigation" : "ghost"}
           className="relative top-auto translate-y-0"
-          aria-label="Toggle main sidebar"
+          aria-label={gt("Toggle main sidebar")}
         />
       </div>
       <div className="relative z-10 flex h-8 min-w-0 flex-1 flex-wrap content-start items-center gap-x-2 overflow-hidden py-0.5 md:hidden">
@@ -161,13 +162,20 @@ function SidebarUtilityItem({
   icon,
   label,
   onClick,
+  onPointerDown,
 }: {
   icon: ReactNode;
   label: string;
   onClick: () => void;
+  onPointerDown?: ((event: ReactPointerEvent) => void) | undefined;
 }) {
   return (
-    <SidebarHeaderIconButton label={label} size="footer" onClick={onClick}>
+    <SidebarHeaderIconButton
+      label={label}
+      size="footer"
+      onClick={onClick}
+      onPointerDown={onPointerDown}
+    >
       {icon}
     </SidebarHeaderIconButton>
   );
@@ -195,7 +203,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   };
   const handleIssuesClick = () => {
     closeMobileSidebar();
-    void navigate({ to: "/issues", search: readIssueListPreferences() });
+    void openLayoutPage("issues");
   };
   const handleSettingsClick = () => {
     closeMobileSidebar();
@@ -227,7 +235,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         ) : (
-          // Keep the three utilities in the design's compact, icon-only row.
+          // Keep the utilities in the design's compact, icon-only row.
           <SidebarMenuItem className="shrink-0">
             <div className="flex gap-1">
               <SidebarUtilityItem
@@ -240,6 +248,9 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
                   icon={<PullRequestGlyph.pullRequest className="size-4" />}
                   label={gt("Pull requests")}
                   onClick={handlePullRequestsClick}
+                  onPointerDown={(event) =>
+                    beginLayoutContentDrag(event, { kind: "pull-requests" })
+                  }
                 />
               ) : null}
               {issuesSupported ? (
@@ -247,6 +258,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
                   icon={<IssueGlyph.issue className="size-4" />}
                   label={gt("Issues", { $context: "sidebar link to the list of issues" })}
                   onClick={handleIssuesClick}
+                  onPointerDown={(event) => beginLayoutContentDrag(event, { kind: "issues" })}
                 />
               ) : null}
               <SidebarUtilityItem
@@ -257,8 +269,8 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             </div>
           </SidebarMenuItem>
         )}
-        <SidebarUpstreamUpdatePill />
         <SidebarThreadUndoNotice />
+        <SidebarUpstreamUpdatePill />
         <SidebarUpdatePill />
       </SidebarMenu>
     </TooltipProvider>

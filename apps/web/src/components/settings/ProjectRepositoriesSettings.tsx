@@ -30,7 +30,7 @@ import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { getEnvironmentBrowsePlatform } from "../CommandPalette.logic";
 import { resolveTrackedFolderInput, trackedFolderDisplayPath } from "./trackedFolders.logic";
 import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
+import { Button, ContentButton } from "../ui/button";
 import {
   Dialog,
   DialogDescription,
@@ -285,8 +285,6 @@ function AddTrackedFolderDialog(props: {
   });
   const parentPath = browsePath.canBrowseUp ? browsePath.parentPath : null;
   const hiddenCount = Math.max(0, visibleEntries.length - BROWSE_SUGGESTION_LIMIT);
-  const rowClassName = "w-full justify-start";
-
   return (
     <Dialog
       open
@@ -327,25 +325,25 @@ function AddTrackedFolderDialog(props: {
           <DialogPanel>
             <div className="-mx-2 flex min-h-40 flex-col">
               {parentPath !== null ? (
-                <Button
-                  variant="ghost"
-                  className={rowClassName}
+                <ContentButton
+                  variant="action-row"
+                  className="w-full"
                   onClick={() => setQuery(parentPath)}
                 >
                   <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
                   ..
-                </Button>
+                </ContentButton>
               ) : null}
               {visibleEntries.slice(0, BROWSE_SUGGESTION_LIMIT).map((entry) => (
-                <Button
+                <ContentButton
                   key={entry.fullPath}
-                  variant="ghost"
-                  className={rowClassName}
+                  variant="action-row"
+                  className="w-full"
                   onClick={() => setQuery(appendBrowsePathSegment(query, entry.name))}
                 >
                   <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 truncate">{entry.name}</span>
-                </Button>
+                </ContentButton>
               ))}
               {browseQuery.error ? (
                 <p role="alert" className="px-2 py-1.5 text-body text-muted-foreground">

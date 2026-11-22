@@ -1,6 +1,6 @@
 import { type RuntimeRequestId, type ScopedThreadRef } from "@t3tools/contracts";
 import { markdownProseDirection, textDirection } from "~/textDirection";
-import { useGT } from "gt-react";
+import { T, useGT } from "gt-react";
 import { memo, use, useEffect, useEffectEvent, useRef, useState } from "react";
 import { BackgroundThreadContext } from "./backgroundThread";
 import { useStableCallback } from "~/hooks/useStableCallback";
@@ -276,17 +276,17 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   const writeOptionKey =
     activeQuestion.options.length < 9 ? activeQuestion.options.length + 1 : null;
   const hint = customAnswerActive
-    ? "Your answer is ready to submit."
+    ? gt("Your answer is ready to submit.")
     : activeQuestion.multiSelect
-      ? "Select one or more options."
-      : "Select one option.";
+      ? gt("Select one or more options.")
+      : gt("Select one option.");
   const primaryLabel = primaryAction?.isResponding
-    ? "Submitting…"
+    ? gt("Submitting…")
     : primaryAction && !primaryAction.isLastQuestion
-      ? "Next"
+      ? gt("Next", { $context: "button that goes to the next question" })
       : prompt.questions.length > 1
-        ? "Submit answers"
-        : "Answer";
+        ? gt("Submit answers")
+        : gt("Answer", { $context: "verb, submits the answer to a question" });
 
   return (
     <Collapsible
@@ -310,7 +310,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
           />
         }
         icon={<MessageCircleQuestionMarkIcon className="text-ring" />}
-        title={gt("Question")}
+        title={gt("Question", { $context: "heading of a question the agent asks" })}
         sub={
           isCollapsed ? (
             <span
@@ -406,7 +406,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
               {canWriteAnswer ? (
                 <QuestionOptionRow
                   textAlign={questionTextAlign}
-                  label="Let me write an answer"
+                  label={gt("Let me write an answer")}
                   description={customAnswerActive ? progress.customAnswer.trim() : null}
                   multiSelect={activeQuestion.multiSelect === true}
                   selected={customAnswerActive}
@@ -428,7 +428,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
               disabled={isResponding}
               onClick={() => onDismiss(prompt.requestId)}
             >
-              Skip
+              <T>Skip</T>
             </Button>
           ) : null}
           {!actionsInComposer && onPrevious && questionIndex > 0 ? (
@@ -438,7 +438,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
               disabled={primaryAction?.isResponding ?? isResponding}
               onClick={onPrevious}
             >
-              Previous
+              {gt("Previous", { $context: "button that goes to the previous question" })}
             </Button>
           ) : null}
           {!actionsInComposer && onSubmit ? (

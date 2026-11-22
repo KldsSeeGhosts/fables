@@ -1,5 +1,5 @@
-import { Trash2Icon } from "lucide-react";
 import { msg, T, useMessages } from "gt-react";
+import { Trash2Icon } from "lucide-react";
 import { useRef, useSyncExternalStore } from "react";
 
 import {
@@ -78,8 +78,8 @@ export function ConfirmDialogHost() {
   const focusConfirm = state.status !== "idle" && state.initialFocus === "confirm";
   const confirmLabel =
     (state.status === "idle" ? undefined : state.confirmLabel) ?? m(msg("Confirm"));
-  // A destructive "Delete ..." action carries the trash icon.
-  const showDeleteIcon = confirmVariant === "destructive" && /^delete\b/i.test(confirmLabel);
+  const showDeleteIcon =
+    state.status !== "idle" && confirmVariant === "destructive" && state.deleteIcon === true;
   const onCancel = () => respondToConfirmDialog(false);
   const onConfirm = () => respondToConfirmDialog(true);
 

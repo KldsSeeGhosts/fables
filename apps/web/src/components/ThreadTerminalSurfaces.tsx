@@ -12,6 +12,7 @@ import {
   type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
+import { useGT, useMessages } from "gt-react";
 import {
   resolveTerminalActivityStatus,
   type TerminalActivityStatus,
@@ -87,6 +88,8 @@ export const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerm
   onAddTerminalContext,
   paneMode,
 }: PersistentThreadTerminalDrawerProps) {
+  const gt = useGT();
+  const messages = useMessages();
   const canOperateTerminal = useEnvironmentScope(threadRef.environmentId, AuthTerminalOperateScope);
   const hasTerminalWriteAccess = () =>
     readEnvironmentScope(threadRef.environmentId, AuthTerminalOperateScope);
@@ -109,12 +112,12 @@ export const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerm
   );
   const visible = active && terminalUiState.terminalOpen;
   const metadata = useTerminalDrawerSessions(threadRef.environmentId, threadId);
-  const knownTerminalSessions = metadata?.sessions ?? null;
+  const knownTerminalSessions = metadata?.sessions;
   const snapshotId = metadata?.snapshotId;
   // Until the grant and the session list load, which terminals exist is not known yet.
   const canReadTerminal = useEnvironmentScope(threadRef.environmentId, AuthTerminalReadScope);
   const sessionLoaded = useEnvironmentSessionLoaded(threadRef.environmentId);
-  const attaching = !sessionLoaded || (canReadTerminal && knownTerminalSessions === null);
+  const attaching = !sessionLoaded || (canReadTerminal && metadata === null);
   const panelSurfaces = useRightPanelStore(
     (state) => selectThreadRightPanelState(state.byThreadKey, threadRef).surfaces,
   );
@@ -128,7 +131,7 @@ export const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerm
   for (const session of drawerTerminalSessions) {
     terminalLabelsById.set(
       session.target.terminalId,
-      resolveTerminalSessionLabel(session.target.terminalId, session.state.summary),
+      resolveTerminalSessionLabel(session.target.terminalId, session.state.summary, messages),
     );
   }
   const terminalStatusById = new Map<string, TerminalActivityStatus>();
@@ -170,8 +173,7 @@ export const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerm
   const allocateTerminalId = () =>
     nextTerminalId(
       allocatableTerminalIds,
-      knownTerminalSessions === null ||
-        !readEnvironmentScope(threadRef.environmentId, AuthTerminalReadScope)
+      metadata === null || !readEnvironmentScope(threadRef.environmentId, AuthTerminalReadScope)
         ? randomUUID()
         : undefined,
     );
@@ -318,7 +320,7 @@ export const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerm
       mode={paneMode ? "pane" : "drawer"}
       threadRef={threadRef}
       threadId={threadId}
-      threadTitle={serverThread?.title ?? (draftThread ? "New thread" : null)}
+      threadTitle={serverThread?.title ?? (draftThread ? gt("New thread") : null)}
       cwd={cwd}
       worktreePath={effectiveWorktreePath}
       runtimeEnv={runtimeEnv}
@@ -394,6 +396,8 @@ export const PersistentThreadTerminalPanel = memo(function PersistentThreadTermi
   newShortcutLabel,
   closeShortcutLabel,
 }: PersistentThreadTerminalPanelProps) {
+  const gt = useGT();
+  const messages = useMessages();
   const serverThread = useQuietThreadShell(threadRef);
   const draftThread = useComposerDraftStore((store) => store.getDraftThreadByRef(threadRef));
   const projectRef = serverThread
@@ -428,7 +432,7 @@ export const PersistentThreadTerminalPanel = memo(function PersistentThreadTermi
     const summary =
       knownTerminalSessions?.find((session) => session.target.terminalId === terminalId)?.state
         .summary ?? null;
-    terminalLabelsById.set(terminalId, resolveTerminalSessionLabel(terminalId, summary));
+    terminalLabelsById.set(terminalId, resolveTerminalSessionLabel(terminalId, summary, messages));
   }
   const terminalLaunchLocationsById = new Map<
     string,
@@ -469,7 +473,7 @@ export const PersistentThreadTerminalPanel = memo(function PersistentThreadTermi
       visible={visible}
       threadRef={threadRef}
       threadId={threadRef.threadId}
-      threadTitle={serverThread?.title ?? (draftThread ? "New thread" : null)}
+      threadTitle={serverThread?.title ?? (draftThread ? gt("New thread") : null)}
       cwd={cwd}
       worktreePath={worktreePath}
       runtimeEnv={runtimeEnv}

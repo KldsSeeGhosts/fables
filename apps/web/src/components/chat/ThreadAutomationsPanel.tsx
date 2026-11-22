@@ -1,7 +1,9 @@
 import { useAtomValue } from "@effect/atom-react";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
 import { useNavigate } from "@tanstack/react-router";
 import { T, useGT, useMessages, Var } from "gt-react";
+import { m as resolveMessage } from "~/i18n/messages";
 import { CalendarClockIcon, PlayIcon, Settings2Icon } from "lucide-react";
 import { useState } from "react";
 import {
@@ -10,6 +12,7 @@ import {
   type ScheduledTask,
   type ThreadId,
 } from "@t3tools/contracts";
+import type { TimestampFormat } from "@t3tools/contracts/settings";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -34,8 +37,36 @@ function reportFailure(title: string, error: unknown) {
     stackedThreadToast({
       type: "error",
       title,
-      description: error instanceof Error ? error.message : String(error),
+      description: thrownErrorMessage(error, resolveMessage) ?? String(error),
     }),
+  );
+}
+
+function taskScheduleLine(
+  task: ScheduledTask,
+  timestampFormat: TimestampFormat,
+  timeZone: string | undefined,
+  resolve: typeof resolveMessage,
+) {
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <span className="truncate">
+        {scheduleLabel(task.schedule, timestampFormat, timeZone, task.nextRunAt, resolve)}
+      </span>
+      {task.blockedByPolicy !== undefined ? (
+        <span className="truncate">{task.blockedByPolicy}</span>
+      ) : task.enabled && task.nextRunAt !== null ? (
+        <span className="shrink-0">
+          <T>
+            next <ScheduledRelativeLabel value={task.nextRunAt} />
+          </T>
+        </span>
+      ) : task.enabled ? null : (
+        <span className="shrink-0">
+          <T context="automation state">paused</T>
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -66,6 +97,7 @@ export function ThreadAutomationsPanel(props: {
   const timestampFormat = useClientSettings((settings) => settings.timestampFormat);
   const navigate = useNavigate();
   const gt = useGT();
+  const m = useMessages();
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
 
   const boundTasks = (tasksQuery.data?.tasks ?? []).filter(
@@ -118,15 +150,13 @@ export function ThreadAutomationsPanel(props: {
       title={gt("Automations")}
       summary={
         boundTasks.length ? (
-          <>
-            {boundTasks.length}
-            {nextRun ? (
-              <>
-                <T>, next </T>
-                <ScheduledRelativeLabel value={nextRun} />
-              </>
-            ) : null}
-          </>
+          nextRun ? (
+            <T>
+              <Var>{boundTasks.length}</Var>, next <ScheduledRelativeLabel value={nextRun} />
+            </T>
+          ) : (
+            boundTasks.length
+          )
         ) : undefined
       }
       action={
@@ -170,17 +200,7 @@ export function ThreadAutomationsPanel(props: {
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="truncate text-label leading-4">{task.title}</span>
                 <span className="truncate text-caption leading-4 text-muted-foreground">
-                  {task.blockedByPolicy ??
-                    (!task.enabled
-                      ? gt("Paused", { $context: "automation state" })
-                      : task.lastRunStatus === "running"
-                        ? gt("Running", { $context: "automation state" })
-                        : scheduleLabel(
-                            task.schedule,
-                            timestampFormat,
-                            tasksQuery.data?.timeZone,
-                            task.nextRunAt,
-                          ))}
+                  {taskScheduleLine(task, timestampFormat, tasksQuery.data?.timeZone, m)}
                 </span>
               </span>
             </ThreadDetailsControl>

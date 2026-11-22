@@ -1,8 +1,9 @@
 import { useEffect, useId, useState } from "react";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages } from "gt-react";
 import { useNavigate } from "@tanstack/react-router";
 import { create } from "zustand";
 import { useNowMinute } from "../hooks/useNowMinute";
+import type { MessageResolver } from "../i18n/messages";
 import {
   localSnoozeDate,
   localSnoozeTime,
@@ -66,30 +67,45 @@ export function CustomSnoozeDialogHost() {
 type DurationParts = { readonly days: number; readonly hours: number; readonly minutes: number };
 
 const DURATION_FIELDS = [
-  { key: "days", label: msg("Days", { $context: "snooze duration unit" }) },
-  { key: "hours", label: msg("Hours", { $context: "snooze duration unit" }) },
-  { key: "minutes", label: msg("Minutes", { $context: "snooze duration unit" }) },
+  {
+    key: "days",
+    label: msg("Days"),
+    decrementLabel: msg("Fewer days"),
+    incrementLabel: msg("More days"),
+  },
+  {
+    key: "hours",
+    label: msg("Hours"),
+    decrementLabel: msg("Fewer hours"),
+    incrementLabel: msg("More hours"),
+  },
+  {
+    key: "minutes",
+    label: msg("Minutes"),
+    decrementLabel: msg("Fewer minutes"),
+    incrementLabel: msg("More minutes"),
+  },
 ] as const;
 
 function durationMinutes(parts: DurationParts): number {
   return parts.days * 24 * 60 + parts.hours * 60 + parts.minutes;
 }
 
-/** "today at 6:12 PM", "tomorrow at 9:00 AM", or "on Mon, Sep 29 at 9:00 AM". */
-function formatReturnTime(wake: Date, now: Date): string {
+/** "Returns today at 6:12 PM", "… tomorrow at 9:00 AM", or "… on Mon, Sep 29 at 9:00 AM". */
+function formatReturnTime(wake: Date, now: Date, resolve: MessageResolver): string {
   const time = wake.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   const dayOffset = Math.round(
     (new Date(wake).setHours(0, 0, 0, 0) - new Date(now).setHours(0, 0, 0, 0)) / 86_400_000,
   );
-  if (dayOffset === 0) return `today at ${time}`;
-  if (dayOffset === 1) return `tomorrow at ${time}`;
+  if (dayOffset === 0) return resolve(msg("Returns today at {time}", { time }));
+  if (dayOffset === 1) return resolve(msg("Returns tomorrow at {time}", { time }));
   const day = wake.toLocaleDateString(undefined, {
     weekday: "short",
     month: "short",
     day: "numeric",
     ...(wake.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
   });
-  return `on ${day} at ${time}`;
+  return resolve(msg("Returns on {day} at {time}", { day, time }));
 }
 
 /** The current time, refreshed each minute while mounted so a live label never goes stale. */
@@ -100,7 +116,7 @@ function useMinuteClock(): Date {
 
 function CustomSnoozeDialog() {
   const gt = useGT();
-  const m = useMessages();
+  const messages = useMessages();
   const id = useId();
   const navigate = useNavigate();
   const [initial] = useState(() => new Date(Date.now() + 3_600_000));
@@ -253,23 +269,15 @@ function CustomSnoozeDialog() {
                             }}
                           >
                             <NumberFieldGroup>
-                              <NumberFieldDecrement
-                                aria-label={m(
-                                  msg("Fewer {unit}", { unit: m(field.label).toLowerCase() }),
-                                )}
-                              />
-                              <NumberFieldInput aria-label={m(field.label)} />
-                              <NumberFieldIncrement
-                                aria-label={m(
-                                  msg("More {unit}", { unit: m(field.label).toLowerCase() }),
-                                )}
-                              />
+                              <NumberFieldDecrement aria-label={messages(field.decrementLabel)} />
+                              <NumberFieldInput aria-label={messages(field.label)} />
+                              <NumberFieldIncrement aria-label={messages(field.incrementLabel)} />
                             </NumberFieldGroup>
                             <label
                               htmlFor={`${id}-${field.key}`}
                               className="text-dim-foreground text-meta"
                             >
-                              {m(field.label)}
+                              {messages(field.label)}
                             </label>
                           </NumberField>
                         ))}
@@ -280,13 +288,9 @@ function CustomSnoozeDialog() {
                         aria-hidden
                         className="size-3.5 shrink-0 text-muted-foreground"
                       />
-                      {wakeAt ? (
-                        <T>
-                          Returns <Var>{formatReturnTime(new Date(wakeAt), now)}</Var>
-                        </T>
-                      ) : (
-                        <T>Set a duration longer than zero.</T>
-                      )}
+                      {wakeAt
+                        ? formatReturnTime(new Date(wakeAt), now, messages)
+                        : gt("Set a duration longer than zero.")}
                     </p>
                   </div>
                 )}

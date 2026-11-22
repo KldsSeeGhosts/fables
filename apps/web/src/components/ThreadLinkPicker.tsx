@@ -48,7 +48,7 @@ export function ThreadLinkPicker({
       <CommandInput placeholder={gt("Search threads or projects...")} disabled={pending} />
       <CommandList className="max-h-80 overflow-y-auto">
         {candidates.length === 0 ? (
-          <div className="px-3 py-6 text-center text-body text-muted-foreground">
+          <div className="px-3 py-6 text-center text-label text-muted-foreground">
             <T>No active threads found.</T>
           </div>
         ) : (

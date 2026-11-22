@@ -1,4 +1,3 @@
-import { DEFAULT_APP_ICON } from "@t3tools/shared/appIcons";
 import { BUILT_IN_THEMES } from "@t3tools/shared/themePalettes";
 import { msg, T, useGT, useMessages } from "gt-react";
 import { AppWindowIcon, MonitorIcon, MoonIcon, PaletteIcon, SunIcon } from "lucide-react";
@@ -29,13 +28,6 @@ const APPEARANCE_ICONS: Readonly<Record<AppearanceChoice, typeof MonitorIcon>> =
   light: SunIcon,
   "black-chrome": AppWindowIcon,
   dark: MoonIcon,
-};
-
-const APPEARANCE_CHOICE_LABELS: Readonly<Record<AppearanceChoice, string>> = {
-  system: msg("System"),
-  light: msg("Light"),
-  "black-chrome": msg("Black chrome"),
-  dark: msg("Dark"),
 };
 
 export function notifyThemeSaveFailure(): void {
@@ -154,8 +146,8 @@ export function useCommandPaletteThemeItems() {
           return {
             kind: "action" as const,
             value: `appearance:${choice}`,
-            title: messages(APPEARANCE_CHOICE_LABELS[choice]),
-            searchTerms: [label, messages(APPEARANCE_CHOICE_LABELS[choice]), "appearance", "mode"],
+            title: messages(label),
+            searchTerms: [messages(label), label, "appearance", "mode"],
             icon: <Icon className={ITEM_ICON_CLASS} />,
             titleTrailingContent:
               appearanceChoice === choice ? (
@@ -202,13 +194,13 @@ export function useCommandPaletteThemeItems() {
         items: APP_ICON_OPTIONS.map((option) => ({
           kind: "action",
           value: `app-icon:${option.id}`,
-          title: option.id === DEFAULT_APP_ICON ? gt("Default") : option.label,
-          searchTerms: [option.label, "app icon"],
+          title: messages(option.label),
+          searchTerms: [messages(option.label), option.label, "app icon"],
           icon: <img alt="" className="size-4" draggable={false} src={option.src} />,
           titleTrailingContent:
             currentAppIcon.id === option.id ? (
               <span className="text-meta text-dim-foreground">
-                <T context="the app icon in use now">Current</T>
+                <T context="the theme or mode in use now">Current</T>
               </span>
             ) : undefined,
           run: () => updateClientSettings({ appIcon: option.id }),

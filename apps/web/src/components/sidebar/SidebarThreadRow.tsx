@@ -70,10 +70,11 @@ import {
 } from "react";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
 
-import { m, type MessageResolver } from "../../i18n/messages";
+import type { MessageResolver } from "../../i18n/messages";
 
 import { useRightPanelStore } from "../../rightPanelStore";
-import { useOpenPrLink } from "../../lib/openPullRequestLink";
+import { beginLayoutContentDrag } from "../../layout/layoutDrag";
+import { readThreadPullRequestSurface, useOpenPrLink } from "../../lib/openPullRequestLink";
 import { useUiStateStore } from "../../uiStateStore";
 import { useThreadSelectionStore } from "../../threadSelectionStore";
 import { useNowMinute } from "../../hooks/useNowMinute";
@@ -200,12 +201,11 @@ function WorkingDurationLabel(props: { environmentId: EnvironmentId; startedMs: 
   );
 }
 
-function terminalProcessLabel(count: number, resolve: MessageResolver = m): string {
+function terminalProcessLabel(count: number, resolve: MessageResolver): string {
   return resolve(
-    msg(
-      "{count, plural, one {{count} terminal process running} other {{count} terminal processes running}}",
-      { count },
-    ),
+    msg("{count, plural, one {{count} process running} other {{count} processes running}}", {
+      count,
+    }),
   );
 }
 
@@ -220,7 +220,7 @@ const SIDEBAR_STATUSES: Record<
     className: "text-info-foreground",
   },
   preparing: {
-    label: msg("Setting up", { $context: "thread status" }),
+    label: msg("Setting up"),
     Icon: CircleDashedIcon,
     className: "text-info-foreground",
   },
@@ -230,22 +230,22 @@ const SIDEBAR_STATUSES: Record<
     className: "text-muted-foreground",
   },
   approval: {
-    label: msg("Approval", { $context: "thread status" }),
+    label: msg("Approval", { $context: "thread status: needs approval" }),
     Icon: ShieldQuestionIcon,
     className: "text-warning-foreground",
   },
   input: {
-    label: msg("Input", { $context: "thread status" }),
+    label: msg("Input", { $context: "thread status: needs user input" }),
     Icon: MessageCircleQuestionIcon,
     className: "text-(--sidebar-status-input)",
   },
   request: {
-    label: msg("Request", { $context: "thread status" }),
+    label: msg("Request", { $context: "thread status: guest request" }),
     Icon: UserRoundIcon,
     className: "text-guest-foreground",
   },
   limited: {
-    label: msg("Limited", { $context: "thread status" }),
+    label: msg("Limited", { $context: "thread status: usage limited" }),
     Icon: CircleAlertIcon,
     className: "text-warning-foreground",
   },
@@ -255,7 +255,7 @@ const SIDEBAR_STATUSES: Record<
     className: "text-error-foreground",
   },
   woke: {
-    label: msg("Woke", { $context: "thread status" }),
+    label: msg("Woke", { $context: "thread status: woke from snooze" }),
     Icon: AlarmClockIcon,
     className: "text-warning-foreground",
   },
@@ -277,10 +277,12 @@ function SidebarWokeLabel(props: { onDismiss: (event: ReactMouseEvent) => void }
       >
         <AlarmClockIcon aria-hidden className="size-4 shrink-0 text-warning-foreground" />
         <span role="status" className="text-warning-foreground">
-          {gt("Woke", { $context: "thread status" })}
+          <T context="thread status: woke from snooze">Woke</T>
         </span>
       </TooltipTrigger>
-      <TooltipPopup side="top">{gt("Dismiss Woke notification")}</TooltipPopup>
+      <TooltipPopup side="top">
+        <T>Dismiss Woke notification</T>
+      </TooltipPopup>
     </Tooltip>
   );
 }
@@ -292,8 +294,8 @@ function SidebarStatusLabel(props: {
   workingStartedAt: string | null;
   compact?: boolean;
 }) {
-  const status = SIDEBAR_STATUSES[props.kind];
   const messages = useMessages();
+  const status = SIDEBAR_STATUSES[props.kind];
   return (
     <span
       className={cn(
@@ -402,8 +404,9 @@ function SidebarThreadTooltip({
     .map((instanceId) => providerEntryByInstanceId.get(instanceId)?.displayName ?? instanceId);
   const supportsMultiplePullRequests = useSupportsMultiplePullRequests(thread.environmentId);
   const gt = useGT();
+  const m = useMessages();
   return (
-    <ThreadHoverCardPopup side="right" align="start" sideOffset={4} className="w-75">
+    <ThreadHoverCardPopup side="right" align="start" sideOffset={4} className="w-80">
       <ThreadHoverCard
         title={thread.title}
         footer={
@@ -475,7 +478,7 @@ function SidebarThreadTooltip({
               showBadge={showInstanceBadge && providerEntry?.accentColor !== undefined}
               badgeContent="none"
               badgeClassName="h-2 min-w-2 px-0"
-              iconClassName="size-3 shrink-0 opacity-60"
+              iconClassName="size-3 shrink-0"
             />
             <div className="min-w-0 text-muted-foreground">
               <div className="truncate">{modelLabel}</div>
@@ -502,7 +505,7 @@ function SidebarThreadTooltip({
               className={cn("size-3 shrink-0", terminalStatus.colorClass)}
             />
             <div className="min-w-0 truncate text-muted-foreground">
-              {terminalProcessLabel(terminalProcessCount)}
+              {terminalProcessLabel(terminalProcessCount, m)}
             </div>
           </div>
         ) : null}
@@ -724,7 +727,9 @@ type SidebarThreadRowProps = {
   providerEntryByInstanceId: ReadonlyMap<string, SidebarProviderEntry>;
   timestampFormat: TimestampFormat;
   onThreadClick: (event: ReactMouseEvent, threadRef: ScopedThreadRef) => void;
-  onThreadActivate: (threadRef: ScopedThreadRef) => void;
+  onThreadActivate: (threadRef: ScopedThreadRef) => void | Promise<unknown>;
+  onThreadOpen: (threadRef: ScopedThreadRef) => void;
+  onThreadDoubleClick: (threadRef: ScopedThreadRef, title: string) => void;
   onStartRename: (threadRef: ScopedThreadRef, title: string) => void;
   onRenameTitleChange: (title: string) => void;
   onCommitRename: (threadRef: ScopedThreadRef, title: string) => void;
@@ -809,6 +814,8 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     onStartRename,
     onThreadActivate,
     onThreadClick,
+    onThreadDoubleClick,
+    onThreadOpen,
     onUnsettle,
     onUnsnooze,
     onUnpin,
@@ -994,22 +1001,13 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     }
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    onThreadActivate(threadRef);
+    onThreadOpen(threadRef);
   };
   const handleDoubleClick = (event: ReactMouseEvent) => {
-    if (
-      !readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope) ||
-      isRenaming ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
-    ) {
-      return;
-    }
+    if (isRenaming || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     if ((event.target as HTMLElement).closest("button, a, input")) return;
     event.preventDefault();
-    onStartRename(threadRef, thread.title);
+    onThreadDoubleClick(threadRef, thread.title);
   };
   const [isFileDragOver, setIsFileDragOver] = useState(false);
   const fileDropHandlers = onFileDropThreads
@@ -1199,9 +1197,25 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
       </span>
     );
 
-  const openLinkedItems = () => {
-    useRightPanelStore.getState().open(threadRef, "pull-requests");
-    if (!props.isRouteThread) onThreadActivate(threadRef);
+  const whenThreadShown = (open: () => void) => {
+    if (props.isRouteThread) return open();
+    // Once the thread is shown, so the panel lands beside its chat and stays in front.
+    void Promise.resolve(onThreadActivate(threadRef)).then(open, () => undefined);
+  };
+  const openLinkedItems = () =>
+    whenThreadShown(() => useRightPanelStore.getState().open(threadRef, "pull-requests"));
+  const handlePrLinkPress = (event: ReactPointerEvent<HTMLElement>, url: string) => {
+    const surface = readThreadPullRequestSurface(threadRef, url);
+    if (surface) beginLayoutContentDrag(event, { kind: "surface", threadRef, surface });
+  };
+  const handlePrPress = (event: ReactPointerEvent<HTMLElement>, opensList: boolean) => {
+    const url = pr?.url ?? currentLinkedPr?.url;
+    const surface = opensList
+      ? ({ id: "pull-requests", kind: "pull-requests" } as const)
+      : url
+        ? readThreadPullRequestSurface(threadRef, url)
+        : null;
+    if (surface) beginLayoutContentDrag(event, { kind: "surface", threadRef, surface });
   };
   const prBadge =
     prBadgeShape?.kind === "stack" || pr || currentLinkedPr ? (
@@ -1221,6 +1235,8 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
         status={prStatus}
         onOpenList={openLinkedItems}
         onOpenPullRequest={handlePrClick}
+        onPress={handlePrPress}
+        onPressPullRequest={handlePrLinkPress}
       />
     ) : null;
   const firstIssue = thread.issues?.[0];
@@ -1259,7 +1275,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
         }
       >
         <IssueIcon aria-hidden className={cn("size-3 shrink-0", issueStatus?.toneClassName)} />
-        <span className="max-w-16 truncate text-xs font-normal text-secondary-label tabular-nums">
+        <span className="max-w-16 truncate text-meta text-secondary-label tabular-nums">
           {issueCount === 1 ? firstIssue.displayKey : issueCount}
         </span>
       </TooltipTrigger>
@@ -1274,11 +1290,9 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
           <ThreadDetailsIssueRows
             links={thread.issues ?? []}
             threadRef={threadRef}
-            compact={false}
+            variant="mini"
             mountScope="sidebar-tooltip"
-            onOpen={() => {
-              if (!props.isRouteThread) onThreadActivate(threadRef);
-            }}
+            openWith={whenThreadShown}
           />
         </div>
       </TooltipPopup>
@@ -1507,10 +1521,10 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                     {variantAction === "unsnooze" && props.snoozeWakeLabelText !== null ? (
                       <span className="inline-flex items-center gap-1 text-meta font-normal text-info-foreground">
                         <AlarmClockIcon aria-hidden className="size-3 shrink-0" />
-                        <span className="sr-only">
-                          <T>Snoozed until </T>
-                        </span>
-                        {props.snoozeWakeLabelText}
+                        <T>
+                          <span className="sr-only">Snoozed until </span>
+                          <Var>{props.snoozeWakeLabelText}</Var>
+                        </T>
                       </span>
                     ) : (inFolder ? isWokeStatus : isWoke) ? (
                       <SidebarWokeLabel onDismiss={handleAcknowledgeWokeClick} />
@@ -1559,7 +1573,9 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                         >
                           <AlarmClockOffIcon className="size-3.5" />
                         </TooltipTrigger>
-                        <TooltipPopup side="top">{gt("Wake thread now")}</TooltipPopup>
+                        <TooltipPopup side="top">
+                          <T>Wake thread now</T>
+                        </TooltipPopup>
                       </Tooltip>
                     )
                   ) : !props.settlementSupported ? null : variantAction === "unsettle" ? (
@@ -1602,7 +1618,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                         }
                       >
                         <CheckIcon className="size-3" />
-                        Settle
+                        <T>Settle</T>
                       </TooltipTrigger>
                       <TooltipPopup side="top">
                         <T>Settle thread</T>

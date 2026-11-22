@@ -14,7 +14,7 @@ import { msg } from "gt-react";
 import { useContext } from "react";
 
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
-import { m } from "~/i18n/messages";
+import { m, type MessageResolver } from "~/i18n/messages";
 import {
   type EnvironmentPresentation,
   useEnvironments,
@@ -25,7 +25,7 @@ import { projectEnvironment } from "~/state/projects";
 import { type NewThreadHandler, useNewThreadHandler } from "./useHandleNewThread";
 
 // The server offers no scratch folder when its data dir sits in a git work tree.
-const SCRATCH_UNAVAILABLE_REASON = "Off on this server: its data folder is inside a git repo";
+const SCRATCH_UNAVAILABLE_REASON = msg("Off on this server: its data folder is inside a git repo");
 
 function reportScratchFailure(title: string, error: unknown) {
   toastManager.add(
@@ -59,14 +59,17 @@ export function createScratchProjectActions(input: {
    * Why "No project" is off for a connected environment whose config came
    * without a scratch folder; null while it is available or still loading.
    */
-  const scratchUnavailableReason = (environmentId: EnvironmentId | null): string | null => {
+  const scratchUnavailableReason = (
+    environmentId: EnvironmentId | null,
+    resolve: MessageResolver = m,
+  ): string | null => {
     const environment = [...input.environments()].find(
       (entry) => entry.environmentId === environmentId,
     );
     return environment?.connection.phase === "connected" &&
       environment.serverConfig !== null &&
       environment.serverConfig.scratchWorkspaceRoot === undefined
-      ? SCRATCH_UNAVAILABLE_REASON
+      ? resolve(SCRATCH_UNAVAILABLE_REASON)
       : null;
   };
 

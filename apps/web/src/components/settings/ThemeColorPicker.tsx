@@ -1,5 +1,5 @@
 import { msg, T, useGT, useMessages } from "gt-react";
-import { memo, useEffect, useRef, useState, type ReactElement } from "react";
+import { memo, useEffect, useState, useRef, type ReactElement } from "react";
 import { m, type MessageResolver } from "../../i18n/messages";
 import { isThemeColor, themeColorToHex, type ThemeColorRole } from "../../themePalette";
 import { cn } from "../../lib/utils";
@@ -192,7 +192,9 @@ function ThemeColorPickerPanel({
         />
         <div className="grid grid-cols-[1fr_1.2fr] gap-2">
           <label className="grid min-w-0 gap-1">
-            <span className="px-1 text-3xs font-semibold text-muted-foreground">Hex</span>
+            <span className="px-1 text-3xs font-semibold text-muted-foreground">
+              {gt("Hex", { $context: "hexadecimal color value" })}
+            </span>
             <span className="flex min-w-0 items-center gap-2 rounded-lg border border-input bg-background px-2 focus-within:border-ring">
               <span
                 className="size-3.5 shrink-0 rounded-full"
@@ -319,8 +321,6 @@ export function ThemeColorHexInput({
   const editorValue = value.trim().toLowerCase().startsWith("oklch(")
     ? (themeColorToHex(value) ?? value)
     : value;
-  // While focused the input shows the typed text, not the committed value: a guided palette
-  // rewrites the committed color, and echoing that mid-edit would replace the user's keystrokes.
   const [hexDraft, setHexDraft] = useState<string | null>(null);
   const hexText = hexDraft ?? editorValue;
   return (
@@ -374,7 +374,8 @@ export const ThemeColorField = memo(function ThemeColorField({
   const gt = useGT();
   const messages = useMessages();
   const label = customLabel ?? getThemeRoleLabel(role, messages);
-  const swatchValue = isThemeColor(value) ? value : "#000000";
+  const isColorValue = isThemeColor(value);
+  const swatchValue = isColorValue ? value : "#000000";
 
   return (
     <div
@@ -401,9 +402,7 @@ export const ThemeColorField = memo(function ThemeColorField({
             <span
               className={cn(
                 "size-full rounded-badge border group-focus-visible:ring-2 group-focus-visible:ring-inset group-focus-visible:ring-ring",
-                isThemeColor(value)
-                  ? "border-foreground/15"
-                  : "border-dashed border-destructive/70",
+                isColorValue ? "border-foreground/15" : "border-dashed border-destructive/70",
               )}
               style={isThemeColor(value) ? { backgroundColor: swatchValue } : undefined}
             />

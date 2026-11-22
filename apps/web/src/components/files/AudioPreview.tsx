@@ -1,4 +1,3 @@
-import { useGT } from "gt-react";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import {
   LoaderCircleIcon,
@@ -8,6 +7,7 @@ import {
   Volume2Icon,
   VolumeXIcon,
 } from "lucide-react";
+import { msg, useGT, useMessages } from "gt-react";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -19,6 +19,7 @@ import {
   mediaMetadataParts,
 } from "~/components/media/mediaFileInfo";
 import { useStableCallback } from "~/hooks/useStableCallback";
+import type { MessageResolver } from "~/i18n/messages";
 import { cn } from "~/lib/utils";
 import { ContextChip, ContextChipAction, ContextChipLabel } from "../ContextChip";
 import { InlineButton } from "../ui/button";
@@ -48,11 +49,11 @@ function wavSampleRate(bytes: ArrayBuffer): number | null {
   return riff ? view.getUint32(24, true) : null;
 }
 
-function channelLabel(channels: number | null): string | null {
+function channelLabel(channels: number | null, resolve: MessageResolver): string | null {
   if (channels === null) return null;
-  if (channels === 1) return "mono";
-  if (channels === 2) return "stereo";
-  return `${channels} channels`;
+  if (channels === 1) return resolve(msg("mono", { $context: "audio channel layout" }));
+  if (channels === 2) return resolve(msg("stereo", { $context: "audio channel layout" }));
+  return resolve(msg("{channels} channels", { $context: "audio channel count" }), { channels });
 }
 
 function sampleRateLabel(sampleRate: number | null): string | null {
@@ -155,6 +156,8 @@ export function AudioPreview(props: AudioPreviewProps) {
 }
 
 function StandardAudioPreview(props: AudioPreviewProps) {
+  const gt = useGT();
+  const messages = useMessages();
   const onUnmount = useContext(AudioPreviewUnmountContext);
   const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
   const audioRef = useStableCallback((element: HTMLAudioElement | null) => {
@@ -179,7 +182,7 @@ function StandardAudioPreview(props: AudioPreviewProps) {
   const metadata = mediaMetadataParts([
     mediaFormatLabel(props.name),
     sampleRateLabel(summary?.sampleRate ?? null),
-    channelLabel(summary?.channels ?? null),
+    channelLabel(summary?.channels ?? null, messages),
     formatMediaSize(summary?.sizeBytes ?? null),
   ]);
 
@@ -242,7 +245,7 @@ function StandardAudioPreview(props: AudioPreviewProps) {
             type="button"
             variant="default"
             size="icon-sm"
-            aria-label={state.paused ? "Play" : "Pause"}
+            aria-label={state.paused ? gt("Play") : gt("Pause")}
             onClick={togglePlay}
           >
             {state.paused ? (
@@ -257,7 +260,7 @@ function StandardAudioPreview(props: AudioPreviewProps) {
           <MediaScrubber
             state={state}
             onSeek={seek}
-            label="Seek audio"
+            label={gt("Seek audio")}
             trackClassName="bg-foreground/10"
             playedClassName="bg-warning-foreground"
           />
@@ -268,7 +271,7 @@ function StandardAudioPreview(props: AudioPreviewProps) {
             type="button"
             variant="ghost-muted"
             size="icon-xs"
-            aria-label={state.muted ? "Unmute" : "Mute"}
+            aria-label={state.muted ? gt("Unmute") : gt("Mute")}
             aria-pressed={state.muted}
             onClick={toggleMuted}
           >

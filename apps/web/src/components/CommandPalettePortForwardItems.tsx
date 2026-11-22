@@ -148,7 +148,12 @@ export function useCommandPalettePortForwardItem(input: {
       kind: "action",
       value: `port-forward:start:${environmentId}:${server.port}`,
       title: gt("Forward localhost:{port}", { port: server.port }),
-      description: [labelOf(environmentId), server.processName].filter(Boolean).join(" · "),
+      description: (
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate">{labelOf(environmentId)}</span>
+          {server.processName ? <span className="truncate">{server.processName}</span> : null}
+        </span>
+      ),
       searchTerms: [String(server.port), server.processName ?? "", "forward"],
       icon: <CableIcon className={ITEM_ICON_CLASS} />,
       run: () => start(environmentId, server.port),

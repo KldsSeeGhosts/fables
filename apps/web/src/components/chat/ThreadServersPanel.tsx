@@ -176,7 +176,7 @@ function ThreadServersList(props: ThreadServersPanelProps) {
   return (
     <ThreadDetailsSection
       title={gt("Servers", { $context: "thread details section: running dev servers" })}
-      summary={gt("{count} running", { count: servers.length })}
+      summary={gt("{count} running", { count: servers.length, $context: "running dev servers" })}
     >
       <ul className="m-0 list-none p-0">
         {servers.slice(0, visibleCount).map((server, index) => {
@@ -221,15 +221,21 @@ function ThreadServersList(props: ThreadServersPanelProps) {
                       localhost:{server.port}
                     </span>
                     <span className="truncate text-caption leading-4 text-muted-foreground">
-                      {forward
-                        ? gt("Forwarded to :{port}", {
-                            $context: "a remote dev server reachable on this machine's port",
-                            port: forward.localPort,
-                          })
-                        : (server.processName ??
-                          (server.terminal === null
-                            ? gt("Agent", { $context: "who started a dev server" })
-                            : gt("Terminal", { $context: "who started a dev server" })))}
+                      {[
+                        // First, so the narrow panel truncates the less useful parts.
+                        forward
+                          ? gt("Forwarded to :{port}", {
+                              $context: "a remote dev server reachable on this machine's port",
+                              port: forward.localPort,
+                            })
+                          : null,
+                        server.terminal === null
+                          ? gt("Agent", { $context: "who started a dev server" })
+                          : gt("Terminal", { $context: "who started a dev server" }),
+                        server.processName,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
                     </span>
                   </span>
                 </TooltipTrigger>

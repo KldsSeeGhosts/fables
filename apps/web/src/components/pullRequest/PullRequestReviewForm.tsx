@@ -1,5 +1,4 @@
 import { useAtomCommand } from "~/state/use-atom-command";
-import { capitalizeTerm } from "@t3tools/client-runtime/source-control-clients";
 /**
  * with whatever line comments the review is holding. The verdict is picked by the composer's
  * segmented control; the popover around it belongs to PullRequestComposer.
@@ -30,9 +29,15 @@ import {
   type PullRequestCompletionScope,
 } from "./PullRequestMarkdownTextarea";
 
-const sent = (term: string): Record<PullRequestReviewVerdict, string> => ({
+import type { ChangeRequestTermKind } from "./changeRequestTerm";
+
+const sent = (term: ChangeRequestTermKind): Record<PullRequestReviewVerdict, string> => ({
   comment: m(msg("Review submitted")),
-  approve: m(msg("{term} approved", { term: capitalizeTerm(term) })),
+  approve: m(
+    msg("{term, select, mr {Merge request} cr {Change request} other {Pull request}} approved", {
+      term,
+    }),
+  ),
   "request-changes": m(msg("Changes requested")),
 });
 
@@ -55,8 +60,7 @@ export function PullRequestReviewForm({
   reference: PullRequestRef;
   completionScope: PullRequestCompletionScope | null;
   verdict: PullRequestReviewVerdict;
-  /** The host's word for a change request, as in "pull request". */
-  term: string;
+  term: ChangeRequestTermKind;
   requestChangesSummaryRequired: boolean;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   pending: boolean;

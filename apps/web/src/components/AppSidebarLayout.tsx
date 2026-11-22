@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { useGT } from "gt-react";
+import { msg, useGT, useMessages } from "gt-react";
 import * as Schema from "effect/Schema";
 import {
   lazy,
@@ -63,7 +63,11 @@ import { isModalDialogOpen } from "../lib/modalDialog";
 import { SidebarChromeBrand, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import type { SidebarRouteReveal } from "./sidebar/routeReveal";
 import { WorkspacePlane } from "../layout/WorkspacePlane";
-import { overviewZoomTransition, useOverviewPhase } from "../layout/Overview";
+import {
+  onOverviewBackgroundPointerDown,
+  overviewZoomTransition,
+  useOverviewPhase,
+} from "../layout/Overview";
 import { ChromeChannelArt, useSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import {
   clampThreadSidebarWidth,
@@ -88,6 +92,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { registerCommands, registerMenuAction } from "../shortcuts/dispatcher";
 import { resolveThreadRouteRef } from "../threadRoutes";
+import { CLOSED_SIDEBAR_CONTROLS_SURFACE_CLASS } from "../workspaceTitlebar";
 import { SidebarBrandWidthProbe } from "./sidebar/SidebarChrome";
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "var(--desktop-window-controls-inset, 90px)";
@@ -222,7 +227,7 @@ function registerWorkspaceFocusCommands(router: AnyRouter): () => void {
   };
 }
 
-// Escape leaves the pull requests page when no scope (a selection, a dialog,
+// Escape leaves the pull requests or issues page when no scope (a selection, a dialog,
 // a drag) claimed it, so it observes after every other scope.
 function registerPullRequestsEscapeCommand(router: AnyRouter): () => void {
   return registerCommands(
@@ -230,15 +235,16 @@ function registerPullRequestsEscapeCommand(router: AnyRouter): () => void {
     {
       observe: (event, consumed) => {
         if (consumed || event.repeat || event.isComposing || event.key !== "Escape") return;
+        const page = router.state.location.pathname;
         if (
-          router.state.location.pathname !== "/pull-requests" ||
+          (page !== "/pull-requests" && page !== "/issues") ||
           isCommandPaletteOpen() ||
           isModalDialogOpen() ||
           isLayoutDragActive()
         )
           return;
-        if (selectFocusedTab(useLayoutStore.getState().layout)?.content.kind !== "pull-requests")
-          return;
+        const focusedKind = selectFocusedTab(useLayoutStore.getState().layout)?.content.kind;
+        if (focusedKind !== "pull-requests" && focusedKind !== "issues") return;
         event.preventDefault();
         const activeElement = document.activeElement;
         if (activeElement instanceof HTMLElement) activeElement.blur();
@@ -405,7 +411,7 @@ function SidebarControl({ showSidebar }: { readonly showSidebar: boolean }) {
 
       event.preventDefault();
       event.stopPropagation();
-      toggleOutsideOverview();
+      if (!event.repeat) toggleOutsideOverview();
     };
 
     window.addEventListener("keydown", onKeyDown, true);
@@ -430,6 +436,7 @@ function SidebarControl({ showSidebar }: { readonly showSidebar: boolean }) {
       ref={appShellCommandsRef}
       className={cn(
         "pointer-events-none fixed left-[var(--workspace-controls-left)] top-[var(--workspace-controls-top)] z-50 ml-px flex h-[var(--workspace-topbar-height)] items-center",
+        CLOSED_SIDEBAR_CONTROLS_SURFACE_CLASS,
         mobileSidebarSheetMounted && "hidden",
       )}
       // Sits on the window chrome, so it takes the black chrome tokens too.
@@ -498,8 +505,16 @@ function SidebarControl({ showSidebar }: { readonly showSidebar: boolean }) {
 }
 
 const NAVIGATION_HISTORY_BUTTONS = {
-  back: { label: "Back", command: "navigation.back", Icon: ArrowLeftIcon },
-  forward: { label: "Forward", command: "navigation.forward", Icon: ArrowRightIcon },
+  back: {
+    label: msg("Back", { $context: "browser navigation" }),
+    command: "navigation.back",
+    Icon: ArrowLeftIcon,
+  },
+  forward: {
+    label: msg("Forward", { $context: "browser navigation" }),
+    command: "navigation.forward",
+    Icon: ArrowRightIcon,
+  },
 } as const;
 
 // Next to the sidebar toggle on the chrome row (pen fiPPG, iZJUf). On the web
@@ -512,9 +527,12 @@ function NavigationHistoryButton({
   direction: HistoryDirection;
   onStageBackdrop: boolean;
 }) {
+  const gt = useGT();
+  const m = useMessages();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const canNavigate = useCanNavigateHistory(direction);
-  const { label, command, Icon } = NAVIGATION_HISTORY_BUTTONS[direction];
+  const { label: labelMessage, command, Icon } = NAVIGATION_HISTORY_BUTTONS[direction];
+  const label = m(labelMessage);
   const shortcutLabel = shortcutLabelForCommand(keybindings, command);
 
   return (
@@ -536,8 +554,7 @@ function NavigationHistoryButton({
         <Icon className="size-4 text-sidebar-toggle" strokeWidth={2.25} />
       </TooltipTrigger>
       <TooltipPopup side="bottom">
-        {label}
-        {shortcutLabel ? ` (${shortcutLabel})` : ""}
+        {shortcutLabel ? gt("{label} ({shortcut})", { label, shortcut: shortcutLabel }) : label}
       </TooltipPopup>
     </Tooltip>
   );
@@ -568,9 +585,8 @@ export function AppSidebarLayout({
   const { active: panelAnimationsActive, durationMs: panelAnimationDurationMs } =
     usePanelAnimationSettings();
   const pathname = useLocation({ select: (location) => location.pathname });
-  const panelAnimationsSuppressed = usePanelNavigationSuppression(pathname);
-  // Each chat suppresses its own panels (SurfaceHost). React propagates a context change past
-  // nested providers, so a flip here on a chat switch would re-render every mounted chat twice.
+  // Each chat suppresses its own panels (SurfaceHost). A flip here on a chat switch would
+  // re-render every mounted chat twice and restyle the shell, whose eased sizes stay put.
   const onChatRoute = useParams({
     strict: false,
     select: (params) => resolveThreadRouteTarget(params) !== null,
@@ -578,7 +594,7 @@ export function AppSidebarLayout({
   const pagePanelAnimationsSuppressed = usePanelNavigationSuppression(
     onChatRoute ? "chat" : pathname,
   );
-  const routePanelAnimationsActive = panelAnimationsActive && !panelAnimationsSuppressed;
+  const routePanelAnimationsActive = panelAnimationsActive && !pagePanelAnimationsSuppressed;
   const isOnDesignSystem =
     DesignSystemSidebarNav !== null &&
     (pathname === "/design-system" || pathname.startsWith("/design-system/"));
@@ -613,7 +629,9 @@ export function AppSidebarLayout({
   const overviewPhase = useOverviewPhase();
   const overviewStaged = overviewPhase !== "closed" && !isMobileLayout;
   const overviewShown = overviewPhase === "opening" || overviewPhase === "open";
-  const overviewTransition = overviewStaged ? overviewZoomTransition() : {};
+  // Set on the app's root whether staged or not: an inherited variable that
+  // changes there restyles every element in the app.
+  const overviewTransition = overviewZoomTransition();
   const hideWindowControlsWhenSidebarCollapsed = useHideWindowControlsWhenSidebarCollapsed();
   const isWindowFullscreen = useSyncExternalStore(
     subscribeToWindowFullscreen,
@@ -699,7 +717,9 @@ export function AppSidebarLayout({
                 }}
                 className={cn(overviewStaged && "z-35")}
                 data-overview-zoom={overviewStaged ? overviewPhase : undefined}
-                inert={overviewStaged && overviewShown}
+                // Not inert: flipping inert restyles the whole thread list. The
+                // overview owns the keyboard, and the cover below takes presses.
+                aria-hidden={(overviewStaged && overviewShown) || undefined}
                 style={
                   overviewStaged
                     ? {
@@ -720,6 +740,14 @@ export function AppSidebarLayout({
                   <ThreadSidebar routeReveal={sidebarRouteReveal} />
                 )}
                 <SidebarRail onDoubleClick={resetSidebarWidth} />
+                {overviewStaged && overviewShown ? (
+                  // A press on the faded sidebar is a press on the overview's backdrop.
+                  <div
+                    aria-hidden
+                    className="absolute inset-0 z-50"
+                    onPointerDown={onOverviewBackgroundPointerDown}
+                  />
+                ) : null}
               </Sidebar>
             </>
           ) : null}

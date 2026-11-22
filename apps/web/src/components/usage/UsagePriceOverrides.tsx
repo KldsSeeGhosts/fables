@@ -644,15 +644,13 @@ export function UsagePriceOverrides({
                     >
                       {result?.status === "failed" ? (
                         <>
-                          <span className="block">
-                            <T>Not saved</T>
-                          </span>
+                          <span className="block">{gt("Not saved")}</span>
                           <span className="block">{result.error}</span>
                         </>
                       ) : result?.status === "saved" ? (
-                        <T>Saved</T>
+                        gt("Saved")
                       ) : (
-                        <T>Saving…</T>
+                        gt("Saving…")
                       )}
                     </span>
                   </div>

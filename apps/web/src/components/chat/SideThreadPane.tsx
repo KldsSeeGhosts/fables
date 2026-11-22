@@ -1,16 +1,15 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { sideThreadKindOf } from "@t3tools/client-runtime/side-thread";
 import { formatSubagentDisplayTitle } from "@t3tools/client-runtime/state/subagent-display";
-import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/shell";
-import { resolveLatestMergeBackRun } from "@t3tools/client-runtime/state/thread-workflows";
 import {
   isAtomCommandInterrupted,
   settlePromise,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { AuthOrchestrationOperateScope, type ScopedThreadRef } from "@t3tools/contracts";
+import { threadContextRecord } from "@t3tools/shared/composerContextReferences";
 import { T, useGT } from "gt-react";
-import { CornerUpLeftIcon, Trash2Icon, XIcon } from "lucide-react";
+import { Trash2Icon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useComposerDraftStore } from "../../composerDraftStore";
@@ -51,7 +50,6 @@ export default function SideThreadPane(props: {
 }) {
   const { parentRef, surface } = props;
   const { threadId } = surface;
-  const inPanelTabBar = useInPanelTabBar();
   const gt = useGT();
   const threadRef = scopeThreadRef(parentRef.environmentId, threadId);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers the parent panel as host in the panel store
@@ -60,7 +58,6 @@ export default function SideThreadPane(props: {
     [parentRef, threadId],
   );
   const shell = useQuietThreadShell(threadRef);
-  const parent = useQuietThreadShell(parentRef);
   const bootstrapComplete = isThreadRouteSnapshotAuthoritative(
     useEnvironmentShellStatus(parentRef.environmentId),
   );
@@ -83,43 +80,18 @@ export default function SideThreadPane(props: {
   const kind = sideThreadKindOf(thread) ?? "subagent";
   const isSideChat = kind === "side-chat";
   const canOperate = useEnvironmentScope(parentRef.environmentId, AuthOrchestrationOperateScope);
-  const mergeBack = useAtomCommand(threadEnvironment.mergeBack, { reportFailure: false });
   const deleteThread = useAtomCommand(threadEnvironment.delete, { reportFailure: false });
   const confirmThreadDelete = useClientSettings((settings) => settings.confirmThreadDelete);
-  const [bringingBack, setBringingBack] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const mergeRun = projection ? resolveLatestMergeBackRun(projection) : null;
-  // A pending merge-back would fail the main thread's queued message, so the server refuses it.
-  const bringBackBlockedReason = !canOperate
-    ? gt("This connection cannot change threads.")
-    : threadRuntimeIsActive(parent?.runtime)
-      ? gt("Available when the main thread is idle.")
-      : mergeRun === null
-        ? gt("Available after a finished reply.")
-        : null;
-
-  const bringBack = async () => {
-    if (bringBackBlockedReason !== null || mergeRun === null || bringingBack) return;
-    setBringingBack(true);
-    const result = await mergeBack({
-      environmentId: parentRef.environmentId,
-      input: { sourceThreadId: threadId, targetThreadId: parentRef.threadId, runId: mergeRun.id },
-    });
-    setBringingBack(false);
-    if (result._tag === "Success") {
-      toastManager.add({
-        type: "success",
-        title: gt("Brought back"),
-        description: gt("The main thread gets this side chat with your next message there."),
+  // Closing an unused side chat deletes it, which would leave the link unreadable.
+  const canAddToChat = shell !== null && shell.latestUserMessageAt !== null;
+  const addToChat = () => {
+    if (!canAddToChat) return;
+    useComposerDraftStore
+      .getState()
+      .addThreadContexts(parentRef, [threadContextRecord(threadRef, shell.title)], {
+        insertAtCaret: false,
       });
-    } else if (!isAtomCommandInterrupted(result)) {
-      const error = squashAtomCommandFailure(result);
-      toastManager.add({
-        type: "error",
-        title: gt("Could not bring back the side chat"),
-        ...(error instanceof Error ? { description: error.message } : {}),
-      });
-    }
   };
 
   const deleteSideChat = async () => {
@@ -158,6 +130,7 @@ export default function SideThreadPane(props: {
     }
   };
 
+  const inPanelTabBar = useInPanelTabBar();
   const title =
     thread === null
       ? isSideChat
@@ -167,61 +140,45 @@ export default function SideThreadPane(props: {
         ? thread.title
         : formatSubagentDisplayTitle(thread.title);
 
-  const actions = (
-    <div className="flex shrink-0 items-center gap-1.5">
+  const sideChatActions = (
+    <div className="flex shrink-0 items-center gap-0.5">
       <Tooltip>
         <TooltipTrigger
           render={
             <Button
               variant="ghost"
-              size="icon-sm"
-              aria-label={gt("Bring back")}
-              aria-disabled={bringBackBlockedReason !== null || bringingBack || undefined}
-              onClick={() => void bringBack()}
+              size="xs"
+              aria-disabled={!canAddToChat || undefined}
+              onClick={addToChat}
             >
-              <CornerUpLeftIcon className="size-3.5" />
+              <T>Add to chat</T>
             </Button>
           }
         />
         <TooltipPopup side="bottom">
-          <T>Bring back</T>
-          {bringBackBlockedReason ? <span className="block">{bringBackBlockedReason}</span> : null}
+          {canAddToChat
+            ? gt("Adds this side chat to the main thread's next message.")
+            : gt("Available after the first message.")}
         </TooltipPopup>
       </Tooltip>
-      <Tooltip>
-        <TooltipTrigger render={<span className="flex shrink-0" />}>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={gt("Delete side chat")}
-            disabled={!canOperate || shell === null || deleting}
-            onClick={() => void deleteSideChat()}
-          >
-            <Trash2Icon className="size-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipPopup side="bottom">
-          <T>Delete side chat</T>
-        </TooltipPopup>
-      </Tooltip>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label={gt("Delete side chat")}
+        disabled={!canOperate || shell === null || deleting}
+        onClick={() => void deleteSideChat()}
+      >
+        <Trash2Icon />
+      </Button>
       {inPanelTabBar ? null : (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={gt("Close side chat")}
-                onClick={props.onClose}
-              >
-                <XIcon className="size-3.5" />
-              </Button>
-            }
-          />
-          <TooltipPopup side="bottom">
-            <T>Close side chat</T>
-          </TooltipPopup>
-        </Tooltip>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={gt("Close side chat")}
+          onClick={props.onClose}
+        >
+          <XIcon />
+        </Button>
       )}
     </div>
   );
@@ -234,16 +191,16 @@ export default function SideThreadPane(props: {
     >
       {isSideChat ? (
         inPanelTabBar ? (
-          <PanelTabActions>{actions}</PanelTabActions>
+          <PanelTabActions>{sideChatActions}</PanelTabActions>
         ) : (
-          <div className="flex h-9 shrink-0 items-center gap-1 pr-1 pl-3">
-            <span className="min-w-0 flex-1 truncate text-meta">{title}</span>
-            {actions}
+          <div className="flex h-9 shrink-0 items-center gap-1 border-b border-border pr-1 pl-3">
+            <h2 className="min-w-0 flex-1 truncate text-meta">{title}</h2>
+            {sideChatActions}
           </div>
         )
       ) : null}
       {renderState === "missing" ? (
-        <p className="p-3 text-xs text-muted-foreground">
+        <p className="p-3 text-meta text-muted-foreground">
           {isSideChat ? (
             <T>This side chat was deleted.</T>
           ) : (

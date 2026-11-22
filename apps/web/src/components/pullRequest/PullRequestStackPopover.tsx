@@ -8,6 +8,7 @@ import { Menu, MenuTrigger, MenuPopup, MenuGroup, MenuGroupLabel, MenuItem } fro
 import { PullRequestStackLayers } from "./PullRequestStackLayers";
 import { PullRequestStackHeader } from "./PullRequestStackHeader";
 import { PullRequestGlyph } from "./pullRequestIcons";
+import { changeRequestTermKind } from "./changeRequestTerm";
 
 // Mount only on open to avoid per-row stack fetches.
 function StackBody({
@@ -36,7 +37,9 @@ function StackBody({
           stale={!!query.error}
         />
         {query.error ? (
-          <MenuItem onClick={query.refresh}>{gt("Retry stack refresh")}</MenuItem>
+          <MenuItem onClick={query.refresh}>
+            <T>Retry stack refresh</T>
+          </MenuItem>
         ) : null}
         <PullRequestStackLayers
           stack={query.data}
@@ -55,7 +58,10 @@ function StackBody({
         {query.error ??
           (query.isPending
             ? gt("Loading stack…")
-            : gt("This {kind} is no longer in a stack.", { kind: terminology.singular }))}
+            : gt(
+                "This {term, select, mr {merge request} cr {change request} other {pull request}} is no longer in a stack.",
+                { term: changeRequestTermKind(terminology) },
+              ))}
       </MenuGroupLabel>
     </>
   );

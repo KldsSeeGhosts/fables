@@ -298,7 +298,6 @@ import {
 } from "@t3tools/client-runtime/state/project-grouping";
 import { buildSidebarProjectPickerEntries } from "../sidebarProjectGrouping";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
-import { readIssueListPreferences } from "~/components/issue/issueListPreferences";
 import { IssueGlyph } from "~/components/issue/issuePresentation";
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 
@@ -336,6 +335,7 @@ function openIntentView(
 const NEW_THREAD_NO_PROJECT_VALUE = "new-thread-in:no-project";
 
 export function CommandPalette({ children }: { children: ReactNode }) {
+  const gt = useGT();
   useCommandPaletteMount();
   const state = useCommandPaletteStore();
   const setOpen = (open: boolean) => dispatchCommandPalette({ _tag: "SetOpen", open });
@@ -377,7 +377,11 @@ export function CommandPalette({ children }: { children: ReactNode }) {
           setOpen={setOpen}
           openChildSearch={openChildSearch}
           initialContext={state.restoredSearch}
-          overlayEscapeLabel={state.parentSearch ? "Back" : "Close"}
+          overlayEscapeLabel={
+            state.parentSearch
+              ? gt("Back", { $context: "button, leaves the file picker" })
+              : gt("Close")
+          }
         />
       </CommandDialog>
     </ComposerHandleContext>
@@ -470,9 +474,9 @@ function OpenCommandPaletteDialog(props: {
   ) => void;
   readonly initialContext: CommandPaletteReturnContext | undefined;
 }) {
+  const composerHandleRef = useComposerHandleContext();
   const gt = useGT();
   const messages = useMessages();
-  const composerHandleRef = useComposerHandleContext();
   const navigate = useNavigate();
   const openLayoutPage = useOpenLayoutPage();
   const pathname = useLocation({ select: (location) => location.pathname });
@@ -799,6 +803,7 @@ function OpenCommandPaletteDialog(props: {
     supportsTriage(triageEnvironmentId);
   const scratchOffReason = scratchUnavailableReason(
     currentProjectEnvironmentId ?? primaryEnvironmentId,
+    messages,
   );
   const currentProject = resolveCommandPaletteProject(
     projectByKey,
@@ -1031,7 +1036,7 @@ function OpenCommandPaletteDialog(props: {
 
   const submenuGroups =
     currentView?.groups[0]?.value === NEW_THREAD_IN_GROUP
-      ? [{ value: NEW_THREAD_IN_GROUP, label: "Projects", items: projectThreadItems }]
+      ? [{ value: NEW_THREAD_IN_GROUP, label: gt("Projects"), items: projectThreadItems }]
       : currentView?.groups[0]?.value === "themes"
         ? changeThemeItem.groups
         : currentView?.groups[0]?.value === "appearance"
@@ -1428,7 +1433,7 @@ function OpenCommandPaletteDialog(props: {
     actionItems.push({
       kind: "action",
       value: "action:choose-workspace",
-      title: "Choose workspace",
+      title: gt("Choose workspace"),
       searchTerms: ["branch", "worktree", "checkout", "workspace"],
       icon: <FolderIcon className={ITEM_ICON_CLASS} />,
       shortcutCommand: "composer.workspace",
@@ -1707,7 +1712,7 @@ function OpenCommandPaletteDialog(props: {
         kind: "action",
         value: "action:terminal-split",
         searchTerms: ["split terminal", "terminal", "split", "horizontal"],
-        title: "Split terminal",
+        title: gt("Split terminal"),
         icon: <SquareSplitHorizontalIcon className={ITEM_ICON_CLASS} />,
         shortcutCommand: "terminal.split",
         disabled: !target.canSplit(),
@@ -1720,7 +1725,7 @@ function OpenCommandPaletteDialog(props: {
         kind: "action",
         value: "action:terminal-split-vertical",
         searchTerms: ["split terminal vertically", "terminal", "split", "vertical"],
-        title: "Split terminal vertically",
+        title: gt("Split terminal vertically"),
         icon: <SquareSplitVerticalIcon className={ITEM_ICON_CLASS} />,
         shortcutCommand: "terminal.splitVertical",
         disabled: !target.canSplit(),
@@ -1733,11 +1738,12 @@ function OpenCommandPaletteDialog(props: {
   }
 
   // The side pane's tabs and the terminal, beside the focused chat.
-  const openBesideItem = activeThread || activeDraftThread ? buildOpenBesidePaletteItem() : null;
+  const openBesideItem =
+    activeThread || activeDraftThread ? buildOpenBesidePaletteItem(messages) : null;
   if (openBesideItem) actionItems.push(openBesideItem);
   // The index shows the layout too once there is a project.
   if (activeThread || activeDraftThread || (pathname === "/" && projects.length > 0)) {
-    actionItems.push(...buildLayoutPaletteItems(scrollingWorkspaces));
+    actionItems.push(...buildLayoutPaletteItems(scrollingWorkspaces, messages));
   }
 
   actionItems.push({
@@ -1872,7 +1878,7 @@ function OpenCommandPaletteDialog(props: {
       title: gt("Open issues"),
       icon: <IssueGlyph.issue className={ITEM_ICON_CLASS} />,
       run: async () => {
-        await navigate({ to: "/issues", search: readIssueListPreferences() });
+        await openLayoutPage("issues");
       },
     });
   }
@@ -1950,7 +1956,7 @@ function OpenCommandPaletteDialog(props: {
       kind: "action",
       value: "action:design-system",
       searchTerms: ["design system", "ds", "primitives", "components", "catalog", "ui"],
-      title: "Open design system",
+      title: gt("Open design system"),
       icon: <SwatchBookIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
         await navigate({ to: "/design-system" });
@@ -2015,8 +2021,7 @@ function OpenCommandPaletteDialog(props: {
   }
 
   const rootGroups = buildRootGroups({ actionItems, recentThreadItems }, messages);
-  // Every setting goes to the palette's own matcher, so settings get the same
-  // word starts and typo tolerance as threads.
+  // Settings use the same matcher as threads, including word starts and typo tolerance.
   const settingsSearchItems: CommandPaletteActionItem[] = settingsForThisPlatform(
     availableSettingsSearchItems,
   ).map((item) => ({

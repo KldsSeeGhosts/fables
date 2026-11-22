@@ -1,6 +1,6 @@
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { useAtomValue } from "@effect/atom-react";
-import { useGT } from "gt-react";
+import { T, useGT, useMessages } from "gt-react";
 import {
   DownloadIcon,
   FolderPlusIcon,
@@ -32,13 +32,14 @@ import { WorkspacePageHeader } from "./WorkspacePageHeader";
  * hero's place list with nothing in it but the ways to get a project.
  */
 export function NoProjectsHero() {
-  const navigate = useNavigate();
   const gt = useGT();
+  const messages = useMessages();
+  const navigate = useNavigate();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const { scratchEnvironmentId, scratchUnavailableReason, startScratchThread } =
     useScratchProject();
   const scratchTargetEnvironmentId = scratchEnvironmentId(primaryEnvironmentId);
-  const scratchOffReason = scratchUnavailableReason(primaryEnvironmentId);
+  const scratchOffReason = scratchUnavailableReason(primaryEnvironmentId, messages);
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const openAddProject = () => openCommandPalette({ open: "add-project" });
 
@@ -48,7 +49,9 @@ export function NoProjectsHero() {
       <div className="flex min-h-0 flex-1 flex-col justify-end pt-1.5 [container:draft-hero/size] sm:pt-2">
         <div className="chat-composer-lane scrollbar-gutter-both flex min-h-0 w-full flex-1 items-center overflow-y-auto py-4 [@container_draft-hero_(max-height:440px)]:hidden">
           <div className="mx-auto flex w-full max-w-110 flex-col">
-            <h1 className="sr-only">{gt("Add a project to start")}</h1>
+            <h1 className="sr-only">
+              <T>Add a project to start</T>
+            </h1>
             <div role="list" aria-label={gt("Projects")} className="flex flex-col gap-0.5">
               <DraftProjectGroupLabel>{gt("No projects yet")}</DraftProjectGroupLabel>
               <DraftProjectRow
@@ -60,7 +63,11 @@ export function NoProjectsHero() {
               <DraftProjectRow
                 icon={<DownloadIcon className="size-4 shrink-0 text-foreground" />}
                 label={gt("Import conversations…")}
-                detail={gt("Continue from Claude Code, Codex or Pi")}
+                detail={gt("Continue from {claude}, {codex} or {pi}", {
+                  claude: "Claude Code",
+                  codex: "Codex",
+                  pi: "Pi",
+                })}
                 onSelect={() => void navigate({ to: "/welcome" })}
               />
               {scratchTargetEnvironmentId === null && scratchOffReason === null ? null : (
@@ -145,7 +152,7 @@ function NewThreadPane({
             <PaneNotch>
               <div className={PANE_TAB_CLASS}>
                 <SquarePenIcon aria-hidden className="size-3.5 shrink-0" />
-                {gt("New thread")}
+                <T>New thread</T>
               </div>
               {/* A draft's "+" and details toggle, with nothing to act on yet. */}
               <Tooltip>

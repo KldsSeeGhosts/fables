@@ -86,7 +86,7 @@ export function UseInAnotherAppDialogHost() {
 function UseInAnotherAppDialog({ requested }: { readonly requested: EnvironmentId | null }) {
   const { environment, label } = useAccessEnvironment(requested);
   const gt = useGT();
-  const title = gt("Use T3 Code in another app (MCP) ({label})", { label: label ?? "T3 Code" });
+  const title = `${gt("Use T3 Code in another app (MCP)")} (${label ?? "T3 Code"})`;
   return (
     <Dialog open onOpenChange={(open) => (open ? undefined : close())}>
       <WizardPopup>
@@ -537,7 +537,7 @@ function GateMessage({
 }) {
   return (
     <section className="space-y-3">
-      <h3 className="text-title">{title}</h3>
+      <h3 className="text-title [--type-title:1rem]">{title}</h3>
       {lines.length > 0 ? (
         <div className="space-y-1 text-body text-muted-foreground">
           {lines.map((line) => (
@@ -815,7 +815,10 @@ function ApprovalCode({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-body">
           <T>
-            Code to approve <Var>{m(accessConfig[access].label)}</Var>
+            Code to approve{" "}
+            <span className="text-label">
+              <Var>{m(accessConfig[access].label)}</Var>
+            </span>
           </T>
         </span>
         {live ? null : (
@@ -829,11 +832,12 @@ function ApprovalCode({
           <>
             <CopyRow label={gt("Code", { $context: "approval code" })} value={code.credential} />
             <p className="text-meta text-muted-foreground">
-              <T>
-                Expires{" "}
-                <Var>{`${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`}</Var>{" "}
-                <span className="ms-2">one use</span>
-              </T>
+              {gt("Expires {time}", {
+                time: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`,
+              })}
+              <span className="ms-2">
+                <T>one use</T>
+              </span>
             </p>
           </>
         ) : (

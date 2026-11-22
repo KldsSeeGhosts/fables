@@ -547,7 +547,9 @@ export const OpenInPicker = memo(function OpenInPicker({
         </Tooltip>
         <MenuPopup align="end" className="min-w-60">
           <MenuGroup>
-            <MenuGroupLabel>Open in…</MenuGroupLabel>
+            <MenuGroupLabel>
+              <T>Open in…</T>
+            </MenuGroupLabel>
             {editorItems}
           </MenuGroup>
         </MenuPopup>

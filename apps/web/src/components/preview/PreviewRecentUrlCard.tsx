@@ -1,5 +1,5 @@
-import { History, X } from "lucide-react";
 import { useGT } from "gt-react";
+import { History, X } from "lucide-react";
 
 import { isValidHistoryTimestamp, type BrowserHistoryEntry } from "~/browserHistoryStore";
 import { RelativeTime } from "~/components/RelativeTime";

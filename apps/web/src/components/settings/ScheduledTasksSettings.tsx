@@ -163,15 +163,15 @@ import {
 
 const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
 
+// Thread ids are trimmed, so the leading space keeps this from matching one.
+const NEW_THREAD_DESTINATION = " new-thread";
+
 const SCOPE_SUMMARY_TEMPLATES: Record<string, string> = {
   "Not connected:": msg("Not connected: {environments}"),
   "Loading scheduled tasks on": msg("Loading scheduled tasks on {environments}"),
   "Could not load scheduled tasks:": msg("Could not load scheduled tasks: {environments}"),
   "No tasks on": msg("No tasks on {environments}"),
 };
-
-// Thread ids are trimmed, so the leading space keeps this from matching one.
-const NEW_THREAD_DESTINATION = " new-thread";
 
 const EMPTY_DRAFT: DraftState = {
   editingId: null,
@@ -211,7 +211,7 @@ const EMPTY_DRAFT: DraftState = {
 const TASK_TEMPLATES = [
   {
     icon: PackageIcon,
-    badge: msg("Daily at 02:00", { $context: "scheduled task template schedule" }),
+    badge: msg("Daily at 02:00"),
     title: msg("Nightly dependency check"),
     description: msg("Update outdated dependencies and open a PR if tests pass."),
     draft: {
@@ -221,14 +221,14 @@ const TASK_TEMPLATES = [
   },
   {
     icon: InboxIcon,
-    badge: msg("Weekdays at 09:30", { $context: "scheduled task template schedule" }),
+    badge: msg("Weekdays at 09:30"),
     title: msg("Triage new issues"),
     description: msg("Label and summarize issues opened since yesterday."),
     draft: { timeOfDay: "09:30" },
   },
   {
     icon: FlaskConicalIcon,
-    badge: msg("Every 6 hours", { $context: "scheduled task template schedule" }),
+    badge: msg("Every 6 hours"),
     title: msg("Watch flaky tests"),
     description: msg("Rerun the flaky suite and report tests that failed twice."),
     draft: { scheduleMode: "interval", intervalMinutes: "360" },
@@ -512,7 +512,7 @@ export function ScheduledTasksSettings(target: {
       }
     >
       <PlusIcon className="size-3" />
-      {gt("New task")}
+      <T>New task</T>
     </Button>
   );
   return (
@@ -801,7 +801,7 @@ function ScheduledTaskEnvironmentSection({
             description={tasksQuery.error}
           />
         ) : !tasks ? (
-          <SettingsLoadingRows label={gt("Loading scheduled tasks…")} count={2} />
+          <SettingsLoadingRows label={gt("Loading scheduled tasks")} count={2} />
         ) : (
           <>
             {taskId && !linkedTask ? (
@@ -847,10 +847,11 @@ function ScheduledTaskTemplates({
 }: {
   readonly onUseTemplate: (template: Partial<DraftState>) => void;
 }) {
+  const gt = useGT();
   const messages = useMessages();
   return (
     <>
-      <SettingsEmptyTiles title={messages(msg("Start from an example"))}>
+      <SettingsEmptyTiles title={gt("Start from an example")}>
         {TASK_TEMPLATES.map((template) => (
           <SettingsEmptyTile
             key={template.title}
@@ -868,36 +869,32 @@ function ScheduledTaskTemplates({
                   onUseTemplate({
                     ...template.draft,
                     title: messages(template.title),
-                    prompt: messages(template.description),
+                    prompt: template.description,
                   })
                 }
               >
-                {messages(msg("Use template"))}
+                <T>Use template</T>
                 <ArrowRightIcon />
               </Button>
             </span>
           </SettingsEmptyTile>
         ))}
       </SettingsEmptyTiles>
-      <SettingsEmptyTiles title={messages(msg("How a run works"))}>
+      <SettingsEmptyTiles title={gt("How a run works")}>
         <SettingsEmptyTile
           icon={<AlarmClockIcon />}
-          title={messages(msg("On schedule"))}
-          description={messages(msg("The task starts at its time, even if the window is closed."))}
+          title={gt("On schedule")}
+          description={gt("The task starts at its time, even if the window is closed.")}
         />
         <SettingsEmptyTile
           icon={<GitBranchIcon />}
-          title={messages(msg("In its workspace"))}
-          description={messages(
-            msg("A project checkout or a fresh worktree, with the model you chose."),
-          )}
+          title={gt("In its workspace")}
+          description={gt("A project checkout or a fresh worktree, with the model you chose.")}
         />
         <SettingsEmptyTile
           icon={<MessageSquareIcon />}
-          title={messages(msg("As a thread"))}
-          description={messages(
-            msg("It lands in the sidebar marked Scheduled, like any other run."),
-          )}
+          title={gt("As a thread")}
+          description={gt("It lands in the sidebar marked Scheduled, like any other run.")}
         />
       </SettingsEmptyTiles>
     </>
@@ -1043,7 +1040,7 @@ function ScheduledTaskRow({
               <MenuSeparator />
               <MenuItem onClick={() => void act("delete")}>
                 <Trash2Icon />
-                {gt("Delete", { $context: "verb, deletes the scheduled task" })}
+                Delete
               </MenuItem>
             </MenuPopup>
           </Menu>
@@ -1612,6 +1609,7 @@ function ScheduledTaskEditorForm({
   readonly onClose: () => void;
 }) {
   const messages = useMessages();
+  const locale = useLocale();
   const gt = useGT();
   const { scope, connectedEnvironments } = useSettingsScope();
   const [environmentId, setEnvironmentId] = useState(initialEnvironmentId);
@@ -2049,11 +2047,18 @@ function ScheduledTaskEditorForm({
                   setDraft((current) => ({ ...current, workspaceMode: value }));
               }}
             >
-              <Toggle value="root">{gt("Project checkout")}</Toggle>
-              <Toggle value="worktree">{gt("New worktree")}</Toggle>
-              <Toggle value="existing_worktree">{gt("Specific checkout")}</Toggle>
+              <Toggle value="root">
+                <T>Project checkout</T>
+              </Toggle>
+              <Toggle value="worktree">
+                <T>New worktree</T>
+              </Toggle>
+              <Toggle value="existing_worktree">
+                <T>Specific checkout</T>
+              </Toggle>
             </ToggleGroup>
           </Field>
+
           <div className="grid gap-3 sm:grid-cols-2">
             {draft.workspaceMode === "worktree" ? (
               <Field label={gt("Base branch")} htmlFor="scheduled-task-base-ref">
@@ -2078,7 +2083,7 @@ function ScheduledTaskEditorForm({
                   size="sm"
                   font="mono"
                   value={draft.existingWorktreePath}
-                  placeholder={gt("/path/to/checkout")}
+                  placeholder="/path/to/checkout"
                   onChange={(event) =>
                     setDraft((current) => ({
                       ...current,
@@ -2410,8 +2415,12 @@ function ScheduledTaskEditorForm({
                       }}
                     >
                       {WEEKDAY_ORDER.map((day) => (
-                        <Toggle key={day} value={String(day)} aria-label={weekdayShortLabel(day)}>
-                          {weekdayShortLabel(day)}
+                        <Toggle
+                          key={day}
+                          value={String(day)}
+                          aria-label={weekdayShortLabel(day, locale)}
+                        >
+                          {weekdayShortLabel(day, locale)}
                         </Toggle>
                       ))}
                     </ToggleGroup>
@@ -2460,9 +2469,7 @@ function ScheduledTaskEditorForm({
                       setDraft((current) => ({ ...current, intervalMinutes: event.target.value }))
                     }
                   />
-                  <span className="text-meta text-muted-foreground">
-                    {gt("minutes", { $context: "unit after the interval number" })}
-                  </span>
+                  <span className="text-meta text-muted-foreground">minutes</span>
                 </div>
               </Field>
             )}
@@ -2479,11 +2486,11 @@ function ScheduledTaskEditorForm({
             checked={draft.enabled}
             onCheckedChange={(enabled) => setDraft((current) => ({ ...current, enabled }))}
           />
-          {gt("Enabled")}
+          <T>Enabled</T>
         </label>
         <div className="flex gap-2">
           <DialogClose render={<Button variant="secondary" disabled={saving} />}>
-            {gt("Cancel")}
+            <T>Cancel</T>
           </DialogClose>
           <Button disabled={!canSubmit} onClick={() => void submit()}>
             {draft.editingId ? gt("Save task") : gt("Create task")}

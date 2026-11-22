@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
-import { msg, T, useGT, useMessages } from "gt-react";
 import { FileSearchIcon } from "lucide-react";
+import { msg, T, useGT, useMessages } from "gt-react";
 import { useState, type ReactNode } from "react";
 
 import type { MessageResolver } from "~/i18n/messages";
@@ -87,11 +87,7 @@ function EmptyProjectFilePicker(props: { readonly escapeLabel: string }) {
       aria-label={gt("File picker")}
       escapeLabel={props.escapeLabel}
       footerActionLabel={gt("Open file")}
-      inputProps={{
-        ...FILE_PICKER_INPUT_PROPS,
-        placeholder: gt("Search files…"),
-        disabled: true,
-      }}
+      inputProps={{ ...FILE_PICKER_INPUT_PROPS, disabled: true, placeholder: gt("Search files…") }}
       mode="none"
       testId="project-file-picker"
       value=""

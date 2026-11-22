@@ -146,10 +146,10 @@ function DialogPopup({
   placement?: "center" | "content-top";
   contentInset?: number;
 }) {
+  const gt = useGT();
   const [parts, registerPart] = useParts();
   const defaultId = useId();
   const popupId = props.id ?? defaultId;
-  const gt = useGT();
   const { popupRef, initialFocus } = useDialogActionInitialFocus();
   const popup = useRender({
     ref: popupRef,

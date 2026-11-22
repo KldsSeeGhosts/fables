@@ -205,7 +205,7 @@ function WindowBar({
           ) : null}
           {pace ? <Text variant="meta">{m(PACE[pace].label)}</Text> : null}
           {resetsAt ? (
-            <span className="text-muted-foreground">{gt("Resets {time}", { time: resetsAt })}</span>
+            <span className="text-muted-foreground">{gt("Resets {resetsAt}", { resetsAt })}</span>
           ) : null}
           {resetsIn ? <span className="text-muted-foreground">{resetsIn}</span> : null}
         </div>

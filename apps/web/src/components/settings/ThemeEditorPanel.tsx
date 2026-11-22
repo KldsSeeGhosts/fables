@@ -1,3 +1,4 @@
+import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import {
   CrosshairIcon,
   PaintbrushIcon,
@@ -11,7 +12,6 @@ import {
   Maximize2Icon,
   Minimize2Icon,
 } from "lucide-react";
-import { msg, T, useGT, useMessages } from "gt-react";
 
 import {
   useEffect,
@@ -67,6 +67,8 @@ import {
   showThemeInspectorHover,
   type ThemeElementInspection,
 } from "./themeInspector";
+import { msg, T, useGT, useMessages } from "gt-react";
+import { m, type MessageResolver } from "../../i18n/messages";
 
 const THEME_EDITOR_SIMPLE_ROLES: ReadonlyArray<ThemeColorRole> = ["canvas", "accent"];
 
@@ -282,6 +284,11 @@ function getThemeEditorColorFamily(role: ThemeColorRole): ThemeEditorColorFamily
   return THEME_EDITOR_COLOR_FAMILY_BY_ROLE.get(role) ?? null;
 }
 
+function themeEditorRoleLabel(role: ThemeColorRole, resolve: MessageResolver = m): string {
+  const family = getThemeEditorColorFamily(role);
+  return family ? resolve(family.label) : getThemeRoleLabel(role, resolve);
+}
+
 type ThemeEditorColors = ThemeColors;
 type ThemeEditorColorsByAppearance = Record<ThemeAppearance, ThemeEditorColors>;
 
@@ -372,8 +379,8 @@ export function ThemeEditorPanel({
   seedName?: string | undefined;
   restoreTheme: () => void;
 }) {
-  const gt = useGT();
   const messages = useMessages();
+  const gt = useGT();
   const isEditing = editingTheme !== null;
   const [name, setName] = useState("");
   const [activeAppearance, setActiveAppearance] = useState<ThemeAppearance>(initialAppearance);
@@ -485,16 +492,18 @@ export function ThemeEditorPanel({
 
   const appearanceLockReason = (appearance: ThemeAppearance): string | null => {
     if (editableAppearances && !editableAppearances.includes(appearance)) {
-      return gt(
-        "{label} has no {appearance} palette. Create a theme with the same name to add one.",
-        { label: `“${editingTheme?.label}”`, appearance },
-      );
+      return appearance === "light"
+        ? gt("“{label}” has no light palette. Create a theme with the same name to add one.", {
+            label: editingTheme?.label,
+          })
+        : gt("“{label}” has no dark palette. Create a theme with the same name to add one.", {
+            label: editingTheme?.label,
+          });
     }
     if (!isEditing && takenAppearances.includes(appearance)) {
-      return gt("{label} already has a {appearance} palette.", {
-        label: `“${mergeTarget?.label}”`,
-        appearance,
-      });
+      return appearance === "light"
+        ? gt("“{label}” already has a light palette.", { label: mergeTarget?.label })
+        : gt("“{label}” already has a dark palette.", { label: mergeTarget?.label });
     }
     return null;
   };
@@ -696,10 +705,7 @@ export function ThemeEditorPanel({
     };
     const showInspection = (inspection: ThemeElementInspection) => {
       hoverInspection = inspection;
-      showThemeInspectorHover(
-        inspection,
-        getThemeEditorColorFamily(inspection.role)?.label ?? getThemeRoleLabel(inspection.role),
-      );
+      showThemeInspectorHover(inspection, themeEditorRoleLabel(inspection.role));
     };
     const handlePointerOver = (event: PointerEvent) => {
       const target = event.target;
@@ -773,11 +779,7 @@ export function ThemeEditorPanel({
       hoverFrame = requestAnimationFrame(() => {
         hoverFrame = null;
         if (hoverInspection) {
-          showThemeInspectorHover(
-            hoverInspection,
-            getThemeEditorColorFamily(hoverInspection.role)?.label ??
-              getThemeRoleLabel(hoverInspection.role),
-          );
+          showThemeInspectorHover(hoverInspection, themeEditorRoleLabel(hoverInspection.role));
         }
       });
     };
@@ -839,8 +841,8 @@ export function ThemeEditorPanel({
 
     if (mergeTarget?.css && css.trim() && mergeTarget.css !== css) {
       setError(
-        gt("{label} has different custom CSS. Use the same CSS or pick another name.", {
-          label: `“${mergeTarget.label}”`,
+        gt("“{label}” has different custom CSS. Use the same CSS or pick another name.", {
+          label: mergeTarget.label,
         }),
       );
       return;
@@ -865,7 +867,15 @@ export function ThemeEditorPanel({
         const editedModes = getThemeModes(editingTheme);
         const collision = editedModes.find((mode) => takenAppearances.includes(mode));
         if (collision) {
-          setError(`“${mergeTarget.label}” already has a ${collision} palette. Pick another name.`);
+          setError(
+            collision === "light"
+              ? gt("“{label}” already has a light palette. Pick another name.", {
+                  label: mergeTarget.label,
+                })
+              : gt("“{label}” already has a dark palette. Pick another name.", {
+                  label: mergeTarget.label,
+                }),
+          );
           return;
         }
         mergedAppearance = editedModes[0] ?? null;
@@ -908,7 +918,9 @@ export function ThemeEditorPanel({
       } else if (mergeTarget) {
         if (takenAppearances.includes(activeAppearance)) {
           setError(
-            `“${mergeTarget.label}” already has light and dark palettes. Pick another name.`,
+            gt("“{label}” already has light and dark palettes. Pick another name.", {
+              label: mergeTarget.label,
+            }),
           );
           return;
         }
@@ -964,7 +976,7 @@ export function ThemeEditorPanel({
     } catch (cause) {
       setError(
         cause instanceof Error
-          ? cause.message
+          ? (errorDisplayMessage(cause, m) ?? cause.message)
           : isEditing
             ? gt("Could not save the theme.")
             : gt("Could not create the theme."),
@@ -995,7 +1007,7 @@ export function ThemeEditorPanel({
     // Use aria-disabled so locked modes remain hoverable for explanatory tooltips.
     const button = (
       <Toggle aria-disabled={lockReason !== null} value={appearance}>
-        {appearance === "light" ? <T>Light</T> : <T>Dark</T>}
+        {appearance === "light" ? gt("Light") : gt("Dark")}
       </Toggle>
     );
     if (lockReason === null) return button;
@@ -1056,6 +1068,11 @@ export function ThemeEditorPanel({
       (role) => !isThemeEditorColor(colorsByAppearance[appearance][role]),
     ).map((role) => ({ appearance, role })),
   )[0];
+  const invalidColorLabel = invalidColor
+    ? invalidColor.role === "canvas" && !isAdvanced
+      ? gt("Background")
+      : getThemeRoleLabel(invalidColor.role, messages)
+    : null;
 
   const renderSimpleColors = () => (
     <div className="flex flex-col gap-2">
@@ -1150,7 +1167,7 @@ export function ThemeEditorPanel({
       families: group.families.filter(
         (family) =>
           !query ||
-          [messages(family.label), ...family.roles.map((role) => getThemeRoleLabel(role))]
+          [messages(family.label), ...family.roles.map((role) => getThemeRoleLabel(role, messages))]
             .join(" ")
             .toLowerCase()
             .includes(query),
@@ -1279,25 +1296,19 @@ export function ThemeEditorPanel({
 
   const selectedLabel = selectedRole
     ? isAdvanced
-      ? messages(getThemeEditorColorFamily(selectedRole)?.label ?? getThemeRoleLabel(selectedRole))
-      : getThemeRoleLabel(selectedRole)
+      ? themeEditorRoleLabel(selectedRole, messages)
+      : getThemeRoleLabel(selectedRole, messages)
     : null;
-  const invalidColorName =
-    invalidColor === undefined
-      ? ""
-      : invalidColor.role === "canvas" && !isAdvanced
-        ? gt("Background")
-        : getThemeRoleLabel(invalidColor.role);
   const pillText = isInspecting ? gt("Select an element") : selectedLabel;
   const pillDetail = isInspecting ? (
     <span className="inline-flex items-center gap-1">
-      <Kbd>Esc</Kbd> <T>to cancel</T>
+      <T>
+        <Kbd>Esc</Kbd> to cancel
+      </T>
     </span>
   ) : (
     <span>
-      {gt("{count, plural, one {{count} use} other {{count} uses}}", {
-        count: usageCount ?? 0,
-      })}
+      {gt("{count, plural, one {{count} use} other {{count} uses}}", { count: usageCount ?? 0 })}
     </span>
   );
 
@@ -1356,7 +1367,7 @@ export function ThemeEditorPanel({
         >
           <PaletteIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
           <h2 className="min-w-0 flex-1 truncate text-label text-foreground">
-            {isEditing ? <T>Edit theme</T> : <T>Create theme</T>}
+            {isEditing ? gt("Edit theme") : gt("Create theme")}
           </h2>
           <Tooltip>
             <TooltipTrigger
@@ -1381,11 +1392,9 @@ export function ThemeEditorPanel({
               }
             />
             <TooltipPopup data-theme-editor-panel="">
-              {isInspecting ? (
-                <T>Cancel and clear the selection</T>
-              ) : (
-                <T>Pick a color from the app</T>
-              )}
+              {isInspecting
+                ? gt("Cancel and clear the selection")
+                : gt("Pick a color from the app")}
             </TooltipPopup>
           </Tooltip>
           <Button
@@ -1424,16 +1433,18 @@ export function ThemeEditorPanel({
               ) : invalidColor ? (
                 <p aria-live="polite" className="text-body text-destructive">
                   {invalidColor.appearance === activeAppearance
-                    ? gt("{role} isn't a valid color. Use a hex like #1A1B26.", {
-                        role: invalidColorName,
+                    ? gt("“{label}” isn’t a valid color. Use a hex like #1A1B26.", {
+                        label: invalidColorLabel,
                       })
-                    : gt(
-                        "{role} isn't a valid color in the {appearance} palette. Use a hex like #1A1B26.",
-                        {
-                          role: invalidColorName,
-                          appearance: invalidColor.appearance,
-                        },
-                      )}
+                    : invalidColor.appearance === "light"
+                      ? gt(
+                          "“{label}” isn’t a valid color in the light palette. Use a hex like #1A1B26.",
+                          { label: invalidColorLabel },
+                        )
+                      : gt(
+                          "“{label}” isn’t a valid color in the dark palette. Use a hex like #1A1B26.",
+                          { label: invalidColorLabel },
+                        )}
                 </p>
               ) : null}
               {!isAdvanced ? renderAppearanceButtons() : null}
@@ -1473,7 +1484,7 @@ export function ThemeEditorPanel({
               >
                 {isEditing ? (
                   mergeTarget ? (
-                    gt("Merge into {label}", { label: `“${mergeTarget.label}”` })
+                    gt("Merge into “{label}”", { label: mergeTarget.label })
                   ) : (
                     gt("Save changes")
                   )

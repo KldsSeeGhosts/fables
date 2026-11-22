@@ -531,7 +531,7 @@ export function LinkEnvironmentDialog({
               </p>
             ) : null}
             {through !== null ? (
-              <p className="text-caption text-muted-foreground">
+              <p className="text-meta text-muted-foreground">
                 {gt(
                   "{via} links to {target} at full access, so it gets the pairing code. No code to paste.",
                   { via: via?.label ?? "", target: through.label },
@@ -599,20 +599,20 @@ export function LinkEnvironmentDialog({
             )}
             <LinkAccessPicker value={access} onChange={setAccess} disabled={busy} />
             {machine === null || source === null ? null : backOffer.kind === "offered" ? (
-              <label className="flex cursor-pointer items-start gap-2.5 text-meta has-data-disabled:cursor-default">
+              <label className="flex cursor-pointer items-start gap-2.5 text-body has-data-disabled:cursor-default">
                 <Checkbox
                   checked={alsoLinkBack}
                   disabled={busy}
                   onCheckedChange={setAlsoLinkBack}
                 />
                 <span className="min-w-0 space-y-0.5">
-                  <span className="block text-meta text-foreground">
+                  <span className="block text-label text-foreground">
                     {gt("Also link {target} back to {source}", {
                       source: source.label,
                       target: machine.label,
                     })}
                   </span>
-                  <span className="block text-caption text-muted-foreground">
+                  <span className="block text-meta text-muted-foreground">
                     {gt("Agents on {target} can then work on {source} too.", {
                       source: source.label,
                       target: machine.label,
@@ -621,7 +621,7 @@ export function LinkEnvironmentDialog({
                 </span>
               </label>
             ) : backOffer.kind === "blocked" ? (
-              <p className="text-caption text-muted-foreground">
+              <p className="text-meta text-muted-foreground">
                 {linkBackBlockLabel(
                   backOffer.reason,
                   { source: source.label, target: machine.label },
@@ -668,7 +668,7 @@ export function useForgetPeerLink(environmentId: EnvironmentId, link: PeerLinkSu
   const forget = async () => {
     const confirmed = await (requestConfirmDialog(
       gt(
-        "Forget {label}? Agents here stop working there. Revoke \"T3 Code - …\" in {label}''s Sharing & access to end the session there too.",
+        "Forget {label}? Agents here stop working there. Revoke the T3 Code connection in {label}''s Sharing & access to end the session there too.",
         { label: link.label },
       ),
       { variant: "destructive" },

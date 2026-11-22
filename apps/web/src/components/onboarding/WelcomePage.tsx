@@ -345,22 +345,36 @@ export function WelcomePage({
 }
 
 function TelemetryNotice({ environmentId }: { readonly environmentId: EnvironmentId }) {
-  const gt = useGT();
   const messages = useMessages();
   const telemetryOff = managedTelemetryOffMessage(useManagedPolicy(environmentId), messages);
   return (
     <p className="mt-auto pt-12 text-caption leading-relaxed text-muted-foreground">
-      {telemetryOff === undefined
-        ? gt("T3 Code collects anonymous usage data to improve the app.")
-        : telemetryOff}{" "}
-      {telemetryOff === undefined ? gt("To opt out, see the") : gt("See the")}{" "}
-      <InlineButton
-        tone="muted"
-        render={<a href={PRIVACY_POLICY_URL} target="_blank" rel="noreferrer noopener" />}
-      >
-        {gt("privacy policy")}
-      </InlineButton>
-      .
+      {telemetryOff === undefined ? (
+        <T>
+          T3 Code collects anonymous usage data to improve the app. To opt out, see the{" "}
+          <InlineButton
+            tone="muted"
+            render={<a href={PRIVACY_POLICY_URL} target="_blank" rel="noreferrer noopener" />}
+          >
+            privacy policy
+          </InlineButton>
+          .
+        </T>
+      ) : (
+        <>
+          {telemetryOff}{" "}
+          <T>
+            See the{" "}
+            <InlineButton
+              tone="muted"
+              render={<a href={PRIVACY_POLICY_URL} target="_blank" rel="noreferrer noopener" />}
+            >
+              privacy policy
+            </InlineButton>
+            .
+          </T>
+        </>
+      )}
     </p>
   );
 }
@@ -1242,10 +1256,12 @@ function AgentRow({
           state === "ready" ? (
             <span className="inline-flex items-center gap-1.5 text-meta text-success-foreground">
               <CheckIcon className="size-3.5" />
-              Ready
+              <T context="agent status">Ready</T>
             </span>
           ) : state === "checking" ? (
-            <span className="text-meta text-muted-foreground">Checking…</span>
+            <span className="text-meta text-muted-foreground">
+              <T>Checking…</T>
+            </span>
           ) : (
             action
           )

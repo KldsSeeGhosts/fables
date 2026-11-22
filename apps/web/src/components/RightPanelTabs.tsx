@@ -1,11 +1,15 @@
-import { msg, T, useGT, useMessages } from "gt-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import {
+  threadRuntimeIsActive,
+  type EnvironmentThreadShell,
+} from "@t3tools/client-runtime/state/shell";
 import { useQuietThreadShell } from "~/state/entities";
 import { useLayoutPane, useLayoutPaneFocusedRef } from "../layout/layoutPaneContext";
 import { beginLayoutTabDrag } from "../layout/layoutDrag";
 import { useLayoutStore } from "../layout/layoutStore";
 import {
   finishLayoutTabRename,
+  LayoutNewTabButton,
   LayoutPaneTab,
   LayoutPaneTabStrip,
   showLayoutTabMenu,
@@ -41,12 +45,15 @@ import {
   Volume2Icon,
   VolumeOffIcon,
 } from "lucide-react";
+import { msg, T, useGT, useMessages } from "gt-react";
 
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
   type Ref,
+  useEffect,
+  useEffectEvent,
   useRef,
   useState,
 } from "react";
@@ -55,6 +62,8 @@ import { isElectron } from "~/env";
 import type { DesktopPreviewOverlay } from "~/previewStateStore";
 import type { RightPanelSurface } from "~/rightPanelStore";
 import { cn } from "~/lib/utils";
+import { resolveShortcutCommand, type ShortcutMatchContext } from "~/keybindings";
+import { isModalDialogOpen } from "~/lib/modalDialog";
 import { readLocalApi } from "~/localApi";
 import { useStableCallback } from "~/hooks/useStableCallback";
 import { Button } from "~/components/ui/button";
@@ -70,7 +79,10 @@ import { Popover, PopoverPopup, PopoverTrigger } from "~/components/ui/popover";
 import { useDeviceState } from "~/state/device";
 import type { PreviewPanelInlineSize } from "~/hooks/usePreviewPanelInlineSize";
 import { useRevealActiveTab } from "~/hooks/useRevealActiveTab";
-import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
+import {
+  COLLAPSED_SIDEBAR_INSET_EASE_CLASS,
+  COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
+} from "~/workspaceTitlebar";
 
 import { PreviewPanelShell, type PreviewPanelMode } from "./preview/PreviewPanelShell";
 import { PanelTabSlotsContext, usePanelTabActionsHost } from "./PanelTabBreadcrumb";
@@ -86,7 +98,6 @@ import { preventThumbButtonFocus, takeThumbButtonNavigation } from "./preview/th
 import { observeResize } from "~/lib/observeResize";
 import {
   previewFaviconOf,
-  sideChatTabState,
   SurfaceIcon,
   surfaceTitle,
   type PullRequestTabStatusSeed,
@@ -111,6 +122,7 @@ export interface RightPanelTabsProps {
   maximized?: boolean;
   open?: boolean;
   keybindings: ResolvedKeybindingsConfig;
+  getShortcutContext?: () => ShortcutMatchContext;
   widthStorageKey?: string;
   defaultWidth?: number;
   /**
@@ -118,6 +130,8 @@ export interface RightPanelTabsProps {
    * pull requests page's review, pen bETcv).
    */
   pane?: boolean;
+  /** The page's list is maximized away, so this pane's notch carries the layout pane's own tabs. */
+  holdsPaneTabs?: boolean;
   inlineSize?: PreviewPanelInlineSize;
   layoutControls?: ReactNode;
   surfaces: readonly RightPanelSurface[];
@@ -132,6 +146,8 @@ export interface RightPanelTabsProps {
   onActivate: (surface: RightPanelSurface) => void;
   onRenameDevice?: (surfaceId: string, title: string) => void;
   onCloseSurface: (surface: RightPanelSurface) => void;
+  /** Escape on an empty pane closes its sheet. */
+  onClose?: () => void;
   /** Moves a subagent, side chat or linked thread tab to the main screen. */
   onOpenInMainView?: (
     surface: Extract<RightPanelSurface, { kind: "thread" | "linked-thread" }>,
@@ -141,8 +157,6 @@ export interface RightPanelTabsProps {
   onCloseAllSurfaces: () => void;
   onMoveSurface?: (surfaceId: string, toIndex: number) => void;
   onCopyFilePath: (relativePath: string) => void;
-  /** Escape on the empty pane's chooser closes the pane; the sheet closes itself. */
-  onClose?: () => void;
   onDuplicateBrowser?: (surface: RightPanelSurface) => void;
   onAddBrowser: () => void;
   /** Keep separate from the DOM click handler so a MouseEvent cannot become a profile id. */
@@ -419,6 +433,25 @@ function RightPanelEmptyState(props: {
   );
 }
 
+const SIDE_CHAT_STATE_LABELS = {
+  "needs approval": msg("needs approval"),
+  "needs input": msg("needs input"),
+  running: msg("running", { $context: "side chat status" }),
+} as const;
+
+/** What a side chat tab's dot shows and its title's accessible name says. */
+function sideChatTabState(shell: EnvironmentThreadShell | null) {
+  if (shell === null) return null;
+  if (shell.hasPendingApprovals || shell.pendingSubagentRequest === "approval") {
+    return "needs approval";
+  }
+  if (shell.hasPendingUserInput || shell.pendingSubagentRequest === "user_input") {
+    return "needs input";
+  }
+  return threadRuntimeIsActive(shell.runtime) ? "running" : null;
+}
+
+// Static dots: a side chat or subagent tab can stay open for a whole run.
 function SortableTabList(props: {
   surfaces: readonly RightPanelSurface[];
   onMove: ((surfaceId: string, toIndex: number) => void) | undefined;
@@ -455,12 +488,6 @@ interface RightPanelTabHandlers {
   onFinishRename: (surfaceId: string, title: string) => void;
 }
 
-const SIDE_CHAT_STATE_LABELS = {
-  "needs approval": msg("needs approval"),
-  "needs input": msg("needs input"),
-  running: msg("running", { $context: "side chat status" }),
-} as const;
-
 const NO_LAYOUT_TAB: LayoutTab = {
   id: "panel",
   content: { kind: "launcher", id: "panel", context: null },
@@ -496,6 +523,7 @@ function RightPanelTab(
   },
 ) {
   const gt = useGT();
+  const messages = useMessages();
   const {
     dragDisabled,
     previewUrl,
@@ -535,16 +563,15 @@ function RightPanelTab(
       ? null
       : (findLayoutTab(state.layout, (tab) => tab.id === layoutTabId)?.tab ?? null),
   );
-  const messages = useMessages();
   const layoutLabel = useLayoutTabLabel(layoutTab ?? NO_LAYOUT_TAB);
   const sideChatTitle =
     sideChatShell === null
-      ? null
+      ? props.title
       : sideChatShell.lineage.sideChat === true
         ? sideChatShell.title
         : formatSubagentDisplayTitle(sideChatShell.title);
-  const title = layoutTab ? layoutLabel.title : (sideChatTitle ?? props.title);
   const sideChatState = sideChatTabState(sideChatShell);
+  const title = layoutTab ? layoutLabel.title : sideChatTitle;
   const tooltip = layoutTab
     ? layoutLabel.tooltip
     : [title, threadTitle, previewUrl, surface.kind === "file" ? surface.relativePath : null]
@@ -583,7 +610,7 @@ function RightPanelTab(
     >
       <>
         <PanelTabCloseButton
-          label={`Close ${title}`}
+          label={gt("Close {title}", { title })}
           onClick={() => onClose(surface)}
           showOnPhone={notched}
         >
@@ -613,7 +640,11 @@ function RightPanelTab(
                 <button
                   type="button"
                   className="cursor-pointer flex size-4 shrink-0 items-center justify-center rounded-kbd hover:surface-ghost-hover"
-                  aria-label={audio === "muted" ? `Unmute ${title}` : `Mute ${title}`}
+                  aria-label={
+                    audio === "muted"
+                      ? gt("Unmute {title}", { title })
+                      : gt("Mute {title}", { title })
+                  }
                   onClick={(event) => {
                     event.stopPropagation();
                     void previewBridge
@@ -722,6 +753,7 @@ const PANE_BODY_SURFACE_CLASS: Partial<Record<RightPanelSurface["kind"], string>
 
 export function RightPanelTabs(props: RightPanelTabsProps) {
   const gt = useGT();
+  const messages = useMessages();
   const focusedSurface = props.surfaces.find((surface) => surface.id === props.activeSurfaceId);
   const ownsDesktopTitleBar = isElectron && props.mode === "inline";
   const browserProfiles = useBrowserDefaults().profiles;
@@ -732,6 +764,12 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
   const { tabId: layoutPaneTabId, leadingEdge } = useLayoutPane();
   const layoutTabId = props.mode === "embedded" ? layoutPaneTabId : null;
   const siblingTabs = useLayoutPaneSiblingTabs();
+  const pageTab = useLayoutStore((state) =>
+    props.mode === "embedded" || !props.holdsPaneTabs || layoutPaneTabId === null
+      ? null
+      : (findLayoutTab(state.layout, (tab) => tab.id === layoutPaneTabId)?.tab ?? null),
+  );
+  const paneTabsId = layoutTabId ?? pageTab?.id ?? null;
   const isMobile = useMediaQuery("max-md");
   const pinnedChatTab =
     isMobile && layoutTabId !== null
@@ -752,6 +790,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
     registerActions,
   };
   const [addSurfaceMenuOpen, setAddSurfaceMenuOpen] = useState(false);
+  const addSurfaceTriggerRef = useRef<HTMLButtonElement>(null);
   const [tabScrollState, setTabScrollState] = useState({
     hasOverflow: false,
     canScrollLeft: false,
@@ -759,6 +798,41 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
   });
 
   if (props.open === false && addSurfaceMenuOpen) setAddSurfaceMenuOpen(false);
+
+  const addSurfaceMenuBlocked = () => !addSurfaceMenuOpen && isModalDialogOpen();
+  const onNewSurfaceKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    if (event.defaultPrevented || event.isComposing) return;
+    const shortcutContext = props.getShortcutContext?.();
+    if (!shortcutContext) return;
+    if (
+      resolveShortcutCommand(event, props.keybindings, {
+        context: { ...shortcutContext, rightPanelOpen: true },
+      }) !== "rightPanel.new"
+    )
+      return;
+    if (addSurfaceMenuBlocked()) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!event.repeat) {
+      addSurfaceTriggerRef.current?.focus();
+      setAddSurfaceMenuOpen(true);
+    }
+  });
+  // Forwarded from a focused browser page. Focusing the trigger here would let ChatView's
+  // window-focus handler see a plain button and refocus the composer, closing the menu.
+  const onMenuAction = useEffectEvent((action: string) => {
+    if (action === "rightPanel.new" && !addSurfaceMenuBlocked()) setAddSurfaceMenuOpen(true);
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes document keydown and the desktop menu action (forwarded from a focused browser page) for the new surface shortcut while the panel is open
+  useEffect(() => {
+    if (props.open === false) return;
+    document.addEventListener("keydown", onNewSurfaceKeyDown, true);
+    const unsubscribe = window.desktopBridge?.onMenuAction(onMenuAction);
+    return () => {
+      document.removeEventListener("keydown", onNewSurfaceKeyDown, true);
+      unsubscribe?.();
+    };
+  }, [props.open]);
 
   const updateTabScrollState = (viewport: HTMLDivElement) => {
     const hasOverflow = viewport.scrollWidth - viewport.clientWidth > TAB_SCROLL_EDGE_TOLERANCE;
@@ -793,44 +867,46 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
     surfaces: {
       browser: {
         available: props.browserAvailable,
-        disabledReason: props.browserUnavailableReason ?? SURFACE_DISABLED_REASONS.browser,
+        disabledReason:
+          props.browserUnavailableReason ?? messages(SURFACE_DISABLED_REASONS.browser),
         onClick: props.onAddBrowser,
       },
       terminal: {
         available: props.terminalAvailable,
-        disabledReason: SURFACE_DISABLED_REASONS.terminal,
+        disabledReason: messages(SURFACE_DISABLED_REASONS.terminal),
         onClick: props.onAddTerminal,
       },
       files: {
         available: props.filesAvailable,
-        disabledReason: SURFACE_DISABLED_REASONS.files,
+        disabledReason: messages(SURFACE_DISABLED_REASONS.files),
         onClick: props.onAddFiles,
       },
       diff: {
         available: props.diffAvailable,
-        disabledReason: SURFACE_DISABLED_REASONS.diff,
+        disabledReason: messages(SURFACE_DISABLED_REASONS.diff),
         onClick: props.onAddDiff,
       },
       "pull-request": {
         available: props.pullRequestAvailable,
-        disabledReason: SURFACE_DISABLED_REASONS.pullRequest,
+        disabledReason: messages(SURFACE_DISABLED_REASONS.pullRequest),
         onClick: props.onAddPullRequest,
       },
       "pull-requests": {
         available: props.pullRequestsAvailable,
-        disabledReason: SURFACE_DISABLED_REASONS.pullRequests,
+        disabledReason: messages(SURFACE_DISABLED_REASONS.pullRequests),
         onClick: props.onAddPullRequests,
       },
       device: {
         available: props.deviceAvailable,
-        disabledReason: SURFACE_DISABLED_REASONS.device,
+        disabledReason: messages(SURFACE_DISABLED_REASONS.device),
         onClick: props.onAddDevice,
       },
       ...(props.onAddSideChat
         ? {
             "side-chat": {
               available: props.sideChatAvailable === true && !props.sideChatDisabledReason,
-              disabledReason: props.sideChatDisabledReason ?? SURFACE_DISABLED_REASONS.sideChat,
+              disabledReason:
+                props.sideChatDisabledReason ?? messages(SURFACE_DISABLED_REASONS.sideChat),
               onClick: props.onAddSideChat,
             },
           }
@@ -887,10 +963,13 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       });
       items.push({
         id: "toggle-mute",
-        ...tabMuteMenuItem({
-          overlay: menuOverlay,
-          canResolveRuntimeTabId: props.previewRuntimeTabId !== undefined,
-        }),
+        ...tabMuteMenuItem(
+          {
+            overlay: menuOverlay,
+            canResolveRuntimeTabId: props.previewRuntimeTabId !== undefined,
+          },
+          messages,
+        ),
       });
     }
     items.push(
@@ -1026,10 +1105,13 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
   };
 
   const addSurfaceMenu =
-    // A notch keeps it while empty too: an empty notch reads as a broken corner.
+    paneTabsId !== null ? (
+      <LayoutNewTabButton tabId={paneTabsId} />
+    ) : // A notch keeps it while empty too: an empty notch reads as a broken corner.
     props.open !== false || props.surfaces.length > 0 || notched ? (
       <Menu open={addSurfaceMenuOpen} onOpenChange={setAddSurfaceMenuOpen}>
         <MenuTrigger
+          ref={addSurfaceTriggerRef}
           render={
             <Button
               aria-label={gt("Add panel surface")}
@@ -1064,7 +1146,12 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       workspaceLabel={
         focusedSurface
           ? gt("Workspace panel: {title}", {
-              title: surfaceTitle(focusedSurface, props.previewSessions, props.terminalLabelsById),
+              title: surfaceTitle(
+                focusedSurface,
+                props.previewSessions,
+                props.terminalLabelsById,
+                messages,
+              ),
             })
           : gt("Workspace panel")
       }
@@ -1093,6 +1180,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           notched
             ? cn(
                 "relative z-10 ps-1.5 pe-2 md:ps-0",
+                COLLAPSED_SIDEBAR_INSET_EASE_CLASS,
                 (focusedSurface && PANE_BODY_SURFACE_CLASS[focusedSurface.kind]) ?? "bg-background",
               )
             : "pl-2",
@@ -1108,7 +1196,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       >
         <PanelTabsNotch
           notched={notched}
-          secondStrip={props.mode !== "embedded"}
+          secondStrip={paneTabsId === null}
           addButton={addSurfaceMenu}
           pinnedTab={
             pinnedChatTab ? (
@@ -1118,8 +1206,8 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             ) : null
           }
         >
-          {layoutTabId !== null
-            ? siblingTabs.before
+          {paneTabsId !== null
+            ? [...siblingTabs.before, ...(pageTab ? [pageTab] : [])]
                 .filter((tab) => tab.id !== pinnedChatTab?.id)
                 .map((tab) => <LayoutPaneTab key={tab.id} tab={tab} />)
             : null}
@@ -1149,7 +1237,12 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     }
                     active={surface.id === props.activeSurfaceId}
                     pending={props.pendingSurfaceIds.has(surface.id)}
-                    title={surfaceTitle(surface, props.previewSessions, props.terminalLabelsById)}
+                    title={surfaceTitle(
+                      surface,
+                      props.previewSessions,
+                      props.terminalLabelsById,
+                      messages,
+                    )}
                     audio={tabAudioState(
                       previewTabId ? (props.desktopByTabId[previewTabId] ?? null) : null,
                     )}
@@ -1179,7 +1272,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             </SortableTabList>
             {notched ? null : addSurfaceMenu}
           </PanelTabStrip>
-          {layoutTabId !== null
+          {paneTabsId !== null
             ? siblingTabs.after
                 .filter((tab) => tab.id !== pinnedChatTab?.id)
                 .map((tab) => <LayoutPaneTab key={tab.id} tab={tab} />)

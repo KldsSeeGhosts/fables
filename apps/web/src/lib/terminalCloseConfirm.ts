@@ -29,7 +29,7 @@ export async function confirmTerminalClose(
     return await localApi.dialogs.confirm(
       labels.length === 1
         ? [
-            m(msg('Close terminal "{label}"?', { label: labels[0] })),
+            m(msg('Close "{label}"?', { label: labels[0] })),
             m(msg("This ends its shell and anything running in it, and clears its history.")),
           ].join("\n")
         : [

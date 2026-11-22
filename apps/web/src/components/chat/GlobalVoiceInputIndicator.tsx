@@ -7,7 +7,7 @@ import {
   useVoiceOwnerPresented,
 } from "../../speech/voiceInputSession";
 import { Button } from "../ui/button";
-import { ComposerSpeechRecordingPill } from "./ComposerSpeechButton";
+import { ComposerSpeechButton, SpeechRecordingElapsed } from "./ComposerSpeechButton";
 
 /**
  * Keeps the chosen destination's dictation alive across navigation and, while the draft it
@@ -37,15 +37,19 @@ export function GlobalVoiceInputIndicator({ hidden = false }: { hidden?: boolean
         >
           <span className="truncate">{target.label ?? gt("Untitled thread")}</span>
         </Button>
-        <ComposerSpeechRecordingPill
+        {state.phase === "recording" ? (
+          <SpeechRecordingElapsed recordingStartedAt={recordingStartedAt} />
+        ) : null}
+        <ComposerSpeechButton
           state={state}
-          progress={null}
-          level={level}
-          recordingStartedAt={recordingStartedAt}
           onStart={() => void session.start(target)}
-          onStop={() => void session.stop()}
-          onCancel={() => session.cancel()}
-          onSkipPostProcessing={() => session.skipPostProcessing()}
+          dictation={{
+            level,
+            recordingStartedAt,
+            onStop: () => void session.stop(),
+            onCancel: () => session.cancel(),
+            onSkipPostProcessing: () => session.skipPostProcessing(),
+          }}
         />
       </div>
     </div>

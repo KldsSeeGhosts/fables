@@ -85,16 +85,25 @@ export function useAutoBalanceUpdateBanner(
   const title = running
     ? gt("Updating")
     : failed
-      ? gt("Could not update")
+      ? gt("Could not update", { $context: "server update banner title, machine names follow" })
       : manual === machines.length
         ? gt("Manual update required")
-        : gt("Update available for");
+        : gt("Update available for", {
+            $context: "server update banner title, machine names follow",
+          });
   const listed = running
     ? machines.filter((machine) => machine.state.status === "running")
     : failed
       ? machines.filter((machine) => machine.state.status === "failed")
       : machines;
   const machineNames = listed.map((machine) => machine.serverLabel).join(", ");
+  const viewMachinesLabel = running
+    ? gt("Updating {machines}. View machines", { machines: machineNames })
+    : failed
+      ? gt("Could not update {machines}. View machines", { machines: machineNames })
+      : manual === machines.length
+        ? gt("Manual update required for {machines}. View machines", { machines: machineNames })
+        : gt("Update available for {machines}. View machines", { machines: machineNames });
   // Every machine updates from "Update all" unless some need a manual step or
   // are mid-update; then the per-machine list is one click away.
   const showMachineList =
@@ -110,8 +119,8 @@ export function useAutoBalanceUpdateBanner(
         <span className="inline-flex flex-col">
           <span>
             {gt(
-              "{count, plural, one {{count} needs a manual update} other {{count} need a manual update}}",
-              { count: manual },
+              "{manual, plural, one {{manual} needs a manual update} other {{manual} need a manual update}}",
+              { manual },
             )}
           </span>
           <span>{machineNames}</span>
@@ -125,12 +134,9 @@ export function useAutoBalanceUpdateBanner(
           <Popover>
             <PopoverTrigger
               render={<Button size="xs" variant="secondary" />}
-              aria-label={gt("{title} {machines}. View machines", {
-                title,
-                machines: machineNames,
-              })}
+              aria-label={viewMachinesLabel}
             >
-              {gt("View machines")}
+              <T>View machines</T>
             </PopoverTrigger>
             <PopoverPopup side="top" align="start" width="md">
               <div className="space-y-3 text-xs">
@@ -149,9 +155,7 @@ export function useAutoBalanceUpdateBanner(
                     ) : (
                       <div className="text-muted-foreground">
                         {machine.connected
-                          ? gt("Ready to update to {version}", {
-                              version: machine.targetVersion,
-                            })
+                          ? gt("Ready to update to {version}", { version: machine.targetVersion })
                           : gt("Reconnect this machine to update")}
                       </div>
                     )}

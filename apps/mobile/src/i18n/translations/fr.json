@@ -118,9 +118,9 @@
   "c4eb2b21c8c58a54": "Normal",
   "f42c2a36b3507308": "{label} activé",
   "77cc5f738cb7d459": "{label} désactivé",
-  "2159a4897d4a4d73": "{runtime, select, codex {Mettez à jour la CLI Codex vers la version {version} ou ultérieure pour utiliser {names}.} other {Mettez à jour {providerName} vers la version {version} ou ultérieure pour utiliser {names}.}}",
-  "a0854b0f9604fc7b": "{runtime, select, codex {{names} nécessite la CLI Codex {version} ou une version ultérieure, mais cette installation ne peut pas dépasser {latestVersion}. Installez la CLI Codex autrement ou attendez une nouvelle version.} other {{names} nécessite {providerName} {version} ou une version ultérieure, mais cette installation ne peut pas dépasser {latestVersion}. Installez {providerName} autrement ou attendez une nouvelle version.}}",
   "aba3bb73ce212f0c": "{names} nécessite {providerName} {version} ou une version plus récente, mais le cask Homebrew claude-code ne propose que {latestVersion}. Passe au cask claude-code@latest : {command}",
+  "a0854b0f9604fc7b": "{runtime, select, codex {{names} nécessite la CLI Codex {version} ou une version ultérieure, mais cette installation ne peut pas dépasser {latestVersion}. Installez la CLI Codex autrement ou attendez une nouvelle version.} other {{names} nécessite {providerName} {version} ou une version ultérieure, mais cette installation ne peut pas dépasser {latestVersion}. Installez {providerName} autrement ou attendez une nouvelle version.}}",
+  "2159a4897d4a4d73": "{runtime, select, codex {Mettez à jour la CLI Codex vers la version {version} ou ultérieure pour utiliser {names}.} other {Mettez à jour {providerName} vers la version {version} ou ultérieure pour utiliser {names}.}}",
   "d887bea446534de5": "Aucun projet de cet environnement ne peut lire {host}/{repository}.",
   "4e466d60e2f7736b": "Collez l’URL complète de la pull request ; ce fil n’a pas de dépôt auquel rattacher le numéro.",
   "302625058bacbe38": "Collez une URL complète ; l’hôte de ce projet n’a pas de format d’URL connu pour {changeRequest}.",
@@ -367,10 +367,8 @@
   "638678077ba2e050": "{count, plural, one {Tentative de revue de {count} pull request} other {Tentative de revue de {count} pull requests}}",
   "420bea546d5f8802": "Fil copié",
   "2efb2dd3bf170f67": "Échec de la copie du fil",
-  "6c03545936b55e0b": "Lien de la PR copié",
   "18786351520c79d5": "Lien {shortLabel} copié",
-  "1b88f6a5e9fdeea7": "Échec de la copie du lien de la PR",
-  "ff8d722c3ae4d1fa": "Échec de la copie du lien {shortLabel}",
+  "ff8d722c3ae4d1fa": "Impossible de copier le lien {shortLabel}",
   "b063ecd06059857f": "Compactage avant l’expiration du cache…",
   "071ab90b0e0f5e76": "Compactage…",
   "2fb1845862c9a087": "Compacté automatiquement avant l’expiration du cache",
@@ -919,6 +917,8 @@
   "eb3de8871016043c": "{count, plural, =1 {Intégration {names} utilisée} other {Intégrations {names} utilisées}}",
   "7ed2bff150997c76": "{names} utilisé",
   "7136ebec3019a2ed": "{count, plural, one {{count} autre action effectuée} other {{count} autres actions effectuées}}",
+  "ba392a6319fd43e0": "{seconds} s",
+  "7a7d66eb860047d1": "depuis {duration}",
   "551df12aeaf5ba83": "{status, select, inProgress {Association d’une pull request} completed {Pull request associée} failed {Impossible d’associer une pull request} declined {Refus d’associer une pull request} stopped {Arrêt de l’association d’une pull request} other {Association d’une pull request}}",
   "cbb12c435f68cb2f": "{status, select, inProgress {Association de la {changeRequest} #{number}} completed {{changeRequest} #{number} associée} failed {Impossible d’associer la {changeRequest} #{number}} declined {Refus d’associer la {changeRequest} #{number}} stopped {Arrêt de l’association de la {changeRequest} #{number}} other {Association de la {changeRequest} #{number}}}",
   "2f2917c28f02a36e": "{status, select, inProgress {Association de pull requests} completed {Pull requests associées} failed {Impossible d’associer des pull requests} declined {Refus d’associer des pull requests} stopped {Arrêt de l’association de pull requests} other {Association de pull requests}}",
@@ -1085,7 +1085,6 @@
   "1def3827b7403ac6": "Modèle d’e-mail",
   "9ed38458996c973a": "Modèle Slack",
   "0eb8cb19daf61b59": "{ms} ms",
-  "ba392a6319fd43e0": "{seconds} s",
   "40bc7efea699741f": "{minutes} min {seconds} s",
   "93918bb7fbf62e92": "{hours} h {minutes} min {seconds} s",
   "d3a9046187e04d81": "{hours} h {seconds} s",
@@ -1951,9 +1950,9 @@
   "a5e3ff0d1a60b766": "Impossible de configurer l’accès au relais de l’environnement : {detail}",
   "7d508fe978cb0f3b": "Éteint",
   "3ae222ec888dd171": "ID de trace :",
-  "be00d572b18076d8": "Appuyez longuement pour retirer de cet appareil",
   "46e2a0e828785d97": "Gérer {environment}",
   "5392155ec0c8b0be": "Retirer {environment} de cet appareil",
+  "be00d572b18076d8": "Appuyez longuement pour retirer de cet appareil",
   "782a518513f0777a": "Activer {environment}",
   "a35685d9ad9de747": "Chargement des environnements cloud associés.",
   "91ca3ba7b2f9d6b6": "Aucun autre environnement cloud associé.",
@@ -4093,12 +4092,12 @@
   "74fed222a72f86bc": "Photothèque",
   "f47273372ba4ed5c": "Choisir des fichiers",
   "584c3539b9524b9a": "Ajouter une pièce jointe",
-  "e2c0a080e1c2a94d": "Pull requests et conversations",
+  "e2c0a080e1c2a94d": "Pull requests et fils",
   "0e83c3bf28f8958e": "Commandes",
   "75d18dac06f4f037": "Skills",
   "d384fcf737bd3c54": "Mentions",
   "caabad88e067f9ef": "Recherche de fichiers…",
-  "cc3a99fa77770432": "Aucune pull request ni conversation correspondante.",
+  "cc3a99fa77770432": "Aucune pull request ni aucun fil correspondant.",
   "4532ebb7ce1d3257": "Aucune mention correspondante.",
   "1c2f899f6eb7aa4b": "Aucun skill trouvé.",
   "25b22a00dae2d1ec": "Aucune commande correspondante.",
@@ -4648,7 +4647,7 @@
   "70fa09bcb72a19bb": "Créer un nouveau lien",
   "adb486dabb4bfe2c": "Créer un lien",
   "c0a91279ab9b7a3e": "Envoyez-le à une personne. Il est à usage unique et expire dans 24 heures.",
-  "356ec2ce33231586": "L'invité voit le fil comme vous, y compris les sorties des commandes et le raisonnement de l'agent. Chaque message qu'il envoie attend votre intervention.",
+  "356ec2ce33231586": "L’invité voit le fil comme vous, y compris la sortie des commandes et le raisonnement de l’agent. Chaque message qu’il envoie attend votre validation.",
   "11bb30071c8d00e4": "Le lien est à usage unique et expire dans 24 heures.",
   "05ba3b5f06a7acfe": "Fermer les fichiers",
   "c7e4f052c3d6c066": "Ouvrir les fichiers",
@@ -4802,10 +4801,10 @@
   "068c8b6f9a2c1b4f": "Réponse",
   "bd39c2eea85979f7": "Demande",
   "ad78fae7d373cf21": "En cours",
-  "945e6659afae60d5": "Surveillance",
+  "14a1bb9a179e17b0": "En surveillance",
   "37ffec8201f153c1": "Échec",
   "2277fa5e14ffd3b0": "Limité",
-  "1aad28e9abe4c5eb": "Fusionné",
+  "6a8e0b2604df7fc3": "Fusionnée",
   "6583fff72f2231e8": "Terminé",
   "bb58e9ed3a2d0e54": "Clore",
   "474876386e3b8977": "Supprimer",
@@ -4995,6 +4994,42 @@
     },
     ". Ouvrez ChatGPT avec le compte que vous avez connecté."
   ],
+  "d55c0f672b8e61c2": "Hide accounts",
+  "5e55c1ee3fe9524a": "Show accounts",
+  "54423a35bd50c696": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " CPA accounts"
+  ],
+  "d9eeb418e1fb35f5": "Hide accounts",
+  "325c31ce889c6aba": "Show accounts",
+  "1c1ddbbd4567f2ab": "Disabled",
+  "8c63db26cd80bbc9": "Dashboard account",
+  "bd1485b065fd7d76": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " (estimated)"
+  ],
+  "933fa7740fe8c681": {
+    "i": 1,
+    "k": "_gt_value_1",
+    "v": "v"
+  },
+  "412e3b93454812aa": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " % restant"
+  ],
+  "76f33bfd46f00759": "Quota unavailable.",
   "a3d040c4ef4fc6e9": "En avance sur le rythme",
   "b16fdf56b16d99c9": "Dans le rythme",
   "90f977e97ae8b6c6": "En dessous du rythme",
@@ -5037,14 +5072,6 @@
     " n’a pas pu actualiser les limites. Affichage des dernières valeurs connues."
   ],
   "726ece0c7139ce8a": "Ce compte ne signale plus de limites dans les environnements sélectionnés.",
-  "412e3b93454812aa": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " % restant"
-  ],
   "82d204e1a9e7da17": [
     "Réinitialisation",
     " ",
@@ -5076,6 +5103,7 @@
   "fb7be23247bbe5ec": "en avance",
   "05c53f9e062392da": "au rythme",
   "5216fc7e035af55c": "en dessous du rythme",
+  "9da3a17289293930": "Utilisation indisponible pour cette connexion API",
   "0fd14331cbecbfc6": "Réinitialisation appliquée. Vos fenêtres ont été remises à zéro.",
   "1a92fa2f744401bc": "Rien à réinitialiser pour le moment.",
   "fff9b7f838279ee3": "Plus aucun crédit de réinitialisation.",
@@ -5090,7 +5118,6 @@
   "f8a9ced202b79202": "Masquer le libellé du compte",
   "e4b6c8eab1e48ee2": "Afficher le libellé du compte",
   "1f76510e608a9292": "Utilisation…",
-  "9da3a17289293930": "Utilisation indisponible pour cette connexion API",
   "fd121a8a212b5242": "Cette connexion ne peut pas gérer les comptes des fournisseurs.",
   "43e655305262c0c7": "Coût",
   "88151c994a23d697": "Tokens",

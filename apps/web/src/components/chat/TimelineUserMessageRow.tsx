@@ -5,6 +5,7 @@ import {
   CHAT_USER_MARKDOWN_REMARK_PLUGINS,
   remarkEnableOrderedListNumbers,
 } from "@t3tools/shared/markdownPipeline";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { type TimelineRow, TimelineRowActivityCtx, TimelineRowCtx } from "./timelineRowContext";
@@ -19,8 +20,6 @@ import {
   userMessageFileLabel,
 } from "./TimelineUserMessageRow.logic";
 import { UserMessageContextReferenceChip } from "./UserMessageContextChips";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
-import { m, type MessageResolver } from "~/i18n/messages";
 import { findRevealRef } from "./markdownFindContext";
 import {
   type EnvironmentId,
@@ -102,6 +101,7 @@ import { useMediaQuery } from "~/hooks/useMediaQuery";
 import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../timestampFormat";
 import { WorkflowOpeningBlock } from "./WorkflowOpeningBlock";
 import { useTallEnoughToFold } from "./useTallEnoughToFold";
+import type { MessageResolver } from "~/i18n/messages";
 
 // Drawn inside the media so dark screenshots keep an edge on the dark background.
 const MEDIA_EDGE_CLASS_NAME =
@@ -1417,7 +1417,9 @@ function UserMessageMeta({
       >
         <Redo2Icon aria-hidden className="size-3" />
         {m(label)}
-        {unread ? <span className="ms-1">{gt("waiting to be read")}</span> : null}
+        {unread ? (
+          <span className="ms-1">{gt("waiting to be read", { $context: "a steer message" })}</span>
+        ) : null}
       </TooltipTrigger>
       <TooltipPopup side="top">
         {unread
@@ -1432,7 +1434,7 @@ function UserMessageMeta({
 
 function userMessageIntentDescription(
   intent: "steer" | "promoted_queued_to_steer",
-  resolve: MessageResolver = m,
+  resolve: MessageResolver,
 ): string {
   return intent === "promoted_queued_to_steer"
     ? resolve(msg("Originally queued, then promoted to steer the active turn"))
@@ -1445,6 +1447,6 @@ function resolveUserMessageMeta(
   if (intent !== "steer" && intent !== "promoted_queued_to_steer") return null;
   return {
     intent,
-    label: msg("Steer", { $context: "noun, a message that steers a running turn" }),
+    label: msg("steer", { $context: "noun, a message that steers the running turn" }),
   };
 }

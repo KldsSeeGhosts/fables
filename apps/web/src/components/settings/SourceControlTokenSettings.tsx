@@ -36,14 +36,14 @@ export function SourceControlTokenSettings({
   readonly onSaved: () => void;
 }) {
   const gt = useGT();
-  const id = useId();
-  const hostInputId = `${definition.kind}-token-host-${environmentId}-${id}`;
-  const tokenInputId = `${definition.kind}-token-${environmentId}-${id}`;
   // Translates the GitHub definition's English `tokenAccess`.
   const tokenAccess =
     definition.kind === "github"
       ? gt("read and write access to pull requests and contents")
       : credentials.tokenAccess;
+  const id = useId();
+  const hostInputId = `${definition.kind}-token-host-${environmentId}-${id}`;
+  const tokenInputId = `${definition.kind}-token-${environmentId}-${id}`;
   const { tokens } = useEnvironmentSettings(environmentId, (settings) =>
     readHostCredentialSettings(settings, definition.kind),
   );

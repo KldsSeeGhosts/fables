@@ -203,8 +203,8 @@ export function AssistantCitationChip({
     onRestoreFocus?: () => void;
   };
 }) {
-  const navigate = useNavigate();
   const gt = useGT();
+  const navigate = useNavigate();
   const sourceThread = useQuietThreadShell(
     scopeThreadRef(citation.environmentId, citation.threadId),
   );

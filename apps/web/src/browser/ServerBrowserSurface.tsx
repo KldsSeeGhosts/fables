@@ -253,8 +253,6 @@ export function ServerBrowserSurface(props: {
   const probeRef = useRef<TouchProbe | null>(null);
   const lastProbeRef = useRef<{ x: number; y: number; editable: boolean; at: number } | null>(null);
   const firstFrame = useEffectEvent(() => onFirstFrame?.());
-  const noFrames = useEffectEvent(() => onNoFrames?.());
-  const [framesStalled, setFramesStalled] = useState(false);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Paint the handoff frame before the destination becomes visible while its stream reconnects.
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
@@ -277,6 +275,8 @@ export function ServerBrowserSurface(props: {
       firstFrame();
     }
   }, [environmentId, threadId, tabId, visible, pdfUrl]);
+  const noFrames = useEffectEvent(() => onNoFrames?.());
+  const [framesStalled, setFramesStalled] = useState(false);
   const viewportChanged = useEffectEvent((viewport: PreviewStreamViewport) =>
     onViewport?.(viewport),
   );

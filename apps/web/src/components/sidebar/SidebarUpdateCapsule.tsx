@@ -93,10 +93,6 @@ export function SidebarUpdateCapsule({
   const failed = machines.some(({ status }) => status === "failed");
   const settled = !hasActiveMachine && run.localVersion === null;
   const restartSeconds = restartSecondsLeft(run, now);
-  const expandedControlClassName =
-    restartSeconds === null
-      ? "@min-[5rem]/sidebar-update:block"
-      : "@min-[12rem]/sidebar-update:block";
 
   const actionLabel =
     view.action === "later" ? gt("Later") : view.action === "retry" ? gt("Retry") : gt("Dismiss");
@@ -110,10 +106,7 @@ export function SidebarUpdateCapsule({
     <Popover>
       <div
         className={cn(
-          "relative ml-auto flex h-8 w-8 shrink-0 items-center justify-end rounded-full bg-sidebar-control-surface text-sidebar-foreground transition-[width] duration-200 ease-out motion-reduce:transition-none",
-          restartSeconds === null
-            ? "@min-[5rem]/sidebar-update:w-full"
-            : "@min-[12rem]/sidebar-update:w-full",
+          "relative flex h-8 flex-1 items-center rounded-full bg-sidebar-control-surface text-sidebar-foreground",
           view.tone === "slow" && "ring-1 ring-warning/40 ring-inset",
           view.tone === "failed" && "ring-1 ring-destructive/40 ring-inset",
         )}
@@ -131,24 +124,14 @@ export function SidebarUpdateCapsule({
         />
         {/* w-0 keeps the label out of the capsule's minimum width, so a shared footer row
             can squeeze the label but never push the action past the sidebar edge. */}
-        <span
-          className={cn(
-            "pointer-events-none relative hidden w-0 min-w-0 flex-1 truncate pl-3 text-caption transition-opacity duration-200 ease-out starting:opacity-0 motion-reduce:transition-none",
-            expandedControlClassName,
-          )}
-        >
+        <span className="pointer-events-none relative w-0 min-w-0 flex-1 truncate pl-3 text-caption">
           <span className={cn(view.tone === "failed" && "text-destructive")}>{view.label}</span>
           {view.slow ? (
             <span className="text-warning tabular-nums"> {view.slow.elapsed}</span>
           ) : null}
         </span>
         {view.action !== null ? (
-          <span
-            className={cn(
-              "relative hidden shrink-0 transition-opacity duration-200 ease-out starting:opacity-0 motion-reduce:transition-none",
-              expandedControlClassName,
-            )}
-          >
+          <span className="relative shrink-0">
             <Button size="xs" variant="link" onClick={runAction}>
               {actionLabel}
             </Button>
@@ -157,10 +140,6 @@ export function SidebarUpdateCapsule({
         <span
           className={cn(
             "pointer-events-none relative grid size-8 shrink-0 place-items-center",
-            view.action !== null &&
-              (restartSeconds === null
-                ? "@min-[5rem]/sidebar-update:hidden"
-                : "@min-[12rem]/sidebar-update:hidden"),
             restartSeconds !== null &&
               "rounded-full text-caption tabular-nums ring-1 ring-current/22 ring-inset",
           )}
@@ -210,16 +189,20 @@ export function SidebarUpdateCapsule({
               ) : null}
             </div>
           ))}
-          {settled && failed ? (
+          {view.action !== null ? (
             <div className="mt-1 flex justify-end gap-1">
-              {view.action === "retry" ? (
-                <Button size="xs" variant="secondary" onClick={runAction}>
-                  <T>Retry</T>
+              <Button
+                size="xs"
+                variant={view.action === "retry" ? "secondary" : "ghost"}
+                onClick={runAction}
+              >
+                {actionLabel}
+              </Button>
+              {settled && failed && view.action !== "dismiss" ? (
+                <Button size="xs" variant="ghost" onClick={dismissSettledUpdateRunMachines}>
+                  <T>Dismiss</T>
                 </Button>
               ) : null}
-              <Button size="xs" variant="ghost" onClick={dismissSettledUpdateRunMachines}>
-                <T>Dismiss</T>
-              </Button>
             </div>
           ) : null}
         </div>

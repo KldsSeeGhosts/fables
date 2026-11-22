@@ -104,7 +104,8 @@ function acquireDiffWorkerPool(poolSize: number) {
 
 // Plain-text views do not queue a highlight task that could retry a blank first render.
 function DiffWorkerReady({ failed, children }: { failed: boolean; children?: ReactNode }) {
-  const ready = useDiffWorkerPoolReady(useWorkerPool(), failed);
+  const workerPool = useWorkerPool();
+  const ready = useDiffWorkerPoolReady(workerPool, failed);
   return ready ? (
     children
   ) : (
@@ -117,14 +118,11 @@ function DiffWorkerReady({ failed, children }: { failed: boolean; children?: Rea
   );
 }
 
-export function useDiffWorkerPoolReady(
-  workerPool: WorkerPoolManager | null | undefined,
-  failed = false,
-) {
+export function useDiffWorkerPoolReady(workerPool: WorkerPoolManager | undefined, failed = false) {
   const [readyPool, setReadyPool] = useState<WorkerPoolManager>();
   const ready = workerPool
     ? readyPool === workerPool || workerPool.isInitialized() || !workerPool.isWorkingPool()
-    : failed || workerPool === null || typeof window === "undefined";
+    : failed || typeof window === "undefined";
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- initializes the diff worker pool and marks it ready when its async startup settles
   useEffect(() => {

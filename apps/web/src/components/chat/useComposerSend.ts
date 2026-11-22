@@ -113,6 +113,7 @@ import {
   referencedThreadContexts,
 } from "./composerSend.logic";
 import { useMultipleModelSend } from "./useMultipleModelSend";
+import { useLayoutStore } from "../../layout/layoutStore";
 import type { SideChatMessage } from "./useSideChat";
 import { type ComposerDispatchMode } from "@t3tools/client-runtime/state/composer-dispatch";
 import {
@@ -297,6 +298,7 @@ interface ComposerSendInput {
   }) => Promise<AtomCommandResult<void, unknown>>;
   /** Links a checked-out pull request to its thread; best effort, failures only logged. */
   readonly linkCheckoutPullRequest: (threadRef: ScopedThreadRef, url: string) => void;
+  readonly layoutTabId: string | null;
 }
 
 /**
@@ -382,6 +384,7 @@ export function useComposerSend(input: ComposerSendInput) {
     handleNewThreadInActiveProject,
     persistThreadSettingsForNextTurn,
     linkCheckoutPullRequest,
+    layoutTabId,
   } = input;
   const linkedEnvironments = useLinkedEnvironments(environmentId);
   const handleNewThread = useNewThreadHandler();
@@ -1101,6 +1104,7 @@ export function useComposerSend(input: ComposerSendInput) {
       setThreadError(threadIdForSend, attachmentCapabilitiesBeforeUpload.fileBlockReason);
       return;
     }
+    if (layoutTabId !== null) useLayoutStore.getState().keepTab(layoutTabId);
     const turnUsesAttachmentUploads =
       composerFilesSnapshot.length > 0
         ? attachmentCapabilitiesBeforeUpload.supportsAttachmentUploads
@@ -1319,8 +1323,8 @@ export function useComposerSend(input: ComposerSendInput) {
       );
       toastManager.add({
         type: "info",
-        title: "Your message changed, so it wasn't sent.",
-        description: "Send again when it's ready.",
+        title: m(msg("Your message changed, so it wasn't sent.")),
+        description: m(msg("Send again when it's ready.")),
       });
       return;
     }
@@ -1840,7 +1844,10 @@ export function useComposerSend(input: ComposerSendInput) {
     );
     if (!isAtomCommandInterrupted(startResult)) {
       const error = squashAtomCommandFailure(startResult);
-      setThreadError(threadIdForSend, error instanceof Error ? error.message : "Retry failed.");
+      setThreadError(
+        threadIdForSend,
+        error instanceof Error ? error.message : m(msg("Retry failed.")),
+      );
     }
   }
 

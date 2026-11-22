@@ -73,8 +73,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { createPortal, flushSync } from "react-dom";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { createPortal, flushSync } from "react-dom";
 import {
   clampCollapsedComposerCursor,
   type ComposerTrigger,
@@ -156,7 +156,6 @@ import {
   useSpeechUnavailableReason,
 } from "../../speech/useEnvironmentSpeechInput";
 import { ComposerSpeechButton } from "./ComposerSpeechButton";
-import { VoiceInputErrorPill } from "./VoiceInputErrorPill";
 import { COMPOSER_PILL_SLOT_BUTTON_CLASS_NAME } from "./ComposerPrimaryActions";
 import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
 import { shortcutLabelForCommand, type ShortcutMatchContext } from "../../keybindings";
@@ -996,10 +995,13 @@ export function ChatComposer(props: ChatComposerProps) {
     m,
   );
   // Over-limit prompts show their line as soon as they overflow, and send stays off until they fit.
-  const promptLengthMessage = getComposerSubmissionValidationMessage({
-    prompt,
-    submissionTarget: activePendingProgress ? "pending-user-input" : "provider-turn",
-  });
+  const promptLengthMessage = getComposerSubmissionValidationMessage(
+    {
+      prompt,
+      submissionTarget: activePendingProgress ? "pending-user-input" : "provider-turn",
+    },
+    m,
+  );
   const [promptLengthDismissed, setPromptLengthDismissed] = useState(false);
   if (promptLengthDismissed && promptLengthMessage === null) setPromptLengthDismissed(false);
   const sendDisabledReason =
@@ -1508,11 +1510,14 @@ export function ChatComposer(props: ChatComposerProps) {
   }
 
   if (composerSubmissionError !== null) {
-    const nextError = getComposerSubmissionValidationMessage({
-      prompt,
-      isSendBusy,
-      submissionTarget: activePendingProgress ? "pending-user-input" : "provider-turn",
-    });
+    const nextError = getComposerSubmissionValidationMessage(
+      {
+        prompt,
+        isSendBusy,
+        submissionTarget: activePendingProgress ? "pending-user-input" : "provider-turn",
+      },
+      m,
+    );
     if (nextError !== composerSubmissionError) {
       setComposerSubmissionError(nextError);
     }
@@ -2781,19 +2786,22 @@ export function ChatComposer(props: ChatComposerProps) {
                 }),
           },
         ];
-  const promptLengthItem = composerPromptLengthBannerItem({
-    message:
-      providerInputSubmissionError ??
-      composerSubmissionError ??
-      (promptLengthDismissed ? null : promptLengthMessage),
-    prompt,
-    onStash: () => void stashCurrentPromptStable(),
-    onDismiss: () => {
-      setProviderInputSubmissionError(null);
-      setComposerSubmissionError(null);
-      setPromptLengthDismissed(true);
+  const promptLengthItem = composerPromptLengthBannerItem(
+    {
+      message:
+        providerInputSubmissionError ??
+        composerSubmissionError ??
+        (promptLengthDismissed ? null : promptLengthMessage),
+      prompt,
+      onStash: () => void stashCurrentPromptStable(),
+      onDismiss: () => {
+        setProviderInputSubmissionError(null);
+        setComposerSubmissionError(null);
+        setPromptLengthDismissed(true);
+      },
     },
-  });
+    m,
+  );
   const bannerStackItems = [...(promptLengthItem ? [promptLengthItem] : []), ...bannerItems];
   const shelfItems =
     pendingUserInputs.length > 0
@@ -3354,7 +3362,7 @@ export function ChatComposer(props: ChatComposerProps) {
           composerBlurFrameRef.current = null;
         }
         flushSync(() => setIsComposerFocused(true));
-        const shell = composerFormRef.current?.closest('[data-slot="composer-shell"]');
+        const shell = composerFormRef.current?.closest('[data-slot="composer-host"]');
         const trigger = Array.from(
           shell?.querySelectorAll<HTMLButtonElement>(
             `button[data-composer-shortcut~="${command}"]:not(:disabled)`,
@@ -3477,11 +3485,14 @@ export function ChatComposer(props: ChatComposerProps) {
       }),
       setMultipleModelSelections,
       validateProviderInput: (providerInput: string) => {
-        const validationMessage = getComposerSubmissionValidationMessage({
-          prompt: promptRef.current,
-          providerInput,
-          submissionTarget: "provider-turn",
-        });
+        const validationMessage = getComposerSubmissionValidationMessage(
+          {
+            prompt: promptRef.current,
+            providerInput,
+            submissionTarget: "provider-turn",
+          },
+          m,
+        );
         providerInputRejectedRef.current = validationMessage !== null;
         setProviderInputSubmissionError(validationMessage);
         return validationMessage === null;
@@ -3696,7 +3707,7 @@ export function ChatComposer(props: ChatComposerProps) {
         if (isInsideRestingComposerControlScope(event.target)) return;
         composerMentionDragHandlers.onDrop(event);
       }}
-      className="mx-auto w-full min-w-0 max-w-(--chat-content-max-width)"
+      className="mx-auto w-full min-w-0 max-w-(--chat-content-max-width) rounded-[inherit]"
       data-chat-composer-form="true"
       {...threadContextDropTargetProps()}
     >
@@ -3727,7 +3738,7 @@ export function ChatComposer(props: ChatComposerProps) {
       <ComposerBanner.Dock>
         <ComposerBannerStack items={shelfItems} />
       </ComposerBanner.Dock>
-      <div className="relative">
+      <div className="relative rounded-[inherit]">
         <ComposerSurface.Main
           ref={composerMainSurfaceRef}
           className={composerProviderState.composerFrameClassName}
@@ -3755,7 +3766,7 @@ export function ChatComposer(props: ChatComposerProps) {
                   className="relative inline-flex h-7.5 items-center gap-2 rounded-full bg-background/60 px-3 text-foreground text-label"
                 >
                   <PaperclipIcon className="size-3.5" aria-hidden="true" />
-                  Drop files to attach
+                  <T>Drop files to attach</T>
                 </span>
               </div>
             ) : null}
@@ -3804,29 +3815,18 @@ export function ChatComposer(props: ChatComposerProps) {
                       <button
                         type="button"
                         className={COMPOSER_PILL_SLOT_BUTTON_CLASS_NAME}
-                        hidden={voiceInputActive && !canInterrupt}
-                        disabled={
-                          voiceInputActive ? !canInterrupt : collapsedComposerPrimaryActionDisabled
-                        }
-                        aria-label={
-                          voiceInputActive ? "Stop generation" : collapsedComposerPrimaryActionLabel
-                        }
+                        disabled={collapsedComposerPrimaryActionDisabled}
+                        aria-label={collapsedComposerPrimaryActionLabel}
                         onPointerDown={(event) => event.preventDefault()}
                         onClick={(event) => {
                           event.stopPropagation();
-                          if (voiceInputActive) onInterrupt();
-                          else if (showResumeAction) onResume();
+                          if (showResumeAction) onResume();
                           else if (props.resumeCompactionTokens !== null && !props.keepFullHistory)
                             expandMobileComposer();
                           else submitComposer();
                         }}
                       >
-                        {voiceInputActive ? (
-                          <span
-                            className="size-2.5 rounded-xs bg-error-foreground"
-                            aria-hidden="true"
-                          />
-                        ) : showResumeAction ? (
+                        {showResumeAction ? (
                           <PlayIcon className="size-4 fill-current" aria-hidden="true" />
                         ) : (
                           <svg
@@ -4022,7 +4022,7 @@ export function ChatComposer(props: ChatComposerProps) {
                       !projectSelectionRequired &&
                       !showProviderUnavailable &&
                       !environmentDisconnected
-                        ? "Ask anything…"
+                        ? gt("Ask anything…")
                         : undefined
                     }
                     disabled={
@@ -4041,7 +4041,6 @@ export function ChatComposer(props: ChatComposerProps) {
               >
                 {composerAttachButton}
                 <ComposerFooterPrimaryActions
-                  key={`${environmentId}:${activeThreadId ?? "new"}`}
                   renderSpeechAction={renderSpeechAction}
                   compact={isComposerPrimaryActionsCompact}
                   canOperateThread={canOperateThread}
@@ -4071,7 +4070,7 @@ export function ChatComposer(props: ChatComposerProps) {
                   sendDisabledReason={primaryActionSendDisabledReason}
                   isEnvironmentUnavailable={primaryActionEnvironmentUnavailable}
                   isPreparingWorktree={isPreparingWorktree}
-                  hasSendableContent={composerSendState.hasSendableContent || voiceInputActive}
+                  hasSendableContent={composerSendState.hasSendableContent}
                   canResume={showResumeAction}
                   preserveComposerFocusOnPointerDown={isMobileViewport}
                   isEditingQueuedMessage={isEditingQueuedMessage}
@@ -4083,16 +4082,6 @@ export function ChatComposer(props: ChatComposerProps) {
                   keepFullHistory={props.keepFullHistory}
                   onToggleKeepFullHistory={props.onToggleKeepFullHistory}
                 >
-                  {speechInput.available && speechInput.state.phase === "error" ? (
-                    <VoiceInputErrorPill
-                      error={speechInput.state.error}
-                      errorAction={speechInput.state.errorAction}
-                      disabled={dictationDisabled}
-                      cancelShortcutLabel="Esc"
-                      onRetry={() => void speechInput.start()}
-                      onDismiss={() => speechInput.cancel()}
-                    />
-                  ) : null}
                   <VoiceInputSetup
                     environmentId={speechInput.transcriptionEnvironmentId}
                     open={speechInput.setup.open}

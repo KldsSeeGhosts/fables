@@ -18,7 +18,7 @@ import {
   UserPlusIcon,
   XIcon,
 } from "lucide-react";
-import { T, useGT, useMessages } from "gt-react";
+import { Branch, T, useGT, useMessages, Var } from "gt-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
@@ -138,6 +138,7 @@ function CommitChecksPill({ checks }: { checks: NonNullable<PullRequestCommit["c
         {checks.passed}/{checks.total}
       </span>
       <span className="sr-only">
+        {" "}
         {checks.state === "passing"
           ? gt("checks passed")
           : checks.state === "failing"
@@ -157,7 +158,7 @@ function ReviewRailBody({
   defaultOpen,
   open,
   onOpenChange,
-  label,
+  subject = "review",
 }: {
   body: string;
   cwd: string;
@@ -166,25 +167,22 @@ function ReviewRailBody({
   defaultOpen: boolean;
   open: boolean | undefined;
   onOpenChange: (open: boolean) => void;
-  label?: string;
+  subject?: "review" | "description";
 }) {
   const gt = useGT();
-  const sectionLabel = label ?? gt("review text");
   const expanded = open ?? defaultOpen;
   return (
     <Collapsible open={expanded} onOpenChange={onOpenChange}>
       <CollapsibleTrigger
         variant="muted"
         aria-label={
-          expanded
-            ? gt("Hide {section}", {
-                section: sectionLabel,
-                $context: "collapses a long review section",
-              })
-            : gt("Show {section}", {
-                section: sectionLabel,
-                $context: "expands a long review section",
-              })
+          subject === "description"
+            ? expanded
+              ? gt("Hide description")
+              : gt("Show description")
+            : expanded
+              ? gt("Hide review text")
+              : gt("Show review text")
         }
         className="w-full min-w-0 gap-1 text-left"
       >
@@ -258,19 +256,23 @@ function RailEntry({
                   defaultOpen={defaultOpen}
                   open={open}
                   onOpenChange={onOpenChange}
-                  label={gt("description", { $context: "the request's description text" })}
+                  subject="description"
                 />
               ) : null
             ) : null
           }
         >
-          <Actor actor={entry.actor} />
-          <Verb>
-            {gt(
-              "{term, select, mr {opened this merge request} cr {opened this change request} other {opened this pull request}}",
-              { term },
-            )}
-          </Verb>
+          <T>
+            <Var>
+              <Actor actor={entry.actor} />
+            </Var>{" "}
+            <Verb>
+              opened this{" "}
+              <Branch branch={term} mr="merge request" cr="change request">
+                pull request
+              </Branch>
+            </Verb>
+          </T>
         </RailRow>
       );
     case "merged":
@@ -282,7 +284,7 @@ function RailEntry({
         >
           <span className="font-medium text-foreground">
             {gt(
-              "{term, select, mr {Merge request merged} cr {Change request merged} other {Pull request merged}}",
+              "{term, select, mr {Merge request} cr {Change request} other {Pull request}} merged",
               { term },
             )}
           </span>
@@ -297,7 +299,7 @@ function RailEntry({
         >
           <span className="font-medium text-foreground">
             {gt(
-              "{term, select, mr {Merge request closed} cr {Change request closed} other {Pull request closed}}",
+              "{term, select, mr {Merge request} cr {Change request} other {Pull request}} closed",
               { term },
             )}
           </span>
@@ -313,7 +315,7 @@ function RailEntry({
           </RailMarker>
           <button
             type="button"
-            aria-label={gt("View commit {oid}", { oid: commit.oid })}
+            aria-label={gt("View commit {sha}", { sha: commit.oid })}
             onClick={() => onOpenCommit(commit.oid)}
             className="group flex min-h-6 w-full min-w-0 cursor-pointer items-center gap-2 rounded-row text-left text-body outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
@@ -340,15 +342,31 @@ function RailEntry({
     case "review-request":
       return (
         <RailRow at={entry.at} marker={<UserPlusIcon className="size-3.5" />}>
-          <Actor actor={entry.actor} />
-          <Verb>
-            {entry.again
-              ? gt("re-requested review from")
-              : gt("requested review from", { $context: "the actor asked for a review" })}
-          </Verb>
-          {entry.reviewers.map((reviewer) => (
-            <Actor key={reviewer.login} actor={reviewer} />
-          ))}
+          {entry.again ? (
+            <T>
+              <Var>
+                <Actor actor={entry.actor} />
+              </Var>{" "}
+              <Verb>re-requested review from</Verb>{" "}
+              <Var>
+                {entry.reviewers.map((reviewer) => (
+                  <Actor key={reviewer.login} actor={reviewer} />
+                ))}
+              </Var>
+            </T>
+          ) : (
+            <T>
+              <Var>
+                <Actor actor={entry.actor} />
+              </Var>{" "}
+              <Verb>requested review from</Verb>{" "}
+              <Var>
+                {entry.reviewers.map((reviewer) => (
+                  <Actor key={reviewer.login} actor={reviewer} />
+                ))}
+              </Var>
+            </T>
+          )}
         </RailRow>
       );
     case "review": {
@@ -372,9 +390,7 @@ function RailEntry({
                 <TooltipTrigger render={<span className="text-muted-foreground" />}>
                   {verb}
                   {stale ? (
-                    <span className="sr-only">
-                      , <T>before the latest commits</T>
-                    </span>
+                    <span className="sr-only">{gt(", before the latest commits")}</span>
                   ) : null}
                 </TooltipTrigger>
                 <TooltipPopup>
@@ -405,9 +421,7 @@ function RailEntry({
               <Button
                 size="icon-xs"
                 variant="ghost-muted"
-                aria-label={gt("Open {review} on host", {
-                  review: gt("review", { $context: "noun, a code review" }),
-                })}
+                aria-label={gt("Open review on host")}
                 onClick={() => void readLocalApi()?.shell.openExternal(reviewUrl)}
               >
                 <ExternalLinkIcon className="size-3" />
@@ -451,12 +465,12 @@ function RailEntry({
                 <span className="flex-1" />
                 {unresolved > 0 ? (
                   <Badge variant="warning">
-                    <T>Unresolved</T>
+                    <T context="review thread state">Unresolved</T>
                   </Badge>
                 ) : (
                   <span className="inline-flex shrink-0 items-center gap-1">
                     <CheckIcon aria-hidden className="size-3.5 text-success-foreground" />
-                    <T>Resolved</T>
+                    <T context="review thread state">Resolved</T>
                   </span>
                 )}
                 <ChevronRightIcon aria-hidden className="size-3.5 shrink-0" />
@@ -519,11 +533,7 @@ function NewSinceDivider({ lastSeen }: { lastSeen: number }) {
       : "";
   return (
     <li
-      aria-label={
-        relativeLabel
-          ? gt("New since you looked {time}", { time: relativeLabel })
-          : gt("New since you looked")
-      }
+      aria-label={gt("New since you looked {time}", { time: relativeLabel })}
       className="relative z-10 flex items-center gap-2 pb-3.5"
     >
       <span aria-hidden className="h-px flex-1 bg-info/40" />
@@ -640,8 +650,8 @@ export function PullRequestTimelineTab({
       estimatedItemSize={140}
       tabIndex={-1}
       data-workspace-focus-default
-      className="scrollbar-gutter-both h-full px-4 outline-none"
-      contentContainerClassName="relative mx-auto w-full max-w-3xl min-w-0"
+      className="h-full px-4"
+      contentContainerClassName="relative min-w-0"
       ListHeaderComponent={<div className="h-0.75" />}
       ListFooterComponent={<div className="h-3" />}
     />

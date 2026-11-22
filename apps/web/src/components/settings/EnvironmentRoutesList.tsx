@@ -186,7 +186,7 @@ function SortableRouteRow({
             </span>
           ) : null}
           {refused ? (
-            <span className="rounded-sm bg-destructive/8 px-1 text-micro text-destructive-foreground">
+            <span className="rounded-sm bg-destructive/8 px-1 text-caption text-destructive-foreground">
               <T>Sign-in refused</T>
             </span>
           ) : null}
@@ -204,7 +204,7 @@ function SortableRouteRow({
           </Tooltip>
         ) : null}
         {refused && address !== null ? (
-          <p className="text-micro text-muted-foreground">
+          <p className="text-meta text-muted-foreground">
             <T>The host refused this device's sign-in. Pair this address again with Add route.</T>
           </p>
         ) : null}

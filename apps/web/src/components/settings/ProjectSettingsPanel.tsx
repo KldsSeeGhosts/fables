@@ -1,4 +1,6 @@
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { useComposerMenuState } from "../chat/useComposerMenuState";
+import { m as resolveMessage } from "../../i18n/messages";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
 import { useEnvironmentsWithScope } from "../../state/session";
@@ -21,8 +23,8 @@ import { useLayoutPageLocation } from "../../layout/pageNavigation";
 import { useLayoutPane } from "../../layout/layoutPaneContext";
 import { closeLayoutProject } from "../../layout/layoutActions";
 import { SmileIcon, Trash2Icon, UploadIcon } from "lucide-react";
-import { T, useGT, useMessages } from "gt-react";
 import { lazy, Suspense, useRef, useState, type ReactNode } from "react";
+import { T, useGT, useMessages } from "gt-react";
 
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { releaseProjectDraftUploads } from "../../lib/composerDraftUploads";
@@ -90,7 +92,7 @@ function isGroupingSelection(value: unknown): value is SidebarProjectGroupingMod
 // Grouping overrides are client settings, so they stay editable without project write access.
 function CheckoutGroupingSelect({ member }: { member: SidebarProjectGroupMember }) {
   const gt = useGT();
-  const messages = useMessages();
+  const m = useMessages();
   const overrideKey = derivePhysicalProjectKey(member);
   const globalMode = useClientSettings((settings) => settings.sidebarProjectGroupingMode);
   const selection = useClientSettings(
@@ -109,12 +111,15 @@ function CheckoutGroupingSelect({ member }: { member: SidebarProjectGroupMember 
             value,
           ),
         })).catch((error) => {
-          console.error(gt("Failed to save checkout grouping rule"), error);
+          console.error("Failed to save checkout grouping rule", error);
           toastManager.add(
             stackedThreadToast({
               type: "error",
               title: gt("Could not save grouping rule"),
-              description: error instanceof Error ? error.message : gt("An error occurred."),
+              description:
+                error instanceof Error
+                  ? (thrownErrorMessage(error, resolveMessage) ?? error.message)
+                  : gt("An error occurred."),
             }),
           );
         });
@@ -125,8 +130,8 @@ function CheckoutGroupingSelect({ member }: { member: SidebarProjectGroupMember 
         size="sm"
         title={
           selection === "inherit"
-            ? gt("Default ({mode})", { mode: messages(PROJECT_GROUPING_MODE_LABELS[globalMode]) })
-            : messages(PROJECT_GROUPING_MODE_LABELS[selection])
+            ? gt("Default ({mode})", { mode: m(PROJECT_GROUPING_MODE_LABELS[globalMode]) })
+            : m(PROJECT_GROUPING_MODE_LABELS[selection])
         }
         aria-label={gt("Grouping rule for {path} on {environment}", {
           path: member.workspaceRoot,
@@ -137,21 +142,19 @@ function CheckoutGroupingSelect({ member }: { member: SidebarProjectGroupMember 
       >
         <SelectValue>
           {selection === "inherit"
-            ? gt("Default", { $context: "inherits the global grouping rule" })
-            : messages(PROJECT_GROUPING_MODE_LABELS[selection])}
+            ? gt("Default", { $context: "grouping rule follows the global default" })
+            : m(PROJECT_GROUPING_MODE_LABELS[selection])}
         </SelectValue>
       </SelectTrigger>
       <SelectPopup align="end" alignItemWithTrigger={false}>
         <SelectItem value="inherit">
           <T>Use global default</T>
         </SelectItem>
-        <SelectItem value="repository">
-          {messages(PROJECT_GROUPING_MODE_LABELS.repository)}
-        </SelectItem>
+        <SelectItem value="repository">{m(PROJECT_GROUPING_MODE_LABELS.repository)}</SelectItem>
         <SelectItem value="repository_path">
-          {messages(PROJECT_GROUPING_MODE_LABELS.repository_path)}
+          {m(PROJECT_GROUPING_MODE_LABELS.repository_path)}
         </SelectItem>
-        <SelectItem value="separate">{messages(PROJECT_GROUPING_MODE_LABELS.separate)}</SelectItem>
+        <SelectItem value="separate">{m(PROJECT_GROUPING_MODE_LABELS.separate)}</SelectItem>
       </SelectPopup>
     </Select>
   );
@@ -368,14 +371,17 @@ function ProjectDetail({
     const api = readLocalApi();
     if (!api) return;
 
-    const { projectThreads, isWholeGroup, confirmationMessage } = planProjectRemoval({
-      members,
-      groupMemberCount: group.memberProjects.length,
-      hasOtherMembers,
-      displayName: group.displayName,
-      threads,
-      unloadedThreadCount: readUnloadedThreadCount(members, threads),
-    });
+    const { projectThreads, isWholeGroup, confirmationMessage } = planProjectRemoval(
+      {
+        members,
+        groupMemberCount: group.memberProjects.length,
+        hasOtherMembers,
+        displayName: group.displayName,
+        threads,
+        unloadedThreadCount: readUnloadedThreadCount(members, threads),
+      },
+      resolveMessage,
+    );
     const confirmed = await settlePromise(() =>
       api.dialogs.confirm(confirmationMessage, { variant: "destructive" }),
     );
@@ -406,7 +412,7 @@ function ProjectDetail({
         () => undefined,
       );
       if (result._tag === "Failure") {
-        reportProjectFailure(gt("Failed to remove {project}", { project: member.title }), result);
+        reportProjectFailure(gt('Failed to remove "{title}"', { title: member.title }), result);
         return;
       }
       const projectRef = scopeProjectRef(member.environmentId, member.id);
@@ -491,7 +497,11 @@ function ProjectDetail({
     const online = environment?.connection.phase === "connected";
     return (
       <Badge variant={isPrimary ? "secondary" : online ? "success" : "unavailable"}>
-        {isPrimary ? <T>This device</T> : online ? <T>Online</T> : <T>Offline</T>}
+        {isPrimary
+          ? gt("This device")
+          : online
+            ? gt("Online", { $context: "connection status" })
+            : gt("Offline", { $context: "connection status" })}
       </Badge>
     );
   };
@@ -666,7 +676,7 @@ function ProjectDetail({
               ) : projectIcon?.kind === "emoji" ? (
                 projectIcon.emoji
               ) : (
-                (faviconPath ?? gt("Automatic", { $context: "automatic project icon" }))
+                (faviconPath ?? gt("Automatic"))
               )
             }
             resetAction={
@@ -690,7 +700,7 @@ function ProjectDetail({
                   onClick={() => setIconPickerOpen(true)}
                 >
                   <SmileIcon />
-                  <T>Choose</T>
+                  {gt("Choose", { $context: "verb, opens the project icon picker" })}
                 </Button>
                 <Button
                   size="sm"
@@ -701,7 +711,7 @@ function ProjectDetail({
                   onClick={() => setFaviconPickerOpen(true)}
                 >
                   <UploadIcon />
-                  <T>Upload</T>
+                  {gt("Upload", { $context: "verb, uploads a project icon file" })}
                 </Button>
               </div>
             }
@@ -751,7 +761,9 @@ function ProjectDetail({
                     )
                   }
                 >
-                  {group.archived ? <T>Unarchive</T> : <T>Archive</T>}
+                  {group.archived
+                    ? gt("Unarchive")
+                    : gt("Archive", { $context: "verb, archives a project" })}
                 </Button>
               }
             />
@@ -782,7 +794,7 @@ function ProjectDetail({
                 onClick={() => void removeMembers(group.memberProjects)}
               >
                 <Trash2Icon />
-                {hasOtherMembers ? <T>Remove checkout</T> : <T>Remove project</T>}
+                {hasOtherMembers ? gt("Remove checkout") : gt("Remove project")}
               </Button>
             }
           />

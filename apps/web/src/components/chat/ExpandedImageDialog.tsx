@@ -1,7 +1,6 @@
 import { memo, useRef, useState, type ReactNode, type KeyboardEvent } from "react";
-import { flushSync } from "react-dom";
-import { useGT } from "gt-react";
 import { cn } from "~/lib/utils";
+import { useGT, useMessages } from "gt-react";
 import {
   ArrowLeftIcon,
   CopyIcon,
@@ -15,6 +14,7 @@ import {
   Text as TextGlyphIcon,
 } from "lucide-react";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
+import { flushSync } from "react-dom";
 import { Button } from "../ui/button";
 
 import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
@@ -163,6 +163,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
   onClose,
 }: ExpandedImageDialogProps) {
   const gt = useGT();
+  const messages = useMessages();
   const [imageOffset, setImageOffset] = useState(0);
   const [failedImageSrc, setFailedImageSrc] = useState<string | null>(null);
   const [accessibilityDetailsSrc, setAccessibilityDetailsSrc] = useState<string | null>(null);
@@ -236,7 +237,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
   };
 
   if (!item) return null;
-  const mediaLabel = item.type === "video" ? gt("video") : gt("image");
+  const isVideo = item.type === "video";
   const openOriginalLink =
     item.originalUrl && resolveExternalWebLinkHost(item.originalUrl) !== null ? (
       <OpenMediaLink originalUrl={item.originalUrl} />
@@ -328,7 +329,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
         }}
       >
         <DialogTitle className="sr-only">
-          {gt("Expanded {kind} preview", { kind: mediaLabel })}
+          {isVideo ? gt("Expanded video preview") : gt("Expanded image preview")}
         </DialogTitle>
         <div className="relative isolate z-10 flex w-fit min-w-[min(var(--media-width),36rem)] max-w-[var(--media-width)] flex-col items-center gap-2.5">
           <div
@@ -346,7 +347,9 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
                     size="icon-sm"
                     variant="secondary"
                     onClick={close}
-                    aria-label={gt("Back, close {kind} preview", { kind: mediaLabel })}
+                    aria-label={
+                      isVideo ? gt("Back, close video preview") : gt("Back, close image preview")
+                    }
                   />
                 }
               >
@@ -375,12 +378,12 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
                     />
                   }
                 >
-                  {meta ?? formatAttachmentSize(item.sizeBytes!)}
+                  {meta ?? formatAttachmentSize(item.sizeBytes!, messages)}
                 </TooltipTrigger>
                 <TooltipPopup>
                   {meta ? <span className="block">{meta}</span> : null}
                   {item.sizeBytes !== undefined ? (
-                    <span className="block">{formatAttachmentSize(item.sizeBytes)}</span>
+                    <span className="block">{formatAttachmentSize(item.sizeBytes, messages)}</span>
                   ) : null}
                 </TooltipPopup>
               </Tooltip>
@@ -413,7 +416,9 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
             ) : item.source ? (
               <SnapShotContentsButton source={item.source} side="bottom" />
             ) : null}
-            {item.onCopySnapshot ? <SnapShotCopyButton onCopy={item.onCopySnapshot} /> : null}
+            {item.onCopySnapshot ? (
+              <SnapShotCopyButton onCopy={item.onCopySnapshot} side="bottom" />
+            ) : null}
             {zoomable ? (
               <div className="flex h-7 shrink-0 items-center rounded-control surface-well px-0.5 max-sm:hidden">
                 {/* aria-disabled keeps focus in the dialog when a click reaches a zoom limit, so arrow keys still navigate. */}
@@ -459,7 +464,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
               </MediaBarButton>
             ) : null}
             <MediaBarButton
-              label={gt("Save {kind}", { kind: mediaLabel })}
+              label={isVideo ? gt("Save video") : gt("Save image")}
               disabled={unavailable}
               onClick={() => void runByteAction("save")}
             >

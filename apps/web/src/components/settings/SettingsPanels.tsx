@@ -1,7 +1,7 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m as resolveMessage } from "~/i18n/messages";
-import { UpstreamNightlySettings } from "./UpstreamNightlySettings";
 import { useAtomValue } from "@effect/atom-react";
+import { UpstreamNightlySettings } from "./UpstreamNightlySettings";
 import { NotificationSettings } from "./NotificationSettings";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
 import { CheckIcon, RotateCcwIcon } from "lucide-react";
@@ -835,9 +835,7 @@ function AutoSettleDaysInput({
         }}
         aria-label={gt("Days of inactivity before auto-settle")}
       />
-      <InputGroupUnit>
-        <T>days</T>
-      </InputGroupUnit>
+      <InputGroupUnit>{gt("days", { $context: "unit after a number of days" })}</InputGroupUnit>
     </InputGroup>
   );
 }
@@ -870,7 +868,6 @@ export function RestoreDeviceDefaultsButton({ onRestored }: { onRestored?: () =>
     </Tooltip>
   );
 }
-
 export function GeneralSettingsPanel() {
   const gt = useGT();
   const m = useMessages();

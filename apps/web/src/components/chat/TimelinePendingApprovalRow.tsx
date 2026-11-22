@@ -18,6 +18,7 @@ import { useTurnItemDetail } from "../../state/queries";
 
 function ApprovalFileDiff({ file }: { file: NonNullable<PendingApproval["files"]>[number] }) {
   const ctx = use(TimelineRowCtx);
+  const gt = useGT();
   const detail = useTurnItemDetail(
     !file.diff && file.source
       ? { environmentId: ctx.activeThreadEnvironmentId, ...file.source }
@@ -38,10 +39,10 @@ function ApprovalFileDiff({ file }: { file: NonNullable<PendingApproval["files"]
       ) : (
         <span className="text-muted-foreground">
           {detail.isPending
-            ? "Loading diff…"
+            ? gt("Loading diff…")
             : detail.error
-              ? "Could not load diff."
-              : "Diff is unavailable."}
+              ? gt("Could not load diff.")
+              : gt("Diff is unavailable.")}
         </span>
       )}
     </div>
@@ -104,11 +105,11 @@ export const TimelinePendingApprovalRow = memo(function TimelinePendingApprovalR
 }: {
   approval: PendingApproval;
 }) {
-  const gt = useGT();
-  const m = useMessages();
   const [diffRequestId, setDiffRequestId] = useState<PendingApproval["requestId"] | null>(null);
   const diffOpen = diffRequestId === approval.requestId;
   const { onRespondToApproval, workspaceRoot } = use(TimelineRowCtx);
+  const gt = useGT();
+  const m = useMessages();
   const presentation = APPROVAL_PRESENTATION[approval.requestKind];
   const detail =
     approval.requestKind === "file-change"

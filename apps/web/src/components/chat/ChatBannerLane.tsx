@@ -6,8 +6,8 @@ import type {
   ThreadId,
   UsageLimitSourceSnapshots,
 } from "@t3tools/contracts";
-import { type Dispatch, type SetStateAction, useState } from "react";
 import { useMessages } from "gt-react";
+import { type Dispatch, type SetStateAction, useState } from "react";
 import { getDefaultServerModel } from "../../providerModels";
 import {
   dismissProviderStatusBannerForSession,
@@ -69,7 +69,7 @@ export function useChatBannerLane(input: {
     setThreadError,
     setThreadErrorBannerDismissTick,
   } = input;
-  const resolve = useMessages();
+  const messages = useMessages();
   const [lowLimitDismissals, setLowLimitDismissals] = useState(readLowLimitDismissals);
   const lowLimitSignal = resolveLowLimitSignal(
     activeProviderStatus,
@@ -94,46 +94,45 @@ export function useChatBannerLane(input: {
     onDismiss: () => dismissProviderStatusBannerForSession(providerStatusDismissalKey),
     onOpenProviderSetup,
     onOpenTerminal,
+    resolve: messages,
   });
   if (providerItem) items.push(providerItem);
-  const errorItem = threadErrorBannerItem({
-    bannerKey: threadErrorBannerKey,
-    error: threadError,
-    errorClass: threadErrorClass,
-    errorCode: threadErrorCode,
-    onRetry,
-    retrying,
-    onDismiss: () => {
-      if (threadId !== null) setThreadError(threadId, null);
-      dismissThreadErrorBannerForSession(threadErrorBannerKey);
-      setThreadErrorBannerDismissTick((tick) => tick + 1);
+  const errorItem = threadErrorBannerItem(
+    {
+      bannerKey: threadErrorBannerKey,
+      error: threadError,
+      errorClass: threadErrorClass,
+      errorCode: threadErrorCode,
+      onRetry,
+      retrying,
+      onDismiss: () => {
+        if (threadId !== null) setThreadError(threadId, null);
+        dismissThreadErrorBannerForSession(threadErrorBannerKey);
+        setThreadErrorBannerDismissTick((tick) => tick + 1);
+      },
     },
-  });
+    messages,
+  );
   if (errorItem) items.push(errorItem);
   if (lowLimitVisible && lowLimitSignal !== null) {
     items.push(
-      lowLimitBannerItem(
-        {
-          signal: lowLimitSignal,
-          switchTarget: lowLimitSwitchTarget,
-          onSwitch: (target) =>
-            onProviderModelSelect(
-              target.instanceId,
-              getDefaultServerModel([target], target.driver),
-            ),
-          limits:
-            limitsAvailable && activeProviderStatus !== null
-              ? {
-                  environmentId,
-                  instanceId: activeProviderStatus.instanceId,
-                  providers: providerStatuses,
-                  sources: usageLimitSources,
-                }
-              : null,
-          onDismissed: setLowLimitDismissals,
-        },
-        resolve,
-      ),
+      lowLimitBannerItem({
+        signal: lowLimitSignal,
+        switchTarget: lowLimitSwitchTarget,
+        onSwitch: (target) =>
+          onProviderModelSelect(target.instanceId, getDefaultServerModel([target], target.driver)),
+        limits:
+          limitsAvailable && activeProviderStatus !== null
+            ? {
+                environmentId,
+                instanceId: activeProviderStatus.instanceId,
+                providers: providerStatuses,
+                sources: usageLimitSources,
+              }
+            : null,
+        onDismissed: setLowLimitDismissals,
+        resolve: messages,
+      }),
     );
   }
   return items;

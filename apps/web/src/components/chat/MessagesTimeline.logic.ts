@@ -1532,7 +1532,7 @@ function deriveTurnFolds(input: {
   retainedAssistantReplyEntryIds: ReadonlySet<string>;
   /** Hide all keeps main: a reply with nothing to expand gets no duration row. */
   durationRowForBareReply: boolean;
-  resolve?: MessageResolver;
+  resolve: MessageResolver;
 }): ReadonlyMap<string, TurnFold> {
   const interruptedRunIds = new Set<RunId>();
   const usageLimitedRunIds = usageLimitedTimelineRunIds(input.timelineEntries);
@@ -1759,7 +1759,7 @@ function deriveTurnFolds(input: {
       : isLatestInterruptedTurn || interruptedRunIds.has(runId)
         ? "stopped"
         : "worked";
-    const label = turnFoldLabel(ending, elapsedMs, input.resolve ?? m);
+    const label = turnFoldLabel(ending, elapsedMs, input.resolve);
     // The checkpoint diff is what the changed-files card shows; provider
     // counts are the fallback for turns without a checkpoint.
     const checkpoint = readyCheckpointByRunId.get(runId);
@@ -1790,22 +1790,22 @@ function deriveTurnFolds(input: {
 function turnFoldLabel(
   ending: TurnFoldEnding,
   elapsedMs: number | null,
-  resolve: MessageResolver = m,
+  resolve: MessageResolver,
 ): string {
-  const duration = elapsedMs !== null ? formatWorkingDuration(elapsedMs, resolve) : null;
+  const duration = elapsedMs !== null ? formatWorkingDuration(elapsedMs) : null;
   switch (ending) {
     case "stopped":
       return duration
         ? resolve(msg("Stopped at {duration}", { duration }))
-        : resolve(msg("Stopped"));
+        : resolve(msg("Stopped", { $context: "how a turn ended" }));
     case "failed":
       return duration
         ? resolve(msg("Failed after {duration}", { duration }))
-        : resolve(msg("Failed"));
+        : resolve(msg("Failed", { $context: "how a turn ended" }));
     case "limited":
       return duration
         ? resolve(msg("Limited at {duration}", { duration }))
-        : resolve(msg("Limited"));
+        : resolve(msg("Limited", { $context: "how a turn ended, usage limit reached" }));
     case "worked":
       return duration
         ? resolve(msg("Worked for {duration}", { duration }))
@@ -2164,7 +2164,6 @@ function deriveTimelineTurnFolds(
     | "revealedMessageId"
     | "turnWorkFold"
   >,
-  resolve: MessageResolver = m,
 ) {
   if (input.toolCallVisibility === "zen") return new Map<string, TurnFold>();
   const timelineEntries = timelineRowEntries(input);
@@ -2185,7 +2184,7 @@ function deriveTimelineTurnFolds(
       runlessWorkActive: input.isWorking && input.runlessWorkActive === true,
       liveSubagentEntryIds: liveSubagentCardEntryIds(timelineEntries),
       retainedAssistantReplyEntryIds: retainedAssistantReplyEntryIds(timelineEntries),
-      resolve,
+      resolve: m,
     });
   }
   return deriveTurnFolds({
@@ -2200,7 +2199,7 @@ function deriveTimelineTurnFolds(
     liveSubagentEntryIds: liveSubagentCardEntryIds(timelineEntries),
     retainedAssistantReplyEntryIds: retainedAssistantReplyEntryIds(timelineEntries),
     durationRowForBareReply: input.toolCallVisibility !== "hideAll",
-    resolve,
+    resolve: m,
   });
 }
 
@@ -4293,11 +4292,14 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
 }
 
 /** The working bar's short name for a pending approval, like "Approve git push". */
-export function pendingApprovalSlotLabel(approval: {
-  readonly requestKind: string;
-  readonly detail?: string | undefined;
-  readonly appName?: string | undefined;
-}): string {
+export function pendingApprovalSlotLabel(
+  approval: {
+    readonly requestKind: string;
+    readonly detail?: string | undefined;
+    readonly appName?: string | undefined;
+  },
+  resolve: MessageResolver = m,
+): string {
   switch (approval.requestKind) {
     case "command": {
       const words = (approval.detail ?? "")
@@ -4306,16 +4308,20 @@ export function pendingApprovalSlotLabel(approval: {
         .filter((word) => word.length > 0 && !/^[A-Z_][A-Z0-9_]*=/u.test(word))
         .slice(0, 2)
         .join(" ");
-      return words ? `Approve ${words}` : "Approve command";
+      return words
+        ? resolve(msg("Approve {command}", { command: words }))
+        : resolve(msg("Approve command"));
     }
     case "file-read":
-      return "Approve file read";
+      return resolve(msg("Approve file read"));
     case "file-change":
-      return "Approve file change";
+      return resolve(msg("Approve file change"));
     case "mcp-elicitation":
-      return approval.appName ? `Approve ${approval.appName}` : "Approve app access";
+      return approval.appName
+        ? resolve(msg("Approve {app}", { app: approval.appName }))
+        : resolve(msg("Approve app access"));
     default:
-      return "Approve permission";
+      return resolve(msg("Approve permission"));
   }
 }
 

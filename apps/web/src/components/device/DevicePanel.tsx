@@ -8,7 +8,7 @@ import type {
 } from "@t3tools/contracts";
 import { useAtomMount } from "@effect/atom-react";
 import { Schema } from "effect";
-import { T, useGT, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import {
   ArrowUpRight,
   CloudIcon,
@@ -56,9 +56,7 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { Switch } from "~/components/ui/switch";
-import { Dialog } from "~/components/ui/dialog";
 import { Popover, PopoverPopup, PopoverTrigger } from "~/components/ui/popover";
-import { WizardPopup } from "~/components/ui/wizard";
 import { Spinner } from "~/components/ui/spinner";
 import { cn } from "~/lib/utils";
 import { focusPanelTerminalAfterClose } from "~/lib/terminalFocus";
@@ -68,6 +66,7 @@ import {
   NO_DEVICE_PROBE_ATOM,
   useDeviceState,
 } from "~/state/device";
+import type { MessageResolver } from "~/i18n/messages";
 import { formatEnvironmentQueryError } from "~/state/query";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { DeviceLoadingView } from "./DeviceLoadingView";
@@ -80,9 +79,6 @@ import {
 import { DeviceWorkspace } from "./DeviceWorkspace";
 import { PreviewPanelShell, type PreviewPanelMode } from "../preview/PreviewPanelShell";
 
-const platformLabel = (platform: DevicePlatform, gt: ReturnType<typeof useGT>) =>
-  platform === "ios" ? gt("iOS Simulators") : gt("Android Emulators");
-
 const deviceKey = (device: Pick<DeviceSummary, "hostId" | "id">) =>
   `${device.hostId}\u0000${device.id}`;
 
@@ -94,10 +90,10 @@ export function DevicePanel(props: {
   readonly threadRef: ScopedThreadRef;
   readonly surface: Extract<RightPanelSurface, { kind: "device" }>;
   readonly visible: boolean;
-  readonly onDismissSetup: () => void;
 }) {
   const { environmentId, threadId } = props.threadRef;
   const gt = useGT();
+  const m = useMessages();
   const { state, loaded, error: stateError, refresh: refreshState } = useDeviceState(environmentId);
   const list = useAtomCommand(deviceEnvironment.list, { reportFailure: false });
   const open = useAtomCommand(deviceEnvironment.open);
@@ -292,7 +288,7 @@ export function DevicePanel(props: {
         ),
         state.agentAccessEnabled,
         isAndroidDiscoveryUncertain(state),
-        gt,
+        m,
       )
     : null;
   const availabilityKey = availability
@@ -301,16 +297,9 @@ export function DevicePanel(props: {
 
   if (loaded && (!state.onboardingCompleted || hostDisabled)) {
     return (
-      <Dialog
-        open={props.visible}
-        onOpenChange={(isOpen) => {
-          if (!isOpen) props.onDismissSetup();
-        }}
-      >
-        <WizardPopup>
-          <DeviceSetup environmentId={environmentId} state={state} />
-        </WizardPopup>
-      </Dialog>
+      <PreviewPanelShell mode={props.mode}>
+        <DeviceSetup environmentId={environmentId} state={state} layout="pane" />
+      </PreviewPanelShell>
     );
   }
 
@@ -368,7 +357,7 @@ export function DevicePanel(props: {
               <Button
                 size="icon-xs"
                 variant="ghost"
-                aria-label="Dismiss device error"
+                aria-label={gt("Dismiss device error")}
                 onClick={() => setOperation(null)}
               >
                 <X className="size-3" />
@@ -463,7 +452,7 @@ export function DevicePanel(props: {
                   ) : null}
                   <div className="flex-1" />
                   <label className="flex shrink-0 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-                    {gt("Float over chat")}
+                    <T>Float over chat</T>
                     <Switch
                       size="sm"
                       checked={floatOverChat}
@@ -499,7 +488,7 @@ export function DevicePanel(props: {
                           onClick={() => void list({ environmentId, input: {} })}
                         >
                           <RotateCw />
-                          {gt("Refresh devices")}
+                          <T>Refresh devices</T>
                         </Button>
                       </EmptyContent>
                     ) : null}
@@ -509,7 +498,9 @@ export function DevicePanel(props: {
                   ? grouped.map((group) => (
                       <LabeledSection
                         key={group.platform}
-                        label={platformLabel(group.platform, gt)}
+                        label={
+                          group.platform === "ios" ? gt("iOS Simulators") : gt("Android Emulators")
+                        }
                       >
                         <DiscoveryList>
                           {group.devices.map((device) => (
@@ -588,9 +579,9 @@ function DeviceRow(props: {
   readonly onOpen: () => void;
   readonly onPowerOff: () => void;
 }) {
+  const gt = useGT();
   const { device } = props;
   const DeviceIcon = /ipad|tablet/i.test(device.name) ? Tablet : Smartphone;
-  const gt = useGT();
   return (
     <div className="flex items-center gap-3 px-3.5 py-2.5">
       <Button
@@ -618,12 +609,12 @@ function DeviceRow(props: {
       </Button>
       <Badge variant={device.booted ? "success" : "secondary"}>
         {device.physical
-          ? gt("Connected")
+          ? gt("Connected", { $context: "device state" })
           : device.booted
-            ? gt("Running")
+            ? gt("Running", { $context: "device state" })
             : props.simlock
-              ? gt("Available")
-              : gt("Shut down")}
+              ? gt("Available", { $context: "device state" })
+              : gt("Shut down", { $context: "device state" })}
       </Badge>
       {props.pending ? (
         <Spinner size="xs" />
@@ -637,7 +628,7 @@ function DeviceRow(props: {
           onClick={props.onOpen}
         >
           <ArrowUpRight />
-          {gt("Open")}
+          {gt("Open", { $context: "verb, opens a running device" })}
         </Button>
       ) : device.booted ? (
         <Button
@@ -653,7 +644,9 @@ function DeviceRow(props: {
           onClick={props.onPowerOff}
         >
           <Power />
-          {props.simlock ? gt("Return to pool") : gt("Power off")}
+          {props.simlock
+            ? gt("Return to pool", { $context: "verb, releases a leased device" })
+            : gt("Power off", { $context: "verb, shuts down a device" })}
         </Button>
       ) : (
         <Button
@@ -669,7 +662,9 @@ function DeviceRow(props: {
           onClick={props.onOpen}
         >
           <Play />
-          {props.simlock ? gt("Lease") : gt("Boot")}
+          {props.simlock
+            ? gt("Lease", { $context: "verb, borrows a device from a pool" })
+            : gt("Boot", { $context: "verb, starts a device" })}
         </Button>
       )}
     </div>
@@ -754,16 +749,13 @@ function DeviceDiscoveryWarning(props: {
   );
 }
 
-const platformToolLabel = (platform: DevicePlatform, gt: ReturnType<typeof useGT>) =>
-  platform === "ios" ? gt("Xcode and iOS Simulator") : gt("The Android SDK and Emulator");
-
 /** The availability alert under the list: what this host can run and why not. */
 function describeHostAvailability(
   host: DeviceHostSummary,
   hasAndroidDevices: boolean,
   agentAccessEnabled: boolean,
   androidDiscoveryUncertain: boolean,
-  gt: ReturnType<typeof useGT>,
+  resolve: MessageResolver,
 ) {
   const ios = host.platforms.find((platform) => platform.platform === "ios");
   const android = host.platforms.find((platform) => platform.platform === "android");
@@ -771,9 +763,9 @@ function describeHostAvailability(
   if (host.kind === "simlock") {
     return {
       available: available.length > 0,
-      title: gt("{host} leases devices from a Simlock pool.", { host: host.label }),
+      title: resolve(msg("{host} leases devices from a Simlock pool.", { host: host.label })),
       details: [
-        gt("Returning a device to the pool wipes it."),
+        resolve(msg("Returning a device to the pool wipes it.")),
         ...new Set(
           host.platforms.flatMap((platform) =>
             !platform.available && platform.reason ? [platform.reason] : [],
@@ -784,27 +776,46 @@ function describeHostAvailability(
   }
   const details: string[] = [];
   const first = available[0];
-  const cloudDevices = available
-    .map(({ platform }) => (platform === "ios" ? gt("iOS Simulators") : gt("Android emulators")))
-    .join(" and ");
+  const cloudIos = available.some(({ platform }) => platform === "ios");
+  const cloudAndroid = available.some(({ platform }) => platform === "android");
   const title = first
     ? host.kind === "eas"
-      ? gt("{host} starts {devices} in the cloud with Expo Simulators.", {
-          host: host.label,
-          devices: cloudDevices,
-        })
-      : gt("{tools} are available.", { tools: platformToolLabel(first.platform, gt) })
+      ? cloudIos && cloudAndroid
+        ? resolve(
+            msg(
+              "{host} starts iOS Simulators and Android emulators in the cloud with Expo Simulators.",
+              { host: host.label },
+            ),
+          )
+        : cloudIos
+          ? resolve(
+              msg("{host} starts iOS Simulators in the cloud with Expo Simulators.", {
+                host: host.label,
+              }),
+            )
+          : resolve(
+              msg("{host} starts Android emulators in the cloud with Expo Simulators.", {
+                host: host.label,
+              }),
+            )
+      : first.platform === "ios"
+        ? resolve(msg("Xcode and iOS Simulator are available."))
+        : resolve(msg("The Android SDK and Emulator are available."))
     : host.kind === "eas"
-      ? gt("Expo Simulators is unavailable on this host.")
-      : gt("No simulator or emulator tools are available on this host.");
+      ? resolve(msg("Expo Simulators is unavailable on this host."))
+      : resolve(msg("No simulator or emulator tools are available on this host."));
   if (host.kind !== "eas" && ios?.available && android?.available) {
-    details.push(gt("{tools} are available too.", { tools: platformToolLabel("android", gt) }));
+    details.push(resolve(msg("The Android SDK and Emulator are available too.")));
   }
   for (const platform of host.platforms) {
     if (platform.available) continue;
     details.push(
       platform.reason ??
-        (platform.platform === "ios" ? gt("iOS is unavailable.") : gt("Android is unavailable.")),
+        resolve(
+          msg("{platform} is unavailable.", {
+            platform: platform.platform === "ios" ? "iOS" : "Android",
+          }),
+        ),
     );
   }
   if (
@@ -814,13 +825,15 @@ function describeHostAvailability(
     !hasAndroidDevices
   ) {
     details.push(
-      gt(
-        "No Android virtual devices found. Create one in Android Studio's Device Manager, then refresh.",
+      resolve(
+        msg(
+          "No Android virtual devices found. Create one in Android Studio's Device Manager, then refresh.",
+        ),
       ),
     );
   }
   if (agentAccessEnabled && available.length > 0) {
-    details.push(gt("Agents can boot a device when they need one."));
+    details.push(resolve(msg("Agents can boot a device when they need one.")));
   }
   return { available: available.length > 0, title, details };
 }

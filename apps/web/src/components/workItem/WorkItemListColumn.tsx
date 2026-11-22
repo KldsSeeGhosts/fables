@@ -1,6 +1,4 @@
-import { useGT } from "gt-react";
-import { Plug2Icon } from "lucide-react";
-import { useEffect, useRef, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, type ReactNode, type Ref } from "react";
 
 import { cn } from "~/lib/utils";
 import { useLayoutPaneFocusedRef } from "~/layout/layoutPaneContext";
@@ -10,16 +8,19 @@ import { RefreshIcon } from "../ui/refresh-icon";
 import { SettingsPaneHeader, SettingsTabNotch } from "../settings/SettingsTabNotch";
 import { WorkspacePageContainer } from "../WorkspacePageContainer";
 import { workspaceAreaProps } from "../../lib/workspaceFocus";
-import { PullRequestGlyph } from "./pullRequestIcons";
-import { PullRequestCompactFilterMenu } from "./PullRequestCompactFilterMenu";
-import type { PullRequestFilterOption } from "./PullRequestListFilters";
 
-export function PullRequestsColumn({
+/**
+ * A list page's column, shared by Pull requests and Issues: the notch tab with the page's name,
+ * the pinned search and list controls, and the scrolling list under them.
+ */
+export function WorkItemListColumn({
+  area,
+  title,
+  icon,
+  refreshLabel,
   refreshing,
   onRefresh,
-  host,
-  hostMenuOptions,
-  onHost,
+  providerMenu,
   searchInput,
   sortMenu,
   filtersMenu,
@@ -30,11 +31,15 @@ export function PullRequestsColumn({
   listBody,
   scrollRef,
 }: {
+  /** The workspace focus area the list's content answers to. */
+  area: string;
+  title: string;
+  icon: ReactNode;
+  refreshLabel: string;
   refreshing: boolean;
   onRefresh: () => void;
-  host: string | undefined;
-  hostMenuOptions: ReadonlyArray<PullRequestFilterOption<string>>;
-  onHost: (host: string | undefined) => void;
+  /** The filter by host or tracker, absent when there is only one to read. */
+  providerMenu: ReactNode;
   searchInput: ReactNode;
   sortMenu: ReactNode;
   filtersMenu: ReactNode;
@@ -44,10 +49,9 @@ export function PullRequestsColumn({
   /** Whether the list sits beside an open review as its own pane. */
   split: boolean;
   listBody: ReactNode;
-  scrollRef: RefObject<HTMLDivElement | null>;
+  scrollRef: Ref<HTMLDivElement>;
 }) {
-  const gt = useGT();
-  const contentArea = workspaceAreaProps("pull-requests", 1, gt("Pull requests"));
+  const contentArea = workspaceAreaProps(area, 1, title);
   const focusedRef = useLayoutPaneFocusedRef();
   const searchRef = useRef<HTMLDivElement | null>(null);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- window keydown listener focuses the visible search input on Cmd/Ctrl+F
@@ -80,17 +84,12 @@ export function PullRequestsColumn({
       {/* A closed right panel leaves this column full-width, so the header reserves native
           window controls. */}
       <SettingsPaneHeader transparent trailingEdge={!rightPanelOpen}>
-        <SettingsTabNotch
-          title={gt("Pull requests")}
-          icon={
-            <PullRequestGlyph.pullRequest
-              aria-hidden
-              className="size-3.5 shrink-0 text-foreground"
-            />
-          }
-        >
-          <h1 className="truncate">{gt("Pull requests")}</h1>
-        </SettingsTabNotch>
+        {/* Maximized away, the open review's notch holds the pane's tabs instead. */}
+        {maximizedAway ? null : (
+          <SettingsTabNotch title={title} icon={icon}>
+            <h1 className="truncate">{title}</h1>
+          </SettingsTabNotch>
+        )}
       </SettingsPaneHeader>
 
       <div
@@ -111,19 +110,11 @@ export function PullRequestsColumn({
                 {sortMenu}
                 {filtersMenu}
                 {savedViewsMenu}
-                <PullRequestCompactFilterMenu
-                  label={gt("Filter by provider")}
-                  iconOnly={host !== undefined}
-                  triggerIcon={<Plug2Icon aria-hidden className="size-4" />}
-                  triggerLabel={gt("All", { $context: "all providers" })}
-                  value={host ?? ""}
-                  options={hostMenuOptions}
-                  onChange={(next) => onHost(next === "" ? undefined : next)}
-                />
+                {providerMenu}
                 <Button
                   size="icon"
                   variant="ghost"
-                  aria-label={gt("Refresh pull requests")}
+                  aria-label={refreshLabel}
                   onClick={onRefresh}
                   disabled={refreshing}
                 >

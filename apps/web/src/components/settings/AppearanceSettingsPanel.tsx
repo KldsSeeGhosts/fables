@@ -34,8 +34,8 @@ import {
   SettingsSection,
   SettingsSearchTarget,
 } from "./settingsLayout";
-import { AppIconRow } from "./AppIconSettings";
 import { useSearchableSetting } from "./settingsSearch";
+import { AppIconRow } from "./AppIconSettings";
 import { PanelAnimationsPreview } from "./PanelAnimationsPreview";
 import { TypographySection } from "./TypographySettings";
 import { ThreadDetailsItemsRow } from "./ThreadDetailsItemsRow";
@@ -167,7 +167,12 @@ export function AppearanceSettingsPanel() {
         </div>
       </SettingsSection>
 
-      <SettingsSection id="appearance-style" title={gt("Style")} variant="plain" hideTitle>
+      <SettingsSection
+        id="appearance-style"
+        title={gt("Style", { $context: "settings section, surface style" })}
+        variant="plain"
+        hideTitle
+      >
         <SettingsSearchTarget className="space-y-2.5" id={searchableSetting("surface-style").id}>
           <div className="flex min-h-7 items-center">
             <h3 className="text-title text-dim-foreground">
@@ -226,7 +231,7 @@ export function AppearanceSettingsPanel() {
                 htmlFor="appearance-contrast"
               >
                 {settings.appearanceContrast === DEFAULT_UNIFIED_SETTINGS.appearanceContrast
-                  ? gt("Normal")
+                  ? gt("Normal", { $context: "default contrast level" })
                   : `${settings.appearanceContrast}%`}
               </output>
             </div>

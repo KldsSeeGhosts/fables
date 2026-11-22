@@ -251,7 +251,11 @@ export function backgroundWorkNowItem(
       only && typeof only.label !== "string" && only.task.label !== only.task.kind ? (
         <>
           <span className="inline-flex flex-col">
-            <span>{presentation.waiting ? <T>Waiting</T> : <T>Running</T>}</span>
+            <span>
+              {presentation.waiting
+                ? resolve(msg("Waiting", { $context: "status of background work" }))
+                : resolve(msg("Running", { $context: "status of background work" }))}
+            </span>
             <span>{only.label}</span>
           </span>
         </>
@@ -315,7 +319,7 @@ export function branchMismatchBannerItem(
     id: `branch-mismatch:${input.mismatchKey}`,
     variant: "warning",
     icon: <GitBranchIcon />,
-    title: <T>Branch changed</T>,
+    title: resolve(msg("Branch changed")),
     description: (
       <Tooltip>
         <TooltipTrigger render={<span className="min-w-0 truncate" />}>

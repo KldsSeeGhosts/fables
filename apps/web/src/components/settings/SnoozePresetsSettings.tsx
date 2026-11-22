@@ -338,7 +338,9 @@ function SnoozePresetList(props: {
           gt("Menus offer only Custom…")
         ) : (
           <>
-            <p>{gt("Menu now")}</p>
+            <p>
+              <T>Menu now</T>
+            </p>
             <ol className="mt-1 grid gap-1">
               {menuOrder.map((label) => (
                 <li key={label}>{label}</li>

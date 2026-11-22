@@ -331,7 +331,7 @@ function ExtendedOfficeViewer(props: {
           <Suspense fallback={<FileSurfaceLoading />}>
             <DocumentPages
               html={documentPage.html}
-              name={`${props.name}: ${documentPage.title}`}
+              name={`${props.name}: ${pageTitle(page)}`}
               details={
                 <Tooltip>
                   <TooltipTrigger render={<span tabIndex={0} />}>{documentDetails}</TooltipTrigger>

@@ -67,10 +67,10 @@ export function SidebarUpdateReleaseNotes({
   readonly state: DesktopUpdateState;
   readonly tooltip: string;
 }) {
-  const nowMinute = useNowMinute();
-  const now = Date.parse(`${nowMinute}:00Z`);
   const gt = useGT();
   const m = useMessages();
+  const nowMinute = useNowMinute();
+  const now = Date.parse(`${nowMinute}:00Z`);
   if (state.releaseNotes.length === 0) {
     return <>{tooltip}</>;
   }

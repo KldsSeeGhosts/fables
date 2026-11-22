@@ -230,7 +230,6 @@ function FileDocument(props: {
     });
   }
   const { next } = frames;
-  const [loaded, setLoaded] = useState(false);
   const shownFrame = useRef<HTMLIFrameElement>(null);
   const nextFrame = useRef<HTMLIFrameElement>(null);
   // The page reports its scroll position (see FILE_PREVIEW_SCROLL_SCRIPT); the next revision
@@ -273,7 +272,11 @@ function FileDocument(props: {
             ref={revision === next ? nextFrame : shownFrame}
             src={revision.src}
             title={props.title}
-            className={cn("absolute inset-0 size-full border-0", loaded && "bg-background")}
+            className={cn(
+              "absolute inset-0 size-full border-0",
+              revision !== next && "bg-background",
+            )}
+            style={revision === next ? { backgroundColor: "Canvas" } : undefined}
             sandbox="allow-scripts allow-forms allow-popups allow-downloads"
             inert={revision === next}
             aria-hidden={revision === next ? true : undefined}
@@ -289,7 +292,7 @@ function FileDocument(props: {
                       "*",
                     );
                   }
-                : () => setLoaded(true)
+                : undefined
             }
           />
         ),

@@ -423,15 +423,15 @@ describe("pools", () => {
       "First account",
     ]);
     expect(collectCpaAccountGroups(input)[0]?.source.accounts).toHaveLength(3);
-    expect(collectLimitNotices(input)).toEqual(["hub: Showing CPA's last cached quota reading."]);
-    expect(
-      collectProviderUsageLimits(
-        ProviderInstanceId.make("codex"),
-        [provider({})],
-        [cpa],
-        now,
-      )?.accounts.map((account) => account.id),
-    ).toEqual(["hub:first", "hub:failed"]);
+    expect(collectLimitNotices(input)).toContain("hub · failed: Quota unavailable.");
+    const report = collectProviderUsageLimits(
+      ProviderInstanceId.make("codex"),
+      [provider({})],
+      [cpa],
+      now,
+    );
+    expect(report?.accounts.map((account) => account.id)).toEqual(["hub:first", "hub:failed"]);
+    expect(report?.notices).toContain("hub: Showing CPA's last cached quota reading.");
   });
 
   it("merges one account reported natively on two environments and by a hub into one entry", () => {

@@ -77,7 +77,9 @@ import { useStableCallback } from "~/hooks/useStableCallback";
 import { resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
 import { observeVisibleAnimation } from "../../lib/visibleAnimation";
 import {
+  lazy,
   memo,
+  Suspense,
   use,
   useContext,
   useEffect,
@@ -94,7 +96,14 @@ import {
   type MaintainScrollAtEndOptions,
 } from "@legendapp/list/react";
 import { type PendingApproval, type TimelineEntry } from "../../session-logic";
+import { timelineGapRecorderEnabled } from "./timelineGapRecorderEnabled";
 import { type CodexArtifactTemplate } from "@t3tools/shared/codexArtifactTemplates";
+
+const TimelineGapRecorder = timelineGapRecorderEnabled
+  ? lazy(() =>
+      import("./TimelineGapRecorder").then((module) => ({ default: module.TimelineGapRecorder })),
+    )
+  : null;
 
 const EMPTY_PENDING_APPROVALS: ReadonlyArray<PendingApproval> = [];
 const EMPTY_RESPONDING_REQUEST_IDS: TimelineRowSharedState["respondingRequestIds"] = [];
@@ -472,9 +481,9 @@ const ConversationTimeline = memo(function ConversationTimeline({
   topFadeEnabled = false,
   historyControls,
 }: MessagesTimelineProps) {
+  const gt = useGT();
   const layoutPaneFocusedRef = useLayoutPaneFocusedRef();
   const pendingRequest = pendingRequestProp?.blocking === false ? null : pendingRequestProp;
-  const gt = useGT();
   const listIdentityKey = displayThreadKey ?? routeThreadKey;
   // Snapshot restore positions on identity changes; ongoing scroll writes must not move them.
   // Find open at the opening is part of the snapshot: opening find later
@@ -1437,10 +1446,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
               icon={BotIcon}
               {...(parentThreadLink.open === undefined
                 ? {}
-                : {
-                    actionLabel: gt("Open parent thread"),
-                    onAction: parentThreadLink.open,
-                  })}
+                : { actionLabel: gt("Open parent thread"), onAction: parentThreadLink.open })}
             />
           )}
         </div>
@@ -1728,6 +1734,18 @@ const ConversationTimeline = memo(function ConversationTimeline({
   return (
     <>
       {activityAnnouncer}
+      {TimelineGapRecorder ? (
+        <Suspense fallback={null}>
+          <TimelineGapRecorder
+            listRef={listRef}
+            threadKey={listIdentityKey}
+            dataLength={rows.length}
+            latestRunId={latestRun?.runId ?? null}
+            runStatus={latestRun?.status ?? null}
+            foldCollapsing={workingHistoryCollapsing}
+          />
+        </Suspense>
+      ) : null}
       <MarkdownFindContext value={findActive}>
         <TimelineWakeUpsRailInteractionCtx value={wakeUpsRailInteraction}>
           <TimelineRowActivityCtx value={activityState}>
@@ -2121,19 +2139,21 @@ function ContextCompactionTimelineRow({
           <Minimize2Icon aria-hidden="true" className="size-3" />
         )}
         {row.tokenCounts ? (
-          row.title ? (
-            <T>
-              <Var>{row.title}</Var> <Var>{row.tokenCounts.before}</Var>
-              <ArrowRightIcon aria-hidden="true" className="size-3" />
-              <Var>{row.tokenCounts.after}</Var> tokens
-            </T>
-          ) : (
-            <T>
-              Context compacted <Var>{row.tokenCounts.before}</Var>
-              <ArrowRightIcon aria-hidden="true" className="size-3" />
-              <Var>{row.tokenCounts.after}</Var> tokens
-            </T>
-          )
+          <>
+            {row.title ? (
+              <T>
+                <Var>{row.title}</Var> <Var>{row.tokenCounts.before}</Var>
+                <ArrowRightIcon aria-hidden="true" className="size-3" />
+                <Var>{row.tokenCounts.after}</Var> tokens
+              </T>
+            ) : (
+              <T>
+                Context compacted <Var>{row.tokenCounts.before}</Var>
+                <ArrowRightIcon aria-hidden="true" className="size-3" />
+                <Var>{row.tokenCounts.after}</Var> tokens
+              </T>
+            )}
+          </>
         ) : (
           label
         )}
@@ -2221,7 +2241,6 @@ function WorkHistorySkeleton() {
 }
 
 function TurnFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "turn-fold" }> }) {
-  const gt = useGT();
   const ctx = use(TimelineRowCtx);
   const { loading, error, toggle } = useDeferredWorkLoading(row, () =>
     ctx.onToggleTurnFold(row.runId),
@@ -2267,7 +2286,7 @@ function TurnFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "turn-
       {loading ? <WorkHistorySkeleton /> : null}
       {row.ending === "stopped" ? (
         <p className="px-1 pt-2 text-body text-muted-foreground">
-          {row.diff ? gt("Stopped by you. Changes so far are kept.") : gt("Stopped by you.")}
+          {row.diff ? <T>Stopped by you. Changes so far are kept.</T> : <T>Stopped by you.</T>}
         </p>
       ) : row.ending === "limited" && row.resetAt ? (
         <TurnFoldRetryNotice
@@ -2326,15 +2345,17 @@ function TurnFoldRetryNotice({
   resetAt: string;
   timestampFormat: TimestampFormat;
 }) {
-  const gt = useGT();
+  const messages = useMessages();
   const nowMinute = useNowMinute();
   const nowMs = Date.parse(`${nowMinute}:00Z`);
   const timeZone = new Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const resetTime = formatUpcomingTimestamp(resetAt, timestampFormat, nowMs, timeZone);
+  const resetTime = formatUpcomingTimestamp(resetAt, timestampFormat, nowMs, timeZone, messages);
   return (
     <p className="whitespace-pre-wrap break-words px-1 pt-2 text-body text-muted-foreground">
       {message ? `${message} ` : ""}
-      {gt("Retry after {time} ({timeZone}).", { time: resetTime, timeZone })}
+      <T>
+        Retry after <Var>{resetTime}</Var> (<Var>{timeZone}</Var>).
+      </T>
     </p>
   );
 }
@@ -2347,6 +2368,7 @@ function TurnFoldUsageLimit({
   timestampFormat: TimestampFormat;
 }) {
   const gt = useGT();
+  const messages = useMessages();
   const nowMinute = useNowMinute();
   const nowMs = Date.parse(`${nowMinute}:00Z`);
   const resetPassed = useDeadlinePassed(limit.resetAt === null ? null : Date.parse(limit.resetAt));
@@ -2355,10 +2377,13 @@ function TurnFoldUsageLimit({
   return (
     <>
       <span className="shrink-0 text-meta text-muted-foreground">
-        {gt("resumes {time} ({timeZone})", {
-          time: formatUpcomingTimestamp(limit.resetAt, timestampFormat, nowMs, timeZone),
-          timeZone,
-        })}
+        <T>
+          resumes{" "}
+          <Var>
+            {formatUpcomingTimestamp(limit.resetAt, timestampFormat, nowMs, timeZone, messages)}
+          </Var>{" "}
+          (<Var>{timeZone}</Var>)
+        </T>
       </span>
       {limit.onToggleSnooze ? (
         <WorkingBarChip
@@ -2366,7 +2391,9 @@ function TurnFoldUsageLimit({
           aria-pressed={limit.snoozed}
           onClick={limit.onToggleSnooze}
         >
-          {limit.snoozed ? gt("Snoozed") : gt("Snooze")}
+          {limit.snoozed
+            ? gt("Snoozed", { $context: "usage limit retry is snoozed" })
+            : gt("Snooze", { $context: "verb, snooze the usage limit retry" })}
         </WorkingBarChip>
       ) : null}
     </>

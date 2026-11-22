@@ -6,7 +6,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { T, useGT, useMessages, Var } from "gt-react";
+import { T, useGT, useMessages } from "gt-react";
 import { useState } from "react";
 import { ShieldIcon } from "lucide-react";
 import { ComposerRequestCard } from "./ComposerRequestCard";
@@ -31,11 +31,7 @@ function ChildApproval({ entry }: { entry: ChildThreadApproval }) {
     >
       <ComposerRequestCard.Header
         icon={<ShieldIcon />}
-        title={
-          <T>
-            Approval needed from <Var>{entry.title}</Var>
-          </T>
-        }
+        title={gt("Approval needed from {title}", { title: entry.title })}
       />
       <ComposerRequestCard.Well>
         <pre className="max-h-40 overflow-auto whitespace-pre-wrap p-2 font-mono text-meta text-foreground wrap-anywhere">

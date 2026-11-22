@@ -273,7 +273,7 @@ export function ArchivedThreadsPanel() {
               title={
                 <span className="inline-flex items-center gap-2">
                   <ArchiveIcon className="size-3.5 text-muted-foreground" />
-                  <T>Could not load archived threads</T>
+                  {gt("Could not load archived threads")}
                 </span>
               }
               description={archiveError}

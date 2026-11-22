@@ -36,7 +36,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { m, type MessageResolver } from "../../i18n/messages";
 
 import {
@@ -200,12 +200,30 @@ function SourceStatusBadge({
 function LastSampleLabel({ sampledAt }: { sampledAt: DateTime.Utc | null }) {
   const relative = useRelativeTimeState(sampledAt ? DateTime.formatIso(sampledAt) : null);
   if (relative.status !== "relative") {
-    return <span className="text-2xs text-dim-foreground">Waiting for sample</span>;
+    return (
+      <span className="text-2xs text-dim-foreground">
+        <T>Waiting for sample</T>
+      </span>
+    );
   }
   return (
     <span className="text-2xs text-dim-foreground">
-      Updated <span className="font-mono tabular-nums">{relative.value}</span>
-      {relative.suffix ? ` ${relative.suffix}` : ""}
+      {relative.suffix ? (
+        <T context="the time is an elapsed time such as 5m">
+          Updated{" "}
+          <span className="font-mono tabular-nums">
+            <Var>{relative.value}</Var>
+          </span>{" "}
+          ago
+        </T>
+      ) : (
+        <T>
+          Updated{" "}
+          <span className="font-mono tabular-nums">
+            <Var>{relative.value}</Var>
+          </span>
+        </T>
+      )}
     </span>
   );
 }
@@ -286,6 +304,7 @@ function MetricPair({ label, value }: { label: string; value: string }) {
 }
 
 function HealthSource({ label, health }: { label: string; health: ResourceTelemetrySourceHealth }) {
+  const gt = useGT();
   const expectedInBrowser =
     health.status === "unavailable" &&
     Option.exists(health.lastError, (error) => error.includes("'web' mode"));
@@ -297,9 +316,9 @@ function HealthSource({ label, health }: { label: string; health: ResourceTeleme
       status={health.status}
       presentation={
         expectedInBrowser
-          ? { label: "Desktop only", tone: "neutral" }
+          ? { label: gt("Desktop only"), tone: "neutral" }
           : unavailable
-            ? { label: "Unavailable", tone: "neutral" }
+            ? { label: gt("Unavailable"), tone: "neutral" }
             : undefined
       }
     />
@@ -311,9 +330,9 @@ function HealthSource({ label, health }: { label: string; health: ResourceTeleme
         {unavailable ? null : (
           <div className="mt-1 text-2xs leading-relaxed text-dim-foreground">
             {expectedInBrowser
-              ? "Available when this page runs inside the desktop app."
+              ? gt("Available when this page runs inside the desktop app.")
               : Option.match(health.lastError, {
-                  onNone: () => "No reported errors",
+                  onNone: () => gt("No reported errors"),
                   onSome: (error) => error,
                 })}
           </div>
@@ -471,6 +490,7 @@ function ProcessTreeName({
   onToggle: (process: ResourceTelemetryProcess) => void;
 }) {
   const gt = useGT();
+  const messages = useMessages();
   const name = formatProcessName(process);
   const hasChildren = process.childPids.length > 0;
   return (
@@ -505,8 +525,12 @@ function ProcessTreeName({
           </TooltipPopup>
         </Tooltip>
         <ProcessDetail>
-          <span>{categoryLabel(process.category)}</span>
-          <span>PID {process.identity.pid}</span>
+          <span>{categoryLabel(process.category, messages)}</span>
+          <span>
+            <T>
+              PID <Var>{process.identity.pid}</Var>
+            </T>
+          </span>
         </ProcessDetail>
       </div>
     </div>
@@ -524,7 +548,11 @@ function UnavailableNote({ children }: { children: ReactNode }) {
 
 /** A section whose data needs the monitor, once the reason has been stated above. */
 function UnavailableRows() {
-  return <div className="px-4 py-4 text-xs text-muted-foreground sm:px-5">Unavailable</div>;
+  return (
+    <div className="px-4 py-4 text-xs text-muted-foreground sm:px-5">
+      <T>Unavailable</T>
+    </div>
+  );
 }
 
 /** The muted second line under a process name. */
@@ -598,6 +626,7 @@ function ProcessTable({
   onSignal: (process: ResourceTelemetryProcess, signal: ServerProcessSignal) => void;
 }) {
   const messages = useMessages();
+  const gt = useGT();
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const visible = visibleResourceTelemetryProcesses(processes, collapsed);
   const toggle = (process: ResourceTelemetryProcess) => {
@@ -632,13 +661,25 @@ function ProcessTable({
           </colgroup>
           <thead className="sticky top-0 z-10 border-b border-divider bg-card text-3xs text-dim-foreground">
             <tr>
-              <th className="px-4 py-2 font-semibold sm:pl-5">Process</th>
-              <th className="px-3 py-2 text-right font-semibold">CPU</th>
-              <th className="px-3 py-2 text-right font-semibold">CPU time</th>
-              <th className="px-3 py-2 text-right font-semibold">Memory</th>
-              <th className="px-3 py-2 text-right font-semibold">I/O per sec</th>
+              <th className="px-4 py-2 font-semibold sm:pl-5">
+                <T>Process</T>
+              </th>
+              <th className="px-3 py-2 text-right font-semibold">
+                <T>CPU</T>
+              </th>
+              <th className="px-3 py-2 text-right font-semibold">
+                <T>CPU time</T>
+              </th>
+              <th className="px-3 py-2 text-right font-semibold">
+                <T>Memory</T>
+              </th>
+              <th className="px-3 py-2 text-right font-semibold">
+                <T>I/O per sec</T>
+              </th>
               <th className="px-2 py-2 font-semibold sm:pr-4">
-                <span className="sr-only">Signal</span>
+                <span className="sr-only">
+                  <T>Signal</T>
+                </span>
               </th>
             </tr>
           </thead>
@@ -674,11 +715,21 @@ function ProcessTable({
                     write={formatRate(process.ioWriteBytesPerSecond)}
                     tooltip={
                       <div className="space-y-0.5">
-                        <div>Read {formatRate(process.ioReadBytesPerSecond)}</div>
-                        <div>Write {formatRate(process.ioWriteBytesPerSecond)}</div>
-                        <div>Read total {formatBytes(process.ioReadBytes)}</div>
-                        <div>Write total {formatBytes(process.ioWriteBytes)}</div>
-                        <div>{ioSemanticsLabel(process.ioSemantics)}</div>
+                        <div>
+                          {gt("Read {bytes}", { bytes: formatRate(process.ioReadBytesPerSecond) })}
+                        </div>
+                        <div>
+                          {gt("Write {bytes}", {
+                            bytes: formatRate(process.ioWriteBytesPerSecond),
+                          })}
+                        </div>
+                        <div>
+                          {gt("Read total {bytes}", { bytes: formatBytes(process.ioReadBytes) })}
+                        </div>
+                        <div>
+                          {gt("Write total {bytes}", { bytes: formatBytes(process.ioWriteBytes) })}
+                        </div>
+                        <div>{ioSemanticsLabel(process.ioSemantics, messages)}</div>
                       </div>
                     }
                   />
@@ -706,6 +757,7 @@ function HistoryProcessTable({
   processes: ReadonlyArray<ResourceTelemetryProcessSummary>;
 }) {
   const messages = useMessages();
+  const gt = useGT();
   return (
     <div className="border-t border-divider">
       <ScrollArea
@@ -724,11 +776,21 @@ function HistoryProcessTable({
           </colgroup>
           <thead className="sticky top-0 z-10 border-b border-divider bg-card text-3xs text-dim-foreground">
             <tr>
-              <th className="px-4 py-2 font-semibold sm:pl-5">Process</th>
-              <th className="px-3 py-2 text-right font-semibold">CPU time</th>
-              <th className="px-3 py-2 text-right font-semibold">Peak CPU</th>
-              <th className="px-3 py-2 text-right font-semibold">Peak mem</th>
-              <th className="px-3 py-2 text-right font-semibold sm:pr-5">I/O</th>
+              <th className="px-4 py-2 font-semibold sm:pl-5">
+                <T>Process</T>
+              </th>
+              <th className="px-3 py-2 text-right font-semibold">
+                <T>CPU time</T>
+              </th>
+              <th className="px-3 py-2 text-right font-semibold">
+                <T>Peak CPU</T>
+              </th>
+              <th className="px-3 py-2 text-right font-semibold">
+                <T>Peak mem</T>
+              </th>
+              <th className="px-3 py-2 text-right font-semibold sm:pr-5">
+                <T>I/O</T>
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-divider">
@@ -755,9 +817,17 @@ function HistoryProcessTable({
                     </TooltipPopup>
                   </Tooltip>
                   <ProcessDetail>
-                    <span>{categoryLabel(process.category)}</span>
-                    <span>PID {process.identity.pid}</span>
-                    <span>{process.sampleCount} samples</span>
+                    <span>{categoryLabel(process.category, messages)}</span>
+                    <span>
+                      <T>
+                        PID <Var>{process.identity.pid}</Var>
+                      </T>
+                    </span>
+                    <span>
+                      {gt("{count, plural, one {{count} sample} other {{count} samples}}", {
+                        count: process.sampleCount,
+                      })}
+                    </span>
                   </ProcessDetail>
                 </td>
                 <td className="px-3 py-2 text-right font-mono tabular-nums">
@@ -775,8 +845,10 @@ function HistoryProcessTable({
                     write={formatBytes(process.ioWriteBytes)}
                     tooltip={
                       <div className="space-y-0.5">
-                        <div>Read {formatBytes(process.ioReadBytes)}</div>
-                        <div>Write {formatBytes(process.ioWriteBytes)}</div>
+                        <div>{gt("Read {bytes}", { bytes: formatBytes(process.ioReadBytes) })}</div>
+                        <div>
+                          {gt("Write {bytes}", { bytes: formatBytes(process.ioWriteBytes) })}
+                        </div>
                       </div>
                     }
                   />
@@ -803,11 +875,21 @@ function AttributionTable({ entries }: { entries: ReadonlyArray<ResourceAttribut
         </colgroup>
         <thead className="border-b border-divider text-3xs text-dim-foreground">
           <tr>
-            <th className="px-4 py-2 font-semibold sm:pl-5">Operation</th>
-            <th className="px-3 py-2 text-right font-semibold">Read</th>
-            <th className="px-3 py-2 text-right font-semibold">Write</th>
-            <th className="px-3 py-2 text-right font-semibold">Count</th>
-            <th className="px-3 py-2 text-right font-semibold sm:pr-5">Time</th>
+            <th className="px-4 py-2 font-semibold sm:pl-5">
+              <T>Operation</T>
+            </th>
+            <th className="px-3 py-2 text-right font-semibold">
+              <T>Read</T>
+            </th>
+            <th className="px-3 py-2 text-right font-semibold">
+              <T>Write</T>
+            </th>
+            <th className="px-3 py-2 text-right font-semibold">
+              <T>Count</T>
+            </th>
+            <th className="px-3 py-2 text-right font-semibold sm:pr-5">
+              <T>Time</T>
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-divider">
@@ -887,9 +969,8 @@ function ResourceTelemetryDiagnosticsBody({
     (snapshot.health.native.status === "unavailable" ||
       snapshot.health.native.status === "stopped") &&
     snapshot.processes.length === 0
-      ? Option.getOrElse(
-          snapshot.health.native.lastError,
-          () => "The native process monitor is unavailable.",
+      ? Option.getOrElse(snapshot.health.native.lastError, () =>
+          gt("The native process monitor is unavailable."),
         )
       : null;
   const measured = nativeUnavailableReason === null ? snapshot?.groups.allT3 : undefined;
@@ -1036,7 +1117,7 @@ function ResourceTelemetryDiagnosticsBody({
   return (
     <>
       <SettingsSection
-        title="Resource monitor"
+        title={gt("Resource monitor")}
         headerAction={
           <div className="flex items-center gap-2">
             {snapshot && nativeUnavailableReason === null ? (
@@ -1087,7 +1168,9 @@ function ResourceTelemetryDiagnosticsBody({
                 <StatusDot
                   tone={snapshot && snapshot.sampleIntervalMs > 0 ? "success" : "neutral"}
                 />
-                {snapshot ? formatSamplingStatus(snapshot.sampleIntervalMs) : "Sampling every ..."}
+                {snapshot
+                  ? formatSamplingStatus(snapshot.sampleIntervalMs, messages)
+                  : gt("Sampling every ...")}
               </div>
             )}
           </div>
@@ -1124,8 +1207,16 @@ function ResourceTelemetryDiagnosticsBody({
               detail={
                 measured ? (
                   <span className="grid gap-1">
-                    <span>{gt("{count} starts", { count: measured.processStarts })}</span>
-                    <span>{gt("{count} exits", { count: measured.processExits })}</span>
+                    <span>
+                      {gt("{count, plural, one {{count} start} other {{count} starts}}", {
+                        count: measured.processStarts,
+                      })}
+                    </span>
+                    <span>
+                      {gt("{count, plural, one {{count} exit} other {{count} exits}}", {
+                        count: measured.processExits,
+                      })}
+                    </span>
                   </span>
                 ) : undefined
               }
@@ -1134,21 +1225,13 @@ function ResourceTelemetryDiagnosticsBody({
               icon={<HardDriveIcon className="size-3.5" />}
               label={gt("Read throughput")}
               value={measured ? formatRate(measured.ioReadBytesPerSecond) : pendingValue}
-              detail={
-                measured
-                  ? gt("{bytes} observed", { bytes: formatBytes(measured.ioReadBytes) })
-                  : undefined
-              }
+              detail={measured ? `${formatBytes(measured.ioReadBytes)} observed` : undefined}
             />
             <IconStat
               icon={<DatabaseIcon className="size-3.5" />}
               label={gt("Write throughput")}
               value={measured ? formatRate(measured.ioWriteBytesPerSecond) : pendingValue}
-              detail={
-                measured
-                  ? gt("{bytes} observed", { bytes: formatBytes(measured.ioWriteBytes) })
-                  : undefined
-              }
+              detail={measured ? `${formatBytes(measured.ioWriteBytes)} observed` : undefined}
               tone={
                 measured && measured.ioWriteBytesPerSecond >= 10 * 1_024 * 1_024
                   ? "danger"
@@ -1163,7 +1246,9 @@ function ResourceTelemetryDiagnosticsBody({
               value={snapshot ? (speedLimit === null ? "-" : `${speedLimit.toFixed(0)}%`) : "..."}
               detail={
                 snapshot && snapshot.power.thermalState !== "unknown"
-                  ? gt("{state} thermal state", { state: snapshot.power.thermalState })
+                  ? gt("{thermalState} thermal state", {
+                      thermalState: snapshot.power.thermalState,
+                    })
                   : undefined
               }
               tone={speedLimit !== null && speedLimit < 80 ? "warning" : "default"}
@@ -1197,7 +1282,7 @@ function ResourceTelemetryDiagnosticsBody({
       </SettingsSection>
 
       <SettingsSection
-        title="Host & collection"
+        title={gt("Host & collection")}
         headerAction={
           collectorNeedsRetry ? (
             <Button size="xs" variant="secondary" disabled={isRetrying} onClick={retryCollector}>
@@ -1246,7 +1331,10 @@ function ResourceTelemetryDiagnosticsBody({
                       <span>
                         {booleanStateLabel(
                           snapshot.power.idle,
-                          { true: gt("Idle"), false: gt("Active") },
+                          {
+                            true: gt("Idle", { $context: "host power state" }),
+                            false: gt("Active", { $context: "host power state" }),
+                          },
                           messages,
                         )}
                       </span>
@@ -1285,11 +1373,15 @@ function ResourceTelemetryDiagnosticsBody({
                   <T>Desktop host signals not connected</T>
                 </div>
                 <p className="mt-1 text-2xs leading-relaxed text-dim-foreground">
-                  <T>Power, idle, lock, and thermal state are supplied by the desktop host.</T>
                   {snapshot?.health.native.status === "healthy" ||
-                  snapshot?.health.native.status === "degraded"
-                    ? gt("Process telemetry remains fully active in this browser session.")
-                    : null}
+                  snapshot?.health.native.status === "degraded" ? (
+                    <T>
+                      Power, idle, lock, and thermal state are supplied by the desktop host. Process
+                      telemetry remains fully active in this browser session.
+                    </T>
+                  ) : (
+                    <T>Power, idle, lock, and thermal state are supplied by the desktop host.</T>
+                  )}
                 </p>
               </div>
             )}
@@ -1329,10 +1421,7 @@ function ResourceTelemetryDiagnosticsBody({
                   value={
                     nativeUnavailableReason
                       ? "-"
-                      : gt("{retained}/{scanned} retained", {
-                          retained: snapshot.health.retainedProcessCount,
-                          scanned: snapshot.health.scannedProcessCount,
-                        })
+                      : `${snapshot.health.retainedProcessCount}/${snapshot.health.scannedProcessCount} retained`
                   }
                 />
                 <DetailRow
@@ -1352,7 +1441,11 @@ function ResourceTelemetryDiagnosticsBody({
                     <span className="grid justify-items-end gap-1">
                       <span>{Option.getOrElse(snapshot.health.sidecarVersion, () => "-")}</span>
                       {Option.isSome(snapshot.health.sidecarPid) ? (
-                        <span>PID {snapshot.health.sidecarPid.value}</span>
+                        <span>
+                          <T>
+                            PID <Var>{snapshot.health.sidecarPid.value}</Var>
+                          </T>
+                        </span>
                       ) : null}
                     </span>
                   }
@@ -1369,7 +1462,7 @@ function ResourceTelemetryDiagnosticsBody({
       </SettingsSection>
 
       <SettingsSection
-        title="Resource timeline"
+        title={gt("Resource timeline")}
         headerAction={
           <div className="flex items-center gap-2">
             <HistoryWindowSelector selectedWindowMs={windowMs} onSelect={setWindowMs} />
@@ -1401,11 +1494,13 @@ function ResourceTelemetryDiagnosticsBody({
       </SettingsSection>
 
       <SettingsSection
-        title="Live process tree"
+        title={gt("Live process tree")}
         headerAction={
           snapshot ? (
             <span className="text-3xs text-dim-foreground">
-              Identity: <span className="font-mono">PID + start time</span>
+              <T>
+                Identity: <span className="font-mono">PID + start time</span>
+              </T>
             </span>
           ) : null
         }
@@ -1425,9 +1520,11 @@ function ResourceTelemetryDiagnosticsBody({
       </SettingsSection>
 
       <SettingsSection
-        title="Instrumented application I/O"
+        title={gt("Instrumented application I/O")}
         headerAction={
-          <span className="text-3xs text-dim-foreground">Logical bytes by operation</span>
+          <span className="text-3xs text-dim-foreground">
+            <T>Logical bytes by operation</T>
+          </span>
         }
       >
         <div className="overflow-hidden rounded-card border border-transparent surface-card-settings">

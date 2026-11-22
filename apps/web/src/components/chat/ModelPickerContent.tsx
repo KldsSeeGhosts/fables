@@ -668,7 +668,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     }
     for (const instanceId of tabsWithLegacyRow) addRow(instanceId, true);
     for (const [instanceId, subProviders] of subProvidersByInstance) {
-      for (const _subProvider of subProviders) addRow(instanceId, false);
+      for (const _subProvider of subProviders) addRow(instanceId, true);
     }
     return Math.max(0, ...unitsByTab.values());
   })();
@@ -1177,7 +1177,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                     >
                       <div className="min-w-0 flex-1 text-left">
                         <div className="flex min-w-0 items-center gap-2">
-                          <div className="min-w-0 truncate text-sm font-normal leading-snug">
+                          <div className="min-w-0 truncate text-label text-foreground">
                             {subProviderSection.name}
                           </div>
                           {unavailable ? (
@@ -1186,7 +1186,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                             </Badge>
                           ) : null}
                         </div>
-                        <div className="mt-1 text-xs font-normal leading-snug text-muted-foreground">
+                        <div className="mt-1 text-meta text-muted-foreground">
                           {subProviderSection.unavailableReason ??
                             gt("{count, plural, one {{count} model} other {{count} models}}", {
                               count: subProviderSection.models.length,

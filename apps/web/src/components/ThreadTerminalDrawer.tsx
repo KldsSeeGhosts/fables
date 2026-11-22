@@ -1,8 +1,5 @@
-import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { useAtomMount, useAtomValue } from "@effect/atom-react";
-import { msg, T, useGT, useMessages } from "gt-react";
-import { m } from "../i18n/messages";
 import {
   isAtomCommandInterrupted,
   executeAtomQuery,
@@ -30,6 +27,9 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabelsCopy";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { msg, T, useGT, useMessages } from "gt-react";
+import { m, type MessageResolver } from "../i18n/messages";
 import { terminalTabTitle } from "../layout/surfaceTabLabels";
 import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/reactivity";
@@ -58,7 +58,10 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { readTextFromClipboard, writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { cn } from "~/lib/utils";
-import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
+import {
+  COLLAPSED_SIDEBAR_INSET_EASE_CLASS,
+  COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
+} from "~/workspaceTitlebar";
 import { type TerminalContextSelection } from "~/lib/terminalContext";
 import {
   GhosttyTerminalSurface,
@@ -1414,6 +1417,7 @@ function TerminalTabStrip({
   ref: RefObject<HTMLDivElement | null>;
   children: ReactNode;
 }) {
+  const gt = useGT();
   const { tabId } = useLayoutPane();
   if (notch) {
     return (
@@ -1422,7 +1426,7 @@ function TerminalTabStrip({
         data-layout-pane-tab={tabId ?? undefined}
         className="flex shrink-0 items-center gap-1"
         role="tablist"
-        aria-label="Terminals"
+        aria-label={gt("Terminals")}
       >
         {children}
       </div>
@@ -1433,7 +1437,7 @@ function TerminalTabStrip({
       <div
         className="flex h-full w-max min-w-full items-center gap-1"
         role="tablist"
-        aria-label="Terminals"
+        aria-label={gt("Terminals")}
       >
         {children}
       </div>
@@ -1926,7 +1930,9 @@ export default function ThreadTerminalDrawer({
         <div
           className={cn(
             "flex h-11 shrink-0 items-center gap-1",
-            mode === "pane" ? "relative ps-1.5 pe-2 md:ps-0" : "px-1.5 pt-1",
+            mode === "pane"
+              ? cn("relative ps-1.5 pe-2 md:ps-0", COLLAPSED_SIDEBAR_INSET_EASE_CLASS)
+              : "px-1.5 pt-1",
             mode === "pane" && leadingEdge && COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
             mode === "pane" && trailingEdge && "wco:pr-(--workspace-native-controls-inset)",
           )}
@@ -1957,28 +1963,32 @@ export default function ThreadTerminalDrawer({
                   const isActive = terminalId === resolvedActiveTerminalId;
                   // Split siblings of the active tab are on screen too.
                   const isOnScreen = isSplitView && groupIndex === resolvedActiveGroupIndex;
-                  const terminalLabel = terminalLabelById.get(terminalId) ?? "Terminal";
+                  const terminalLabel = terminalLabelById.get(terminalId) ?? gt("Terminal");
                   const status = terminalStatusById?.get(terminalId) ?? "idle";
-                  const statusLabel = terminalActivityStatusLabel(status);
-                  const tabTitle = terminalTabTitle(terminalId, terminalLabel);
+                  const statusLabel = terminalActivityStatusLabel(status, messages);
+                  const tabTitle = terminalTabTitle(terminalId, terminalLabel, messages);
                   const splitLabel =
                     terminalGroup.terminalIds.length < 2
                       ? null
                       : terminalGroup.splitDirection === "vertical"
-                        ? "Stacked"
-                        : "Side by side";
+                        ? gt("Stacked", { $context: "terminals split vertically" })
+                        : gt("Side by side", { $context: "terminals split horizontally" });
                   const tooltip = [
                     terminalLabel,
                     threadTitle,
                     terminalLaunchLocationsById?.get(terminalId)?.cwd ?? worktreePath ?? cwd,
-                    statusLabel ?? "Idle",
+                    statusLabel ?? gt("Idle", { $context: "terminal status" }),
                     splitLabel,
                   ]
                     .filter(Boolean)
                     .join("\n");
-                  const closeTerminalLabel = `Close ${terminalLabel}${
-                    isActive && closeShortcutLabel ? ` (${closeShortcutLabel})` : ""
-                  }`;
+                  const closeTerminalLabel =
+                    isActive && closeShortcutLabel
+                      ? gt("Close {terminal} ({shortcut})", {
+                          terminal: terminalLabel,
+                          shortcut: closeShortcutLabel,
+                        })
+                      : gt("Close {terminal}", { terminal: terminalLabel });
                   return (
                     <div
                       key={terminalId}
@@ -2081,8 +2091,11 @@ export default function ThreadTerminalDrawer({
   );
 }
 
-function terminalActivityStatusLabel(status: TerminalActivityStatus): string | null {
-  if (status === "running") return "Process running";
-  if (status === "failed") return "Last command failed";
+function terminalActivityStatusLabel(
+  status: TerminalActivityStatus,
+  resolve: MessageResolver,
+): string | null {
+  if (status === "running") return resolve(msg("Process running"));
+  if (status === "failed") return resolve(msg("Last command failed"));
   return null;
 }

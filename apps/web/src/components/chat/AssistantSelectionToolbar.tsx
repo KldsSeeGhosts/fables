@@ -231,8 +231,8 @@ export function AssistantSelectionToolbar({
     }
     void writeTextToClipboard(text, {
       target: "selection",
-      unavailableMessage: msg("Clipboard API is unavailable while copying selection."),
-      failureMessage: msg("Failed to copy selection to the clipboard."),
+      unavailableMessage: msg("Clipboard API is unavailable while copying text."),
+      failureMessage: msg("Failed to copy text to the clipboard."),
     }).then(dismiss, (error: unknown) => {
       toastManager.add({
         type: "error",
@@ -280,7 +280,7 @@ export function AssistantSelectionToolbar({
       <span aria-hidden="true" className="h-4 w-px shrink-0 bg-divider" />
       <Button variant="ghost" size="xs" onClick={copy}>
         <CopyIcon aria-hidden="true" />
-        {gt("Copy")}
+        {gt("Copy", { $context: "verb, copies text to the clipboard" })}
       </Button>
     </div>,
     document.body,

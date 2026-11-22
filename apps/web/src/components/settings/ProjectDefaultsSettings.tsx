@@ -1,13 +1,13 @@
+import { managedRuntimeModeDenial } from "@t3tools/client-runtime/contract-labels";
 import {
   DEFAULT_SERVER_SETTINGS,
   type ModelSelection,
   type WorktreeSubmodules,
 } from "@t3tools/contracts";
-import { managedRuntimeModeDenial } from "@t3tools/client-runtime/contract-labels";
 import { createModelSelection, pickModelSelection } from "@t3tools/shared/model";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { useNavigate } from "@tanstack/react-router";
-import { useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages } from "gt-react";
 import { FolderGit2Icon, FolderIcon, GitBranchIcon } from "lucide-react";
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
 
@@ -64,12 +64,15 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
       ? providersByEnvironment.get(representative.environmentId)
       : undefined) ?? EMPTY_SERVER_PROVIDERS;
   const entries = providerInstanceEntriesFor(providers, settings, target?.projectId ?? null);
-  const presentation = resolveDefaultModelSettingsPresentation({
-    entries,
-    providers,
-    settings,
-    projectId: target?.projectId ?? null,
-  });
+  const presentation = resolveDefaultModelSettingsPresentation(
+    {
+      entries,
+      providers,
+      settings,
+      projectId: target?.projectId ?? null,
+    },
+    m,
+  );
   const selection = presentation.selection;
   const modelOptions = getCustomModelOptionsByInstance(
     settings,
@@ -221,7 +224,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
       description={
         isProjectScope
           ? gt("Where new threads in this project start.")
-          : gt("Where new threads start. Projects and their t3.json can override it.")
+          : gt("Where new threads start, unless overridden by the project or t3.json.")
       }
       resetAction={
         !isProjectScope && settings.defaultThreadEnvMode !== null ? (
@@ -322,7 +325,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
               if (reason) {
                 toastManager.add({
                   type: "error",
-                  title: "Fallback model not saved",
+                  title: gt("Fallback model not saved"),
                   description: reason,
                 });
                 return;
@@ -337,7 +340,9 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
             }}
           />
         ) : (
-          <span className="text-body text-muted-foreground">{gt("No providers available")}</span>
+          <span className="text-body text-muted-foreground">
+            <T>No providers available</T>
+          </span>
         )
       }
     />
@@ -426,12 +431,8 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
       title={gt("Automatically pull")}
       description={
         isProjectScope
-          ? gt(
-              "Keeps this project's default branch current when the checkout has no local changes or commits.",
-            )
-          : gt(
-              "Keeps the default branch current when the checkout has no local changes or commits. Projects can override it.",
-            )
+          ? gt("Keep this project's default branch current when the checkout is clean.")
+          : gt("Keep the default branch current when the checkout is clean.")
       }
       resetAction={
         settings.defaultAutoPull ? (
@@ -489,9 +490,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
       description={
         isProjectScope
           ? gt("Pull requests in this project start with this method.")
-          : gt(
-              "Pull requests start with this method. Last selected reuses whatever you chose most recently on this device.",
-            )
+          : gt("Pull requests start with this method, or the one you used last.")
       }
       resetAction={
         settings.pullRequestMergeMethod !== null ? (
@@ -528,7 +527,9 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
             </SelectValue>
           </SelectTrigger>
           <SelectPopup align="end" alignItemWithTrigger={false}>
-            <SelectItem value="last">{gt("Last selected")}</SelectItem>
+            <SelectItem value="last">
+              <T>Last selected</T>
+            </SelectItem>
             <SelectItem value="merge">{m(PULL_REQUEST_MERGE_METHOD_LABELS.merge)}</SelectItem>
             <SelectItem value="squash">{m(PULL_REQUEST_MERGE_METHOD_LABELS.squash)}</SelectItem>
             <SelectItem value="rebase">{m(PULL_REQUEST_MERGE_METHOD_LABELS.rebase)}</SelectItem>
@@ -579,7 +580,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
         category === "source-control"
           ? gt("Repositories")
           : category === "project"
-            ? gt("Defaults")
+            ? gt("Defaults", { $context: "settings section, project defaults" })
             : gt("New threads")
       }
     >
@@ -615,9 +616,9 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
 
 export function WorktreeSubmodulesRow() {
   const searchableSetting = useSearchableSetting();
+  const { scope, target, connectedEnvironments } = useSettingsScope();
   const gt = useGT();
   const m = useMessages();
-  const { scope, target, connectedEnvironments } = useSettingsScope();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   const mixedSubmodules = useScopedSettingsMixed(["worktreeSubmodules"]);
@@ -636,9 +637,7 @@ export function WorktreeSubmodulesRow() {
       description={
         isProjectScope
           ? gt("How new worktrees in this project populate git submodules.")
-          : gt(
-              "How new worktrees populate git submodules. Projects and their t3.json can override it.",
-            )
+          : gt("How new worktrees populate git submodules.")
       }
       resetAction={
         !isProjectScope && settings.worktreeSubmodules !== null ? (

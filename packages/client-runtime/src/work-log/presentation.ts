@@ -21,7 +21,7 @@ import { resolveMediaSource } from "@t3tools/client-runtime/media-source";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { isWorkspaceImagePreviewPath } from "@t3tools/shared/mediaPreview";
 import { formatTokens } from "@t3tools/shared/usageFormat";
-import { formatDuration } from "@t3tools/shared/orchestrationTiming";
+import { formatDuration } from "@t3tools/shared/orchestrationTimingCopy";
 import { classifyToolActivity } from "@t3tools/shared/toolActivity";
 import { toolOutputIndicatesFailure } from "@t3tools/shared/toolOutput";
 
@@ -853,7 +853,13 @@ export function liveThoughtLine(markdown: string): string {
 }
 
 /** A running command's time so far, in whole seconds so the ticking label never shows tenths. */
-export function formatRunningFor(elapsedMs: number): string {
+export function formatRunningFor(elapsedMs: number, resolve: MFunctionType = mFallback): string {
   const seconds = Math.max(0, Math.floor(elapsedMs / 1_000));
-  return `for ${seconds < 60 ? `${seconds}s` : formatDuration(seconds * 1_000)}`;
+  const duration =
+    seconds < 60
+      ? resolve(msg("{seconds}s", { seconds }))
+      : formatDuration(seconds * 1_000, resolve);
+  return resolve(
+    msg("for {duration}", { duration, $context: "how long a running command has run so far" }),
+  );
 }

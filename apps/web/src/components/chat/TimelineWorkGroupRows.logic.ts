@@ -2,7 +2,7 @@ import { toServerClock } from "@t3tools/client-runtime/clock";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { formatDuration } from "@t3tools/shared/orchestrationTimingCopy";
 import { msg } from "gt-react";
-import { m, type MessageResolver } from "~/i18n/messages";
+import { m } from "~/i18n/messages";
 
 export function formatWorkingTimer(startIso: string, endIso: string): string | null {
   const startedAtMs = Date.parse(startIso);
@@ -14,13 +14,13 @@ export function formatWorkingTimer(startIso: string, endIso: string): string | n
   return formatWorkingDuration(endedAtMs - startedAtMs);
 }
 
-export function formatWorkingDuration(elapsedMs: number, resolve: MessageResolver = m): string {
+export function formatWorkingDuration(elapsedMs: number): string {
   const elapsedSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
   if (elapsedSeconds < 60) {
-    return resolve(msg("{seconds}s", { seconds: elapsedSeconds }));
+    return m(msg("{seconds}s", { seconds: elapsedSeconds }));
   }
 
-  return formatDuration(elapsedSeconds * 1_000, resolve);
+  return formatDuration(elapsedSeconds * 1_000, m);
 }
 
 export function formatWorkingTimerNow(

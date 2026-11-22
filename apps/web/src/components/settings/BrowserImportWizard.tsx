@@ -567,6 +567,7 @@ function DoneStep({
   readonly onClose: () => void;
 }) {
   const gt = useGT();
+  const m = useMessages();
   const environment = destinationEnvironmentName;
   return (
     <>
@@ -607,7 +608,7 @@ function DoneStep({
           <Text variant="meta" tone="dim" render={<h3 />}>
             {gt("Skipped", { $context: "heading, cookie domains that were skipped" })}
           </Text>
-          <p className="mt-1 text-sm text-foreground">{formatSkippedDomains(skippedDomains)}</p>
+          <p className="mt-1 text-sm text-foreground">{formatSkippedDomains(skippedDomains, m)}</p>
         </DialogPanel>
       ) : null}
       <DialogFooter>

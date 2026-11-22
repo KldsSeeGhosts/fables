@@ -253,10 +253,11 @@ function ProviderSettingsPlaceholder({
   readonly children?: ReactNode;
 }) {
   const searchableSetting = useSearchableSetting();
+  const gt = useGT();
   return (
     <>
       {deviceTabs ? <SettingsToolbar>{deviceTabs}</SettingsToolbar> : null}
-      <SettingsSection {...searchableSetting("providers")} title="Agents" variant="plain">
+      <SettingsSection {...searchableSetting("providers")} title={gt("Agents")} variant="plain">
         <SettingsGroup divided={false} className="flex min-h-80 overflow-x-hidden overflow-y-auto">
           <Empty size="compact">
             <EmptyMedia variant="icon">{icon}</EmptyMedia>
@@ -341,7 +342,7 @@ export function ProviderSettingsPanel(target: ProviderSettingsTarget) {
               />
             }
           >
-            Back to setup
+            <T>Back to setup</T>
           </Button>
         </div>
       ) : null}
@@ -1070,10 +1071,11 @@ export function EnvironmentProviderSettings({
                     variant="ghost-muted"
                     disabled={isRefreshingProviders || !canRefreshProviders}
                     aria-busy={isRefreshingProviders}
-                    aria-label="Refresh provider status"
+                    aria-label={gt("Refresh provider status")}
                     onClick={() => void refreshProviders()}
                   >
                     <RefreshIcon refreshing={isRefreshingProviders} />
+
                     <span className="hidden min-w-0 truncate sm:inline">
                       {isRefreshingProviders ? (
                         gt("Refreshing providers")
@@ -1096,13 +1098,15 @@ export function EnvironmentProviderSettings({
                       size="icon-xs"
                       variant="ghost-muted"
                       onClick={() => setIsAddInstanceDialogOpen(true)}
-                      aria-label="Add provider"
+                      aria-label={gt("Add provider")}
                     >
                       <PlusIcon />
                     </Button>
                   }
                 />
-                <TooltipPopup side="top">{gt("Add provider")}</TooltipPopup>
+                <TooltipPopup side="top">
+                  <T>Add provider</T>
+                </TooltipPopup>
               </Tooltip>
             ) : null}
           </div>
@@ -1146,7 +1150,7 @@ export function EnvironmentProviderSettings({
                   onClick={() => setIsAddInstanceDialogOpen(true)}
                 >
                   <PlusIcon />
-                  {gt("Add provider")}
+                  <T>Add provider</T>
                 </Button>
               )}
             </SettingsEmptyState>
@@ -1206,7 +1210,9 @@ export function EnvironmentProviderSettings({
                   </Button>
                 }
               />
-              <TooltipPopup>{gt("Import conversations")}</TooltipPopup>
+              <TooltipPopup>
+                <T>Import conversations</T>
+              </TooltipPopup>
             </Tooltip>
             <ProviderUpdatesAction />
           </div>

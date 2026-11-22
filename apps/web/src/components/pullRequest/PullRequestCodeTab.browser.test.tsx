@@ -435,7 +435,12 @@ async function renderShortPages(stack: AsyncDisposableStack) {
     const scroller = container.querySelector(".diff-render-surface")!;
     const header = await vi.waitFor(() => {
       scroller.scrollTop = scroller.scrollHeight;
-      return screen.getByText(path, { exact: true }).element();
+      const visible = screen
+        .getByText(path, { exact: true })
+        .elements()
+        .find((element) => element.checkVisibility());
+      if (!visible) throw new Error(`No visible file header for ${path}`);
+      return visible;
     });
     const { host } = header.getRootNode() as ShadowRoot;
     return page.elementLocator(host).getByRole("button", { name: /^(Expand|Collapse) diff$/ });
@@ -678,7 +683,7 @@ it("keeps an unsent reply when the appearance switches between light and dark", 
     { container },
   );
   const reply = () => screen.getByRole("textbox", { name: "Reply to this conversation" });
-  await screen.getByRole("button", { name: "Reply", exact: true }).click();
+  await reply().click();
   await reply().fill("Unsent");
 
   setAppearanceMode("light");

@@ -131,7 +131,7 @@ function PendingLinkRequest(props: {
       <div className="flex min-w-0 flex-col gap-1 px-3 py-2.5">
         <p className="flex items-center gap-2 text-label text-foreground">
           <LinkIcon aria-hidden className="size-4 shrink-0 text-info-foreground" />
-          {picksMachine(item)
+          {item.url === undefined
             ? gt("Link a machine to this environment")
             : gt("Link {target} to this environment", { target })}
         </p>

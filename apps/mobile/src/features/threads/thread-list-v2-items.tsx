@@ -142,7 +142,9 @@ const STATUS_PILL_BY_KIND: Record<
   },
   // Runtime "idle": the agent stopped with background tasks still open.
   waiting: {
-    label: msg("Monitoring", { $context: "thread status, agent idle with background tasks open" }),
+    label: msg("Monitoring", {
+      $context: "thread status, agent stopped with background tasks open",
+    }),
     symbol: "eye",
     textClassName: "text-adaptive-blue-600-400",
     tintClassName: "accent-adaptive-blue-600-400",
@@ -163,7 +165,7 @@ const STATUS_PILL_BY_KIND: Record<
     fillClassName: "bg-adaptive-amber-500-a12-a16",
   },
   merged: {
-    label: msg("Merged", { $context: "thread status, pull request merged" }),
+    label: msg("Merged", { $context: "thread status, its pull request merged" }),
     symbol: PullRequestGlyph.merged,
     textClassName: "text-adaptive-violet-600-400",
     tintClassName: "accent-adaptive-violet-600-400",
@@ -947,7 +949,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         : null;
   const recede = shouldRecedeThreadRow({ status, selected });
   const isRegeneratingTitle = thread.titleRegeneration != null;
-  const timeLabel = m(props.timeLabel);
+  // List items keep marked text so they stay the same objects across a language switch.
+  const timeLabel = props.timeLabel && m(props.timeLabel);
   const snoozeWakeLabelText =
     props.snoozeWakeLabelText === undefined ? undefined : m(props.snoozeWakeLabelText);
   const rowAccessibilityLabel = threadListV2RowAccessibilityLabel(

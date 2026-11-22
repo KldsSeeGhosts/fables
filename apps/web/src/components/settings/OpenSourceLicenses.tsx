@@ -92,7 +92,6 @@ function LicenseNoticeRow({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }) {
-  const gt = useGT();
   const messages = useMessages();
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
@@ -136,7 +135,7 @@ function LicenseNoticeRow({
                   variant="secondary"
                 >
                   <ExternalLinkIcon aria-hidden />
-                  {gt("Project source")}
+                  <T>Project source</T>
                 </Button>
               ) : null}
               <pre className="max-w-[76ch] whitespace-pre-wrap break-words font-mono text-xs/5 text-foreground">
@@ -244,7 +243,7 @@ export function OpenSourceLicensesPanel() {
         ) : errorMessage !== null ? (
           <LicenseManifestError message={errorMessage} onRetry={retry} />
         ) : (
-          <SettingsLoadingRows label={gt("Loading open-source notices…")} />
+          <SettingsLoadingRows label={gt("Loading open-source notices")} />
         )}
       </SettingsSection>
     </SettingsPageContainer>

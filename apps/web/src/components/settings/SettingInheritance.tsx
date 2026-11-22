@@ -204,10 +204,13 @@ export const SettingResetPlacementContext = createContext<"inline" | "popover">(
 
 /** "2 project overrides" beside a row title at an environment scope. */
 export function SettingOverrideCount({ count }: { count: number }) {
+  const gt = useGT();
   if (count === 0) return null;
   return (
     <Badge variant="secondary">
-      {count} project {count === 1 ? "override" : "overrides"}
+      {gt("{count, plural, one {{count} project override} other {{count} project overrides}}", {
+        count,
+      })}
     </Badge>
   );
 }
@@ -300,12 +303,12 @@ export function SettingInheritance({
     const overrides = environments.find(
       (environment) => environment.environmentId === project.environmentId,
     )?.serverConfig?.settings.projectSettingsOverrides;
-    return formatValue(key, overrides?.[project.projectId]?.[key]);
+    return formatValue(key, overrides?.[project.projectId]?.[key], messages);
   };
   const clearOverrides =
     onClearOverrides && overridingProjects.length > 0 ? (
       <Button size="xs" variant="secondary" onClick={() => onClearOverrides(overridingProjects)}>
-        Clear project overrides
+        <T>Clear project overrides</T>
       </Button>
     ) : null;
   const hasFooter = clearOverrides !== null || footer !== undefined;
@@ -347,9 +350,16 @@ export function SettingInheritance({
                 <Button
                   size="icon-micro"
                   variant="ghost-muted"
-                  aria-label={gt("{overrideSummary}. Show where this value comes from", {
-                    overrideSummary: overrideCount ? `${summary}. ${overrideCount}` : summary,
-                  })}
+                  aria-label={
+                    overrideCount
+                      ? gt("{summary}. {overrideCount}. Show where this value comes from", {
+                          summary,
+                          overrideCount,
+                        })
+                      : gt("{overrideSummary}. Show where this value comes from", {
+                          overrideSummary: summary,
+                        })
+                  }
                 />
               }
             />

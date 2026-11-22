@@ -1,6 +1,6 @@
 import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
-import { capitalizeTerm } from "@t3tools/client-runtime/source-control-clients";
+import { changeRequestTermKind } from "./pullRequest/changeRequestTerm";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
@@ -18,6 +18,7 @@ import {
 } from "@t3tools/contracts";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { ChevronDownIcon, ExternalLinkIcon, GitBranchIcon } from "lucide-react";
+import type { MessageResolver } from "../i18n/messages";
 import {
   useEffect,
   useEffectEvent,
@@ -52,7 +53,6 @@ import { createPortal } from "react-dom";
 import { ThreadDetailsIssueRows } from "./chat/ThreadDetailsIssueRows";
 import { parsePullRequestReference } from "@t3tools/client-runtime/pull-request-link-input";
 import { getSourceControlPresentation } from "../sourceControlPresentation";
-import { changeRequestTermKind } from "./pullRequest/changeRequestTerm";
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import {
   type BranchHold,
@@ -140,6 +140,7 @@ function buildBranchPickerItems({
   checkoutPullRequestItemValue,
   normalizedQuery,
   changeRequestGroupLabel,
+  resolve,
 }: {
   refs: ReadonlyArray<VcsRef>;
   pullRequests: ReadonlyArray<PullRequestListEntry> | undefined;
@@ -149,6 +150,7 @@ function buildBranchPickerItems({
   checkoutPullRequestItemValue: string | null;
   normalizedQuery: string;
   changeRequestGroupLabel: string;
+  resolve: MessageResolver;
 }) {
   const branchByName = new Map(refs.map((refName) => [refName.name, refName] as const));
   const openPullRequests = (pullRequests ?? [])
@@ -186,7 +188,9 @@ function buildBranchPickerItems({
     if (pullRequestByItemValue.has(itemValue)) return changeRequestGroupLabel;
     const ref = branchByName.get(itemValue);
     if (!ref) return null;
-    return ref.isRemote ? "Remote" : "Local";
+    return ref.isRemote
+      ? resolve(msg("Remote", { $context: "branch picker group, remote branches" }))
+      : resolve(msg("Local", { $context: "branch picker group, local branches" }));
   });
   return {
     branchByName,
@@ -456,7 +460,11 @@ export function BranchToolbarBranchSelector({
     createBranchItemValue,
     checkoutPullRequestItemValue,
     normalizedQuery: normalizedBranchQuery,
-    changeRequestGroupLabel: capitalizeTerm(sourceControlPresentation.terminology.plural),
+    changeRequestGroupLabel: gt(
+      "{term, select, mr {Merge requests} cr {Change requests} other {Pull requests}}",
+      { term: changeRequestTermKind(sourceControlPresentation.terminology) },
+    ),
+    resolve: messages,
   });
   const [resolvedActiveBranch, setOptimisticBranch] = useOptimistic(
     branchHoldCurrent ? branchHold.branch : canonicalActiveBranch,
@@ -935,7 +943,7 @@ export function BranchToolbarBranchSelector({
               <span
                 role="button"
                 tabIndex={-1}
-                aria-label={`Open #${pullRequest.number}`}
+                aria-label={gt("Open #{number}", { number: pullRequest.number })}
                 className="grid size-5 shrink-0 place-items-center rounded-row text-dim-foreground hover:text-foreground"
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
@@ -1020,7 +1028,7 @@ export function BranchToolbarBranchSelector({
         displayMode === "toolbar" && renderWorkspaceMenu
           ? (children) =>
               renderWorkspaceMenu({
-                label: isActiveBranchResolving ? "Loading ref…" : triggerLabel,
+                label: isActiveBranchResolving ? gt("Loading ref…") : triggerLabel,
                 disabled: isBranchActionPending,
                 open: isBranchMenuOpen,
                 focusSearch: focusBranchSearch,
@@ -1034,7 +1042,7 @@ export function BranchToolbarBranchSelector({
         ...(displayMode === "toolbar"
           ? {
               anchor: () =>
-                toolbarAnchorRef.current?.closest<HTMLElement>('[data-slot="composer-shell"]') ??
+                toolbarAnchorRef.current?.closest<HTMLElement>('[data-slot="composer-host"]') ??
                 toolbarAnchorRef.current,
             }
           : {}),

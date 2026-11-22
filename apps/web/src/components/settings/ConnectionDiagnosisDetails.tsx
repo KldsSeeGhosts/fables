@@ -109,7 +109,7 @@ export function ConnectionDiagnosisSummary({
           </TooltipTrigger>
           <TooltipPopup side="top">
             <T>
-              attempt <Var>{attempt}</Var>
+              Attempt <Var>{attempt}</Var>
             </T>
           </TooltipPopup>
         </Tooltip>

@@ -1,5 +1,3 @@
-import { m } from "../i18n/messages";
-import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
 import {
   AuthSettingsWriteScope,
@@ -14,6 +12,8 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
+import { projectScriptMenuLabel } from "@t3tools/shared/projectScriptsCopy";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import {
   ChevronDownIcon,
   DownloadIcon,
@@ -25,13 +25,13 @@ import {
   SquareTerminalIcon,
   WrenchIcon,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import React, { useState } from "react";
+import { T, useGT, useMessages, Var } from "gt-react";
+import { m } from "../i18n/messages";
 import { useThreadDiscoveredPorts } from "../portDiscoveryState";
 import { useEnvironment } from "../state/environments";
 import { previewEnvironment } from "../state/preview";
 import { useAtomCommand } from "../state/use-atom-command";
-import { projectScriptMenuLabel } from "@t3tools/shared/projectScriptsCopy";
-import { T, useGT, useMessages, Var } from "gt-react";
 
 import { commandForProjectScript, primaryProjectScript } from "~/projectScripts";
 import { shortcutLabelForCommand } from "~/keybindings";
@@ -149,7 +149,7 @@ export default function ProjectScriptsControl({
     setActionsMenuOpen({ presentation, scripts: false, imports: false });
   }
   const [editorRequest, setEditorRequest] = useState<ProjectScriptEditorRequest | null>(null);
-  const editorRequestIdRef = useRef(0);
+  const editorRequestIdRef = React.useRef(0);
 
   const primaryScript =
     (preferredScriptId ? scripts.find((script) => script.id === preferredScriptId) : undefined) ??
@@ -233,7 +233,10 @@ export default function ProjectScriptsControl({
       <ScriptIcon icon={fileScript.icon ?? "play"} className="size-4" />
       <MenuItemLabel>{fileScript.name}</MenuItemLabel>
       <MenuShortcut>
-        <DownloadIcon className="size-3.5" aria-label="Import" />
+        <DownloadIcon
+          className="size-3.5"
+          aria-label={gt("Import", { $context: "verb, import an action from t3.json" })}
+        />
       </MenuShortcut>
     </MenuItem>
   ));
@@ -242,7 +245,11 @@ export default function ProjectScriptsControl({
     <MenuSub>
       <MenuSubTrigger>
         <FileDownIcon className="size-4" />
-        <MenuItemLabel>From t3.json</MenuItemLabel>
+        <MenuItemLabel>
+          <T>
+            From <Var>t3.json</Var>
+          </T>
+        </MenuItemLabel>
       </MenuSubTrigger>
       <MenuSubPopup>{importItems}</MenuSubPopup>
     </MenuSub>
@@ -293,7 +300,9 @@ export default function ProjectScriptsControl({
             >
               <ScriptIcon icon={script.icon} className="size-4" />
               <MenuItemLabel>
-                {script.runOnWorktreeCreate ? `${script.name} (setup)` : script.name}
+                {script.runOnWorktreeCreate
+                  ? gt("{name} (setup)", { name: script.name })
+                  : script.name}
               </MenuItemLabel>
               <span className="relative ms-auto flex h-6 min-w-6 items-center justify-end ps-4">
                 {shortcutLabel ? (
@@ -311,7 +320,7 @@ export default function ProjectScriptsControl({
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    aria-label={`Edit ${script.name}`}
+                    aria-label={gt("Edit {name}", { name: script.name })}
                     onPointerDown={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
@@ -390,9 +399,7 @@ export default function ProjectScriptsControl({
           {importMenuItems}
           <MenuItem density={presentation === "menu" ? "touch" : "default"} onClick={openAddDialog}>
             <PlusIcon className="size-4" />
-            <MenuItemLabel>
-              {isPanel ? <T>Add project action…</T> : <T>Add action</T>}
-            </MenuItemLabel>
+            <MenuItemLabel>{isPanel ? gt("Add project action…") : gt("Add action")}</MenuItemLabel>
           </MenuItem>
         </>
       )}
@@ -448,11 +455,11 @@ export default function ProjectScriptsControl({
           )}
         </>
       ) : isPanel ? (
-        <div className="flex min-w-0 items-center" role="group" aria-label="Project scripts">
+        <div className="flex min-w-0 items-center" role="group" aria-label={gt("Project scripts")}>
           {primaryScript ? (
             <ThreadDetailsControl
               className="flex-1"
-              aria-label={`Run ${primaryScript.name}`}
+              aria-label={gt("Run {name}", { name: primaryScript.name })}
               disabled={!onRunScript}
               onClick={() => onRunScript?.(primaryScript)}
             >
@@ -467,7 +474,9 @@ export default function ProjectScriptsControl({
           ) : (
             <ThreadDetailsControl className="flex-1" onClick={openAddDialog}>
               <SquareTerminalIcon />
-              <MenuItemLabel>Add project action…</MenuItemLabel>
+              <MenuItemLabel>
+                <T>Add project action…</T>
+              </MenuItemLabel>
             </ThreadDetailsControl>
           )}
           {supportsStop && runningScriptServer?.pid != null ? (
@@ -510,7 +519,9 @@ export default function ProjectScriptsControl({
               >
                 <ChevronDownIcon />
               </TooltipTrigger>
-              <TooltipPopup>{gt("Project actions")}</TooltipPopup>
+              <TooltipPopup>
+                <T>Project actions</T>
+              </TooltipPopup>
             </Tooltip>
             <MenuPopup side="bottom" align="end">
               {scriptItems}
@@ -598,7 +609,7 @@ export default function ProjectScriptsControl({
           >
             <WrenchIcon className="size-3.5" />
             <span className="sr-only @4xl/header-actions:not-sr-only @4xl/header-actions:ml-0.5">
-              <T>Actions</T>
+              <T context="project actions menu">Actions</T>
             </span>
             <ChevronDownIcon className="size-3.5" />
           </MenuTrigger>
@@ -621,7 +632,7 @@ export default function ProjectScriptsControl({
           >
             <PlusIcon className="size-3.5" />
             <span className="sr-only @4xl/header-actions:not-sr-only @4xl/header-actions:ml-0.5">
-              <T>Add action</T>
+              {gt("Add action")}
             </span>
           </TooltipTrigger>
           <TooltipPopup side="top">{gt("Add action")}</TooltipPopup>

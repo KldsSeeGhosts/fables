@@ -243,7 +243,7 @@ export function LinkSeveralEnvironmentsDialog({
             ) : (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-caption text-foreground">
+                  <span className="text-meta text-foreground">
                     <T>Machines</T>
                   </span>
                   <Button
@@ -267,7 +267,7 @@ export function LinkSeveralEnvironmentsDialog({
                 {linksState === "loaded" ? null : (
                   <div
                     role="status"
-                    className="flex items-center justify-between gap-2 text-caption text-muted-foreground"
+                    className="flex items-center justify-between gap-2 text-meta text-muted-foreground"
                   >
                     {linksState === "loading" ? (
                       <T>Checking which machines are already linked…</T>
@@ -337,7 +337,7 @@ export function LinkSeveralEnvironmentsDialog({
                               </span>
                             ) : null}
                             {back?.kind === "failed" ? (
-                              <span className="block text-xs text-destructive">
+                              <span className="block text-caption text-destructive">
                                 {gt("Could not link back: {reason}", {
                                   reason: back.detail ?? linkBatchFailureLabel(back.failure, m),
                                 })}
@@ -363,7 +363,7 @@ export function LinkSeveralEnvironmentsDialog({
               </div>
             )}
             {unlisted > 0 ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {gt(
                   "{count, plural, one {# machine needs a pairing code, so it is not listed.} other {# machines need a pairing code, so they are not listed.}}",
                   { count: unlisted },
@@ -390,17 +390,17 @@ export function LinkSeveralEnvironmentsDialog({
             ) : null}
             <LinkAccessPicker value={access} onChange={setAccess} disabled={busy} />
             {backOffered && sourceLabel !== undefined ? (
-              <label className="flex cursor-pointer items-start gap-2.5 text-sm has-data-disabled:cursor-default">
+              <label className="flex cursor-pointer items-start gap-2.5 text-body has-data-disabled:cursor-default">
                 <Checkbox
                   checked={alsoLinkBack}
                   disabled={busy}
                   onCheckedChange={setAlsoLinkBack}
                 />
                 <span className="min-w-0 space-y-0.5">
-                  <span className="block font-medium text-foreground">
+                  <span className="block text-label text-foreground">
                     {gt("Also link each machine back to {source}", { source: sourceLabel })}
                   </span>
-                  <span className="block text-xs text-muted-foreground">
+                  <span className="block text-meta text-muted-foreground">
                     {gt("Agents there can then work on {source} too.", { source: sourceLabel })}
                     {alsoLinkBack && oneWayOnly > 0
                       ? ` ${gt(

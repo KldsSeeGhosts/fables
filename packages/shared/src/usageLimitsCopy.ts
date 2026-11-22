@@ -240,10 +240,7 @@ export function formatResetsIn(
   return resolve(msg("resets in {duration}", { duration }));
 }
 
-/**
- * `runs out in about 40m`, or null when the window resets before it runs dry.
- * @public
- */
+/** `runs out in about 40m`, or null when the window resets before it runs dry. */
 export function formatRunsOutIn(
   window: ServerProviderUsageWindow,
   now: number,

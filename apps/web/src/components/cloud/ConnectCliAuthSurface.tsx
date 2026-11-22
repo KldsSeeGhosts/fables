@@ -4,7 +4,7 @@ import {
   connectLoopbackCancelUrl,
   readConnectAuthorizeRequest,
 } from "@t3tools/shared/connectAuth";
-import { useGT } from "gt-react";
+import { T, useGT } from "gt-react";
 import { SquareTerminalIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -116,12 +116,19 @@ export function ConnectCliAuthorizeSurface() {
 
       <dl className="flex flex-col gap-1.5 rounded-lg surface-well px-3 py-2.5 text-meta">
         <ConnectCliRequestRow label={gt("Authorization request")}>
-          t3 connect login
+          {/* oxlint-disable-next-line t3code/no-untranslated-copy -- CLI command */}
+          {"t3 connect login"}
         </ConnectCliRequestRow>
         {request.device ? (
-          <ConnectCliRequestRow label={gt("Device")}>{request.device}</ConnectCliRequestRow>
+          <ConnectCliRequestRow
+            label={gt("Device", { $context: "the device requesting CLI login" })}
+          >
+            {request.device}
+          </ConnectCliRequestRow>
         ) : null}
-        <ConnectCliRequestRow label={gt("Code")}>
+        <ConnectCliRequestRow
+          label={gt("Code", { $context: "authorization code shown in the terminal" })}
+        >
           {connectAuthorizeRequestCode(request.state)}
         </ConnectCliRequestRow>
       </dl>
@@ -134,22 +141,26 @@ export function ConnectCliAuthorizeSurface() {
         }}
       >
         <Button disabled={redirecting} onClick={cancel} size="sm" type="button" variant="secondary">
-          {gt("Cancel")}
+          <T>Cancel</T>
         </Button>
         {loadFailed ? (
           <Button size="sm" type="button" onClick={retryClerkLoad}>
-            {gt("Retry sign-in")}
+            <T>Retry sign-in</T>
           </Button>
         ) : (
           <Button autoFocus disabled={!isLoaded || redirecting} size="sm" type="submit">
             {redirecting ? <Spinner /> : null}
-            {isSignedIn ? gt("Authorize") : gt("Sign in and authorize")}
+            {isSignedIn
+              ? gt("Authorize", { $context: "verb, approves the CLI login" })
+              : gt("Sign in and authorize")}
             {redirecting ? null : <Kbd>⏎</Kbd>}
           </Button>
         )}
       </form>
 
-      <StandaloneCardNote>{gt("The terminal continues once you approve.")}</StandaloneCardNote>
+      <StandaloneCardNote>
+        <T>The terminal continues once you approve.</T>
+      </StandaloneCardNote>
     </StandalonePage>
   );
 }

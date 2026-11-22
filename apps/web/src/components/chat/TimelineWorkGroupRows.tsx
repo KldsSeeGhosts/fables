@@ -1,4 +1,8 @@
-import { THOUGHT_PREVIEW_SOURCE_MAX_LENGTH } from "./TimelineWorkEntryRow.logic";
+import { T, useGT, useMessages } from "gt-react";
+import {
+  thoughtPreviewPlugins,
+  THOUGHT_PREVIEW_SOURCE_MAX_LENGTH,
+} from "./TimelineWorkEntryRow.logic";
 import {
   type TimelinePendingRequest,
   type TimelineRow,
@@ -27,11 +31,7 @@ import {
   failedToolIconClassName,
   toolIconAcceptsTint,
 } from "./TimelineToolActivityIcon";
-import {
-  thoughtPreviewPlugins,
-  toolGroupSummaryIconName,
-  workEntryIconName,
-} from "./TimelineWorkEntryRow.logic";
+import { toolGroupSummaryIconName, workEntryIconName } from "./TimelineWorkEntryRow.logic";
 import {
   ReasoningTraceContent,
   SimpleWorkEntryRow,
@@ -40,7 +40,14 @@ import {
   useThreadReadTarget,
 } from "./TimelineWorkEntryRow";
 import { formatWorkingTimer, formatWorkingTimerNow } from "./TimelineWorkGroupRows.logic";
-import { WorkLogButton, WorkLogList, WorkLogRow, WorkLogTarget, WorkLogVerb } from "./WorkLog";
+import {
+  WorkLogButton,
+  WorkLogList,
+  WorkLogRow,
+  WorkLogTarget,
+  WorkLogVerb,
+  WorkVerbLabel,
+} from "./WorkLog";
 import { type ToolActivityIcon, type OrchestrationV2TurnItem } from "@t3tools/contracts";
 import {
   liveThoughtLine,
@@ -52,7 +59,6 @@ import { useAssetUrls } from "~/assets/assetUrls";
 import { observeResize } from "~/lib/observeResize";
 import { tickTextContent } from "~/lib/tickTextContent";
 import { observeVisibleAnimation } from "../../lib/visibleAnimation";
-import { T, useGT, useMessages } from "gt-react";
 import {
   memo,
   use,
@@ -433,21 +439,21 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
   const compacting =
     row.compacting !== undefined || isCompacting || workingWindowHasActiveCompaction(window);
   const label = window?.stopping ? (
-    gt("Stopping…")
+    <T>Stopping…</T>
   ) : pendingRequest && row.createdAt ? (
     // The clock stops while the turn waits on the user.
-    gt("Paused at {elapsed}", {
-      elapsed: formatWorkingTimer(row.createdAt, pendingRequest.createdAt) ?? "0s",
+    gt("Paused at {time}", {
+      time: formatWorkingTimer(row.createdAt, pendingRequest.createdAt) ?? "0s",
     })
   ) : compacting ? (
     <span className="inline-flex items-center gap-2">
       <Minimize2Icon aria-hidden="true" className="size-3" />
       {row.createdAt ? (
-        <>
+        <T>
           Compacting for <WorkingTimer createdAt={row.createdAt} />
-        </>
+        </T>
       ) : (
-        "Compacting…"
+        <T>Compacting…</T>
       )}
     </span>
   ) : providerStartingLabel && !setupTurn ? (
@@ -501,7 +507,7 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
               icon={<LaptopIcon aria-hidden className="size-3 shrink-0" />}
               onClick={ctx.onWorktreeSetupWorkLocally}
             >
-              {gt("Work locally")}
+              <T>Work locally</T>
             </WorkingBarChip>
           ) : null}
           {setupLive && ctx.onCancelWorktreeSetup ? (
@@ -509,7 +515,7 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
               icon={<XIcon aria-hidden className="size-3 shrink-0" />}
               onClick={ctx.onCancelWorktreeSetup}
             >
-              {gt("Cancel", { $context: "stops the worktree setup" })}
+              <T>Cancel</T>
             </WorkingBarChip>
           ) : null}
           {window ? <WorkingBarSlot window={window} pendingRequest={pendingRequest} /> : null}
@@ -665,7 +671,9 @@ function LiveActivityContent({
         ) : null
       }
       label={
-        <span className={cn("block truncate", highlighted && "text-foreground")}>{label}</span>
+        <span className={cn("block truncate", highlighted && "text-foreground")}>
+          {typeof label === "string" ? <WorkVerbLabel text={label} /> : label}
+        </span>
       }
       trailing={
         showTrailingFailureMark ? (
@@ -838,10 +846,13 @@ export function BackgroundActivityTimelineRow({
 }) {
   const ctx = use(TimelineRowCtx);
   const gt = useGT();
-  const label = gt(
-    "{count, plural, one {{count} wake-up} other {{count} wake-ups}}{active, select, yes {…} other {}}",
-    { count: row.updateCount, active: row.active ? "yes" : "no" },
-  );
+  const label = row.active
+    ? gt("{count, plural, one {{count} wake-up…} other {{count} wake-ups…}}", {
+        count: row.updateCount,
+      })
+    : gt("{count, plural, one {{count} wake-up} other {{count} wake-ups}}", {
+        count: row.updateCount,
+      });
   const summary = row.updates.map((update) => update.summary).join(", ");
   const sources = new Map<string, number>();
   for (const update of row.updates) {
@@ -849,7 +860,7 @@ export function BackgroundActivityTimelineRow({
   }
   return (
     <WorkLogButton
-      aria-label={`${label}: ${summary}`}
+      aria-label={gt("{label}: {summary}", { label, summary })}
       aria-expanded={row.expanded}
       onClick={() => ctx.onToggleWorkGroup(row.id, row.id)}
       icon={<BellIcon aria-hidden className="size-3.5 text-dim-foreground" />}
@@ -877,7 +888,10 @@ export function BackgroundActivityTimelineRow({
               return (
                 <span
                   key={kind}
-                  aria-label={`${count} ${kind.replaceAll("_", " ")}`}
+                  aria-label={gt(
+                    "{kind, select, monitor {{count} monitor} command {{count} command} subagent {{count} subagent} delegated_task {{count} delegated task} other {{count} {kind}}}",
+                    { kind, count },
+                  )}
                   className="inline-flex shrink-0 items-center gap-1 text-dim-foreground"
                 >
                   <Icon aria-hidden className="size-3" />
@@ -895,8 +909,11 @@ export function BackgroundActivityTimelineRow({
 /** A request waiting on the user, in the tone of its slot: approvals warn, questions inform. */
 function WorkingRequestRow({ entry }: { entry: TimelineWorkEntry }) {
   const ctx = use(TimelineRowCtx);
+  const gt = useGT();
   const approval = entry.itemType === "approval_request";
-  const target = approval ? (entry.command ?? entry.detail ?? null) : "for your answer";
+  const target = approval
+    ? (entry.command ?? entry.detail ?? null)
+    : gt("for your answer", { $context: "follows Waiting, a question awaits the user" });
   return (
     <WorkLogRow
       icon={
@@ -914,7 +931,11 @@ function WorkingRequestRow({ entry }: { entry: TimelineWorkEntry }) {
               approval ? "text-warning-foreground" : "text-info-foreground",
             )}
           >
-            {approval ? (entry.command ? "Wants to run" : "Needs approval") : "Waiting"}
+            {approval
+              ? entry.command
+                ? gt("Wants to run", { $context: "a command name follows" })
+                : gt("Needs approval")
+              : gt("Waiting", { $context: "for your answer follows" })}
           </span>
           {target ? (
             <span className="min-w-0 truncate text-dim-foreground">
@@ -1039,6 +1060,7 @@ function WorkingWindowView({
   onOverflowChange: (overflows: boolean) => void;
 }) {
   const ctx = use(TimelineRowCtx);
+  const gt = useGT();
   const {
     isCompacting,
     isPreparingWorktree,
@@ -1144,7 +1166,7 @@ function WorkingWindowView({
       <div
         ref={windowRef}
         role="region"
-        aria-label="Work history"
+        aria-label={gt("Work history")}
         className={cn(
           // The gap under the bar sits inside the window, so its fade reaches the hairline.
           "flex min-w-0 flex-col justify-end gap-1 overflow-clip pt-2 transition-[height] duration-200 ease-out motion-reduce:transition-none",
@@ -1177,7 +1199,11 @@ function WorkingWindowView({
             ) : null}
             {shown.map(renderItem)}
             {showThinking ? (
-              <LiveActivityRow label={liveAnswerPreview ?? "Thinking"} iconName="brain" active />
+              <LiveActivityRow
+                label={liveAnswerPreview ?? gt("Thinking")}
+                iconName="brain"
+                active
+              />
             ) : null}
           </>
         )}
@@ -1199,6 +1225,7 @@ function CollapsedWorkingWindow({
   showThinking: boolean;
   onOverflowChange: (overflows: boolean) => void;
 }) {
+  const gt = useGT();
   const rootRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const spacerRef = useRef<HTMLDivElement>(null);
@@ -1302,7 +1329,7 @@ function CollapsedWorkingWindow({
               />
             </div>
           ))}
-          {showThinking ? <LiveActivityRow label="Thinking" iconName="brain" active /> : null}
+          {showThinking ? <LiveActivityRow label={gt("Thinking")} iconName="brain" active /> : null}
         </div>
       </ScrollArea>
       {!following ? (
@@ -1319,7 +1346,7 @@ function CollapsedWorkingWindow({
               }}
             >
               <ArrowDownIcon aria-hidden />
-              Jump to latest
+              <T>Jump to latest</T>
             </Button>
           </div>
         </div>
@@ -1361,6 +1388,7 @@ function WorkingBarSlot({
   pendingRequest: TimelinePendingRequest | null;
 }) {
   const ctx = use(TimelineRowCtx);
+  const gt = useGT();
   if (pendingRequest) {
     const Icon =
       pendingRequest.kind === "approval" ? ShieldQuestionMarkIcon : MessageCircleQuestionMarkIcon;
@@ -1396,7 +1424,9 @@ function WorkingBarSlot({
         </TooltipTrigger>
         <TooltipPopup>
           <span className="block">{pendingRequest.label}</span>
-          <span className="block">Answer in the composer</span>
+          <span className="block">
+            <T>Answer in the composer</T>
+          </span>
         </TooltipPopup>
       </Tooltip>
     );
@@ -1405,7 +1435,9 @@ function WorkingBarSlot({
     return (
       <span className="inline-flex shrink-0 items-center gap-1.5 text-meta text-warning-foreground">
         <RefreshCwIcon aria-hidden className="size-3" />
-        <span>Reconnecting</span>
+        <span>
+          <T>Reconnecting</T>
+        </span>
       </span>
     );
   }
@@ -1414,7 +1446,11 @@ function WorkingBarSlot({
     return (
       <span className="inline-flex shrink-0 items-center gap-1.5 text-meta text-error-foreground">
         <CircleXIcon aria-hidden className="size-3" />
-        {count === null ? "Tests failed" : `${count} ${count === 1 ? "test" : "tests"} failed`}
+        {count === null
+          ? gt("Tests failed")
+          : gt("{count, plural, one {{count} test failed} other {{count} tests failed}}", {
+              count,
+            })}
       </span>
     );
   }
@@ -1442,7 +1478,12 @@ function workingWindowHasActiveCompaction(window: WorkingWindow | undefined): bo
 export function SlashCommandTimelineRow({ command }: { command: TimelineSlashCommand }) {
   const ctx = use(TimelineRowCtx);
   const { activeTurnStartedAt } = use(TimelineRowActivityCtx);
-  const { icon: Icon, verb, target } = presentSlashCommand(command, command.state, command.result);
+  const messages = useMessages();
+  const {
+    icon: Icon,
+    verb,
+    target,
+  } = presentSlashCommand(command, command.state, command.result, messages);
   const skill = command.skill ? ctx.skills.find((entry) => entry.name === command.name) : undefined;
   const compacting = command.name === "compact" && !command.skill && command.state === "running";
   return (
@@ -1464,9 +1505,9 @@ export function SlashCommandTimelineRow({ command }: { command: TimelineSlashCom
             }
           >
             {compacting && activeTurnStartedAt ? (
-              <>
+              <T>
                 Compacting for <WorkingTimer createdAt={activeTurnStartedAt} />
-              </>
+              </T>
             ) : (
               verb
             )}

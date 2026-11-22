@@ -1,4 +1,4 @@
-import { T, msg, useMessages, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { Dot, ExternalLink, FileDown, RotateCw, Unplug } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
@@ -78,6 +78,7 @@ export function PreviewUnreachable({
   onOpenInBrowser,
   move,
 }: Props) {
+  const gt = useGT();
   const m = useMessages();
   const host = safeHost(url) ?? url;
   const friendly = describePreviewError(description, m);
@@ -99,9 +100,7 @@ export function PreviewUnreachable({
               />
             }
           >
-            <T>
-              <Var>{host}</Var> isn&rsquo;t responding
-            </T>
+            {gt("{host} isn’t responding", { host })}
           </TooltipTrigger>
           <TooltipPopup side="bottom">
             <span className="flex flex-col gap-0.5">
@@ -116,7 +115,7 @@ export function PreviewUnreachable({
           </p>
           <ul className="flex flex-col gap-2">
             {suggestions.map((suggestion) => (
-              <li key={m(suggestion)} className="flex items-center gap-2 text-body text-foreground">
+              <li key={suggestion} className="flex items-center gap-2 text-body text-foreground">
                 <Dot aria-hidden className="size-3.5 shrink-0 text-dim-foreground" />
                 {m(suggestion)}
               </li>

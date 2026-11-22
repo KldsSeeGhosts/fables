@@ -17,7 +17,11 @@ import {
   TriangleAlertIcon,
 } from "lucide-react";
 import { AsyncResult } from "effect/reactivity";
-import { useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 
 import type { ComposerThreadTarget } from "~/composerDraftStore";
 import { useLiveRefresh } from "~/hooks/useLiveRefresh";
@@ -93,6 +97,7 @@ export function ThreadDetailsPrRow({
   project,
   label,
   onOpen,
+  onPress,
   onActed,
   onStopWatching,
   composerTarget,
@@ -105,6 +110,7 @@ export function ThreadDetailsPrRow({
   project: EnvironmentProject | null;
   label: string;
   onOpen: (event: ReactMouseEvent<HTMLElement>) => void;
+  onPress?: ((event: ReactPointerEvent<HTMLElement>) => void) | undefined;
   onActed?: () => void;
   onStopWatching?: (() => void) | undefined;
   /** Fix and Resolve write here instead of checking the pull request out in a new thread. */
@@ -504,6 +510,7 @@ export function ThreadDetailsPrRow({
             aria-label={openAriaLabel}
             onClick={onOpen}
             onAuxClick={onOpen}
+            onPointerDown={onPress}
           />
         }
       >
@@ -532,6 +539,7 @@ export function ThreadDetailsPrRow({
                     aria-label={openAriaLabel}
                     onClick={onOpen}
                     onAuxClick={onOpen}
+                    onPointerDown={onPress}
                   />
                 }
               >

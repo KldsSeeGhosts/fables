@@ -251,7 +251,7 @@ export const make = Effect.gen(function* () {
           { type: "separator" },
           { role: "hide", label: m(msg("Hide {appName}"), { appName: environment.displayName }) },
           // alt+cmd+H focuses the pane on the left; Hide Others keeps its item.
-          { role: "hideOthers", accelerator: "", label: m(msg("Hide Others")) },
+          { role: "hideOthers", label: m(msg("Hide Others")), accelerator: "" },
           {
             role: "unhide",
             label: m(msg("Show All", { $context: "macOS app menu item, shows hidden apps" })),

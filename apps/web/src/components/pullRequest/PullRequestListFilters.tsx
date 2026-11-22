@@ -63,6 +63,7 @@ import {
   type PullRequestAuthorFacet,
   type PullRequestLabelFacet,
 } from "./pullRequestList.logic";
+import { m, type MessageResolver } from "~/i18n/messages";
 import { resolveFilterOptions } from "./pullRequestListOptions";
 import { PullRequestActorAvatar } from "./pullRequestPresentation";
 import { PullRequestGlyph } from "./pullRequestIcons";
@@ -117,6 +118,7 @@ export function PullRequestSearchInput({
   onChange: (value: string) => void;
   onSubmit: (value: string) => void;
 }) {
+  const gt = useGT();
   const [draft, setDraft] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   return (
@@ -150,7 +152,7 @@ export function PullRequestSearchInput({
           <Button
             size="icon-micro"
             variant="ghost"
-            aria-label="Clear pull request search"
+            aria-label={gt("Clear pull request search")}
             onClick={() => {
               inputRef.current?.focus();
               setDraft("");
@@ -639,7 +641,11 @@ export function PullRequestFiltersMenu({
     <Menu onOpenChange={onOpenChange}>
       <MenuTrigger
         aria-label={
-          filterCount > 0 ? gt("Filters, {count} active", { count: filterCount }) : gt("Filters")
+          filterCount > 0
+            ? gt("{count, plural, one {Filters, {count} active} other {Filters, {count} active}}", {
+                count: filterCount,
+              })
+            : gt("Filters")
         }
         render={<Button variant="secondary" />}
       >
@@ -736,57 +742,76 @@ export function PullRequestFiltersMenu({
   );
 }
 
-const REVIEW_CLAUSES: Record<NonNullable<PullRequestListFilters["review"]>, string> = {
-  approved: "review is approved",
-  "changes-requested": "changes are requested",
-  "review-required": "review is required",
-  none: "there are no reviews",
-};
+const REVIEW_CLAUSES = {
+  approved: msg("Review is approved."),
+  "changes-requested": msg("Changes are requested."),
+  "review-required": msg("Review is required."),
+  none: msg("There are no reviews."),
+} as const satisfies Record<NonNullable<PullRequestListFilters["review"]>, string>;
 
 /**
- * The active narrowings as one sentence, for the empty list: "Author is theo and checks are
+ * The active narrowings, one sentence each, for the empty list: "Author is theo. Checks are
  * failing." Null when nothing narrows the list.
  */
-export function describePullRequestListFilters({
-  state,
-  involvement,
-  filters,
-  hostLabel,
-  serverLabel,
-  projectLabel,
-}: {
-  state: PullRequestListState;
-  involvement: PullRequestInvolvement;
-  filters: PullRequestListFilters;
-  hostLabel?: string | undefined;
-  serverLabel?: string | undefined;
-  projectLabel?: string | undefined;
-}): string | null {
+export function describePullRequestListFilters(
+  {
+    state,
+    involvement,
+    filters,
+    hostLabel,
+    serverLabel,
+    projectLabel,
+  }: {
+    state: PullRequestListState;
+    involvement: PullRequestInvolvement;
+    filters: PullRequestListFilters;
+    hostLabel?: string | undefined;
+    serverLabel?: string | undefined;
+    projectLabel?: string | undefined;
+  },
+  resolve: MessageResolver = m,
+): string | null {
   const labels = (filters.labels ?? []).flat();
   const clauses = [
-    state === "open" ? null : state === "all" ? "any state is shown" : `state is ${state}`,
+    state === "open"
+      ? null
+      : state === "all"
+        ? resolve(msg("Any state is shown."))
+        : resolve(
+            msg("{state, select, closed {State is closed.} other {State is merged.}}", {
+              state,
+            }),
+          ),
     involvement === "authored"
-      ? "only yours are shown"
+      ? resolve(msg("Only yours are shown."))
       : involvement === "reviewing"
-        ? "review is requested from you"
+        ? resolve(msg("Review is requested from you."))
         : null,
-    filters.author ? `author is ${filters.author}` : null,
+    filters.author ? resolve(msg("Author is {author}.", { author: filters.author })) : null,
     labels.length === 0
       ? null
-      : `${labels.length === 1 ? "label is" : "labels are"} ${labels.join(", ")}`,
+      : resolve(
+          msg("{count, plural, one {Label is {labels}.} other {Labels are {labels}.}}", {
+            count: labels.length,
+            labels: labels.join(", "),
+          }),
+        ),
     filters.draft === "only"
-      ? "only drafts are shown"
+      ? resolve(msg("Only drafts are shown."))
       : filters.draft === "hide"
-        ? "drafts are hidden"
+        ? resolve(msg("Drafts are hidden."))
         : null,
-    filters.review ? REVIEW_CLAUSES[filters.review] : null,
-    filters.checks ? `checks are ${filters.checks}` : null,
-    hostLabel ? `host is ${hostLabel}` : null,
-    serverLabel ? `server is ${serverLabel}` : null,
-    projectLabel ? `project is ${projectLabel}` : null,
+    filters.review ? resolve(REVIEW_CLAUSES[filters.review]) : null,
+    filters.checks
+      ? resolve(
+          msg("{checks, select, passing {Checks are passing.} other {Checks are failing.}}", {
+            checks: filters.checks,
+          }),
+        )
+      : null,
+    hostLabel ? resolve(msg("Host is {host}.", { host: hostLabel })) : null,
+    serverLabel ? resolve(msg("Server is {server}.", { server: serverLabel })) : null,
+    projectLabel ? resolve(msg("Project is {project}.", { project: projectLabel })) : null,
   ].filter((clause) => clause !== null);
-  const last = clauses.at(-1);
-  if (last === undefined) return null;
-  const sentence = clauses.length === 1 ? last : `${clauses.slice(0, -1).join(", ")} and ${last}`;
-  return `${sentence.charAt(0).toUpperCase()}${sentence.slice(1)}.`;
+  return clauses.length === 0 ? null : clauses.join(" ");
 }

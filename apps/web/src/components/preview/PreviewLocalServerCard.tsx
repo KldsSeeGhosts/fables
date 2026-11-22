@@ -1,9 +1,8 @@
+import { msg, useGT, useMessages } from "gt-react";
 import { ArrowUpRight } from "lucide-react";
-import { msg, T, useMessages } from "gt-react";
-
-import { Button } from "~/components/ui/button";
 
 import type { MessageResolver } from "../../i18n/messages";
+import { Button } from "~/components/ui/button";
 
 import type { PreviewableServer } from "./useDiscoveredLocalServers";
 
@@ -14,6 +13,7 @@ interface Props {
 
 /** One live local server: a live dot, its address, the owning process, and Open. */
 export function PreviewLocalServerCard({ server, onOpen }: Props) {
+  const gt = useGT();
   const m = useMessages();
   const address = `${server.host}:${server.port}`;
   return (
@@ -29,11 +29,11 @@ export function PreviewLocalServerCard({ server, onOpen }: Props) {
         type="button"
         variant="secondary"
         size="xs"
-        aria-label={m(msg("Open {address}", { address }))}
+        aria-label={gt("Open {address}", { address })}
         onClick={onOpen}
       >
         <ArrowUpRight />
-        <T>Open</T>
+        {gt("Open", { $context: "verb, opens a local server in the browser" })}
       </Button>
     </div>
   );

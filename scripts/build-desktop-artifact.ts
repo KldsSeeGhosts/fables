@@ -2801,7 +2801,7 @@ export function resolveDesktopProductName(_version: string): string {
 }
 
 // Personal builds use an external keychain without distribution provisioning
-// (see AGENTS.md, Releases and macOS signing).
+// (see docs/operations/ksg-fork.md).
 const MacSelfSignedConfig = Config.Boolean("T3CODE_MACOS_SELF_SIGNED").pipe(
   Config.withDefault(false),
 );

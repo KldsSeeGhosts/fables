@@ -1,4 +1,4 @@
-import { T, msg, useGT, useMessages, Var } from "gt-react";
+import { T, msg, useGT, useMessages } from "gt-react";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m } from "~/i18n/messages";
 import { useStableCallback } from "../../hooks/useStableCallback";
@@ -247,7 +247,7 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
               variant="secondary"
               onClick={() => void navigate({ to: "/settings/connections" })}
             >
-              Connections
+              {gt("Connections")}
             </Button>
             {disconnectAction}
           </>
@@ -268,16 +268,13 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
         variant: updateFailed ? "error" : "default",
         group: "environment",
         icon: <ComposerServerUpdateIcon status={serverUpdateState.status} />,
-        title:
-          versionMismatchServerName !== null
-            ? updateFailed
-              ? gt("{environment} server update failed", {
-                  environment: versionMismatchServerName,
-                })
-              : gt("Updating {environment} server", { environment: versionMismatchServerName })
-            : updateFailed
-              ? gt("Server update failed")
-              : gt("Updating"),
+        title: updateFailed
+          ? versionMismatchServerName !== null
+            ? gt("{environment} server update failed", {
+                environment: versionMismatchServerName,
+              })
+            : gt("Server update failed")
+          : gt("Updating"),
         description:
           serverUpdateState.status === "failed" ? (
             serverUpdateState.message
@@ -285,10 +282,12 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
             <span className="inline-flex flex-col">
               <span>{serverUpdateStageLabel(serverUpdateState.stage, messages)}</span>
               <span>
-                <T>
-                  <Var>{versionMismatchServerLabel}</Var> to{" "}
-                  <Var>{serverUpdateState.targetVersion}</Var>
-                </T>
+                {versionMismatchServerName !== null
+                  ? gt("{environment} server to {version}", {
+                      environment: versionMismatchServerName,
+                      version: serverUpdateState.targetVersion,
+                    })
+                  : gt("Server to {version}", { version: serverUpdateState.targetVersion })}
               </span>
             </span>
           ),
@@ -304,8 +303,8 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
             installation={versionMismatchInstallation}
             desktopAppUpdate={versionMismatchDesktopAppUpdate}
             targetVersion={versionMismatch.clientVersion}
-            variant="secondary"
             label={gt("Retry", { $context: "verb, retries the server update" })}
+            variant="secondary"
           />
         ),
         ...(updateFailed
@@ -326,12 +325,14 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
 
 /** The reconnect countdown updates its text from the shared clock. */
 function RetryCountdown({ retryAt }: { readonly retryAt: number }) {
+  const gt = useGT();
   const attachText = (element: HTMLSpanElement | null) => {
     if (!element) return;
     const update = () => {
       const now = Date.now();
       const seconds = Math.ceil((retryAt - now) / 1000);
-      element.textContent = seconds > 0 ? `Trying again in ${seconds}s` : "Trying again";
+      element.textContent =
+        seconds > 0 ? gt("Trying again in {seconds}s", { seconds }) : gt("Trying again");
       return now < retryAt;
     };
     if (!update()) return;
@@ -342,7 +343,7 @@ function RetryCountdown({ retryAt }: { readonly retryAt: number }) {
   };
   return (
     <span ref={attachText} className="tabular-nums">
-      Trying again
+      {gt("Trying again")}
     </span>
   );
 }

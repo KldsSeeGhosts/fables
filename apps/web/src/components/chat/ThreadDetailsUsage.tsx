@@ -14,7 +14,8 @@ import {
 } from "@t3tools/shared/usageLimits";
 import { formatDuration, limitsNotice } from "@t3tools/shared/usageLimitsCopy";
 import { Link } from "@tanstack/react-router";
-import { msg, useGT, useLocale, useMessages } from "gt-react";
+import type { MessageResolver } from "~/i18n/messages";
+import { msg, T, useGT, useLocale, useMessages, Var } from "gt-react";
 import { BoxIcon, CalendarRangeIcon, GaugeIcon, Minimize2Icon, TimerIcon } from "lucide-react";
 import * as Schema from "effect/Schema";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -26,12 +27,11 @@ import { formatContextWindowTokens } from "../../lib/contextWindow";
 import { cn } from "../../lib/utils";
 import { observeResize } from "../../lib/observeResize";
 import { formatUpcomingTimestamp } from "../../timestampFormat";
-import type { MessageResolver } from "../../i18n/messages";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Button } from "../ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
-import { ContextWindowSegments } from "./ContextWindowSegments";
+import { ContextWindowSegments } from "./ContextWindowMeter";
 import { contextWindowSegments } from "./compaction.logic";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { nextPoolReset, poolSources, resolveThreadDetailsLimits } from "./ThreadDetailsUsage.logic";
@@ -59,7 +59,7 @@ function limitTone(left: number): UsageTone {
   return null;
 }
 
-/** Provider limits share the canvas's icon and label columns. */
+/** Provider limits share the canvas's icon and label columns; each row opens the usage page. */
 export function ThreadDetailsUsage({
   providerInstanceId,
   model,
@@ -121,6 +121,7 @@ export function ThreadDetailsContext({
   readonly compactUnavailableReason?: string | null | undefined;
 }) {
   const gt = useGT();
+  const m = useMessages();
   const locale = useLocale();
   const [collapsed, setCollapsed] = useLocalStorage(
     "thread-details:collapsed:Context breakdown",
@@ -135,7 +136,7 @@ export function ThreadDetailsContext({
           icon={<GaugeIcon />}
           fill={null}
           tone={null}
-          value={gt("N/A")}
+          value={gt("N/A", { $context: "context usage not reported" })}
           tooltip={gt("The provider has not reported context usage.")}
         />
       </ThreadDetailsSection>
@@ -143,11 +144,20 @@ export function ThreadDetailsContext({
   }
   const maxTokens = usage.maxTokens != null && usage.maxTokens > 0 ? usage.maxTokens : null;
   const used = maxTokens !== null ? Math.max(0, Math.min(100, usage.usedPercentage ?? 0)) : null;
-  const tokens =
+  const usedTokens = formatContextWindowTokens(usage.usedTokens);
+  const contextLabel =
     maxTokens !== null
-      ? `${formatContextWindowTokens(usage.usedTokens)} / ${formatContextWindowTokens(maxTokens)}`
-      : `${formatContextWindowTokens(usage.usedTokens)} tokens`;
-  const tokensAria = maxTokens !== null ? gt("{tokens} tokens", { tokens }) : tokens;
+      ? used !== null
+        ? gt("Context: {used} / {max} tokens, {percent}% used", {
+            used: usedTokens,
+            max: formatContextWindowTokens(maxTokens),
+            percent: Math.round(used),
+          })
+        : gt("Context: {used} / {max} tokens used", {
+            used: usedTokens,
+            max: formatContextWindowTokens(maxTokens),
+          })
+      : gt("Context: {usedTokens} tokens used", { usedTokens });
   return (
     <ThreadDetailsSection title={gt("Context window")} variant="usage">
       <Collapsible
@@ -158,17 +168,12 @@ export function ThreadDetailsContext({
         <div className={cn(USAGE_ROW_CLASS, "h-8")}>
           <CollapsibleTrigger
             render={<ThreadDetailsControl part="usage" />}
-            aria-label={
-              used !== null
-                ? gt("Context: {usage}, {used}% used", {
-                    usage: tokensAria,
-                    used: Math.round(used),
-                  })
-                : gt("Context: {usage}", { usage: tokensAria })
-            }
+            aria-label={contextLabel}
           >
             <GaugeIcon className="size-4 shrink-0" />
-            <span className="flex h-6 items-center text-foreground">{gt("Context")}</span>
+            <span className="flex h-6 items-center text-foreground">
+              {gt("Context", { $context: "context window row label" })}
+            </span>
             <span className={cn("flex items-center gap-1.5", onCompact && "pe-7.5")}>
               <span className="min-w-12 flex-1">
                 {used !== null ? <ContextWindowSegments usage={usage} minSegmentWidth={2} /> : null}
@@ -205,7 +210,7 @@ export function ThreadDetailsContext({
           <div className="px-0.5 pb-0.5">
             <div className="surface-composer rounded-lg p-0.5">
               <dl className="text-meta">
-                {contextWindowSegments(usage).map((segment) => (
+                {contextWindowSegments(usage, m).map((segment) => (
                   <div
                     key={segment.label}
                     className="flex h-8 items-center justify-between gap-2 px-2.5"
@@ -223,10 +228,18 @@ export function ThreadDetailsContext({
                   </div>
                 ))}
                 <div className="flex min-h-8 items-center justify-between gap-2 px-2.5">
-                  <dt>{maxTokens !== null ? gt("Used / max") : gt("Used")}</dt>
+                  <dt>
+                    {maxTokens !== null
+                      ? gt("Used / max", { $context: "context window tokens" })
+                      : gt("Used", { $context: "context window tokens" })}
+                  </dt>
                   <dd className="text-caption tabular-nums text-muted-foreground">
-                    {usage.usedTokens.toLocaleString(locale)}
-                    {maxTokens !== null ? ` / ${maxTokens.toLocaleString(locale)}` : null}
+                    {maxTokens !== null
+                      ? gt("{used} / {max}", {
+                          used: usage.usedTokens.toLocaleString(locale),
+                          max: maxTokens.toLocaleString(locale),
+                        })
+                      : usage.usedTokens.toLocaleString(locale)}
                   </dd>
                 </div>
               </dl>
@@ -288,39 +301,41 @@ function LimitRow({
       tick={timeLeft}
       value={`${left}%`}
       ariaValue={gt("{left}% left", { left })}
+      opensUsage
       trailing={
         reset ? (
           <span className="whitespace-nowrap text-caption text-dim-foreground">{reset}</span>
         ) : undefined
       }
-      opensUsage
       tooltip={
         <>
           <span className="text-foreground">
             {gt("{label}: {left}% left", { label: window.label, left })}
           </span>
+          {pace && timeLeft !== null ? (
+            <span>
+              <span className="block">{m(PACE_LABEL[pace])}</span>
+              <span className="block">{gt("{timeLeft}% of the window left", { timeLeft })}</span>
+            </span>
+          ) : null}
           {window.resetsAt && remainingMs > 0 ? (
             <span>
               <span className="block">
                 {pooledAccounts > 1
-                  ? gt("Next reset in {duration}", {
-                      duration: formatDuration(remainingMs, m),
-                    })
-                  : gt("Resets in {duration}", {
-                      duration: formatDuration(remainingMs, m),
-                    })}
+                  ? gt("Next reset in {duration}", { duration: formatDuration(remainingMs, m) })
+                  : gt("Resets in {duration}", { duration: formatDuration(remainingMs, m) })}
               </span>
               <span className="block">
                 {formatUpcomingTimestamp(window.resetsAt, timestampFormat, now, undefined, m)}
               </span>
             </span>
           ) : null}
-          {pace ? <span>{m(PACE_LABEL[pace])}</span> : null}
-          {pace && timeLeft !== null ? (
-            <span className="block">{gt("{timeLeft}% of the window left", { timeLeft })}</span>
-          ) : null}
           {pooledAccounts > 1 ? (
-            <span>{gt("Across {count} accounts", { count: pooledAccounts })}</span>
+            <span>
+              <T>
+                Across <Var>{pooledAccounts}</Var> accounts
+              </T>
+            </span>
           ) : null}
         </>
       }
@@ -353,6 +368,13 @@ function PoolRow({ window, now }: { readonly window: LimitPoolWindow; readonly n
       tone={limitTone(left)}
       value={`${left}%`}
       ariaValue={gt("{left}% left", { left })}
+      trailing={
+        reset ? (
+          <span className="whitespace-nowrap text-caption text-dim-foreground">
+            {reset.duration}
+          </span>
+        ) : undefined
+      }
       opensUsage
       tooltip={
         <>
@@ -370,12 +392,15 @@ function PoolRow({ window, now }: { readonly window: LimitPoolWindow; readonly n
           ) : null}
           {next && reset ? (
             <span className="text-muted-foreground">
-              {accounts > 1
-                ? gt("+{percent}% in {duration}, {time}", {
-                    percent: next.restoresPercent,
-                    ...reset,
-                  })
-                : gt("Resets in {duration}, {time}", reset)}
+              <span className="block">
+                {accounts > 1
+                  ? gt("+{percent}% in {duration}", {
+                      percent: next.restoresPercent,
+                      duration: reset.duration,
+                    })
+                  : gt("Resets in {duration}", { duration: reset.duration })}
+              </span>
+              <span className="block">{reset.time}</span>
             </span>
           ) : null}
           {sourceLabels.length > 0 ? (
@@ -401,7 +426,6 @@ function UsageRow({
   ariaValue = value,
   tooltip,
   trailing,
-  muted = false,
   opensUsage = false,
 }: {
   readonly label: string;
@@ -414,30 +438,22 @@ function UsageRow({
   readonly ariaValue?: string;
   readonly tooltip: ReactNode;
   readonly trailing?: ReactNode;
-  readonly muted?: boolean;
   readonly opensUsage?: boolean;
 }) {
   const gt = useGT();
-  const triggerClassName =
-    "col-span-full grid min-w-0 grid-cols-subgrid items-center gap-x-1.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
+  const rowProps = {
+    "aria-label": gt("{label}: {value}", { label, value: ariaValue }),
+    className: cn(
+      "col-span-full grid min-w-0 grid-cols-subgrid items-center gap-x-1.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+      opensUsage ? "cursor-pointer" : "cursor-default",
+    ),
+  };
   return (
     <Tooltip>
       <div className={cn(USAGE_ROW_CLASS, "h-8")}>
         <TooltipTrigger
           render={
-            opensUsage ? (
-              <Link
-                to="/usage"
-                aria-label={gt("{label}: {value}", { label, value: ariaValue })}
-                className={cn(triggerClassName, "cursor-pointer")}
-              />
-            ) : (
-              <div
-                tabIndex={0}
-                aria-label={gt("{label}: {value}", { label, value: ariaValue })}
-                className={cn(triggerClassName, "cursor-default")}
-              />
-            )
+            opensUsage ? <Link to="/usage" {...rowProps} /> : <div tabIndex={0} {...rowProps} />
           }
         >
           <span className="shrink-0 text-muted-foreground [&>svg]:size-4">{icon}</span>
@@ -457,9 +473,7 @@ function UsageRow({
                         ? "bg-error"
                         : tone === "warning"
                           ? "bg-warning"
-                          : muted
-                            ? "bg-muted-foreground"
-                            : "bg-foreground/80",
+                          : "bg-foreground/80",
                     )}
                     style={{ width: `max(${fill}%, 2px)` }}
                   />

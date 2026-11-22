@@ -78,13 +78,7 @@ export function pullRequestCopyTarget(
     value: url,
     description: url,
     clipboardTarget: "pull request link",
-    successTitle:
-      shortLabel === "PR"
-        ? resolve(msg("PR link copied"))
-        : resolve(msg("{shortLabel} link copied"), { shortLabel }),
-    failureTitle:
-      shortLabel === "PR"
-        ? resolve(msg("Failed to copy PR link"))
-        : resolve(msg("Failed to copy {shortLabel} link"), { shortLabel }),
+    successTitle: resolve(msg("{shortLabel} link copied", { shortLabel })),
+    failureTitle: resolve(msg("Failed to copy {shortLabel} link", { shortLabel })),
   };
 }

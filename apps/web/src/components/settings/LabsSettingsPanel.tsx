@@ -20,7 +20,6 @@ export function LabsSettingsPanel() {
   return (
     <SettingsPageContainer>
       <SettingsSection id="beta" title={gt("Beta")}>
-        <ScrollingWorkspacesRow />
         <BoringSidebarRow />
         {/* Clerk is only mounted when this build has T3 Connect. */}
         {hasCloudPublicConfig() ? <GuestLinksRowWithSignIn /> : <GuestLinksRow />}
@@ -29,7 +28,11 @@ export function LabsSettingsPanel() {
         <SimlockHostsRow />
         <FastWorktreeCheckoutRow />
       </SettingsSection>
-      <SettingsSection id="redesign" title="Redesign">
+      <SettingsSection
+        id="redesign"
+        title={gt("Redesign", { $context: "settings section, labs features of the redesign" })}
+      >
+        <ScrollingWorkspacesRow />
         <TurnWorkFoldRow />
       </SettingsSection>
     </SettingsPageContainer>
@@ -38,19 +41,22 @@ export function LabsSettingsPanel() {
 
 function ScrollingWorkspacesRow() {
   const searchableSetting = useSearchableSetting();
+  const gt = useGT();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   return (
     <SettingsRow
       {...searchableSetting("scrolling-workspaces")}
-      description="Panes scroll sideways instead of shrinking, and you can keep several workspaces with an overview, swipes and a layout tour. Splits, tabs and layout templates work either way."
+      description={gt(
+        "Panes scroll sideways instead of shrinking, and you can keep several workspaces with an overview, swipes and a layout tour. Splits, tabs and layout templates work either way.",
+      )}
       control={
         <Switch
           checked={settings.scrollingWorkspacesEnabled}
           onCheckedChange={(checked) =>
             updateSettings({ scrollingWorkspacesEnabled: Boolean(checked) })
           }
-          aria-label="Scrolling workspaces"
+          aria-label={gt("Scrolling workspaces")}
         />
       }
     />
@@ -59,17 +65,20 @@ function ScrollingWorkspacesRow() {
 
 function TurnWorkFoldRow() {
   const searchableSetting = useSearchableSetting();
+  const gt = useGT();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   return (
     <SettingsRow
       {...searchableSetting("turn-work-fold")}
-      description="Gather a running turn's tool calls and notes under one Working line that folds into its Worked for row when the turn ends, with the tool calls inside shown open."
+      description={gt(
+        "Gather a running turn's tool calls and notes under one Working line that folds into its Worked for row when the turn ends, with the tool calls inside shown open.",
+      )}
       control={
         <Switch
           checked={settings.turnWorkFoldEnabled}
           onCheckedChange={(checked) => updateSettings({ turnWorkFoldEnabled: Boolean(checked) })}
-          aria-label="Fold each turn's work"
+          aria-label={gt("Fold each turn's work")}
         />
       }
     />

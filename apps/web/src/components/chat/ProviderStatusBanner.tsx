@@ -10,8 +10,8 @@ import {
 } from "@t3tools/contracts";
 import { msg, T, useGT } from "gt-react";
 import { BotOffIcon, CircleAlertIcon, KeyRoundIcon, TriangleAlertIcon } from "lucide-react";
-import { m, type MessageResolver } from "../../i18n/messages";
 import { Button } from "../ui/button";
+import { m, type MessageResolver } from "../../i18n/messages";
 import { formatProviderDriverKindLabel } from "../../providerModels";
 import type { ComposerBannerStackItem } from "./ComposerBannerStack";
 
@@ -232,12 +232,14 @@ export function providerStatusBannerItem({
         />
       </>
     ),
-    dismissLabel: resolve(
-      msg("Dismiss {provider} provider {status}", {
-        provider: providerName,
-        status: status.status,
-      }),
-    ),
+    dismissLabel:
+      status.status === "error"
+        ? resolve(msg("Dismiss {provider} provider error", { provider: providerName }))
+        : status.status === "warning"
+          ? resolve(msg("Dismiss {provider} provider warning", { provider: providerName }))
+          : status.status === "ready"
+            ? resolve(msg("Dismiss {provider} provider ready", { provider: providerName }))
+            : resolve(msg("Dismiss {provider} provider disabled", { provider: providerName })),
     onDismiss,
   };
 }

@@ -1543,6 +1543,7 @@ function sanitizeTerminalHistoryChunk(
         const content = stripStringTerminator(
           prefix.slice(2) + input.slice(contentStart, c1?.index ?? end),
         );
+        if (nextCodePoint === 0x5d) readOsc(content);
         // ST ends what the query's ESC cut short and leaves ground state, as the query does when it
         // has its own terminator. Without one, the query ends at the next ESC, which history may
         // strip, so ST would not replay the same and the query stays.
@@ -1555,7 +1556,6 @@ function sanitizeTerminalHistoryChunk(
           index = end;
           continue;
         }
-        if (nextCodePoint === 0x5d) readOsc(content);
         const strip =
           (nextCodePoint === 0x5d && shouldStripOscSequence(content)) ||
           (nextCodePoint === 0x50 && shouldStripDcsSequence(content));

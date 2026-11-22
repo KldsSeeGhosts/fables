@@ -29,7 +29,7 @@ import {
   ClerkUserProfileRefreshButton,
   ClerkUserProfileRow,
 } from "./ClerkUserProfilePage";
-import type { MessageResolver } from "../../i18n/messages";
+import { m, type MessageResolver } from "../../i18n/messages";
 import { useT3ChatLink } from "./useT3ChatLink";
 
 const linkedAtFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
@@ -181,7 +181,6 @@ function T3ConnectTunnelUsage() {
 export function T3ConnectUserProfilePage() {
   const environmentsState = useManagedRelayEnvironments();
   const gt = useGT();
-  const m = useMessages();
   const deregisterEnvironment = useAtomCommand(deregisterManagedRelayEnvironmentCommand, {
     reportFailure: false,
   });

@@ -7,9 +7,9 @@ import { T, useGT } from "gt-react";
 import { SquarePenIcon, XIcon } from "lucide-react";
 import {
   memo,
+  useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
-  useState,
 } from "react";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { useShallow } from "zustand/react/shallow";
@@ -208,7 +208,7 @@ export function useSidebarDrafts(
   return { draftIds, routeDraftComposer };
 }
 
-interface SidebarDraftRowData {
+export interface SidebarDraftRowData {
   draftId: DraftId;
   session: DraftSessionState;
   composer: ComposerThreadDraftState;
@@ -232,6 +232,7 @@ export const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
   projectByKey: ReadonlyMap<string, EnvironmentProject>;
   projectDisplayNameByKey: ReadonlyMap<string, string>;
   routeDraftId: string | null;
+  routeDraftRow?: SidebarDraftRowData | null;
   onNavigateToDraft: (draftId: DraftId) => void;
   onDraftContextMenu: (
     draftId: DraftId,
@@ -250,7 +251,9 @@ export const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
   const drafts = props.draftIds.flatMap((draftId) => {
     const session = draftThreadsByThreadKey[draftId];
     const composer =
-      draftId === props.routeDraftId ? props.routeDraftComposer : draftsByThreadKey[draftId];
+      draftId === props.routeDraftId
+        ? (props.routeDraftRow?.composer ?? props.routeDraftComposer)
+        : draftsByThreadKey[draftId];
     return session && composer ? [{ draftId, session, composer }] : [];
   });
   if (drafts.length === 0) {

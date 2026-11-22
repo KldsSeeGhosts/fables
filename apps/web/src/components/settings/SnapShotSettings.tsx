@@ -144,7 +144,7 @@ export function SnapShotSettings() {
   const webOnly = !bridge && !(typeof window !== "undefined" && window.desktopBridge);
   const captureAvailable = Boolean(bridge) && state !== null && state.mode !== "unavailable";
   const feedbackUnavailable = snapShotFeedbackUnavailableMessage(state, messages);
-  const captureHelper = snapShotCaptureHelperStatus(state);
+  const captureHelper = snapShotCaptureHelperStatus(state, messages);
   const managedShortcut = state?.linuxBackend === "niri" || state?.linuxBackend === "hyprland";
   const shortcutChanged = !managedShortcut && !sameSnapShotShortcut(candidate, savedShortcut);
   const displayShortcut = shortcutChanged ? candidate : (state?.shortcut ?? savedShortcut);
@@ -380,7 +380,7 @@ export function SnapShotSettings() {
       ) : null}
       <SettingsSection
         id="snap-shot"
-        title={gt("Capture")}
+        title={gt("Capture", { $context: "settings section for window snapshots" })}
         warning={webOnly ? undefined : unavailableMessage}
       >
         <SettingsUnavailableGroup unavailable={webOnly || unavailableMessage !== undefined}>
@@ -512,7 +512,10 @@ export function SnapShotSettings() {
       </SettingsSection>
       {webOnly ||
       (settings.snapShotEnabled && captureAvailable && unavailableMessage === undefined) ? (
-        <SettingsSection id="snap-shot-feedback" title={gt("Feedback")}>
+        <SettingsSection
+          id="snap-shot-feedback"
+          title={gt("Feedback", { $context: "settings section" })}
+        >
           <SettingsUnavailableGroup unavailable={webOnly}>
             <SettingsRow
               {...setting("snap-shot-sound")}
@@ -532,14 +535,12 @@ export function SnapShotSettings() {
                   }}
                 >
                   <Toggle value="soft-pop">
-                    <T>Whoosh</T>
+                    {gt("Whoosh", { $context: "name of a whoosh sound" })}
                   </Toggle>
                   <Toggle value="camera-shutter">
-                    <T>Click</T>
+                    {gt("Click", { $context: "name of a camera-shutter sound" })}
                   </Toggle>
-                  <Toggle value="off">
-                    <T>None</T>
-                  </Toggle>
+                  <Toggle value="off">{gt("None", { $context: "no snapshot sound" })}</Toggle>
                 </ToggleGroup>
               }
             />
@@ -575,7 +576,10 @@ export function SnapShotSettings() {
         </SettingsSection>
       ) : null}
       {settings.snapShotEnabled && captureHelper && unavailableMessage === undefined ? (
-        <SettingsSection id="snap-shot-advanced" title={gt("Advanced")}>
+        <SettingsSection
+          id="snap-shot-advanced"
+          title={gt("Advanced", { $context: "settings section" })}
+        >
           <SettingsRow
             title={gt("Capture helper")}
             description={captureHelper.description}
@@ -588,7 +592,7 @@ export function SnapShotSettings() {
                     disabled={setupBusy}
                     onClick={() => void openSetup("access")}
                   >
-                    Set up
+                    <T>Set up</T>
                   </Button>
                 ) : null}
                 <Badge variant={captureHelper.tone}>{captureHelper.label}</Badge>

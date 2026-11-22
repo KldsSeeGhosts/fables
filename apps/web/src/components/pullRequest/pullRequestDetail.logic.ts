@@ -335,7 +335,7 @@ export function classifyPullRequestChecks(
 export function describePullRequestChecks(
   checks: ReadonlyArray<PullRequestCheck>,
   resolve: MessageResolver = m,
-): ReadonlyArray<string> {
+) {
   if (checks.length === 0) return [resolve(msg("No checks reported"))];
   const failed = checks.filter(
     (check) => check.status === "failure" || check.status === "cancelled",
@@ -345,19 +345,13 @@ export function describePullRequestChecks(
   const passed = checks.filter((check) => check.status === "success").length;
   const parts: string[] = [];
   const total = checks.length;
-  if (pending > 0) parts.push(resolve(msg("{pending} of {total} running", { pending, total })));
+  if (failed > 0) parts.push(resolve(msg("{failed} of {total} failing", { failed, total })));
   if (actionRequired > 0) {
     parts.push(
       resolve(msg("{actionRequired} of {total} awaiting action", { actionRequired, total })),
     );
   }
-  if (failed > 0) {
-    parts.push(
-      parts.length > 0
-        ? resolve(msg("{failed} failed", { failed }))
-        : resolve(msg("{failed} of {total} failing", { failed, total })),
-    );
-  }
+  if (pending > 0) parts.push(resolve(msg("{pending} of {total} running", { pending, total })));
   if (parts.length === 0) {
     return [
       passed === total

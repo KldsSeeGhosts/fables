@@ -1,6 +1,6 @@
 import type { EnvironmentId, UnifiedSettings } from "@t3tools/contracts";
 import { T, useGT, Var } from "gt-react";
-import { PlusIcon } from "lucide-react";
+import { GaugeIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 
 import { useUpdateEnvironmentSettings } from "../../hooks/useSettings";
@@ -17,9 +17,7 @@ import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { AddUsageLimitSourceDialog } from "./AddUsageLimitSourceDialog";
 import { useSearchableSetting } from "./settingsSearch";
-import { SettingsRow, SettingsSection } from "./settingsLayout";
-
-const CLI_PROXY_NAME = "CLI Proxy";
+import { SettingsEmptyState, SettingsRow, SettingsSection } from "./settingsLayout";
 
 export function UsageProviderSettings({
   environmentId,
@@ -52,10 +50,20 @@ export function UsageProviderSettings({
         }
       >
         {entries.length === 0 ? (
-          <SettingsRow title={gt("No usage providers configured.")} />
+          <div className="py-8">
+            <SettingsEmptyState
+              icon={<GaugeIcon />}
+              title={gt("No usage providers configured.")}
+              description={gt(
+                "Add a CPA Manager or CLIProxyAPI hub to show pooled account limits next to your providers.",
+              )}
+            />
+          </div>
         ) : (
           entries.map(([id, source]) => {
             const label = source.label?.trim() || source.url;
+            const providerName =
+              source.kind === "cpa-manager" ? gt("CPA Manager") : gt("CLI Proxy");
             return (
               <SettingsRow
                 key={id}
@@ -63,15 +71,13 @@ export function UsageProviderSettings({
                   <Tooltip>
                     <TooltipTrigger render={<span tabIndex={0} />}>{label}</TooltipTrigger>
                     <TooltipPopup>
-                      <span className="block">
-                        {source.kind === "cpa-manager" ? gt("CPA Manager") : CLI_PROXY_NAME}
-                      </span>
+                      <span className="block">{providerName}</span>
                       {label !== source.url ? <span className="block">{source.url}</span> : null}
                     </TooltipPopup>
                   </Tooltip>
                 }
-                description={source.kind === "cpa-manager" ? "CPA Manager" : "CLI Proxy"}
-                status={source.enabled ? undefined : "Disabled"}
+                description={providerName}
+                status={source.enabled ? undefined : <T context="provider status">Disabled</T>}
                 control={
                   !readOnly ? (
                     <RemoveUsageProviderButton

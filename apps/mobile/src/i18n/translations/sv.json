@@ -118,9 +118,9 @@
   "c4eb2b21c8c58a54": "Normal",
   "f42c2a36b3507308": "{label} på",
   "77cc5f738cb7d459": "{label} av",
-  "2159a4897d4a4d73": "{runtime, select, codex {Uppdatera Codex CLI till {version} eller senare för att använda {names}.} other {Uppdatera {providerName} till {version} eller senare för att använda {names}.}}",
-  "a0854b0f9604fc7b": "{runtime, select, codex {{names} kräver Codex CLI {version} eller senare, men den här installationen kan bara uppdateras till {latestVersion}. Installera Codex CLI på ett annat sätt eller vänta på en nyare version.} other {{names} kräver {providerName} {version} eller senare, men den här installationen kan bara uppdateras till {latestVersion}. Installera {providerName} på ett annat sätt eller vänta på en nyare version.}}",
   "aba3bb73ce212f0c": "{names} kräver {providerName} {version} eller senare, men Homebrew-casken claude-code har bara {latestVersion}. Byt till casken claude-code@latest: {command}",
+  "a0854b0f9604fc7b": "{runtime, select, codex {{names} kräver Codex CLI {version} eller senare, men den här installationen kan bara uppdateras till {latestVersion}. Installera Codex CLI på ett annat sätt eller vänta på en nyare version.} other {{names} kräver {providerName} {version} eller senare, men den här installationen kan bara uppdateras till {latestVersion}. Installera {providerName} på ett annat sätt eller vänta på en nyare version.}}",
+  "2159a4897d4a4d73": "{runtime, select, codex {Uppdatera Codex CLI till {version} eller senare för att använda {names}.} other {Uppdatera {providerName} till {version} eller senare för att använda {names}.}}",
   "d887bea446534de5": "Inget projekt i den här miljön kan läsa {host}/{repository}.",
   "4e466d60e2f7736b": "Klistra in hela pull request-URL:en; den här tråden har inget repo att slå upp numret i.",
   "302625058bacbe38": "Klistra in en fullständig URL; det här projektets värd har ingen känd URL för {changeRequest}.",
@@ -367,10 +367,8 @@
   "638678077ba2e050": "{count, plural, one {Försökte granska {count} pull request} other {Försökte granska {count} pull requests}}",
   "420bea546d5f8802": "Tråden kopierades",
   "2efb2dd3bf170f67": "Det gick inte att kopiera tråden",
-  "6c03545936b55e0b": "PR-länken kopierades",
-  "18786351520c79d5": "{shortLabel}-länken kopierades",
-  "1b88f6a5e9fdeea7": "Det gick inte att kopiera PR-länken",
-  "ff8d722c3ae4d1fa": "Det gick inte att kopiera {shortLabel}-länken",
+  "18786351520c79d5": "Länk till {shortLabel} kopierad",
+  "ff8d722c3ae4d1fa": "Det gick inte att kopiera länken till {shortLabel}",
   "b063ecd06059857f": "Komprimerar innan cachen går ut…",
   "071ab90b0e0f5e76": "Komprimerar…",
   "2fb1845862c9a087": "Komprimerades automatiskt innan cachen gick ut",
@@ -919,6 +917,8 @@
   "eb3de8871016043c": "{count, plural, =1 {Använde integrationen {names}} other {Använde integrationerna {names}}}",
   "7ed2bff150997c76": "Använde {names}",
   "7136ebec3019a2ed": "{count, plural, one {Utförde {count} annan åtgärd} other {Utförde {count} andra åtgärder}}",
+  "ba392a6319fd43e0": "{seconds} s",
+  "7a7d66eb860047d1": "i {duration}",
   "551df12aeaf5ba83": "{status, select, inProgress {Länkar en pull request} completed {Länkade en pull request} failed {Kunde inte länka en pull request} declined {Avböjde att länka en pull request} stopped {Slutade länka en pull request} other {Länkar en pull request}}",
   "cbb12c435f68cb2f": "{status, select, inProgress {Länkar {changeRequest} #{number}} completed {Länkade {changeRequest} #{number}} failed {Kunde inte länka {changeRequest} #{number}} declined {Avböjde att länka {changeRequest} #{number}} stopped {Slutade länka {changeRequest} #{number}} other {Länkar {changeRequest} #{number}}}",
   "2f2917c28f02a36e": "{status, select, inProgress {Länkar pull requests} completed {Länkade pull requests} failed {Kunde inte länka pull requests} declined {Avböjde att länka pull requests} stopped {Slutade länka pull requests} other {Länkar pull requests}}",
@@ -1085,7 +1085,6 @@
   "1def3827b7403ac6": "E-postmall",
   "9ed38458996c973a": "Slack-mall",
   "0eb8cb19daf61b59": "{ms} ms",
-  "ba392a6319fd43e0": "{seconds} s",
   "40bc7efea699741f": "{minutes} min {seconds} s",
   "93918bb7fbf62e92": "{hours} h {minutes} min {seconds} s",
   "d3a9046187e04d81": "{hours} h {seconds} s",
@@ -1951,9 +1950,9 @@
   "a5e3ff0d1a60b766": "Kunde inte konfigurera miljöns reläåtkomst: {detail}",
   "7d508fe978cb0f3b": "Av",
   "3ae222ec888dd171": "Spårnings-id:",
-  "be00d572b18076d8": "Tryck länge för att ta bort från den här enheten",
   "46e2a0e828785d97": "Hantera {environment}",
   "5392155ec0c8b0be": "Ta bort {environment} från den här enheten",
+  "be00d572b18076d8": "Tryck länge för att ta bort från den här enheten",
   "782a518513f0777a": "Aktivera {environment}",
   "a35685d9ad9de747": "Läser in länkade molnmiljöer.",
   "91ca3ba7b2f9d6b6": "Inga ytterligare länkade molnmiljöer.",
@@ -2505,7 +2504,7 @@
   "4e18c52d87681416": "Öppna terminal",
   "e880959d9520231a": "Granska ändringar",
   "9e25940062052a95": "Kopiera PR-länk eller tråd",
-  "67f5b13c3c7bcd40": "Dela med en gäst",
+  "67f5b13c3c7bcd40": "Dela med gäst",
   "6a433e2e6d1cfd88": "Ny tråd · {environment}",
   "fb49961cfffa5467": "Stäng kommandopaletten",
   "6fdd3baa7bafa38b": "Sök kommandon, projekt och trådar",
@@ -4654,7 +4653,7 @@
   "70fa09bcb72a19bb": "Skapa ny länk",
   "adb486dabb4bfe2c": "Skapa länk",
   "c0a91279ab9b7a3e": "Skicka den till en person. Länken kan användas en gång och går ut om 24 timmar.",
-  "356ec2ce33231586": "Gästen ser tråden på samma sätt som du, inklusive kommandoutdata och agentens resonemang. Varje meddelande som gästen skickar väntar på att du hanterar det.",
+  "356ec2ce33231586": "Gästen ser tråden som du gör, inklusive kommandoutdata och agentens resonemang. Varje meddelande gästen skickar väntar på dig.",
   "11bb30071c8d00e4": "Länken kan användas en gång och går ut om 24 timmar.",
   "05ba3b5f06a7acfe": "Stäng filer",
   "c7e4f052c3d6c066": "Öppna filer",
@@ -4808,10 +4807,10 @@
   "068c8b6f9a2c1b4f": "Indata",
   "bd39c2eea85979f7": "Förfrågan",
   "ad78fae7d373cf21": "Arbetar",
-  "945e6659afae60d5": "Övervakar",
+  "14a1bb9a179e17b0": "Övervakar",
   "37ffec8201f153c1": "Misslyckades",
   "2277fa5e14ffd3b0": "Begränsad",
-  "1aad28e9abe4c5eb": "Mergad",
+  "6a8e0b2604df7fc3": "Mergad",
   "6583fff72f2231e8": "Klar",
   "bb58e9ed3a2d0e54": "Markera som klar",
   "474876386e3b8977": "Ta bort",
@@ -5001,6 +5000,42 @@
     },
     ". Öppna ChatGPT med kontot du anslöt."
   ],
+  "d55c0f672b8e61c2": "Hide accounts",
+  "5e55c1ee3fe9524a": "Show accounts",
+  "54423a35bd50c696": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " CPA accounts"
+  ],
+  "d9eeb418e1fb35f5": "Hide accounts",
+  "325c31ce889c6aba": "Show accounts",
+  "1c1ddbbd4567f2ab": "Disabled",
+  "8c63db26cd80bbc9": "Dashboard account",
+  "bd1485b065fd7d76": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " (estimated)"
+  ],
+  "933fa7740fe8c681": {
+    "i": 1,
+    "k": "_gt_value_1",
+    "v": "v"
+  },
+  "412e3b93454812aa": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " % kvar"
+  ],
+  "76f33bfd46f00759": "Quota unavailable.",
   "a3d040c4ef4fc6e9": "Före takten",
   "b16fdf56b16d99c9": "I takt",
   "90f977e97ae8b6c6": "Under takten",
@@ -5043,14 +5078,6 @@
     " kunde inte uppdatera gränserna. Visar de senast kända värdena."
   ],
   "726ece0c7139ce8a": "Kontot rapporterar inte längre gränser i de valda miljöerna.",
-  "412e3b93454812aa": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " % kvar"
-  ],
   "82d204e1a9e7da17": [
     "Återställs",
     " ",
@@ -5082,6 +5109,7 @@
   "fb7be23247bbe5ec": "före takten",
   "05c53f9e062392da": "i takt",
   "5216fc7e035af55c": "under takten",
+  "9da3a17289293930": "Användning är inte tillgänglig för den här API-anslutningen",
   "0fd14331cbecbfc6": "Återställningen tillämpades. Dina fönster har nollställts.",
   "1a92fa2f744401bc": "Inget att återställa just nu.",
   "fff9b7f838279ee3": "Ingen återställningskredit kvar.",
@@ -5096,7 +5124,6 @@
   "f8a9ced202b79202": "Dölj kontoetikett",
   "e4b6c8eab1e48ee2": "Visa kontoetikett",
   "1f76510e608a9292": "Använder…",
-  "9da3a17289293930": "Användning är inte tillgänglig för denna API-anslutning",
   "fd121a8a212b5242": "Den här anslutningen kan inte hantera leverantörskonton.",
   "43e655305262c0c7": "Kostnad",
   "88151c994a23d697": "Token",

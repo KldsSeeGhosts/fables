@@ -1,6 +1,7 @@
 import { heldPullRequestListEntriesAtom } from "@t3tools/client-runtime/state/pull-requests";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { cn } from "~/lib/utils";
+import { m } from "~/i18n/messages";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { applyPullRequestDraftFilterChange } from "@t3tools/client-runtime/pull-request-query";
 import { pullRequestCopyTarget } from "@t3tools/client-runtime/thread-reference";
@@ -23,7 +24,7 @@ import type {
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowDownUpIcon, CircleAlertIcon, LayersIcon, Plug2Icon } from "lucide-react";
-import { T, useGT, useMessages } from "gt-react";
+import { T, useGT, useLocale, useMessages } from "gt-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import {
@@ -34,6 +35,7 @@ import {
   pullRequestDiffStatKey,
   pullRequestEntryKey,
   rankPullRequestMatches,
+  pullRequestStatsKeysToRequest,
   pullRequestStatsRefreshBatches,
   pullRequestStatsRequestBatches,
   retainVisiblePullRequestStatsBatches,
@@ -76,7 +78,7 @@ import {
   SORT_OPTIONS,
   STATE_TABS,
 } from "./pullRequestListOptions";
-import { PullRequestsColumn } from "./PullRequestsColumn";
+import { WorkItemListColumn } from "../workItem/WorkItemListColumn";
 import { PullRequestListGroups } from "./PullRequestListGroups";
 import { pullRequestPanelReference } from "./usePullRequestDetail";
 import { usePullRequestIntentPrefetch } from "./usePullRequestIntentPrefetch";
@@ -91,7 +93,6 @@ import { pullRequestGroups, pullRequestListEntryId } from "./pullRequestListGrou
 import { PullRequestListEmptyState, PullRequestListNotice } from "./PullRequestListEmptyState";
 import { PullRequestGlyph } from "./pullRequestIcons";
 import { PullRequestListGhost } from "./PullRequestGhosts";
-import { PullRequestsUnavailableState } from "./PullRequestsUnavailableState";
 import { type PullRequestRowTarget } from "./PullRequestRow";
 import { RightPanelTabs } from "../RightPanelTabs";
 import { isCommandPaletteOpen } from "~/commandPaletteBus";
@@ -139,6 +140,13 @@ import {
   type PullRequestHostRead,
 } from "./pullRequestProjectAssignment.logic";
 
+/** The windowed list reuses row slots, so document order is not the order on screen. */
+function rowsInScreenOrder(viewport: HTMLElement | null): HTMLElement[] {
+  const rows = [...(viewport?.querySelectorAll<HTMLElement>("[data-pull-request-key]") ?? [])];
+  const tops = new Map(rows.map((row) => [row, row.getBoundingClientRect().top]));
+  return rows.sort((a, b) => (tops.get(a) ?? 0) - (tops.get(b) ?? 0));
+}
+
 function getShortcutContext() {
   return {
     terminalFocus: isTerminalFocused(),
@@ -170,14 +178,32 @@ const heldRowReaders = new WeakMap<
   Map<string, ReturnType<typeof heldPullRequestListEntriesAtom<EnvironmentPullRequestEntry>>>
 >();
 
-function usePendingListEntries(
+type PendingListEntriesAtom = Atom.Atom<ReadonlyArray<EnvironmentPullRequestEntry>>;
+const NO_PENDING_LIST_ENTRIES: PendingListEntriesAtom = Atom.make(
+  (): ReadonlyArray<EnvironmentPullRequestEntry> => [],
+);
+// One atom per list and query. An atom made during render was a new registry node every
+// render, whose value read again on subscribe was a new array, so the page rendered again.
+const pendingListAtoms = new WeakMap<
+  ReadonlyArray<EnvironmentPullRequestEntry>,
+  Map<string, PendingListEntriesAtom>
+>();
+
+function pendingListEntriesAtom(
   input: PullRequestListInput,
   entries: ReadonlyArray<EnvironmentPullRequestEntry> | undefined,
-) {
+): PendingListEntriesAtom {
+  if (entries === undefined || entries.length === 0) return NO_PENDING_LIST_ENTRIES;
   const key = JSON.stringify(input);
-  return useAtomValue(
-    Atom.make((get) =>
-      (entries ?? []).flatMap((entry) => {
+  let byInput = pendingListAtoms.get(entries);
+  if (byInput === undefined) {
+    byInput = new Map();
+    pendingListAtoms.set(entries, byInput);
+  }
+  let atom = byInput.get(key);
+  if (atom === undefined) {
+    atom = Atom.make((get) =>
+      entries.flatMap((entry) => {
         let readers = heldRowReaders.get(entry);
         if (readers === undefined) {
           readers = new Map();
@@ -190,13 +216,23 @@ function usePendingListEntries(
         }
         return AsyncResult.getOrElse(get(reader), () => []);
       }),
-    ),
-  );
+    );
+    byInput.set(key, atom);
+  }
+  return atom;
+}
+
+function usePendingListEntries(
+  input: PullRequestListInput,
+  entries: ReadonlyArray<EnvironmentPullRequestEntry> | undefined,
+) {
+  return useAtomValue(pendingListEntriesAtom(input, entries));
 }
 
 export function PullRequestsPage() {
   const gt = useGT();
   const resolve = useMessages();
+  const locale = useLocale();
   const { visible } = useLayoutPane();
   const location = useLayoutPageLocation();
   const search = validatePullRequestsSearch(location.search);
@@ -781,6 +817,12 @@ export function PullRequestsPage() {
   const shownHeldAuthored = usePendingListEntries(overlayInput, heldPartitions?.authored);
   const shownHeldReviewing = usePendingListEntries(overlayInput, heldPartitions?.reviewing);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // State as well as a ref: the windowed rows follow the scroller once it mounts.
+  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
+  const attachScroller = (element: HTMLDivElement | null) => {
+    scrollRef.current = element;
+    setScrollElement(element);
+  };
   const {
     entries,
     listedPullRequestTabStatuses,
@@ -844,7 +886,6 @@ export function PullRequestsPage() {
   }
   const [statsTargetState, setStatsTargetState] = useState<{
     readonly key: string;
-    readonly sortKey?: string;
     readonly batches: ReadonlyArray<PullRequestStatsBatch>;
   }>({ key: filterKey, batches: [] });
   const statsBatches = statsTargetState.key === filterKey ? statsTargetState.batches : [];
@@ -902,12 +943,10 @@ export function PullRequestsPage() {
         activeBatches: batches,
         statsByRow: known,
       });
-      if (added.length === 0 && current.key === filterKey && current.sortKey === sortStatsKey) {
-        return current;
-      }
-      return { key: filterKey, sortKey: sortStatsKey, batches: [...batches, ...added] };
+      if (added.length === 0 && current.key === filterKey) return current;
+      return { key: filterKey, batches: [...batches, ...added] };
     });
-  }, [filterKey, entriesByStatsKey, statsPolicy, sortStatsKey]);
+  }, [filterKey, entriesByStatsKey, statsPolicy]);
   // The observer outlives the rows it watches, so it reads the rows held at the time it fires.
   const readStatsRows = useEffectEvent(() => entriesByStatsKey);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- IntersectionObserver on rows requests stats for rows that scroll into view
@@ -983,7 +1022,15 @@ export function PullRequestsPage() {
     statsByRow,
     statsPolicy === "eager" ? statsQuery.stats : null,
     statsPolicy !== "eager" ||
-      (statsTargetState.sortKey === sortStatsKey &&
+      // Read here rather than marked by the effect, so a keystroke that needs no new counts
+      // settles in its own render instead of committing again.
+      (statsTargetState.key === filterKey &&
+        pullRequestStatsKeysToRequest(
+          entriesByStatsKey,
+          new Set(entriesByStatsKey.keys()),
+          statsTargetState.batches,
+          statsByRow,
+        ).size === 0 &&
         !statsQuery.isPending &&
         !listQuery.isPending &&
         !baselineQuery.isPending &&
@@ -1083,8 +1130,7 @@ export function PullRequestsPage() {
       if (!group || readCloseSweep().closingKeys.has(originKey)) return;
       // The rows on screen, in screen order: stacks reorder their layers and a folded stack
       // renders none, so the data order would sweep rows the reader never passed over.
-      const orderedKeys = Array.from(
-        scrollRef.current?.querySelectorAll<HTMLElement>("[data-pull-request-key]") ?? [],
+      const orderedKeys = rowsInScreenOrder(scrollRef.current).map(
         (row) => row.dataset.pullRequestKey ?? "",
       );
       const canClose = (key: string) => {
@@ -1139,7 +1185,7 @@ export function PullRequestsPage() {
           const bounds = viewport.getBoundingClientRect();
           const visibleY = Math.min(Math.max(y, bounds.top), bounds.bottom - 1);
           let key: string | null = null;
-          for (const row of viewport.querySelectorAll<HTMLElement>("[data-pull-request-key]")) {
+          for (const row of rowsInScreenOrder(viewport)) {
             if (key !== null && row.getBoundingClientRect().top > visibleY) break;
             key = row.dataset.pullRequestKey ?? null;
           }
@@ -1243,10 +1289,11 @@ export function PullRequestsPage() {
     ),
   );
 
-  const prefetchEntry = usePullRequestIntentPrefetch((entry) =>
+  const { prefetch: prefetchEntry, reads: intentReads } = usePullRequestIntentPrefetch((entry) =>
     listedPullRequestsBySurface.has(pullRequestListEntryId(entry)),
   );
-  const selectEntry = (entry: PullRequestRowTarget) => {
+  // Stable, so the memoized rows skip the page's re-renders.
+  const selectEntry = useStableCallback((entry: PullRequestRowTarget) => {
     if (rightPanelRef === null) return;
     useRightPanelStore.getState().openPullRequest(rightPanelRef, entry);
     updateSearch({
@@ -1256,7 +1303,7 @@ export function PullRequestsPage() {
       selectedEnvironmentId: entry.environmentId,
       selectedHost: entry.host,
     });
-  };
+  });
 
   const searchInput = (
     <PullRequestSearchInput
@@ -1289,22 +1336,25 @@ export function PullRequestsPage() {
   // Said in the empty list, so a list narrowed to nothing names what narrowed it.
   const hostFilterEntries = hosts.length > 0 ? hosts : expectedHosts;
   const hostFilterEntry = hostFilterEntries.find((entry) => entry.host === search.host);
-  const filterSummary = describePullRequestListFilters({
-    state: search.state,
-    involvement: search.involvement,
-    filters: menuFilters,
-    hostLabel:
-      search.host === undefined
-        ? undefined
-        : hostFilterEntry
-          ? pullRequestHostLabel(hostFilterEntries, hostFilterEntry)
-          : search.host,
-    serverLabel:
-      capableEnvironments.length > 1 && scopedEnvironmentId !== null
-        ? environmentLabels.get(scopedEnvironmentId)
-        : undefined,
-    projectLabel: scopedProject?.title,
-  });
+  const filterSummary = describePullRequestListFilters(
+    {
+      state: search.state,
+      involvement: search.involvement,
+      filters: menuFilters,
+      hostLabel:
+        search.host === undefined
+          ? undefined
+          : hostFilterEntry
+            ? pullRequestHostLabel(hostFilterEntries, hostFilterEntry)
+            : search.host,
+      serverLabel:
+        capableEnvironments.length > 1 && scopedEnvironmentId !== null
+          ? environmentLabels.get(scopedEnvironmentId)
+          : undefined,
+      projectLabel: scopedProject?.title,
+    },
+    resolve,
+  );
   const clearListFilters = () =>
     updateListScope({
       state: "open",
@@ -1329,18 +1379,21 @@ export function PullRequestsPage() {
   // Every host signed out (or missing its CLI) leaves an empty list that is no answer at all,
   // so it says which host to sign in to rather than "no pull requests".
   const signedOutHosts = hosts.filter((host) => !host.configured);
+  const listFormat = new Intl.ListFormat(locale, { type: "conjunction" });
   const firstSignedOut = signedOutHosts[0];
   const signIn =
     firstSignedOut !== undefined && signedOutHosts.length === hosts.length
       ? {
-          hostLabel: signedOutHosts.map((host) => pullRequestHostLabel(hosts, host)).join(" and "),
-          changeRequestPlural: [
+          hostLabel: listFormat.format(
+            signedOutHosts.map((host) => pullRequestHostLabel(hosts, host)),
+          ),
+          changeRequestPlural: listFormat.format([
             ...new Set(
               signedOutHosts.map(
                 (host) => sourceControlClients.get(host.kind).changeRequest.plural,
               ),
             ),
-          ].join(" and "),
+          ]),
           detail: signedOutHosts.length === 1 ? firstSignedOut.detail : null,
           Icon: getSourceControlPresentationForKind(firstSignedOut.kind).Icon,
         }
@@ -1353,7 +1406,14 @@ export function PullRequestsPage() {
       ? null
       : listErrors.length === 1
         ? `${firstListError.projectTitle}: ${firstListError.message}`
-        : `${listErrors.length} repositories could not be read. ${firstListError.projectTitle}: ${firstListError.message}`;
+        : gt(
+            "{count, plural, one {{count} repository could not be read.} other {{count} repositories could not be read.}} {project}: {message}",
+            {
+              count: listErrors.length,
+              project: firstListError.projectTitle,
+              message: firstListError.message,
+            },
+          );
   const carriedToNothing =
     shownCount === 0 &&
     typedQuery.length === 0 &&
@@ -1371,11 +1431,21 @@ export function PullRequestsPage() {
       ) : firstLoad ? (
         <PullRequestListGhost rows={7} caption={gt("Loading pull requests…")} />
       ) : listError && shownCount === 0 ? (
-        <PullRequestsUnavailableState
-          error={listError}
-          refreshing={listQuery.isPending}
-          onRetry={listQuery.retry}
-        />
+        <PullRequestListNotice
+          icon={CircleAlertIcon}
+          title={gt("Could not load pull requests")}
+          description={listError}
+        >
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={listQuery.isPending}
+            onClick={listQuery.retry}
+          >
+            <RefreshIcon size="sm" refreshing={listQuery.isPending} />
+            <T>Retry</T>
+          </Button>
+        </PullRequestListNotice>
       ) : carriedToNothing ? (
         <PullRequestListGhost rows={7} />
       ) : shownCount === 0 &&
@@ -1385,7 +1455,7 @@ export function PullRequestsPage() {
         !listFiltered ? (
         <PullRequestListNotice
           icon={CircleAlertIcon}
-          title="Could not load pull requests"
+          title={gt("Could not load pull requests")}
           description={readErrorMessage}
         >
           <Button
@@ -1395,7 +1465,7 @@ export function PullRequestsPage() {
             onClick={() => void refreshFromHost()}
           >
             <RefreshIcon size="sm" refreshing={refreshing} />
-            Retry
+            <T>Retry</T>
           </Button>
         </PullRequestListNotice>
       ) : shownCount === 0 ? (
@@ -1430,8 +1500,10 @@ export function PullRequestsPage() {
           closingKeys={closingKeys}
           sweepingKeys={closeSweepKeys}
           onCloseSweepStart={startCloseSweep}
+          scrollElement={scrollElement}
         />
       )}
+      {intentReads}
 
       {listError && shownCount > 0 ? (
         <div className="flex items-center justify-between gap-3 rounded-control border border-warning/30 bg-warning-surface px-3 py-2 text-xs">
@@ -1550,11 +1622,25 @@ export function PullRequestsPage() {
     />
   );
   const columnProps = {
+    area: "pull-requests",
+    title: gt("Pull requests"),
+    icon: (
+      <PullRequestGlyph.pullRequest aria-hidden className="size-3.5 shrink-0 text-foreground" />
+    ),
+    refreshLabel: gt("Refresh pull requests"),
     refreshing,
     onRefresh: () => void refreshFromHost(),
-    host: search.host,
-    hostMenuOptions,
-    onHost: (host: string | undefined) => updateListScope({ host }),
+    providerMenu: (
+      <PullRequestCompactFilterMenu
+        label={gt("Filter by provider")}
+        iconOnly={search.host !== undefined}
+        triggerIcon={<Plug2Icon aria-hidden className="size-4" />}
+        triggerLabel={gt("All", { $context: "all providers" })}
+        value={search.host ?? ""}
+        options={hostMenuOptions}
+        onChange={(next) => updateListScope({ host: next === "" ? undefined : next })}
+      />
+    ),
     searchInput,
     sortMenu,
     filtersMenu,
@@ -1568,7 +1654,7 @@ export function PullRequestsPage() {
     rightPanelOpen: rightPanelState.isOpen,
     maximizedAway: rightPanelMaximized,
     listBody,
-    scrollRef,
+    scrollRef: attachScroller,
   };
 
   const activateSurface = (surface: PullRequestSurface) => {
@@ -1614,7 +1700,7 @@ export function PullRequestsPage() {
     const { shortLabel } = (
       sourceControlClients.findByChangeRequestUrl(url) ?? sourceControlClients.get(undefined)
     ).changeRequest;
-    void copyThreadReference(pullRequestCopyTarget(url, shortLabel));
+    void copyThreadReference(pullRequestCopyTarget(url, shortLabel, m));
   });
   const closeActiveSurfaceFromShortcut = useEffectEvent((event: KeyboardEvent) => {
     if (activePullRequestSurface === null) return;
@@ -1668,7 +1754,7 @@ export function PullRequestsPage() {
     >
       <div ref={observeSplitRow} className="relative flex min-h-0 flex-1">
         {pullRequestsSupported && rightPanelPresent ? openPanelControls : null}
-        <PullRequestsColumn {...columnProps} split={splitPanes} />
+        <WorkItemListColumn {...columnProps} split={splitPanes} />
 
         {splitPanes ? (
           <RightPanelTabs
@@ -1676,6 +1762,7 @@ export function PullRequestsPage() {
             pane
             open={rightPanelState.isOpen}
             maximized={rightPanelMaximized}
+            holdsPaneTabs={rightPanelMaximized}
             keybindings={keybindings}
             widthStorageKey="t3code:pull-request-panel-width"
             // The pen's split (bETcv) gives the review 549 of 1280px, which

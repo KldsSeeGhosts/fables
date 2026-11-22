@@ -281,7 +281,11 @@ export function BranchPickerRefItem({
     refName.lastCommitAt === undefined ? null : new Date(refName.lastCommitAt * 1000).toISOString(),
   );
   const age =
-    relative.status === "relative" ? (relative.suffix === null ? "now" : relative.value) : null;
+    relative.status === "relative"
+      ? relative.suffix === null
+        ? gt("now", { $context: "relative time" })
+        : relative.value
+      : null;
   const RefIcon = refName.isRemote ? CloudIcon : GitBranchIcon;
   return (
     <div>
@@ -299,11 +303,7 @@ export function BranchPickerRefItem({
           <RefIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
           <MiddleTruncate value={itemValue} className="flex-1" />
           {badge ? <span className="shrink-0 text-micro text-dim-foreground">{badge}</span> : null}
-          {refName.isDefault ? (
-            <Badge variant="secondary">
-              <T>default</T>
-            </Badge>
-          ) : null}
+          {refName.isDefault ? <Badge variant="secondary">default</Badge> : null}
           {selected ? (
             <CheckIcon aria-hidden className="size-3.5 shrink-0 text-foreground" />
           ) : age ? (

@@ -4,6 +4,7 @@ import {
   secretRequestDisplay,
   secretRequestFailureMessage,
   secretRequestInputs,
+  secretRequestLink,
   secretRequestPrivacyNote,
   secretRequestReasonParts,
   secretRequestReference,
@@ -25,7 +26,7 @@ import type {
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { hasFeatureFlag } from "@t3tools/client-runtime/state/server";
-import { useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages } from "gt-react";
 import {
   ArrowUpRightIcon,
   CheckIcon,
@@ -40,6 +41,7 @@ import { useId, useRef, useState, type FormEvent, type MouseEvent } from "react"
 
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { cn } from "../../lib/utils";
 import { Button, InlineButton } from "../ui/button";
 import { SecretSourceSelect } from "../settings/SecretSourceInput";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "../ui/input-group";
@@ -201,9 +203,24 @@ function PendingSecretRequestForm(props: {
       void send({ type: "reference", source, reference });
     }
   };
-  // On click, not pointerdown: the mousedown that follows a pointerdown
-  // moves focus back off the input. A click that ends a text selection
-  // leaves it alone so the reason can still be copied.
+  const link = secretRequestLink(item);
+  const field = (input: SecretRequestInput, index: number, prefix?: string | null) => (
+    <SecretRequestField
+      key={input.key}
+      id={inputId(index)}
+      input={input}
+      // A single input is labelled by the card title.
+      label={multiple ? input.label : undefined}
+      value={secretRequestValue(values, input.key)}
+      disabled={submitting}
+      invalid={error !== null}
+      describedBy={describedBy}
+      prefix={prefix}
+      onChange={(value) => setValues((current) => ({ ...current, [input.key]: value }))}
+    />
+  );
+  const reason = secretRequestReasonParts(item);
+  const prefix = !multiple && source === null && VARIABLE_NAME.test(item.label) ? item.label : null;
   const onCardClick = (event: MouseEvent<HTMLFormElement>) => {
     if (!(event.target instanceof Element)) return;
     if (event.target.closest("input, button, a, [data-slot='tooltip-trigger']")) return;
@@ -211,25 +228,12 @@ function PendingSecretRequestForm(props: {
     const empty = inputs.findIndex((input) => !secretRequestValue(values, input.key).trim());
     document.getElementById(inputId(Math.max(empty, 0)))?.focus();
   };
-  const reason = secretRequestReasonParts(item);
-  const prefix = VARIABLE_NAME.test(item.label) ? item.label : null;
-
   const saveButton = (
     <Button type="submit" variant="secondary" disabled={submitting || !canSave}>
-      {gt("Save securely")}
+      <T>Save securely</T>
       <Kbd size="sm" aria-hidden>
         ↵
       </Kbd>
-    </Button>
-  );
-  const declineButton = (
-    <Button
-      type="button"
-      variant="ghost-muted"
-      disabled={submitting}
-      onClick={() => void send({ type: "decline" })}
-    >
-      {gt("Decline", { $context: "verb, declines the secret request" })}
     </Button>
   );
 
@@ -243,13 +247,9 @@ function PendingSecretRequestForm(props: {
     >
       <div className="flex min-h-9 min-w-0 items-center gap-2 px-2.5 pb-1">
         <KeyRoundIcon aria-hidden className="size-4 shrink-0 text-warning-foreground" />
-        {multiple ? (
-          <span className="min-w-0 flex-1 text-label text-foreground">{item.label}</span>
-        ) : (
-          <label htmlFor={inputId(0)} className="min-w-0 flex-1 text-label text-foreground">
-            {item.label}
-          </label>
-        )}
+        <label htmlFor={inputId(0)} className="min-w-0 flex-1 text-label text-foreground">
+          {item.label}
+        </label>
         <Tooltip>
           <TooltipTrigger
             render={
@@ -282,98 +282,66 @@ function PendingSecretRequestForm(props: {
             {reason.after}
           </p>
         ) : null}
-        {multiple ? (
-          <div className="flex min-w-0 flex-col gap-2.5">
-            {inputs.map((input, index) => (
-              <SecretRequestField
-                key={input.key}
-                id={inputId(index)}
-                input={input}
-                label={input.label}
-                value={secretRequestValue(values, input.key)}
-                disabled={submitting}
-                invalid={error !== null}
-                describedBy={describedBy}
-                onChange={(value) => setValues((current) => ({ ...current, [input.key]: value }))}
-              />
-            ))}
-            {/* One group, so a narrow pane wraps both buttons together. */}
-            <div className="ms-auto flex shrink-0 items-center gap-1">
-              {saveButton}
-              {declineButton}
-            </div>
-          </div>
-        ) : (
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            {sources.length > 0 ? (
-              <SecretSourceSelect
-                value={source?.id ?? null}
-                sources={sources}
-                label={item.label}
-                disabled={submitting}
-                onValueChange={(next) => {
-                  setSourceId(next);
-                  setError(null);
-                }}
-              />
-            ) : null}
-            <div className="min-w-40 flex-1">
-              {source === null ? (
-                <SecretRequestField
+        {reason.link === null && link !== null ? (
+          <p className="min-w-0 px-1 text-body">
+            <HostLink href={link.href} host={link.host} />
+          </p>
+        ) : null}
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          {sources.length > 0 ? (
+            <SecretSourceSelect
+              value={source?.id ?? null}
+              sources={sources}
+              label={item.label}
+              disabled={submitting}
+              onValueChange={(next) => {
+                setSourceId(next);
+                setError(null);
+              }}
+            />
+          ) : null}
+          <div className={cn("min-w-40 flex-1", multiple && "basis-full")}>
+            {multiple ? (
+              <div className="flex min-w-0 flex-col gap-2.5">
+                {inputs.map((input, index) => field(input, index))}
+              </div>
+            ) : source === null ? (
+              field(inputs[0]!, 0, prefix)
+            ) : (
+              <InputGroup>
+                <InputGroupInput
                   id={inputId(0)}
-                  input={inputs[0]!}
-                  prefix={prefix}
-                  value={secretRequestValue(values, "")}
+                  font="mono"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  placeholder={source.referencePlaceholder}
+                  value={reference}
                   disabled={submitting}
-                  invalid={error !== null}
-                  describedBy={describedBy}
-                  onChange={(value) => setValues((current) => ({ ...current, "": value }))}
+                  aria-invalid={error !== null || undefined}
+                  aria-describedby={describedBy}
+                  onChange={(event) => {
+                    setReference(event.currentTarget.value);
+                    setError(null);
+                  }}
                 />
-              ) : (
-                <InputGroup>
-                  {prefix !== null ? (
-                    <InputGroupAddon className="max-w-1/2 min-w-0 shrink-0">
-                      <div className="min-w-0 border-e border-divider pe-3">
-                        <Text
-                          render={<p />}
-                          variant="body"
-                          tone="muted"
-                          mono
-                          truncate
-                          title={prefix}
-                        >
-                          {prefix}
-                        </Text>
-                      </div>
-                    </InputGroupAddon>
-                  ) : null}
-                  <InputGroupInput
-                    id={inputId(0)}
-                    font="mono"
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                    spellCheck={false}
-                    placeholder={source.referencePlaceholder}
-                    value={reference}
-                    disabled={submitting}
-                    aria-invalid={error !== null || undefined}
-                    aria-describedby={describedBy}
-                    onChange={(event) => {
-                      setReference(event.currentTarget.value);
-                      setError(null);
-                    }}
-                  />
-                </InputGroup>
-              )}
-            </div>
-            {/* One group, so a narrow pane wraps both buttons together. */}
-            <div className="ms-auto flex shrink-0 items-center gap-1">
-              {saveButton}
-              {declineButton}
-            </div>
+              </InputGroup>
+            )}
           </div>
-        )}
+          {/* One group, so a narrow pane wraps both buttons together. */}
+          <div className="ms-auto flex shrink-0 items-center gap-1">
+            {saveButton}
+            <Button
+              type="button"
+              variant="ghost-muted"
+              disabled={submitting}
+              onClick={() => void send({ type: "decline" })}
+            >
+              <T>Decline</T>
+            </Button>
+          </div>
+        </div>
         {error !== null ? (
           <p id={errorId} role="alert" className="px-1 text-meta text-destructive">
             {error}
@@ -387,13 +355,12 @@ function PendingSecretRequestForm(props: {
 function SecretRequestField(props: {
   readonly id: string;
   readonly input: SecretRequestInput;
-  readonly label?: string | undefined;
-  /** The request's env-var-style label repeated in front of the value. */
-  readonly prefix?: string | null | undefined;
+  readonly label: string | undefined;
   readonly value: string;
   readonly disabled: boolean;
   readonly invalid: boolean;
   readonly describedBy: string;
+  readonly prefix?: string | null | undefined;
   readonly onChange: (value: string) => void;
 }) {
   const { input } = props;
@@ -402,7 +369,7 @@ function SecretRequestField(props: {
   const masked = input.secret && !revealed;
   const control = (
     <InputGroup>
-      {props.prefix != null ? (
+      {props.prefix ? (
         <InputGroupAddon className="max-w-1/2 min-w-0 shrink-0">
           <div className="min-w-0 border-e border-divider pe-3">
             <Text render={<p />} variant="body" tone="muted" mono truncate title={props.prefix}>
@@ -451,7 +418,7 @@ function SecretRequestField(props: {
   if (props.label === undefined) return control;
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <label htmlFor={props.id} className="px-1 text-meta text-muted-foreground">
+      <label htmlFor={props.id} className="text-label text-muted-foreground">
         {props.label}
       </label>
       {control}

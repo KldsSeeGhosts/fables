@@ -1,6 +1,6 @@
 import { m } from "../i18n/messages";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { useGT, useMessages } from "gt-react";
+import { msg, useGT, useMessages } from "gt-react";
 import { ChildThreadApprovals } from "./chat/ChildThreadApprovals";
 import { ComposerTaskStatus } from "./chat/ComposerTaskStatus";
 import { isReturnedSurfaceFocus, workspaceAreaProps } from "../lib/workspaceFocus";
@@ -1253,12 +1253,11 @@ export default function ChatView(props: ChatViewProps) {
     !isServerThread && draftFallback
       ? draftFallback.selection
       : activeProjectSettings.settings.defaultModelSelection;
-  // The notch's "+": a new thread in this project, in a new tab of this pane.
+  // A new thread in this project, in a new tab of this pane.
   const handleNewThreadInActiveProject = () => {
     if (activeProjectRef === null) return;
     void runInNewLayoutTab(() => handleNewThread(activeProjectRef));
   };
-  const handleNewThreadInActiveProjectStable = useStableCallback(handleNewThreadInActiveProject);
   const projectGroupingSettings = selectProjectGroupingSettings(settings);
   const activeDraftLogicalProjectKey =
     !isServerThread && activeProject
@@ -1804,6 +1803,9 @@ export default function ChatView(props: ChatViewProps) {
   };
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const backgroundThread = use(BackgroundThreadContext);
+  // The details panel's git control takes the commit and push shortcut while it shows, so the
+  // hidden "shortcut" control (a second copy of its queries and dialogs) mounts only without it.
+  const [panelGitHostsShortcut, setPanelGitHostsShortcut] = useState(false);
   const scriptKeybindings =
     useAtomValue(serverEnvironment.configValueAtom(environmentId))?.keybindings ??
     DEFAULT_RESOLVED_KEYBINDINGS;
@@ -2412,7 +2414,7 @@ export default function ChatView(props: ChatViewProps) {
         activeProjectSettings.settings.newWorktreesStartFromOrigin)
       : false;
   const worktreeRepositoryChoices = useWorktreeRepositoryChoices(activeProject);
-  const rememberedWorktreeRepositories = useRememberedWorktreeRepositories(activeProject ?? null);
+  const rememberedWorktreeRepositories = useRememberedWorktreeRepositories(activeProject);
   const sendEnvMode = resolveSendEnvMode({
     requestedEnvMode: envMode,
     isGitRepo,
@@ -2550,8 +2552,6 @@ export default function ChatView(props: ChatViewProps) {
       })
     : null;
   const {
-    besideAvailable,
-    openBesideStable,
     onOpenToolDiffStable,
     onOpenTurnDiffStable,
     openChangesFromThreadPanelStable,
@@ -2561,8 +2561,6 @@ export default function ChatView(props: ChatViewProps) {
     startTerminal,
     activeThreadRef,
     activeProject,
-    gitCwd,
-    activeProjectCwd,
     activeRightPanelSurface,
     activePreviewState,
     deviceState,
@@ -2675,14 +2673,14 @@ export default function ChatView(props: ChatViewProps) {
   const compactUnavailableReason = !compactThreadUnavailable
     ? null
     : isWorking
-      ? "Compact when the agent finishes"
+      ? gt("Compact when the agent finishes")
       : pendingApprovals.length > 0 || pendingUserInputs.length > 0
-        ? "Answer the pending request first"
+        ? gt("Answer the pending request first")
         : !manualCompactionProviderAvailable
-          ? "This provider cannot compact on request"
+          ? gt("This provider cannot compact on request")
           : !activeThreadHasCompactableConversation
-            ? "Nothing to compact yet"
-            : "Compacting is unavailable right now";
+            ? gt("Nothing to compact yet")
+            : gt("Compacting is unavailable right now");
   const freshSessionAvailable =
     activeMessageCount > 0 && serverConfig?.environment.capabilities.freshContext === true;
   const freshSessionArmed = useFreshSessionArmed(routeThreadKey);
@@ -2793,7 +2791,7 @@ export default function ChatView(props: ChatViewProps) {
     if (firstPendingApproval) {
       return {
         kind: "approval",
-        label: pendingApprovalSlotLabel(firstPendingApproval),
+        label: pendingApprovalSlotLabel(firstPendingApproval, messages),
         createdAt: firstPendingApproval.createdAt,
       };
     }
@@ -2831,8 +2829,8 @@ export default function ChatView(props: ChatViewProps) {
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Could not snooze thread",
-          description: "The reset time has passed. Retry the thread manually.",
+          title: m(msg("Could not snooze thread")),
+          description: m(msg("The reset time has passed. Retry the thread manually.")),
         }),
       );
       return;
@@ -2849,8 +2847,10 @@ export default function ChatView(props: ChatViewProps) {
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: limitSnoozed ? "Failed to wake thread" : "Failed to snooze thread",
-            description: error instanceof Error ? error.message : "An error occurred.",
+            title: limitSnoozed
+              ? m(msg("Failed to wake thread"))
+              : m(msg("Failed to snooze thread")),
+            description: error instanceof Error ? error.message : m(msg("An error occurred.")),
           }),
         );
       }
@@ -3082,35 +3082,6 @@ export default function ChatView(props: ChatViewProps) {
     },
   });
 
-  const closeActiveRightPanelSurfaceStable = useStableCallback(() => {
-    if (activeThreadRef === null || activeRightPanelSurface === null) return;
-    useRightPanelStore.getState().closeSurface(activeThreadRef, activeRightPanelSurface.id);
-  });
-  const toggleRightPanelStable = useStableCallback(() => {
-    rightPanelShortcuts["rightPanel.toggle"]?.();
-  });
-  const toggleRightPanelMaximizedStable = useStableCallback(() => {
-    if (activeThreadRef === null) return;
-    useRightPanelStore.getState().setMaximized(activeThreadRef, rightPanelState.maximized !== true);
-  });
-
-  // A focused desktop browser page forwards these chords as menu actions.
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to desktop bridge menu actions that toggle or close the right panel
-  useEffect(() => {
-    if (embedded || backgroundThread) return;
-    return window.desktopBridge?.onMenuAction((action) => {
-      if (action === "rightPanel.toggle") toggleRightPanelStable();
-      else if (action === "rightPanel.toggleMaximized") toggleRightPanelMaximizedStable();
-      else if (action === "rightPanel.close") closeActiveRightPanelSurfaceStable();
-    });
-  }, [
-    embedded,
-    backgroundThread,
-    toggleRightPanelStable,
-    toggleRightPanelMaximizedStable,
-    closeActiveRightPanelSurfaceStable,
-  ]);
-
   usePasteToFocusComposer(embedded ? null : activeThreadId, composerRef);
   // A delegated task is a remote thread's subagent.
   const isSubagentThread =
@@ -3155,6 +3126,7 @@ export default function ChatView(props: ChatViewProps) {
                 ? gt("Available once the thread's worktree is set up.")
                 : null;
   const sendSideChatStable = useStableCallback(sideChat.open);
+  const openNewSideChatStable = useStableCallback(() => void sideChat.open());
   const { onConfirmRevertStable, onForkFromRunStable, onRevertTimelineTurnStable } =
     useTimelineRewind({
       environmentId,
@@ -3319,6 +3291,7 @@ export default function ChatView(props: ChatViewProps) {
       handleNewThreadInActiveProject,
       persistThreadSettingsForNextTurn,
       linkCheckoutPullRequest,
+      layoutTabId: layoutPane.tabId,
     });
   const withdrawQueuedSendStable = useStableCallback(withdrawQueuedSend);
 
@@ -3463,7 +3436,7 @@ export default function ChatView(props: ChatViewProps) {
   useEffect(() => {
     if (!activeThreadRef) return;
     return publishThreadChatBridge(activeThreadRef, {
-      workspaceMutationId,
+      workspaceMutationId: workspaceRevision.revision,
       sendReady: chatSendReady,
       sendAnnotation: (annotation, image) => {
         sendPreviewAnnotationStable(annotation, image);
@@ -3476,7 +3449,7 @@ export default function ChatView(props: ChatViewProps) {
     activeThreadRef,
     addTerminalContextToDraftStable,
     chatSendReady,
-    workspaceMutationId,
+    workspaceRevision.revision,
     sendPreviewAnnotationStable,
   ]);
   // `chatSendReady` (above) holds every state that makes `onSend` bail and wait.
@@ -3712,11 +3685,8 @@ export default function ChatView(props: ChatViewProps) {
               trailingInset={
                 !rightPanelControlsAtRoot && !rightPanelControlsInPanel ? headerControlsInset : null
               }
-              onNewThreadInProject={handleNewThreadInActiveProjectStable}
-              besideAvailable={besideAvailable}
-              onOpenBeside={openBesideStable}
-              newTabShortcutLabel={shortcutLabelForCommand(keybindings, "tab.new")}
               hiddenTerminal={hiddenTerminalChip}
+              onNewSideChat={sideChat.available ? openNewSideChatStable : undefined}
               {...(activeDraftLogicalProjectKey
                 ? { onOpenProjectSettings: handleOpenDraftProjectSettingsStable }
                 : {})}
@@ -3967,7 +3937,7 @@ export default function ChatView(props: ChatViewProps) {
                         inert={queuedRunEdit.isSaving}
                         aria-busy={queuedRunEdit.isSaving}
                       >
-                        <div className="relative z-10">
+                        <div className="relative z-10 rounded-[inherit]">
                           {showProviderSubagentBar ? (
                             <ProviderSubagentBar
                               provider={selectedProviderEntry ?? null}
@@ -4039,17 +4009,17 @@ export default function ChatView(props: ChatViewProps) {
                               isRevertingCheckpoint={isRevertingCheckpoint}
                               sendDisabledReason={
                                 !canOperateThread
-                                  ? "This connection cannot change threads."
+                                  ? gt("This connection cannot change threads.")
                                   : isEnvironmentChanging
-                                    ? "Preparing machine"
+                                    ? gt("Preparing machine")
                                     : isRevertingCheckpoint
-                                      ? "Rewinding conversation"
+                                      ? gt("Rewinding conversation")
                                       : feedbackUploading
-                                        ? "Sending feedback"
+                                        ? gt("Sending feedback")
                                         : threadDetailLoading
-                                          ? "Messages loading"
+                                          ? gt("Messages loading")
                                           : worktreeSetupBlocksSend
-                                            ? "Preparing worktree"
+                                            ? gt("Preparing worktree")
                                             : projectCloneSendBlockReason
                               }
                               isPreparingWorktree={isPreparingWorktree && !sendQueuesBehindSetup}
@@ -4168,7 +4138,10 @@ export default function ChatView(props: ChatViewProps) {
                                 projectId={activeThread.projectId}
                                 worktreePath={activeThread.worktreePath}
                                 isServerThread={isServerThread}
-                                showGitControls={isGitRepo}
+                                showGitControls={
+                                  isGitRepo || worktreeRepositoryChoices.tracksGitRepositories
+                                }
+                                showBranchControls={isGitRepo}
                                 {...(routeKind === "draft" && draftId ? { draftId } : {})}
                                 onEnvModeChange={onEnvModeChangeStable}
                                 startFromOrigin={startFromOrigin}
@@ -4274,6 +4247,8 @@ export default function ChatView(props: ChatViewProps) {
                   gitCwd={gitCwd}
                   workspaceMutationId={workspaceRevision.revision}
                   isGitRepo={isGitRepo}
+                  gitShortcutListening={panelGitHostsShortcut && !backgroundThread}
+                  onGitShortcutHostChange={setPanelGitHostsShortcut}
                   envLocked={envLocked}
                   availableEnvironments={logicalProjectEnvironments}
                   autoEnvironmentLabel={autoEnvironmentLabel}
@@ -4302,7 +4277,7 @@ export default function ChatView(props: ChatViewProps) {
                     ? { onCheckoutPullRequestRequest: openPullRequestDialogStable }
                     : {})}
                   onComposerFocusRequest={scheduleComposerFocusStable}
-                  {...(isServerThread && isGitRepo
+                  {...(isServerThread && diffAvailable
                     ? { onOpenChanges: openChangesFromThreadPanelStable }
                     : {})}
                   onRunProjectScript={runProjectScriptStable}
@@ -4344,11 +4319,13 @@ export default function ChatView(props: ChatViewProps) {
       {embedded ? null : <LinkPullRequestDialogHost hostThreadRef={routeThreadRef} />}
       <ThreadVisitWatermark threadRef={routeThreadRef} />
       <ExpandedImageDialogHost threadKey={routeThreadKey} />
-      {gitCwd && isGitRepo ? (
+      {gitCwd && isGitRepo && !panelGitHostsShortcut ? (
         <GitActionsControl
           presentation="shortcut"
           listenForShortcuts={!embedded && !backgroundThread}
           gitCwd={gitCwd}
+          name={activeProject?.title ?? ""}
+          workspaceMutationId={workspaceRevision.revision}
           activeThreadRef={activeThreadRef}
           {...(draftId ? { draftId } : {})}
         />

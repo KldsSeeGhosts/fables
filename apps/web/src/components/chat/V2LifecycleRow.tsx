@@ -1,4 +1,4 @@
-import { T, Var, msg, useGT, useMessages } from "gt-react";
+import { T, msg, useGT, useMessages } from "gt-react";
 import { ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { AgentElapsed } from "./AgentElapsed";
 import { projectedSubagentsToRuntime } from "@t3tools/client-runtime/state/subagentRuntime";
@@ -463,10 +463,11 @@ export function SubagentNotificationLink(props: {
 
 /** The row's trailing state: working, done or failed at a glance. */
 function SubagentStatusGlyph({ status }: { status: OrchestrationV2TurnItem["status"] }) {
+  const m = useMessages();
   return (
     <span className="flex size-3.5 shrink-0 items-center justify-center">
       {status === "pending" || status === "running" || status === "waiting" ? (
-        <Spinner size="xs" tone="muted" aria-label={subagentStatusVisual(status).label} />
+        <Spinner size="xs" tone="muted" aria-label={m(subagentStatusVisual(status).label)} />
       ) : status === "completed" ? (
         <CheckIcon aria-hidden className="size-3 text-success-foreground" />
       ) : status === "failed" ? (
@@ -591,9 +592,7 @@ function SubagentTimelineLink(props: {
       </span>
       {remote !== undefined ? (
         <span className="shrink-0 text-caption text-dim-foreground">
-          <T>
-            on <Var>{remote.label}</Var>
-          </T>
+          {gt("on {environment}", { environment: remote.label })}
         </span>
       ) : null}
       <span
@@ -768,6 +767,7 @@ export function HandoffNote(props: {
   readonly item: Extract<OrchestrationV2TurnItem, { type: "handoff" }>;
   readonly runs: ReadonlyArray<HandoffTimelineRun>;
 }) {
+  const gt = useGT();
   const providers =
     useAtomValue(serverEnvironment.providersValueAtom(props.environmentId)) ??
     EMPTY_SERVER_PROVIDERS;
@@ -793,7 +793,11 @@ export function HandoffNote(props: {
       label={label}
       handoff
       failed={props.item.status === "failed"}
-      detail={`Context handoff${props.item.status === "failed" ? " failed" : ""}: ${detail}`}
+      detail={
+        props.item.status === "failed"
+          ? gt("Context handoff failed: {providers}", { providers: detail })
+          : gt("Context handoff: {providers}", { providers: detail })
+      }
     />
   );
 }

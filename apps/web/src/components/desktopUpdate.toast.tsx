@@ -1,5 +1,5 @@
 import type { DesktopBridge, DesktopUpdateState } from "@t3tools/contracts";
-import { msg, T } from "gt-react";
+import { msg, T, Var } from "gt-react";
 import { ArrowRightIcon, DownloadIcon } from "lucide-react";
 
 import { ensureLocalApi } from "../localApi";
@@ -124,9 +124,13 @@ export function showDesktopUpdateDownloadedToast(
       title: m(msg("Update downloaded")),
       description: (
         <>
-          {version
-            ? m(msg("T3 Code {version} is ready. Restart to finish updating.", { version }))
-            : m(msg("The update is ready. Restart to finish updating."))}
+          {version ? (
+            <T>
+              T3 Code <Var>{version}</Var> is ready. Restart to finish updating.
+            </T>
+          ) : (
+            <T>The update is ready. Restart to finish updating.</T>
+          )}
           {releaseUrl ? <ReleaseNotesLink releaseUrl={releaseUrl} shell={shell} /> : null}
         </>
       ),

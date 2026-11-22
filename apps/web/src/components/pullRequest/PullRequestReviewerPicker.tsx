@@ -17,17 +17,18 @@ import {
   toggleSelection,
 } from "@t3tools/client-runtime/pull-request-selection";
 import { CheckIcon, UserPlusIcon } from "lucide-react";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { RelativeTime } from "~/components/RelativeTime";
+import { Badge } from "../ui/badge";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { useState } from "react";
 
-import { RelativeTime } from "~/components/RelativeTime";
 import { m, type MessageResolver } from "~/i18n/messages";
+
 import { pullRequestEnvironment } from "~/state/pullRequests";
 import { useEnvironmentQuery } from "~/state/query";
 import { useDebouncedValue } from "~/state/queries";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 
-import { Badge } from "../ui/badge";
 import { toastManager } from "../ui/toast";
 import { PullRequestCandidatePicker } from "./PullRequestCandidatePicker";
 import { PullRequestActorLabel } from "./pullRequestPresentation";
@@ -209,10 +210,10 @@ export function PullRequestReviewerPicker({
         hasGroups
           ? (candidate) =>
               candidate.isRequested
-                ? gt("Already asked", { $context: "reviewer group label" })
+                ? gt("Already asked")
                 : candidate.suggestion !== undefined
-                  ? gt("Suggested", { $context: "reviewer group label" })
-                  : gt("Everyone with access", { $context: "reviewer group label" })
+                  ? gt("Suggested", { $context: "group of suggested reviewers" })
+                  : gt("Everyone with access")
           : undefined
       }
     >
@@ -223,10 +224,13 @@ export function PullRequestReviewerPicker({
           candidate.isRequested,
         );
         const reason = candidate.isRequested ? (
-          selected && candidate.requestedAt ? (
-            <>
-              <T>requested</T> <RelativeTime timestamp={candidate.requestedAt} />
-            </>
+          candidate.requestedAt ? (
+            <T>
+              requested{" "}
+              <Var>
+                <RelativeTime timestamp={candidate.requestedAt} />
+              </Var>
+            </T>
           ) : null
         ) : (
           (candidate.suggestion ?? null)
@@ -235,14 +239,13 @@ export function PullRequestReviewerPicker({
           <>
             <PullRequestActorLabel actor={candidate} className="shrink-0" />
             <span className="min-w-0 flex-1 truncate text-muted-foreground">{reason}</span>
-            {selected ? (
-              candidate.isRequested ? (
-                <Badge variant="warning">
-                  <T>Pending</T>
-                </Badge>
-              ) : (
-                <CheckIcon aria-label={gt("Will ask for a review")} className="size-3.5 shrink-0" />
-              )
+            {selected && candidate.isRequested ? (
+              <Badge variant="warning">{gt("Pending", { $context: "review state" })}</Badge>
+            ) : selected ? (
+              <CheckIcon
+                aria-label={gt("Asking", { $context: "reviewer is being asked" })}
+                className="size-3.5 shrink-0 opacity-60"
+              />
             ) : null}
           </>
         );

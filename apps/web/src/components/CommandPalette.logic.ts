@@ -505,7 +505,7 @@ export function buildThreadActionItems<TThread extends BuildThreadActionItemsThr
           createElement(
             TooltipTrigger,
             { render: createElement("span", { tabIndex: 0 }) },
-            descriptionParts[0] ?? "Thread",
+            descriptionParts[0] ?? resolve(msg("Thread")),
           ),
           createElement(
             TooltipPopup,

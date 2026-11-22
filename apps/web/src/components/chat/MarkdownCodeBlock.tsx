@@ -1,6 +1,12 @@
+import {
+  createHighlightCacheKey,
+  estimateHighlightedSize,
+  extractFenceLanguage,
+} from "./MarkdownCodeBlock.logic";
+import { reportMarkdownActionFailure } from "./markdownActionFailure";
 import { T, useGT } from "gt-react";
-import { toHtml } from "hast-util-to-html";
 import { CheckIcon, CopyIcon, PlayIcon, WrapTextIcon } from "lucide-react";
+import { toHtml } from "hast-util-to-html";
 import React, { use, useEffect, useState, type ReactNode } from "react";
 
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
@@ -12,12 +18,6 @@ import {
 } from "../../lib/incrementalHighlighting";
 import { LRUCache } from "../../lib/lruCache";
 import { getSyntaxHighlighterPromise } from "../../lib/syntaxHighlighting";
-import {
-  createHighlightCacheKey,
-  estimateHighlightedSize,
-  extractFenceLanguage,
-} from "./MarkdownCodeBlock.logic";
-import { reportMarkdownActionFailure } from "./markdownActionFailure";
 import { cn } from "../../lib/utils";
 import {
   hasSpecificPierreIconForFileName,

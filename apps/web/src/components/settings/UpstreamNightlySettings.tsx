@@ -4,7 +4,7 @@ import {
   upstreamMergePrompt,
   upstreamReviewUrl,
 } from "@t3tools/shared/forkUpstream";
-import { msg } from "gt-react";
+import { msg, T, useGT, Var } from "gt-react";
 import { CircleArrowUpIcon } from "lucide-react";
 
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
@@ -22,6 +22,7 @@ import { searchableSetting } from "./settingsSearch";
 export function UpstreamNightlySettings() {
   const query = useEnvironmentQuery(upstreamNightlyAtom);
   const latest = query.data;
+  const gt = useGT();
   const status =
     latest === null ? null : compareForkUpstream(includedUpstreamVersion, latest.version);
   const { copyToClipboard, isCopied } = useCopyToClipboard({
@@ -34,7 +35,7 @@ export function UpstreamNightlySettings() {
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Could not copy merge prompt",
+          title: gt("Could not copy merge prompt"),
           description: error.message,
         }),
       ),
@@ -42,26 +43,30 @@ export function UpstreamNightlySettings() {
 
   const isBehind = status === "behind" && latest !== null && !query.error;
   const lastCheckedTooltip = latest
-    ? `Last checked ${new Date(latest.checkedAt).toLocaleTimeString([], {
-        hour: "numeric",
-        minute: "2-digit",
-      })}`
+    ? gt("Last checked {time}", {
+        time: new Date(latest.checkedAt).toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      })
     : null;
-  const refreshTooltip = lastCheckedTooltip ?? "Check upstream";
+  const refreshTooltip = lastCheckedTooltip ?? gt("Check upstream");
 
   return (
     <SettingsRow
       id={searchableSetting("upstream-nightly").id}
       title={
         <span className="inline-flex flex-wrap items-center gap-2">
-          <span>Upstream</span>
+          <span>
+            <T>Upstream</T>
+          </span>
           {includedUpstreamVersion ? (
             <code className="text-meta text-muted-foreground">{includedUpstreamVersion}</code>
           ) : null}
           {isBehind ? (
             <Badge size="sm" variant="info">
               <CircleArrowUpIcon />
-              Update available
+              <T>Update available</T>
             </Badge>
           ) : null}
         </span>
@@ -69,20 +74,32 @@ export function UpstreamNightlySettings() {
       description={
         <span aria-live="polite">
           {query.error ? (
-            `Could not check upstream. ${query.error}`
+            <T>
+              Could not check upstream. <Var>{String(query.error)}</Var>
+            </T>
           ) : !latest ? (
-            `Checking ${T3_UPSTREAM_REPOSITORY}…`
+            <T>
+              Checking <Var>{T3_UPSTREAM_REPOSITORY}</Var>…
+            </T>
           ) : status === "behind" ? (
-            <>
-              <code className="text-meta text-foreground">{latest.version}</code> is ready to review
-              and merge.
-            </>
+            <T>
+              <Var>
+                <code className="text-meta text-foreground">{latest.version}</code>
+              </Var>{" "}
+              is ready to review and merge.
+            </T>
           ) : status === "current" ? (
-            `Up to date with ${T3_UPSTREAM_REPOSITORY}.`
+            <T>
+              Up to date with <Var>{T3_UPSTREAM_REPOSITORY}</Var>.
+            </T>
           ) : (
-            <>
-              Latest nightly: <code className="text-meta text-foreground">{latest.version}</code>.
-            </>
+            <T>
+              Latest nightly:{" "}
+              <Var>
+                <code className="text-meta text-foreground">{latest.version}</code>
+              </Var>
+              .
+            </T>
           )}
         </span>
       }
@@ -101,14 +118,14 @@ export function UpstreamNightlySettings() {
                 size="sm"
                 variant="secondary"
               >
-                Review changes
+                <T>Review changes</T>
               </Button>
               <Button
                 size="sm"
                 variant="secondary"
                 onClick={() => copyToClipboard(upstreamMergePrompt(latest.version), undefined)}
               >
-                {isCopied ? "Copied" : "Copy merge prompt"}
+                {isCopied ? <T>Copied</T> : <T>Copy merge prompt</T>}
               </Button>
             </>
           ) : latest && !query.error ? (
@@ -123,7 +140,7 @@ export function UpstreamNightlySettings() {
               size="sm"
               variant="secondary"
             >
-              View upstream
+              <T>View upstream</T>
             </Button>
           ) : null}
           <Tooltip>
@@ -133,7 +150,7 @@ export function UpstreamNightlySettings() {
                   <Button
                     size="icon-sm"
                     variant="secondary"
-                    aria-label={query.isPending ? "Checking upstream…" : "Check upstream"}
+                    aria-label={query.isPending ? gt("Checking upstream…") : gt("Check upstream")}
                     disabled={query.isPending}
                     onClick={query.refresh}
                   >
@@ -146,7 +163,7 @@ export function UpstreamNightlySettings() {
                     disabled={query.isPending}
                     onClick={query.refresh}
                   >
-                    {query.isPending ? "Checking…" : "Check upstream"}
+                    {query.isPending ? <T>Checking…</T> : <T>Check upstream</T>}
                   </Button>
                 )
               }

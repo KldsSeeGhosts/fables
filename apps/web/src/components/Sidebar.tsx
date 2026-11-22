@@ -1,7 +1,8 @@
-import { ThreadContextDragGhost } from "./chat/ThreadContextDragGhost";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { msg, T, useGT, useMessages } from "gt-react";
 import { m } from "../i18n/messages";
+import { deleteConfirm } from "../confirmDialog";
+import { ThreadContextDragGhost } from "./chat/ThreadContextDragGhost";
 import { attachSidebarTree } from "../lib/sidebarTree";
 import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
@@ -10,7 +11,12 @@ import {
   endThreadContextDrag,
   moveThreadContextDrag as moveThreadContextDragGhost,
 } from "./chat/threadContextDrag";
-import { selectFocusedTab, selectLayoutThreadKeys } from "../layout/layoutModel";
+import {
+  isLayoutGhostTabShown,
+  selectFocusedLayoutGhostId,
+  selectFocusedTab,
+  selectLayoutThreadKeys,
+} from "../layout/layoutModel";
 import { followLayoutCompanions } from "../layout/openRules";
 import { isThreadlessSurfacesRef } from "../threadlessSurfaces";
 import { useLayoutStore } from "../layout/layoutStore";
@@ -1138,6 +1144,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       : null;
   const [renamingTitle, setRenamingTitle] = useState("");
   const renamingOriginalTitleRef = useRef("");
+  const drawnGhostKeptByClickRef = useRef<string | null>(null);
   const settlingThreadKeysRef = useRef(new Set<string>());
   const threadListRef = useRef<HTMLUListElement | null>(null);
   const searchResultsListRef = useRef<HTMLUListElement | null>(null);
@@ -1230,7 +1237,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   // navigation resolves through its redirect instead, and still reveals.
   const routeKeyInPlace = routeDraftThread?.promotedTo != null;
 
-  if (routeTarget?.kind === "draft") {
+  if (routeTarget?.kind === "draft" && routeKeyInPlace) {
     observeSidebarDraftPromotion(routeReveal, routeRowThreadKey);
   }
   // History, the palette and links can open a thread the scope hides or the list
@@ -1620,6 +1627,24 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     });
   };
 
+  const keepFocusedGhostChatWasDrawn = (threadRef: ScopedThreadRef) => {
+    const store = useLayoutStore.getState();
+    const ghostId = selectFocusedLayoutGhostId(store.layout, {
+      kind: "chat",
+      target: { kind: "server", threadRef },
+    });
+    if (ghostId === null) return false;
+    const wasShown = isLayoutGhostTabShown(store.layout, ghostId);
+    store.keepTab(ghostId);
+    return wasShown;
+  };
+
+  const openThreadFromRow = (threadRef: ScopedThreadRef) => {
+    const keptDrawnGhost = keepFocusedGhostChatWasDrawn(threadRef);
+    void navigateToThread(threadRef);
+    return keptDrawnGhost;
+  };
+
   const handleThreadFileDrop = async (threadRef: ScopedThreadRef, files: File[]) => {
     const dropId = queuePendingFileDrop({ threadRef, files });
     const landedBefore =
@@ -1728,41 +1753,50 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   };
 
   const readOpensPullRequestsInRightPanel = useStableCallback(() => routeThreadRef !== null);
-  const handleThreadClick = (event: ReactMouseEvent, threadRef: ScopedThreadRef) => {
-    if (isSidebarNestedLinkClick(event.target)) return;
-    const isMac = isMacPlatform(navigator.platform);
-    const isModClick = isMac ? event.metaKey : event.ctrlKey;
-    const threadKey = scopedThreadKey(threadRef);
-    if (isModClick) {
-      event.preventDefault();
-      toggleThreadSelection(threadKey);
-      return;
-    }
-    if (event.shiftKey) {
-      event.preventDefault();
-      rangeSelectTo(threadKey, orderedThreadKeysRef.current);
-      return;
-    }
-    if (isTrailingDoubleClick(event.detail)) {
-      return;
-    }
-    if (event.button === 1) {
-      // Middle click keeps the thread open as a tab; the URL follows the focused tab.
-      event.preventDefault();
-      followLayoutCompanions(() =>
-        useLayoutStore
-          .getState()
-          .openKeptTab({ kind: "chat", target: { kind: "server", threadRef } }),
-      );
-      return;
-    }
-    if (event.altKey) {
-      event.preventDefault();
-      openThreadToTheSide(threadRef);
-      return;
-    }
-    navigateToThread(threadRef);
-  };
+  const handleThreadClick = useStableCallback(
+    (event: ReactMouseEvent, threadRef: ScopedThreadRef) => {
+      if (isSidebarNestedLinkClick(event.target)) return;
+      const isMac = isMacPlatform(navigator.platform);
+      const isModClick = isMac ? event.metaKey : event.ctrlKey;
+      const threadKey = scopedThreadKey(threadRef);
+      if (isModClick) {
+        event.preventDefault();
+        toggleThreadSelection(threadKey);
+        return;
+      }
+      if (event.shiftKey) {
+        event.preventDefault();
+        rangeSelectTo(threadKey, orderedThreadKeysRef.current);
+        return;
+      }
+      if (isTrailingDoubleClick(event.detail)) {
+        return;
+      }
+      if (event.button === 1) {
+        // Middle click keeps the thread open as a tab; the URL follows the focused tab.
+        event.preventDefault();
+        followLayoutCompanions(() =>
+          useLayoutStore
+            .getState()
+            .openKeptTab({ kind: "chat", target: { kind: "server", threadRef } }),
+        );
+        return;
+      }
+      if (event.altKey) {
+        event.preventDefault();
+        openThreadToTheSide(threadRef);
+        return;
+      }
+      drawnGhostKeptByClickRef.current = openThreadFromRow(threadRef) ? threadKey : null;
+    },
+  );
+
+  const handleThreadDoubleClick = useStableCallback((threadRef: ScopedThreadRef, title: string) => {
+    const keptDrawnGhostByClick = drawnGhostKeptByClickRef.current === scopedThreadKey(threadRef);
+    drawnGhostKeptByClickRef.current = null;
+    if (keepFocusedGhostChatWasDrawn(threadRef) || keptDrawnGhostByClick) return;
+    startThreadRename(threadRef, title);
+  });
 
   // Snapshot navigation before partition mutation; background parks use a null plan.
   const planForwardNavigation = (
@@ -2252,16 +2286,16 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     routeThreadKey: routeRowThreadKey,
     snoozedThreadCount: snoozedThreads.length,
   });
-  // The open thread's row stays in view: when it first renders and on every
-  // navigation. Rows above can still grow after the first paint, so the list
-  // re-reveals on resize until the user touches it; after that their scroll
-  // position is left alone.
-  const routeRowRendered =
-    routeRowThreadKey !== null &&
-    sidebarListItems.some((item) => item.kind === "thread" && item.key === routeRowThreadKey);
+  // The open thread's row stays in view when it renders, on every navigation and when it
+  // changes section. Rows above can still grow after the first paint, so the list re-reveals
+  // on resize until the user touches it; after that their scroll position is left alone.
+  const routeRowSection =
+    sidebarListItems.flatMap((item) =>
+      item.kind === "thread" && item.key === routeRowThreadKey ? [item.section] : [],
+    )[0] ?? null;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Keep the active row visible as layout changes until the user scrolls.
   useEffect(() => {
-    if (routeRowThreadKey === null || !routeRowRendered || isSearchingThreads) return;
+    if (routeRowThreadKey === null || routeRowSection === null || isSearchingThreads) return;
     if (routeReveal.quietKey === routeRowThreadKey) return;
     const list = threadListRef.current;
     const viewport = list?.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
@@ -2287,7 +2321,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       release();
       for (const type of userInput) viewport.removeEventListener(type, release);
     };
-  }, [isSearchingThreads, routeReveal, routeRowRendered, routeRowThreadKey]);
+  }, [isSearchingThreads, routeReveal, routeRowSection, routeRowThreadKey]);
   const draggedThreadKey = dragState?.activeKey;
   const draggedFromSection = dragState?.activeSection;
   const dragActivationY = dragState?.activationY;
@@ -2726,17 +2760,22 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       if (confirmThreadDelete) {
         const confirmed = await settlePromise(() =>
           api.dialogs.confirm(
-            count === 1
-              ? gt("This deletes the thread and its chat history. You can't undo this.")
-              : gt("This deletes these threads and their chat history. You can't undo this."),
-            {
+            gt(
+              "{count, plural, one {This deletes the thread and its chat history. You can't undo this.} other {This deletes these threads and their chat history. You can't undo this.}}",
+              { count },
+            ),
+            deleteConfirm({
               variant: "destructive",
               title: gt(
                 "{count, plural, one {Delete {count} thread?} other {Delete {count} threads?}}",
-                { count },
+                {
+                  count,
+                },
               ),
-              confirmLabel: count === 1 ? gt("Delete thread") : gt("Delete threads"),
-            },
+              confirmLabel: gt("{count, plural, =1 {Delete thread} other {Delete threads}}", {
+                count,
+              }),
+            }),
           ),
         );
         if (confirmed._tag === "Failure" || !confirmed.value) return;
@@ -2892,7 +2931,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                   AuthOrchestrationOperateScope,
                 ),
                 branch: thread.branch ?? null,
-                // An archived project is not a filter choice.
                 projectFilter:
                   threadProjectGroup && !threadProjectGroup.archived
                     ? {
@@ -3117,11 +3155,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                   gt('This deletes "{title}" and its chat history. You can\'t undo this.', {
                     title: thread.title,
                   }),
-                  {
+                  deleteConfirm({
                     variant: "destructive",
                     title: gt("Delete thread?"),
                     confirmLabel: gt("Delete thread"),
-                  },
+                  }),
                 ),
               );
               if (confirmed._tag === "Failure" || !confirmed.value) return;
@@ -3600,14 +3638,14 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 {projects.length === 0
                   ? gt("No projects yet")
                   : scopedProjectGroups.length > 0
-                    ? scopedProjectGroups.length > 1
-                      ? settledCount > 0
+                    ? settledCount > 0
+                      ? scopedProjectGroups.length > 1
                         ? gt("No active threads in these projects")
-                        : gt("No threads in these projects yet")
-                      : settledCount > 0
-                        ? gt("No active threads in {project}", {
+                        : gt("No active threads in {project}", {
                             project: scopedProjectGroups[0]!.displayName,
                           })
+                      : scopedProjectGroups.length > 1
+                        ? gt("No threads in these projects yet")
                         : gt("No threads in {project} yet", {
                             project: scopedProjectGroups[0]!.displayName,
                           })
@@ -3766,6 +3804,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             timestampFormat={timestampFormat}
                             onThreadClick={handleThreadClick}
                             onThreadActivate={navigateToThread}
+                            onThreadOpen={openThreadFromRow}
+                            onThreadDoubleClick={handleThreadDoubleClick}
                             onStartRename={startThreadRename}
                             onRenameTitleChange={setRenamingTitle}
                             onCommitRename={commitThreadRename}
@@ -3811,6 +3851,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           projectByKey={projectByKey}
                           projectDisplayNameByKey={projectDisplayNameByKey}
                           routeDraftId={routeDraftIdForRows}
+                          routeDraftRow={routeDraftRow}
                           onNavigateToDraft={navigateToDraft}
                           onDraftContextMenu={handleDraftContextMenu}
                         />,

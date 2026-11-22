@@ -23,8 +23,8 @@ import { page } from "vite-plus/test/browser";
 const state = vi.hoisted(() => ({
   threadState: null as unknown as Atom.Writable<AsyncResult.AsyncResult<EnvironmentThreadState>>,
   workflow: null as unknown,
-  command: vi.fn(async (_input: unknown) => state.commandResult),
   commandResult: undefined as unknown,
+  command: vi.fn(async (_input: unknown) => undefined),
 }));
 
 vi.mock(import("@t3tools/client-runtime/state/thread-workflows"), async (importOriginal) => ({
@@ -75,7 +75,10 @@ vi.mock(import("../../state/threads"), async (importOriginal) => {
 
 vi.mock(import("../../state/use-atom-command"), async (importOriginal) => ({
   ...(await importOriginal()),
-  useAtomCommand: (() => state.command) as never,
+  useAtomCommand: (() => async (input: unknown) => {
+    await state.command(input);
+    return state.commandResult;
+  }) as never,
 }));
 
 vi.mock(import("../../assets/assetUrls"), async (importOriginal) => ({
@@ -96,8 +99,8 @@ import type { ExpandedImagePreview } from "./ExpandedImagePreview";
 
 function setup() {
   state.workflow = null;
-  state.command.mockClear();
   state.commandResult = undefined;
+  state.command.mockClear();
 }
 
 const baseProps = {
@@ -450,35 +453,6 @@ it("does not re-render while assistant text streams into the thread", async () =
   expect(renders).toBeGreaterThan(settled);
 });
 
-it("lets a message that is still saving be removed, on the same fill as a saved one", async () => {
-  setup();
-  state.workflow = {
-    activeRun: { id: "run:active" },
-    canPromoteToSteer: true,
-    queuedRuns: [
-      {
-        run: { id: "run:saved", userMessageId: "message:saved" },
-        text: "Saved",
-        attachments: [],
-      },
-    ],
-  };
-  const onRemovePending = vi.fn();
-  await using screen = await renderQueue({
-    optimisticMessages: [
-      { id: MessageId.make("message:saving"), inputIntent: "queued_turn", text: "Saving one" },
-    ],
-    onRemovePending,
-  });
-
-  const [saved, saving] = screen.getByRole("listitem").elements();
-  expect(getComputedStyle(saving!).backgroundColor).toBe(getComputedStyle(saved!).backgroundColor);
-  const remove = screen.getByRole("button", { name: "Remove queued message" }).nth(1);
-  await expect.element(remove).toBeEnabled();
-  await remove.click();
-  expect(onRemovePending).toHaveBeenCalledExactlyOnceWith("message:saving");
-});
-
 it("tells the user why Send now was rejected", async () => {
   setup();
   const reason = "Target run run:active is stopping and cannot be steered.";
@@ -509,6 +483,35 @@ it("tells the user why Send now was rejected", async () => {
     </ToastProvider>,
   );
 
-  await page.getByRole("button", { name: "Send now" }).click();
+  await page.getByRole("button", { name: "Steer" }).click();
   await vi.waitFor(() => expect(page.getByText(reason).element()).toBeVisible());
+});
+
+it("lets a message that is still saving be removed, on the same fill as a saved one", async () => {
+  setup();
+  state.workflow = {
+    activeRun: { id: "run:active" },
+    canPromoteToSteer: true,
+    queuedRuns: [
+      {
+        run: { id: "run:saved", userMessageId: "message:saved" },
+        text: "Saved",
+        attachments: [],
+      },
+    ],
+  };
+  const onRemovePending = vi.fn();
+  await using screen = await renderQueue({
+    optimisticMessages: [
+      { id: MessageId.make("message:saving"), inputIntent: "queued_turn", text: "Saving one" },
+    ],
+    onRemovePending,
+  });
+
+  const [saved, saving] = screen.getByRole("listitem").elements();
+  expect(getComputedStyle(saving!).backgroundColor).toBe(getComputedStyle(saved!).backgroundColor);
+  const remove = screen.getByRole("button", { name: "Remove queued message" }).nth(1);
+  await expect.element(remove).toBeEnabled();
+  await remove.click();
+  expect(onRemovePending).toHaveBeenCalledExactlyOnceWith("message:saving");
 });

@@ -55,6 +55,24 @@ describe("contextWindowSegments", () => {
     ]);
   });
 
+  it("shows a provider's own categories largest first, without empty ones", () => {
+    expect(
+      breakdown({
+        ...usage,
+        breakdown: [
+          { kind: "system_prompt", tokens: 300 },
+          { kind: "skills", tokens: 0 },
+          { kind: "messages", tokens: 500 },
+          { kind: "t3_tools", tokens: 200 },
+        ],
+      }),
+    ).toEqual([
+      ["Messages", 500],
+      ["System prompt", 300],
+      ["T3 Code tools", 200],
+    ]);
+  });
+
   it("caps subsets at their parent and total context", () => {
     expect(
       breakdown({ ...usage, usedTokens: 900, cachedInputTokens: 900, reasoningOutputTokens: 300 }),
@@ -62,6 +80,24 @@ describe("contextWindowSegments", () => {
       ["Cached input", 800],
       ["Reasoning", 100],
     ]);
+  });
+
+  it("keeps carried categories and their message growth equal to the running total", () => {
+    const segments = contextWindowSegments({
+      ...usage,
+      usedTokens: 1_250,
+      breakdown: [
+        { kind: "system_prompt", tokens: 300 },
+        { kind: "messages", tokens: 950 },
+      ],
+    });
+    expect(segments.map(({ label, tokens }) => [label, tokens])).toEqual([
+      ["Messages", 950],
+      ["System prompt", 300],
+    ]);
+    expect(segments.reduce((sum, segment) => sum + segment.tokens, 0)).toBe(1_250);
+    expect(breakdown({ ...usage, breakdown: [] })).toEqual(breakdown(usage));
+    expect(breakdown({ ...usage, breakdown: null })).toEqual(breakdown(usage));
   });
 });
 
