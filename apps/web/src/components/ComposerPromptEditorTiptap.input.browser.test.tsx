@@ -74,7 +74,6 @@ function Composer({
   placeholderSuffix,
 }: {
   value: string;
-  placeholder?: string;
   richTextEnabled: boolean;
   skills: ReadonlyArray<ServerProviderSkill>;
   onChange?: ComposerPromptEditorProps["onChange"] | undefined;

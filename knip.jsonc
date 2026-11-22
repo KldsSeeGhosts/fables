@@ -178,5 +178,13 @@
       "entry": ["graphql.config.ts", "scripts/measure-pr-preview.ts"],
       "ignoreIssues": { "**/*.graphql.ts": ["exports", "types", "namespaceMembers"] },
     },
+    "packages/source-control-tanstack-source": {
+      // Upstream's flag-gated forge exports its credential and API failure union
+      // members before their catch sites exist; keep the error surface public.
+      "ignoreIssues": {
+        "src/server/TanStackSourceApi.ts": ["exports"],
+        "src/server/TanStackSourceCredentials.ts": ["exports"],
+      },
+    },
   },
 }
