@@ -2572,7 +2572,6 @@
   "049f3ac08251a033": "PR",
   "567668349ebde5fc": "PRs",
   "b4b98a0287c282e2": "On another machine, so this machine's agent can't read it. Remove it or switch back to send.",
-  "5bbac0e5afeec779": "Current thread",
   "33c7e68fca089036": "Thread, {title}",
   "34cc63390ad793cc": "Choose a thread",
   "8f12309ead62e38a": "Search threads or projects...",
