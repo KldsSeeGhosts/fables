@@ -436,7 +436,13 @@ it("draws typed text on the placeholder's pixels", async () => {
   await act(async () => {
     editor.commands.insertContent(text);
   });
-  expect(textRect(editor.view.dom.querySelector("p"))).toEqual(shown);
+  // Placeholder and paragraph share one text box but rasterize through different elements, so
+  // their rects can differ by a subpixel quantum; the intent is that they land on the same spot.
+  const typed = textRect(editor.view.dom.querySelector("p"));
+  expect(typed.x).toBeCloseTo(shown.x, 1);
+  expect(typed.y).toBeCloseTo(shown.y, 1);
+  expect(typed.width).toBeCloseTo(shown.width, 1);
+  expect(typed.height).toBeCloseTo(shown.height, 1);
 });
 
 it("lets composition replace selected text without surrounding it", async () => {
