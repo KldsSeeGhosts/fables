@@ -29,7 +29,8 @@ import {
 } from "./PullRequestListRow";
 import { observeResize } from "~/lib/observeResize";
 import { PullRequestGlyph } from "./pullRequestIcons";
-import { PullRequestLabelChip } from "./pullRequestPresentation";
+import { PullRequestPrivateMark } from "./PullRequestDetailLayout";
+import { PullRequestLabelChip, PullRequestReviewDecisionGlyph } from "./pullRequestPresentation";
 
 /** The most label chips a row lays out; the rest only ever count toward its "+N". */
 const MAX_ROW_LABELS = 3;
@@ -338,6 +339,26 @@ function PullRequestRowImpl({
               </span>
             }
             title={entry.title}
+            signals={
+              <>
+                {entry.visibility === "private" ? (
+                  <PullRequestPrivateMark className="size-3 text-muted-foreground" />
+                ) : null}
+                {entry.checksState === undefined ? null : (
+                  <PullRequestChecksPopover
+                    checksState={entry.checksState}
+                    environmentId={entry.environmentId}
+                    reference={{
+                      ...pullRequestPanelReference({ ...entry, host: entry.host.toLowerCase() }),
+                      allowStale: false,
+                    }}
+                  />
+                )}
+                {entry.reviewDecision === undefined ? null : (
+                  <PullRequestReviewDecisionGlyph decision={entry.reviewDecision} />
+                )}
+              </>
+            }
             status={
               <>
                 {entry.stack && !rail ? (

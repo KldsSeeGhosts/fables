@@ -176,13 +176,14 @@ export const providerHostEnvironment = (
       enumerable: true,
       configurable: true,
       get: () => environment.PATH ?? environment.Path ?? environment.path,
-      set: (value) =>
+      set: (value) => {
         Object.defineProperty(next, "PATH", {
           value,
           enumerable: true,
           writable: true,
           configurable: true,
-        }),
+        });
+      },
     });
   }
   return next;

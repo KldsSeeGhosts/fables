@@ -146,6 +146,7 @@ function ThreadLineageRowList(props: {
       <ul
         ref={listRef}
         id={props.id}
+        tabIndex={-1}
         aria-label={gt("Related threads")}
         className="m-0 flex flex-col gap-0.5 list-none overflow-x-clip p-0"
       >

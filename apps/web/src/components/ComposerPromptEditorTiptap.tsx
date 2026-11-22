@@ -1995,7 +1995,7 @@ function ComposerPromptEditorTiptapInner(
               <div
                 data-composer-placeholder=""
                 className={cn(
-                  "pointer-events-none col-start-1 row-start-1 text-placeholder",
+                  "pointer-events-none relative col-start-1 row-start-1 text-placeholder",
                   COMPOSER_TEXT_CLASS_NAME,
                 )}
               >

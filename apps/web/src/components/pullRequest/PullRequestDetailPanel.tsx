@@ -106,6 +106,7 @@ import { Button } from "../ui/button";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
+import { PullRequestPrivateBadge } from "./PullRequestDetailLayout";
 import { PullRequestDetailGhost, PullRequestTimelineGhost } from "./PullRequestGhosts";
 import { PullRequestCopyableCode } from "./PullRequestCopyableCode";
 import { PullRequestActivityUnavailableState } from "./PullRequestActivityUnavailableState";
@@ -1803,6 +1804,7 @@ export function PullRequestDetailPanel({
         >
           {detail ? (
             <>
+              {detail.visibility === "private" ? <PullRequestPrivateBadge /> : null}
               {stackMenuProps !== null ? (
                 <span className="inline-flex shrink-0 @max-2xs/pr-header:hidden">
                   <PullRequestStackMenu {...stackMenuProps} display="trigger" />
