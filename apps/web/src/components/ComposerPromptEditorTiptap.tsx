@@ -1943,13 +1943,13 @@ function ComposerPromptEditorTiptapInner(
           <div
             data-composer-empty={value.length === 0}
             className={cn(
-              "relative grid grid-cols-1 font-(family-name:--font-composer,var(--font-sans)) text-(length:--font-size-prompt,var(--text-sm)) max-sm:pointer-coarse:text-(length:--font-size-prompt-touch)",
+              "relative grid grid-cols-[minmax(0,1fr)] font-(family-name:--font-composer,var(--font-sans)) text-(length:--font-size-prompt,var(--text-sm)) max-sm:pointer-coarse:text-(length:--font-size-prompt-touch)",
               containerClassName,
             )}
           >
             <EditorContent
               editor={editor}
-              className="[grid-area:1/1]"
+              className="col-start-1 row-start-1"
               onKeyDown={(event) => {
                 if (
                   event.key === "Control" ||
@@ -1995,7 +1995,7 @@ function ComposerPromptEditorTiptapInner(
               <div
                 data-composer-placeholder=""
                 className={cn(
-                  "pointer-events-none text-placeholder [grid-area:1/1]",
+                  "pointer-events-none col-start-1 row-start-1 text-placeholder",
                   COMPOSER_TEXT_CLASS_NAME,
                 )}
               >
