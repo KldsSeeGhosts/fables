@@ -14,6 +14,7 @@ import { Button } from "./ui/button";
 import { AlarmClockIcon, CalendarIcon, Settings2Icon } from "lucide-react";
 import { Calendar } from "./ui/calendar";
 import { weekStartsOn } from "../timestampFormat";
+import { useFormattingLocale } from "../i18n/I18nProvider";
 import { Popover, PopoverTrigger, PopoverPopup } from "./ui/popover";
 import { Input } from "./ui/input";
 import { SubmitKbd } from "./SubmitKbd";
@@ -117,6 +118,7 @@ function useMinuteClock(): Date {
 function CustomSnoozeDialog() {
   const gt = useGT();
   const messages = useMessages();
+  const locale = useFormattingLocale();
   const id = useId();
   const navigate = useNavigate();
   const [initial] = useState(() => new Date(Date.now() + 3_600_000));
@@ -205,7 +207,7 @@ function CustomSnoozeDialog() {
                             />
                           }
                         >
-                          {date.toLocaleDateString(undefined, {
+                          {date.toLocaleDateString(locale, {
                             month: "short",
                             day: "numeric",
                             year: "numeric",

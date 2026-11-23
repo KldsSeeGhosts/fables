@@ -334,6 +334,8 @@ interface MessagesTimelineProps {
     readonly handoff?: HandoffEndpoints;
     /** Where it runs, when that is another environment. */
     readonly environmentLabel?: string;
+    /** What this thread is to it, when not its subagent or side chat: `Step of`, say. */
+    readonly relation?: { readonly label: string; readonly actionLabel: string };
     readonly open?: () => void;
   } | null;
   workflowOpening?: WorkflowOpening | null;
@@ -1435,9 +1437,12 @@ const ConversationTimeline = memo(function ConversationTimeline({
             />
           ) : (
             <TimelineSystemDivider
-              label={gt("Subagent of", {
-                $context: "divider label; the parent thread title follows as a link",
-              })}
+              label={
+                parentThreadLink.relation?.label ??
+                gt("Subagent of", {
+                  $context: "divider label; the parent thread title follows as a link",
+                })
+              }
               detail={
                 parentThreadLink.environmentLabel === undefined
                   ? parentThreadLink.title
@@ -1449,7 +1454,10 @@ const ConversationTimeline = memo(function ConversationTimeline({
               icon={BotIcon}
               {...(parentThreadLink.open === undefined
                 ? {}
-                : { actionLabel: gt("Open parent thread"), onAction: parentThreadLink.open })}
+                : {
+                    actionLabel: parentThreadLink.relation?.actionLabel ?? gt("Open parent thread"),
+                    onAction: parentThreadLink.open,
+                  })}
             />
           )}
         </div>
