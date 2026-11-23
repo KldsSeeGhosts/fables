@@ -16,7 +16,7 @@ import {
   usePrimaryEnvironmentId,
 } from "../../state/environments";
 import { useWorkflowEnvironmentIds } from "./useWorkflowEnvironmentIds";
-import { Button } from "../ui/button";
+import { Button, InlineButton } from "../ui/button";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { SidebarInset } from "../ui/sidebar";
 import {
@@ -150,15 +150,15 @@ export function WorkflowsPage() {
             <WorkspaceBreadcrumb ariaLabel={gt("Workflows breadcrumb")} className="flex-1">
               <WorkspaceBreadcrumbItem current={!editing}>
                 {editing ? (
-                  <button
-                    type="button"
+                  <InlineButton
+                    tone="ghost"
                     onClick={() => go({ ...env, ...run })}
-                    className="inline-flex min-w-0 max-w-full cursor-pointer items-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    className="min-w-0 max-w-full"
                   >
                     <WorkspaceBreadcrumbText>
                       <T>Workflows</T>
                     </WorkspaceBreadcrumbText>
-                  </button>
+                  </InlineButton>
                 ) : (
                   <h1 className="truncate">
                     <T>Workflows</T>
@@ -176,15 +176,15 @@ export function WorkflowsPage() {
                         <T context="workflow definition files">Definitions</T>
                       </h1>
                     ) : (
-                      <button
-                        type="button"
+                      <InlineButton
+                        tone="ghost"
                         onClick={() => openDefinitions(null)}
-                        className="inline-flex min-w-0 max-w-full cursor-pointer items-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                        className="min-w-0 max-w-full"
                       >
                         <WorkspaceBreadcrumbText>
                           <T context="workflow definition files">Definitions</T>
                         </WorkspaceBreadcrumbText>
-                      </button>
+                      </InlineButton>
                     )}
                   </WorkspaceBreadcrumbItem>
                 </>
@@ -240,7 +240,7 @@ export function WorkflowsPage() {
               <div ref={setFileActions} className="flex shrink-0 items-center gap-2" />
             )}
             {environmentId === null || editing ? null : (
-              <Button size="sm" variant="outline" onClick={() => openDefinitions(null)}>
+              <Button size="sm" variant="secondary" onClick={() => openDefinitions(null)}>
                 <FileCode2Icon />
                 <T context="workflow definition files">Definitions</T>
               </Button>
@@ -249,7 +249,7 @@ export function WorkflowsPage() {
           {editing && fileEnvironmentId !== null ? (
             <Suspense
               fallback={
-                <p className="p-6 text-sm text-muted-foreground" role="status">
+                <p className="p-6 text-meta text-muted-foreground" role="status">
                   <T>Loading the editor…</T>
                 </p>
               }

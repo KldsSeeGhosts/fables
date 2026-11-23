@@ -35,6 +35,7 @@ export interface SidebarThreadHeaderProps {
 export function SidebarThreadHeader({
   hasProjects,
   projectScope,
+  onNewProject,
   onNewThread,
   newThreadDisabled,
   newThreadShortcutLabel,

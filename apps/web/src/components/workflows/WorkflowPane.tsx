@@ -7,7 +7,7 @@ import { BotIcon, Maximize2Icon, XIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
-import { Button } from "../ui/button";
+import { Button, ContentButton } from "../ui/button";
 import {
   activeWorkflowPaneIndex,
   closeWorkflowPaneTab,
@@ -82,17 +82,16 @@ export default function WorkflowPane({
                 "thread" in tab ? `thread:${tab.env ?? ""}:${tab.thread}` : `${tab.kind}:${tab.key}`
               }
               className={cn(
-                "flex max-w-56 min-w-0 shrink-0 items-center rounded-md text-xs",
+                "flex max-w-56 min-w-0 shrink-0 items-center rounded-md text-caption",
                 index === activeIndex
                   ? "bg-muted text-foreground"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              <button
-                type="button"
+              <ContentButton
+                variant="tab"
                 role="tab"
                 aria-selected={index === activeIndex}
-                className="flex min-w-0 cursor-pointer items-center gap-1.5 py-1 ps-2 pe-1"
                 onClick={() => onChange(openWorkflowPaneTab(state, tab))}
               >
                 {"thread" in tab ? (
@@ -105,7 +104,7 @@ export default function WorkflowPane({
                 ) : (
                   <ReferenceTabLabel reference={referenceOf(tab)} fallback={tab.kind} />
                 )}
-              </button>
+              </ContentButton>
               <Button
                 variant="ghost"
                 size="icon-xs"
@@ -153,7 +152,7 @@ export default function WorkflowPane({
             reference={activeReference}
           />
         ) : (
-          <p className="p-3 text-xs text-muted-foreground" role="status">
+          <p className="p-3 text-caption text-muted-foreground" role="status">
             {detail.data === null ? gt("Loading…") : gt("This run no longer lists it.")}
           </p>
         )}

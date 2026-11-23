@@ -402,7 +402,7 @@ function AddAccountRow({
           tracker: tracker.displayName,
         })}
         control={
-          <Button type="button" size="xs" variant="outline" onClick={() => setAdding(true)}>
+          <Button type="button" size="xs" variant="secondary" onClick={() => setAdding(true)}>
             <PlusIcon className="size-3.5" />
             <T>Add account</T>
           </Button>

@@ -6,8 +6,9 @@ import { useState, type ReactNode } from "react";
 import { cn } from "../../lib/utils";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
-import { Button } from "../ui/button";
+import { Button, ContentButton, InlineButton } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
+import { Text } from "../ui/text";
 import { ScrollArea } from "../ui/scroll-area";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
@@ -105,7 +106,7 @@ export function WorkflowRunsView({
   }
   if (!snapshot) {
     return (
-      <p className="p-6 text-sm text-muted-foreground" role="status">
+      <p className="p-6 text-meta text-muted-foreground" role="status">
         <T>Loading workflow runs…</T>
       </p>
     );
@@ -115,17 +116,17 @@ export function WorkflowRunsView({
     snapshot.definition?.problem == null ? null : (
       <div
         role="alert"
-        className="flex shrink-0 items-center gap-3 border-b bg-destructive/4 px-4 py-2 text-xs"
+        className="flex shrink-0 items-center gap-3 border-b bg-destructive/4 px-4 py-2 text-caption"
       >
         <span className="min-w-0 flex-1 text-muted-foreground">
           <T>
-            <span className="font-medium text-destructive-foreground">
+            <Text variant="caption" tone="destructive" emphasis>
               A workflow file has a problem.
-            </span>{" "}
+            </Text>{" "}
             The last version that did keeps running.
           </T>
         </span>
-        <Button size="xs" variant="outline" onClick={onOpenDefinitions}>
+        <Button size="xs" variant="secondary" onClick={onOpenDefinitions}>
           <T>Open the file</T>
         </Button>
       </div>
@@ -145,13 +146,9 @@ export function WorkflowRunsView({
       description={
         <T>
           This environment has no run with that link.{" "}
-          <button
-            type="button"
-            className="cursor-pointer underline underline-offset-2 hover:text-foreground"
-            onClick={() => onSelect(null)}
-          >
+          <InlineButton tone="link" onClick={() => onSelect(null)}>
             Back to the runs
-          </button>
+          </InlineButton>
         </T>
       }
     />
@@ -168,22 +165,16 @@ export function WorkflowRunsView({
           <T>
             A workflow ties agents, code, schedules and questions to you into one run that survives
             restarts. Write one under{" "}
-            <button
-              type="button"
-              className="underline underline-offset-2 hover:text-foreground"
-              onClick={onOpenDefinitions}
-            >
+            <InlineButton tone="link" onClick={onOpenDefinitions}>
               Definitions
-            </button>
+            </InlineButton>
             , or ask an agent to.{" "}
-            <a
-              href={WORKFLOWS_GUIDE_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="underline underline-offset-2 hover:text-foreground"
+            <InlineButton
+              tone="link"
+              render={<a href={WORKFLOWS_GUIDE_URL} target="_blank" rel="noreferrer" />}
             >
               Read the guide
-            </a>
+            </InlineButton>
           </T>
         }
       />,
@@ -280,7 +271,7 @@ export function WorkflowRunsView({
               </Select>
             ) : null}
             {section === null ? null : (
-              <p className="px-1 text-xs text-muted-foreground">
+              <p className="px-1 text-caption text-muted-foreground">
                 {workflowTriggerLine(section, m)}
               </p>
             )}
@@ -288,7 +279,7 @@ export function WorkflowRunsView({
           <ScrollArea className="min-h-0 flex-1">
             <nav aria-label={gt("Workflow runs")} className="p-2 pt-1">
               {listed.length === 0 ? (
-                <p className="px-2 py-6 text-center text-xs text-muted-foreground">
+                <p className="px-2 py-6 text-center text-caption text-muted-foreground">
                   {section?.neverRan ? gt("Has not run yet.") : m(NOTHING[tab])}
                 </p>
               ) : (
@@ -356,29 +347,27 @@ function WorkflowRunListItem({
   const { run } = node;
   const m = useMessages();
   return (
-    <li>
-      <button
-        type="button"
+    <li className={cn("rounded-row", current && "bg-selection-subtle")}>
+      <ContentButton
+        variant="inset-row-multiline"
         aria-current={current ? "true" : undefined}
-        className={cn(
-          "flex w-full cursor-pointer flex-col gap-0.5 rounded-lg px-2 py-1.5 text-left focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:outline-none focus-visible:ring-inset",
-          current ? "bg-accent" : "hover:bg-accent/50",
-        )}
         onClick={() => onSelect(run.runId)}
       >
-        <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-          <WorkflowChip name={run.workflow} />
-          <span className="min-w-0 flex-1 truncate">{run.workflow}</span>
-          <WorkflowStateWord node={node} />
-        </span>
-        <span className="truncate text-sm text-foreground">{run.title}</span>
-        <span className="flex min-w-0 gap-1.5 text-xs text-muted-foreground">
-          <span className="min-w-0 flex-1 truncate">{workflowRunNow(node, m)}</span>
-          <span className="shrink-0">
-            <RelativeLabel value={run.updatedAt} />
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="flex min-w-0 items-center gap-1.5 text-caption text-muted-foreground">
+            <WorkflowChip name={run.workflow} />
+            <span className="min-w-0 flex-1 truncate">{run.workflow}</span>
+            <WorkflowStateWord node={node} />
+          </span>
+          <span className="truncate text-meta text-foreground">{run.title}</span>
+          <span className="flex min-w-0 gap-1.5 text-caption text-muted-foreground">
+            <span className="min-w-0 flex-1 truncate">{workflowRunNow(node, m)}</span>
+            <span className="shrink-0">
+              <RelativeLabel value={run.updatedAt} />
+            </span>
           </span>
         </span>
-      </button>
+      </ContentButton>
     </li>
   );
 }

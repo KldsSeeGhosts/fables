@@ -53,12 +53,13 @@ export function FeedbackRequestCard(props: {
           render={
             <WorkLogRow
               icon={<Icon className="size-3.5 text-icon-muted" aria-hidden />}
-              label={
+              label={m(TITLE)}
+              trailing={
                 <>
-                  {m(TITLE)} · {display.label}
+                  <span className="text-dim-foreground">{display.label}</span>
+                  <ChevronDownIcon className="size-3.5 text-icon-muted" aria-hidden />
                 </>
               }
-              trailing={<ChevronDownIcon className="size-3.5 text-icon-muted" aria-hidden />}
             />
           }
         />
@@ -124,21 +125,21 @@ function PendingFeedbackRequest(props: {
       className="flex min-w-0 flex-col gap-3 rounded-xl border border-border/60 bg-card p-4"
     >
       <div className="flex min-w-0 flex-col gap-1">
-        <h3 className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+        <h3 className="flex items-center gap-1.5 text-meta text-foreground">
           <MessageSquareIcon className="size-3.5 shrink-0 text-icon-muted" aria-hidden />
           <T>Send this report to the T3 team?</T>
         </h3>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           <T>This is everything that leaves your machine. Nothing is sent unless you press Send.</T>
         </p>
       </div>
       {props.item.conversationTrace !== undefined ? (
         <label className="flex min-w-0 items-center justify-between gap-3">
           <span className="flex min-w-0 flex-col">
-            <span className="text-sm text-foreground">
+            <span className="text-meta text-foreground">
               <T>Include the conversation</T>
             </span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {feedbackConversationHint(props.item.conversationTrace, m)}
             </span>
           </span>
@@ -152,11 +153,11 @@ function PendingFeedbackRequest(props: {
       ) : null}
       <FeedbackPreview preview={feedbackCardPreview(props.item, includeConversation)} />
       {error !== null ? (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-caption text-destructive">
           {error}
         </p>
       ) : !canAnswer ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           <T>Only someone who can run agents on this machine can send or decline it.</T>
         </p>
       ) : null}
@@ -183,7 +184,7 @@ function FeedbackPreview({ preview }: { readonly preview: AgentFeedbackPreview }
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      <dl className="grid min-w-0 grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+      <dl className="grid min-w-0 grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-meta">
         {feedbackPreviewFields(preview, m).map((field) => (
           <div key={field.label} className="contents">
             <dt className="text-muted-foreground">{field.label}</dt>
@@ -193,12 +194,12 @@ function FeedbackPreview({ preview }: { readonly preview: AgentFeedbackPreview }
       </dl>
       {preview.trace !== null ? (
         <Collapsible>
-          <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+          <CollapsibleTrigger className="flex items-center gap-1 text-caption text-muted-foreground hover:text-foreground">
             <ChevronDownIcon className="size-3.5" aria-hidden />
             {feedbackTraceSummary(preview.trace, m)}
           </CollapsibleTrigger>
           <CollapsiblePanel>
-            <ol className="mt-2 flex max-h-80 min-w-0 flex-col gap-1 overflow-y-auto font-mono text-xs">
+            <ol className="mt-2 flex max-h-80 min-w-0 flex-col gap-1 overflow-y-auto font-mono text-caption">
               {feedbackTraceLines(preview.trace, m).map((entry) => (
                 <li key={entry.key} className="min-w-0">
                   <span className="text-muted-foreground">{entry.line}</span>
