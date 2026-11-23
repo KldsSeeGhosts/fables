@@ -50,6 +50,7 @@ import {
   resolvePreviousWorktreeLabel,
   resolvePreviousWorktreeSeed,
   type PreviousWorktreeSeed,
+  shouldShowEnvironmentIndicator,
 } from "./BranchToolbar.logic";
 import {
   BranchToolbarBranchSelector,
@@ -654,6 +655,8 @@ interface RunContextSelectorProps {
   panelEnvironmentActions?: ReactNode;
   workspaceRoot?: string;
   forceNewWorktree: boolean;
+  /** False when the folder has no repository a worktree could come from. */
+  offersWorkspaceModes: boolean;
   autoEnvironmentLabel?: string | undefined;
   onAutoEnvironment?: (() => void) | undefined;
   envLocked: boolean;
@@ -682,7 +685,8 @@ const RunContextSelector = memo(function RunContextSelector({
   section,
   panelEnvironmentActions,
   workspaceRoot,
-  forceNewWorktree,
+  forceNewWorktree: requestedForceNewWorktree,
+  offersWorkspaceModes,
   autoEnvironmentLabel,
   onAutoEnvironment,
   envLocked,
@@ -692,7 +696,7 @@ const RunContextSelector = memo(function RunContextSelector({
   showEnvironmentPicker,
   showEnvironmentIndicator,
   onEnvironmentChange,
-  effectiveEnvMode,
+  effectiveEnvMode: requestedEnvMode,
   activeWorktreePath,
   onEnvModeChange,
   previousWorktreeLabel,
@@ -707,11 +711,14 @@ const RunContextSelector = memo(function RunContextSelector({
   const composerFloatingLayerProps = useComposerMenuProps();
   const activeEnvironment =
     availableEnvironments?.find((env) => env.environmentId === environmentId) ?? null;
+  // A folder no worktree can come from runs threads in place, whatever mode was requested.
+  const forceNewWorktree = offersWorkspaceModes && requestedForceNewWorktree;
+  const effectiveEnvMode = offersWorkspaceModes ? requestedEnvMode : "local";
   const WorkspaceIcon = noProject
     ? FolderIcon
     : effectiveEnvMode === "worktree"
       ? FolderGit2Icon
-      : activeWorktreePath
+      : activeWorktreePath && offersWorkspaceModes
         ? FolderGitIcon
         : FolderIcon;
   const workspaceLabel = noProject
@@ -724,7 +731,10 @@ const RunContextSelector = memo(function RunContextSelector({
           ? resolveEnvModeLabel("worktree", m)
           : resolveCurrentWorkspaceLabel(activeWorktreePath, m);
   const isPanel = displayMode === "panel";
-  const isLocked = isPanel ? section === "workspace" && envModeLocked : envLocked || envModeLocked;
+  const workspaceModesLocked = envModeLocked || !offersWorkspaceModes;
+  const isLocked = isPanel
+    ? section === "workspace" && workspaceModesLocked
+    : envLocked || workspaceModesLocked;
   const workspacePath =
     forceNewWorktree || (effectiveEnvMode === "worktree" && !activeWorktreePath)
       ? null
@@ -734,7 +744,7 @@ const RunContextSelector = memo(function RunContextSelector({
     ((showEnvironmentPicker && onEnvironmentChange) || addTargets.length > 0)
       ? availableEnvironments
       : undefined;
-  const showWorkspaceGroup = section !== "machine";
+  const showWorkspaceGroup = section !== "machine" && offersWorkspaceModes;
   const showPathGroup = isPanel && workspacePath !== null && section !== "workspace";
   const environmentActions = isPanel && section !== "workspace" ? panelEnvironmentActions : null;
   const runContextLabel =
@@ -866,7 +876,7 @@ const RunContextSelector = memo(function RunContextSelector({
         data-composer-context-control
         data-composer-shortcut={[
           showEnvironmentPicker && !envLocked ? "composer.host" : "",
-          !envModeLocked ? "composer.workspace" : "",
+          !workspaceModesLocked ? "composer.workspace" : "",
         ].join(" ")}
       >
         {triggerContent}
@@ -1262,6 +1272,9 @@ export const BranchToolbar = memo(function BranchToolbar({
         currentWorktreePath: activeWorktreePath,
       })
     : null;
+  const previousWorktreeLabel = previousWorktreeSeed
+    ? resolvePreviousWorktreeLabel(previousWorktreeSeed, m)
+    : null;
 
   const onUsePreviousWorktree = () => {
     if (!previousWorktreeSeed) return;
@@ -1305,6 +1318,12 @@ export const BranchToolbar = memo(function BranchToolbar({
   const showEnvironmentPicker = hasMultipleEnvironments && onEnvironmentChange !== undefined;
   const activeEnvironmentOption =
     availableEnvironments?.find((env) => env.environmentId === environmentId) ?? null;
+  // Started threads get no handler but still show which machine they run on,
+  // matching the strip visibility ChatView computes from the same inputs.
+  const showEnvironmentIndicator = shouldShowEnvironmentIndicator({
+    activeEnvironment: activeEnvironmentOption,
+    canPickEnvironment: hasMultipleEnvironments,
+  });
   const [attachStrip, stripCompaction] = useStripCompaction();
   const plainProjectBaseBranch = useWorktreeBaseBranch(activeProject ?? null);
 
@@ -1332,24 +1351,21 @@ export const BranchToolbar = memo(function BranchToolbar({
                   panelEnvironmentActions={panelEnvironmentActions}
                   workspaceRoot={activeProject.workspaceRoot}
                   forceNewWorktree={forceNewWorktree}
+                  offersWorkspaceModes={showGitControls}
                   autoEnvironmentLabel={autoEnvironmentLabel}
                   onAutoEnvironment={onAutoEnvironment}
                   envLocked={envLocked}
-                  envModeLocked={envModeLocked || !showGitControls}
+                  envModeLocked={envModeLocked}
                   environmentId={environmentId}
                   availableEnvironments={availableEnvironments}
                   showEnvironmentPicker={showEnvironmentPicker}
                   showEnvironmentIndicator={activeEnvironmentOption !== null}
                   onEnvironmentChange={onEnvironmentChange}
-                  effectiveEnvMode={showGitControls ? effectiveEnvMode : "local"}
+                  effectiveEnvMode={effectiveEnvMode}
                   activeWorktreePath={activeWorktreePath}
                   onEnvModeChange={onEnvModeChange}
                   noProject={isScratchProject(activeProject, scratchWorkspaceRoot)}
-                  previousWorktreeLabel={
-                    previousWorktreeSeed
-                      ? resolvePreviousWorktreeLabel(previousWorktreeSeed, m)
-                      : null
-                  }
+                  previousWorktreeLabel={previousWorktreeLabel}
                   previousWorktreeBranch={previousWorktreeSeed?.branch ?? null}
                   onUsePreviousWorktree={onUsePreviousWorktree}
                   addTargets={addTargets}
@@ -1422,6 +1438,30 @@ export const BranchToolbar = memo(function BranchToolbar({
     >
       {isScratchProject(activeProject, scratchWorkspaceRoot) ? (
         <NoProjectChip started={isServerThread} />
+      ) : showGitControls ? (
+        <div className="contents @xl/composer-surface:hidden">
+          <RunContextSelector
+            forceNewWorktree={forceNewWorktree}
+            offersWorkspaceModes={showGitControls}
+            autoEnvironmentLabel={autoEnvironmentLabel}
+            onAutoEnvironment={onAutoEnvironment}
+            envLocked={envLocked}
+            envModeLocked={envModeLocked}
+            environmentId={environmentId}
+            availableEnvironments={availableEnvironments}
+            showEnvironmentPicker={showEnvironmentPicker}
+            showEnvironmentIndicator={showEnvironmentIndicator}
+            onEnvironmentChange={onEnvironmentChange}
+            effectiveEnvMode={effectiveEnvMode}
+            activeWorktreePath={activeWorktreePath}
+            onEnvModeChange={onEnvModeChange}
+            previousWorktreeLabel={previousWorktreeLabel}
+            previousWorktreeBranch={previousWorktreeSeed?.branch ?? null}
+            onUsePreviousWorktree={onUsePreviousWorktree}
+            addTargets={addTargets}
+            onAddToMachine={onAddToMachine}
+          />
+        </div>
       ) : null}
       {machineMenu}
       {!showGitControls && !onOpenWorkspaceDetails ? (
