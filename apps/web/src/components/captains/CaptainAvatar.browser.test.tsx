@@ -28,3 +28,15 @@ it("uses the one-shot mount animation only when requested", async () => {
     "prism",
   );
 });
+
+it("renders the hero size as a bare 28px emblem without a tile", async () => {
+  await using screen = await render(
+    <CaptainAvatar avatar={{ preset: "triangle", color: "blue" }} size="hero" />,
+  );
+  const avatar = screen.container.querySelector<HTMLElement>("[data-captain-avatar]");
+
+  expect(avatar?.classList.contains("size-7")).toBe(true);
+  expect(avatar?.querySelector("svg")?.classList.contains("size-7")).toBe(true);
+  expect(avatar?.className).not.toContain("rounded");
+  expect(avatar?.style.backgroundColor).toBe("");
+});

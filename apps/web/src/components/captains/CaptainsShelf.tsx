@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-styled-raw-controls, shadcn/no-arbitrary-values -- Duet channel rows use exact Anthropic theme geometry and palette colors outside the shared control variants. */
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   captainAttentionTotal,
@@ -14,7 +13,7 @@ import { useState } from "react";
 import { flushSync } from "react-dom";
 
 import { useLocalStorage } from "../../hooks/useLocalStorage";
-import { useTheme } from "../../hooks/useTheme";
+import { useDuetShell } from "../../hooks/useDuetShell";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { cn } from "../../lib/utils";
 import { useThreadShells } from "../../state/entities";
@@ -46,7 +45,7 @@ const NO_CAPTAIN_CONVERSATIONS: ReadonlySet<string> = new Set();
 /** The sidebar's entry to the Captains page, with the number of Captains waiting on the user. */
 export function CaptainsHubRow({ active, onOpen }: { active: boolean; onOpen: () => void }) {
   const gt = useGT();
-  const isDuet = useTheme().theme === "ksg-salon";
+  const isDuet = useDuetShell();
   const { supporting, results } = useCaptainEnvironments();
   const shells = useThreadShells(supporting.length > 0);
   if (supporting.length === 0) return null;
@@ -72,23 +71,25 @@ export function CaptainsHubRow({ active, onOpen }: { active: boolean; onOpen: ()
     ) : null;
   if (isDuet) {
     return (
-      <button
-        type="button"
-        data-sidebar-row="nav:captains"
-        aria-current={active ? "page" : undefined}
-        className={cn(
-          "flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left text-label text-[#141413] outline-none select-none hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring dark:text-[#ececec] dark:hover:bg-white/7",
-          active &&
-            "bg-[var(--duet-row-active,var(--sidebar-accent))] hover:bg-[var(--duet-row-active,var(--sidebar-accent))]",
-        )}
-        onClick={onOpen}
-      >
-        <LayersIcon aria-hidden className="size-4 shrink-0 text-[#d97757]" />
-        <span className="min-w-0 flex-1 truncate">
-          <T context="the Captains home page">Everything</T>
-        </span>
-        {badge}
-      </button>
+      <div className="relative">
+        <ContentButton
+          variant="duet-row"
+          data-sidebar-row="nav:captains"
+          aria-current={active ? "page" : undefined}
+          onClick={onOpen}
+        >
+          <LayersIcon aria-hidden className="size-4 shrink-0 text-(--duet-working)" />
+          <span className="min-w-0 flex-1 truncate">
+            <T context="the Captains home page">Everything</T>
+          </span>
+          {badge}
+        </ContentButton>
+        {/* The channel tree's trunk starts here and crosses the header group's bottom padding. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute top-full left-4 h-2 w-px bg-(--duet-tree-line)"
+        />
+      </div>
     );
   }
   return (
@@ -108,19 +109,9 @@ export function CaptainsHubRow({ active, onOpen }: { active: boolean; onOpen: ()
   );
 }
 
-function DuetTreeConnector() {
-  return (
-    <svg
-      aria-hidden
-      className="pointer-events-none absolute top-[-2px] left-0 h-[calc(100%+4px)] w-[30px] overflow-visible text-[#e5e5e5] dark:text-[#333333]"
-      viewBox="0 0 30 32"
-      fill="none"
-    >
-      <path d="M15.5 -6V38" stroke="currentColor" strokeWidth="1" />
-      <path d="M15.5 10Q15.5 16 21.5 16H29" stroke="currentColor" strokeWidth="1" />
-    </svg>
-  );
-}
+/** Each tree row draws its own branch from the trunk, so a row's fill never paints over it. */
+const DUET_TREE_BRANCH_CLASS_NAME =
+  "relative flex h-8 items-center ps-6 before:pointer-events-none before:absolute before:top-0 before:left-4 before:h-4.25 before:w-2 before:rounded-bl-md before:border-b before:border-l before:border-(--duet-tree-line)";
 
 function CaptainShelfRow({
   captain,
@@ -140,7 +131,7 @@ function CaptainShelfRow({
   onOpen: (threadRef: ScopedThreadRef) => void;
 }) {
   const gt = useGT();
-  const isDuet = useTheme().theme === "ksg-salon";
+  const isDuet = useDuetShell();
   const threadRef = scopeThreadRef(environmentId, captain.primaryThreadId);
   const openView = (tab: CaptainDrawerTab) => {
     appAtomRegistry.set(captainBriefTabAtom(threadRef), tab === "docs" ? "docs" : "brief");
@@ -206,35 +197,29 @@ function CaptainShelfRow({
 
   if (isDuet) {
     return (
-      <li className="group/captain-row relative flex h-8 items-center">
-        <DuetTreeConnector />
-        <button
-          type="button"
+      <li className={cn("group/captain-row", DUET_TREE_BRANCH_CLASS_NAME)}>
+        <ContentButton
+          variant="duet-row"
           aria-current={selected ? "page" : undefined}
           aria-label={gt("{name}, {status}", { name: current.name, status })}
-          className={cn(
-            "relative flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md pr-8 pl-7.5 text-left text-label text-[#141413] outline-none select-none hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring dark:text-[#ececec] dark:hover:bg-white/7",
-            selected &&
-              "bg-[var(--duet-row-active,var(--sidebar-accent))] hover:bg-[var(--duet-row-active,var(--sidebar-accent))]",
-          )}
           onClick={() => onOpen(threadRef)}
         >
           <CaptainAvatar avatar={current.avatar} state={avatarState} />
           <span className="min-w-0 flex-1 truncate">{current.name}</span>
-          <span className="ml-auto flex shrink-0 items-center gap-1 group-hover/captain-row:opacity-0 group-focus-within/captain-row:opacity-0">
+          <span className="ms-auto flex shrink-0 items-center gap-1 group-focus-within/captain-row:opacity-0 group-hover/captain-row:opacity-0">
             {!archived && attention > 0 ? (
               <>
-                <span className="size-1.5 rounded-full" style={{ backgroundColor: "#a98546" }} />
-                <span className="text-meta tabular-nums" style={{ color: "#a98546" }}>
+                <span className="size-1.5 rounded-full bg-(--duet-needs-input-ring)" />
+                <span className="text-meta text-(--duet-needs-input-ring) tabular-nums">
                   {attention}
                 </span>
               </>
             ) : !archived && working ? (
-              <span className="size-1.5 rounded-full" style={{ backgroundColor: "#d97757" }} />
+              <span className="size-1.5 rounded-full bg-(--duet-working)" />
             ) : null}
           </span>
-        </button>
-        <div className="absolute right-1 shrink-0 opacity-0 transition-opacity group-focus-within/captain-row:opacity-100 group-hover/captain-row:opacity-100">
+        </ContentButton>
+        <div className="absolute end-1 shrink-0 opacity-0 transition-opacity group-focus-within/captain-row:opacity-100 group-hover/captain-row:opacity-100">
           {menu}
         </div>
         <CaptainProfileDialogs profile={profile} />
@@ -303,7 +288,7 @@ export function CaptainShelfList({
   onReveal?: ((header: HTMLElement) => void) | undefined;
 }) {
   const gt = useGT();
-  const isDuet = useTheme().theme === "ksg-salon";
+  const isDuet = useDuetShell();
   const [expanded, setExpanded] = useLocalStorage(
     "t3code:sidebar:captains-expanded",
     true,
@@ -333,24 +318,31 @@ export function CaptainShelfList({
   if (isDuet) {
     return (
       <li className="list-none">
-        <ul className="flex flex-col">{rowList}</ul>
-        {onCreate ? (
-          <button
-            type="button"
-            className="flex h-8 w-full cursor-pointer items-center gap-2 rounded-md pr-2 pl-7.75 text-left text-label outline-none select-none hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring dark:hover:bg-white/7"
-            style={{ color: "#717075" }}
-            onClick={onCreate}
-            aria-label={gt("New channel")}
-          >
-            <PlusIcon aria-hidden className="size-3.5" />
-            <T>New channel</T>
-          </button>
+        {rowList.length > 0 || onCreate ? (
+          <div className="relative">
+            {/* The trunk stops one row short; the last row's branch curves it into its midpoint. */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute top-0 bottom-8 left-4 w-px bg-(--duet-tree-line)"
+            />
+            <ul className="flex flex-col">{rowList}</ul>
+            {onCreate ? (
+              <div className={DUET_TREE_BRANCH_CLASS_NAME}>
+                <ContentButton
+                  variant="duet-row-quiet"
+                  onClick={onCreate}
+                  aria-label={gt("New channel")}
+                >
+                  <span className="flex size-4 shrink-0 items-center justify-center">
+                    <PlusIcon aria-hidden className="size-3.5" />
+                  </span>
+                  <T>New channel</T>
+                </ContentButton>
+              </div>
+            ) : null}
+          </div>
         ) : null}
-        <div
-          aria-hidden
-          className="mx-3 mt-1 h-px"
-          style={{ backgroundColor: "var(--duet-hairline, var(--border))" }}
-        />
+        <div aria-hidden className="mx-1 my-2 h-px bg-(--duet-hairline)" />
       </li>
     );
   }

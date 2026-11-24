@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Duet emblems use exact Anthropic palette colors and tile radius outside the shared theme scale. */
 import type { CaptainAvatar as Avatar } from "@t3tools/contracts";
 
 import { cn } from "../../lib/utils";
@@ -16,6 +15,9 @@ import {
 import "./CaptainAvatar.css";
 
 export type CaptainAvatarState = "archived" | "idle" | "waiting" | "working";
+
+/** The 28px bare emblem the channel hero leads with. */
+const heroSize = { frame: "size-7", glyph: "size-7", tile: false } as const;
 
 const canonicalShapes = DUET_EMBLEM_ORDER.map((emblem) => DUET_PICKER.emblems[emblem]);
 const canonicalColors = DUET_PALETTE_ORDER.map((palette) => DUET_PICKER.palettes[palette]);
@@ -53,7 +55,7 @@ function DuetEmblemGlyph({
       strokeWidth={1.75}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn("shrink-0 text-[#141413] dark:text-[#ececec]", className)}
+      className={cn("shrink-0 text-foreground", className)}
       data-captain-emblem={emblem}
     >
       {emblem === "orb" ? (
@@ -127,13 +129,13 @@ export function CaptainAvatar({
   animateOnMount = false,
 }: {
   avatar: Avatar;
-  size?: "picker" | "row" | "header" | "large" | "profile";
+  size?: keyof typeof captainAvatarSizes | "hero";
   state?: CaptainAvatarState;
   animateOnMount?: boolean;
 }) {
   const palette = captainPaletteOf(avatar);
   const emblem = captainEmblemOf(avatar);
-  const sizeData = captainAvatarSizes[size];
+  const sizeData = size === "hero" ? heroSize : captainAvatarSizes[size];
   const swatch = DUET_PALETTE_SWATCH[palette];
 
   return (
@@ -146,6 +148,7 @@ export function CaptainAvatar({
       className={cn(
         "inline-flex shrink-0 items-center justify-center overflow-visible",
         sizeData.frame,
+        // oxlint-disable-next-line shadcn/no-arbitrary-values -- the Duet tile radius scales with the tile.
         sizeData.tile && "rounded-[28%]",
         state === "archived" && "opacity-50 grayscale",
       )}
