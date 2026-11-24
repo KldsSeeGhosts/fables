@@ -12,6 +12,7 @@ import {
   ArrowUpIcon,
   CheckIcon,
   ChevronLeftIcon,
+  CornerDownLeftIcon,
   CornerUpRightIcon,
   ListPlusIcon,
   Minimize2Icon,
@@ -21,6 +22,7 @@ import type { MessageResolver } from "~/i18n/messages";
 import { formatContextWindowTokens } from "~/lib/contextWindow";
 import { cn, isMacPlatform } from "~/lib/utils";
 import { useShortcutModifierSelector } from "../../shortcutModifierState";
+import { useDuetShell } from "../../hooks/useDuetShell";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -304,6 +306,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
 }: ComposerPrimaryActionsProps) {
   const gt = useGT();
   const m = useMessages();
+  const isDuetShell = useDuetShell();
   const [stopPhase, setStopPhase] = useStopPhase({ runId, canInterrupt, canOperateThread });
   const pointerFocusProps = preserveComposerFocusOnPointerDown
     ? { onPointerDown: preventPointerFocus }
@@ -331,14 +334,14 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
       preserveComposerFocusOnPointerDown={preserveComposerFocusOnPointerDown}
       onStopRequested={() => setStopPhase("pending")}
       onInterrupt={onInterrupt}
-      leading={insidePendingAction ? null : renderSpeechAction?.(true)}
+      leading={insidePendingAction || isDuetShell ? null : renderSpeechAction?.(true)}
     />
   );
 
   if (pendingAction) {
     return (
       <div className={cn("flex items-center justify-end", compact ? "gap-1.5" : "gap-2")}>
-        {renderSpeechAction?.(false)}
+        {isDuetShell ? null : renderSpeechAction?.(false)}
         {pendingAction.questionIndex > 0 ? (
           compact ? (
             <Button
@@ -468,43 +471,65 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
         : submitLabel);
 
   const isBusyOrHeld = isSendBusy || isSendHeld;
-  const sendButton = (
+  const handleSendClick: MouseEventHandler<HTMLButtonElement> = (event) => {
+    if (stopPhase === "landed") {
+      event.preventDefault();
+      return;
+    }
+    if (showResume) onResume?.();
+    else onSubmitMessage?.(event);
+  };
+  const sendIcon = isBusyOrHeld ? (
+    <Spinner size="sm" aria-hidden="true" />
+  ) : showResume ? (
+    <PlayIcon className="size-4 fill-current" aria-hidden="true" />
+  ) : isEditingQueuedMessage ? (
+    <CheckIcon className="size-3.5" aria-hidden="true" />
+  ) : isQueuing ? (
+    <ListPlusIcon className="size-3.5" aria-hidden="true" />
+  ) : isRunning ? (
+    <CornerUpRightIcon className="size-3.5" aria-hidden="true" />
+  ) : isDuetShell ? (
+    <CornerDownLeftIcon className="size-4" aria-hidden="true" />
+  ) : (
+    <ArrowUpIcon className="size-4" strokeWidth={2.5} aria-hidden="true" />
+  );
+  const sendDisabled =
+    isBusyOrHeld ||
+    isSendDisabled ||
+    isEnvironmentUnavailable ||
+    (!hasSendableContent && !showResume);
+  const sendButton = isDuetShell ? (
+    <ComposerPillButton
+      type={showResume ? "button" : "submit"}
+      data-composer-send=""
+      {...pointerFocusProps}
+      onClick={handleSendClick}
+      disabled={sendDisabled}
+      aria-label={submitStatus ?? submitLabel}
+      aria-busy={isBusyOrHeld || undefined}
+      className={cn(
+        "w-7 rounded-lg transition-none enabled:hover:bg-transparent",
+        hasSendableContent || showResume
+          ? "text-foreground"
+          : "text-placeholder disabled:opacity-100",
+      )}
+    >
+      {sendIcon}
+    </ComposerPillButton>
+  ) : (
     <Button
       type={showResume ? "button" : "submit"}
       variant="default"
       size="icon-pill"
       data-composer-send=""
       {...pointerFocusProps}
-      onClick={(event) => {
-        if (stopPhase === "landed") {
-          event.preventDefault();
-          return;
-        }
-        if (showResume) onResume?.();
-        else onSubmitMessage?.(event);
-      }}
-      disabled={
-        isBusyOrHeld ||
-        isSendDisabled ||
-        isEnvironmentUnavailable ||
-        (!hasSendableContent && !showResume)
-      }
+      onClick={handleSendClick}
+      disabled={sendDisabled}
       aria-label={submitStatus ?? submitLabel}
       aria-busy={isBusyOrHeld || undefined}
     >
-      {isBusyOrHeld ? (
-        <Spinner size="sm" aria-hidden="true" />
-      ) : showResume ? (
-        <PlayIcon className="size-4 fill-current" aria-hidden="true" />
-      ) : isEditingQueuedMessage ? (
-        <CheckIcon className="size-3.5" aria-hidden="true" />
-      ) : isQueuing ? (
-        <ListPlusIcon className="size-3.5" aria-hidden="true" />
-      ) : isRunning ? (
-        <CornerUpRightIcon className="size-3.5" aria-hidden="true" />
-      ) : (
-        <ArrowUpIcon className="size-4" strokeWidth={2.5} aria-hidden="true" />
-      )}
+      {sendIcon}
     </Button>
   );
 
@@ -542,7 +567,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
           </TooltipPopup>
         </Tooltip>
       ) : null}
-      {renderSpeechAction?.(true)}
+      {isDuetShell ? null : renderSpeechAction?.(true)}
       <Tooltip>
         {/* A span trigger keeps the tooltip reachable while send is disabled. */}
         <TooltipTrigger render={<span className="flex h-full" />}>{sendButton}</TooltipTrigger>

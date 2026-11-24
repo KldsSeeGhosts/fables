@@ -47,6 +47,7 @@ import {
   clampManagedRuntimeMode,
   ProviderDriverKind,
   ProviderInstanceId,
+  isCaptainThreadId,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
   PROVIDER_DISPLAY_NAMES,
@@ -261,7 +262,7 @@ import { observeResize } from "~/lib/observeResize";
 const isEnvironmentRequestInvalidError = Schema.is(EnvironmentRequestInvalidError);
 import { toastManager } from "../ui/toast";
 import { m as resolveMessage } from "../../i18n/messages";
-import { BuildingIcon, PaperclipIcon, PlayIcon, ReplyIcon } from "lucide-react";
+import { BuildingIcon, ChevronDownIcon, PaperclipIcon, PlayIcon, ReplyIcon } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { assistantCitationLabel } from "@t3tools/shared/assistantCitations";
 import { assistantCitationNavigation } from "../../lib/assistantCitationNavigation";
@@ -286,6 +287,7 @@ import {
 } from "@t3tools/client-runtime/providerSkills";
 import { useEnvironmentDisconnectDelay } from "../../hooks/useEnvironmentDisconnectDelay";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { useDuetShell } from "../../hooks/useDuetShell";
 import { Kbd } from "../ui/kbd";
 import { useSoftwareKeyboardOpen } from "../../hooks/useSoftwareKeyboardOpen";
 import { useStableCallback } from "../../hooks/useStableCallback";
@@ -301,6 +303,7 @@ import { useComposerImageGroups } from "./useComposerImageGroups";
 import { useComposerStash } from "./useComposerStash";
 import { useComposerContextImport } from "./useComposerContextImport";
 import { useComposerAttachmentIntake } from "./useComposerAttachmentIntake";
+import { useCaptain } from "../captains/useCaptain";
 import { isQueuedFileAttachment, isQueuedImageAttachment } from "./queuedMessageEdit";
 import {
   cancelHeldComposerSend,
@@ -665,6 +668,9 @@ export function ChatComposer(props: ChatComposerProps) {
     onRemoveEditingQueuedAttachment,
     onRestoreEditingQueuedAttachment,
   } = props;
+  const isDuetShell = useDuetShell();
+  const isCaptainPrimaryThread = activeThreadId !== null && isCaptainThreadId(activeThreadId);
+  const captain = useCaptain(isCaptainPrimaryThread ? routeThreadRef : null);
   const {
     activePendingProgress: incomingPendingProgress,
     activePendingResolvedAnswers,
@@ -3748,6 +3754,25 @@ export function ChatComposer(props: ChatComposerProps) {
   const composerAttachButton = showComposerAttachAction ? (
     <ComposerAttachButton onOpenPicker={() => composerAttachInputRef.current?.click()} />
   ) : null;
+  const composerControlsHost = (
+    <div ref={setToolbarControlsHost} className="flex min-w-0 flex-1 items-center">
+      <div
+        ref={attachExpandedComposerControls}
+        data-chat-composer-resting-controls="true"
+        className="flex min-w-0 items-center gap-0.5"
+      >
+        {composerControls}
+      </div>
+    </div>
+  );
+  const duetComposerPlaceholder = isCaptainPrimaryThread
+    ? gt("Message #{channel}", {
+        channel: captain?.name ?? activeThread?.title ?? gt("Captain"),
+      })
+    : activeThread?.lineage.parentThreadId != null
+      ? gt("Add a reply")
+      : gt("Describe a task or ask a question");
+  const showDuetComposerFooterControls = !isCaptainPrimaryThread;
 
   const requestCard =
     !isComposerCollapsedMobile && pendingUserInputs.length > 0 ? (
@@ -3773,6 +3798,63 @@ export function ChatComposer(props: ChatComposerProps) {
         onWriteAnswer={focusComposer}
       />
     ) : null;
+
+  const composerFooterPrimaryActions = (
+    <ComposerFooterPrimaryActions
+      // Stop state belongs to one thread; the composer stays mounted across threads.
+      key={`${environmentId}:${activeThreadId ?? "new"}`}
+      renderSpeechAction={renderSpeechAction}
+      compact={isComposerPrimaryActionsCompact}
+      canOperateThread={canOperateThread}
+      pendingAction={requestCard && requestCardHost ? null : pendingPrimaryAction}
+      isRunning={(phase === "running" || phase === "connecting") && !draftRunsLocally}
+      canInterrupt={canInterrupt}
+      runId={activeThread?.runtime?.activeRunId ?? null}
+      followUpBehavior={followUpBehavior}
+      canSteer={canSteer}
+      alternateShortcutLabel={shortcutLabelForCommand(keybindings, "composer.sendAlternate", {
+        context: {
+          composerFocus: true,
+          draftThreadRoute: routeKind === "draft",
+          turnRunning: true,
+          composerRequiresModifier: composerRequiresModifier(settings.sendShortcut, prompt),
+        },
+      })}
+      voiceInputActive={voiceInputActive}
+      isSendBusy={isSendBusy}
+      isSendHeld={composerSendHeld}
+      sendDisabledReason={primaryActionSendDisabledReason}
+      isEnvironmentUnavailable={primaryActionEnvironmentUnavailable}
+      isPreparingWorktree={isPreparingWorktree}
+      hasSendableContent={hasMessageToSend || voiceInputActive}
+      canResume={showResumeAction}
+      preserveComposerFocusOnPointerDown={isMobileViewport}
+      isEditingQueuedMessage={isEditingQueuedMessage}
+      onSubmitMessage={handleSubmitMessageStable}
+      onResume={onResume}
+      onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
+      onInterrupt={handleInterruptPrimaryActionStable}
+      compactBeforeSendTokens={props.resumeCompactionTokens}
+      keepFullHistory={props.keepFullHistory}
+      onToggleKeepFullHistory={props.onToggleKeepFullHistory}
+    >
+      <VoiceInputSetup
+        environmentId={speechInput.transcriptionEnvironmentId}
+        open={speechInput.setup.open}
+        step={speechInput.setup.step}
+        status={speechInput.status}
+        model={speechInput.setup.model}
+        language={speechInput.setup.language}
+        downloading={speechInput.setup.downloading}
+        error={speechInput.setup.error}
+        onOpenChange={speechInput.setup.setOpen}
+        onRetryCatalog={speechInput.setup.retryCatalog}
+        onDownload={() => void speechInput.setup.download()}
+        onCancelDownload={() => void speechInput.setup.cancelDownload()}
+        onStartRecording={() => void speechInput.setup.startRecording()}
+      />
+    </ComposerFooterPrimaryActions>
+  );
 
   return (
     <form
@@ -3994,7 +4076,9 @@ export function ChatComposer(props: ChatComposerProps) {
               ref={attachComposerBody}
               data-chat-composer-body="true"
               className={cn(
-                "composer-prompt-body relative grid min-h-12 grid-cols-1 items-center pt-3 pb-0.5 ps-4.5 pe-4",
+                isDuetShell
+                  ? "composer-prompt-body relative grid min-h-11 grid-cols-1 items-center rounded-xl border border-input bg-(--composer-fill) px-3.5 pt-1.5 pb-1.5 pe-11"
+                  : "composer-prompt-body relative grid min-h-12 grid-cols-1 items-center pt-3 pb-0.5 ps-4.5 pe-4",
                 isComposerCollapsedMobile && "hidden",
               )}
             >
@@ -4133,7 +4217,10 @@ export function ChatComposer(props: ChatComposerProps) {
                               ? gt("Enable a provider in Settings to send a message")
                               : environmentDisconnected
                                 ? m(DISCONNECTED_COMPOSER_PLACEHOLDER)
-                                : (offeredPromptSuggestion ?? m(COMPOSER_PROMPT_PLACEHOLDER))
+                                : (offeredPromptSuggestion ??
+                                  (isDuetShell
+                                    ? duetComposerPlaceholder
+                                    : m(COMPOSER_PROMPT_PLACEHOLDER)))
                     }
                     placeholderSuffix={
                       offeredPromptSuggestion !== null ? (
@@ -4176,25 +4263,45 @@ export function ChatComposer(props: ChatComposerProps) {
                   />
                 </ComposerContextActionsContext>
               </div>
+              {isDuetShell ? (
+                <div
+                  data-chat-composer-actions="right"
+                  data-chat-composer-transition-actions="true"
+                  className="absolute right-1.5 bottom-1.5 z-10 flex items-center"
+                >
+                  {composerFooterPrimaryActions}
+                </div>
+              ) : null}
             </div>
             <div
               data-chat-composer-toolbar="true"
+              data-duet-composer-footer={isDuetShell ? "" : undefined}
               className={cn(
-                "flex min-h-11 min-w-0 items-center gap-1 ps-2 pe-2 pb-2",
+                isDuetShell
+                  ? "relative mt-1.5 flex h-7 min-w-0 items-center gap-1 px-1"
+                  : "flex min-h-11 min-w-0 items-center gap-1 ps-2 pe-2 pb-2",
                 isComposerCollapsedMobile && "hidden",
               )}
             >
-              <div className="flex min-w-0 flex-1 items-center gap-0.5">
+              <div
+                className="flex min-w-0 flex-1 items-center gap-0.5"
+                data-duet-composer-leading={isDuetShell ? "" : undefined}
+              >
                 {composerAttachButton}
-                <div ref={setToolbarControlsHost} className="flex min-w-0 flex-1 items-center">
-                  <div
-                    ref={attachExpandedComposerControls}
-                    data-chat-composer-resting-controls="true"
-                    className="flex min-w-0 items-center gap-0.5"
+                {isDuetShell ? renderSpeechAction(false) : null}
+                {isDuetShell ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={gt("Voice settings")}
+                    onPointerDown={(event) => event.preventDefault()}
+                    onClick={() => void navigate({ to: "/settings/voice" })}
                   >
-                    {composerControls}
-                  </div>
-                </div>
+                    <ChevronDownIcon className="size-3.5" />
+                  </Button>
+                ) : null}
+                {isDuetShell ? null : composerControlsHost}
                 {stashQueue.length > 0 ? (
                   <ComposerStashBadge
                     count={stashQueue.length}
@@ -4204,73 +4311,23 @@ export function ChatComposer(props: ChatComposerProps) {
                   />
                 ) : null}
               </div>
-              <div
-                data-chat-composer-actions="right"
-                data-chat-composer-transition-actions="true"
-                className="flex shrink-0 items-center gap-1.5"
-              >
-                <ComposerFooterPrimaryActions
-                  // Stop state belongs to one thread; the composer stays mounted across threads.
-                  key={`${environmentId}:${activeThreadId ?? "new"}`}
-                  renderSpeechAction={renderSpeechAction}
-                  compact={isComposerPrimaryActionsCompact}
-                  canOperateThread={canOperateThread}
-                  pendingAction={requestCard && requestCardHost ? null : pendingPrimaryAction}
-                  isRunning={(phase === "running" || phase === "connecting") && !draftRunsLocally}
-                  canInterrupt={canInterrupt}
-                  runId={activeThread?.runtime?.activeRunId ?? null}
-                  followUpBehavior={followUpBehavior}
-                  canSteer={canSteer}
-                  alternateShortcutLabel={shortcutLabelForCommand(
-                    keybindings,
-                    "composer.sendAlternate",
-                    {
-                      context: {
-                        composerFocus: true,
-                        draftThreadRoute: routeKind === "draft",
-                        turnRunning: true,
-                        composerRequiresModifier: composerRequiresModifier(
-                          settings.sendShortcut,
-                          prompt,
-                        ),
-                      },
-                    },
-                  )}
-                  voiceInputActive={voiceInputActive}
-                  isSendBusy={isSendBusy}
-                  isSendHeld={composerSendHeld}
-                  sendDisabledReason={primaryActionSendDisabledReason}
-                  isEnvironmentUnavailable={primaryActionEnvironmentUnavailable}
-                  isPreparingWorktree={isPreparingWorktree}
-                  hasSendableContent={hasMessageToSend || voiceInputActive}
-                  canResume={showResumeAction}
-                  preserveComposerFocusOnPointerDown={isMobileViewport}
-                  isEditingQueuedMessage={isEditingQueuedMessage}
-                  onSubmitMessage={handleSubmitMessageStable}
-                  onResume={onResume}
-                  onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
-                  onInterrupt={handleInterruptPrimaryActionStable}
-                  compactBeforeSendTokens={props.resumeCompactionTokens}
-                  keepFullHistory={props.keepFullHistory}
-                  onToggleKeepFullHistory={props.onToggleKeepFullHistory}
+              {isDuetShell && showDuetComposerFooterControls ? (
+                <div
+                  className="ms-auto flex min-w-0 items-center"
+                  data-duet-composer-footer-controls
                 >
-                  <VoiceInputSetup
-                    environmentId={speechInput.transcriptionEnvironmentId}
-                    open={speechInput.setup.open}
-                    step={speechInput.setup.step}
-                    status={speechInput.status}
-                    model={speechInput.setup.model}
-                    language={speechInput.setup.language}
-                    downloading={speechInput.setup.downloading}
-                    error={speechInput.setup.error}
-                    onOpenChange={speechInput.setup.setOpen}
-                    onRetryCatalog={speechInput.setup.retryCatalog}
-                    onDownload={() => void speechInput.setup.download()}
-                    onCancelDownload={() => void speechInput.setup.cancelDownload()}
-                    onStartRecording={() => void speechInput.setup.startRecording()}
-                  />
-                </ComposerFooterPrimaryActions>
-              </div>
+                  {composerControlsHost}
+                </div>
+              ) : null}
+              {isDuetShell ? null : (
+                <div
+                  data-chat-composer-actions="right"
+                  data-chat-composer-transition-actions="true"
+                  className="flex shrink-0 items-center gap-1.5"
+                >
+                  {composerFooterPrimaryActions}
+                </div>
+              )}
             </div>
             {speechInput.preview ? (
               // column-reverse pins the scroll to the bottom; the single inner div keeps the text in normal order.
