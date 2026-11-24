@@ -8,6 +8,7 @@ import {
   getDesktopUpdateDownloadedVersion,
   getDesktopUpdateInstallConfirmationMessage,
   getDesktopUpdateReleaseUrl,
+  installDesktopUpdate as requestDesktopUpdateInstall,
   shouldToastDesktopUpdateActionResult,
 } from "./desktopUpdate.logic";
 import { m } from "../i18n/messages";
@@ -15,7 +16,7 @@ import { toastManager } from "./ui/toast";
 import { stackedThreadToast } from "./ui/toastHelpers";
 
 type DesktopUpdateShell = Pick<DesktopBridge, "openExternal"> &
-  Partial<Pick<DesktopBridge, "installUpdate">>;
+  Partial<Pick<DesktopBridge, "installUpdate" | "onUpdateState">>;
 
 export async function openDesktopUpdateReleaseNotes(
   shell: Pick<DesktopBridge, "openExternal"> | undefined,
@@ -32,7 +33,7 @@ export async function openDesktopUpdateReleaseNotes(
  * update control and the update-downloaded toast's Restart now action.
  */
 export async function installDesktopUpdate(
-  bridge: Pick<DesktopBridge, "installUpdate" | "openExternal">,
+  bridge: Pick<DesktopBridge, "installUpdate" | "onUpdateState" | "openExternal">,
   state: Pick<DesktopUpdateState, "availableVersion" | "downloadedVersion">,
 ): Promise<void> {
   let confirmed = false;
@@ -54,7 +55,10 @@ export async function installDesktopUpdate(
   if (!confirmed) return;
 
   try {
-    const result = await bridge.installUpdate();
+    const result = await requestDesktopUpdateInstall(
+      bridge,
+      state.downloadedVersion ?? state.availableVersion ?? undefined,
+    );
     if (!result.accepted) {
       showDesktopUpdateDownloadedToast(bridge, result.state);
       return;
@@ -112,12 +116,14 @@ export function showDesktopUpdateDownloadedToast(
 ): void {
   const version = getDesktopUpdateDownloadedVersion(state);
   const releaseUrl = getDesktopUpdateReleaseUrl(version);
-  const installBridge = shell.installUpdate
-    ? {
-        installUpdate: shell.installUpdate.bind(shell),
-        openExternal: shell.openExternal.bind(shell),
-      }
-    : null;
+  const installBridge =
+    shell.installUpdate && shell.onUpdateState
+      ? {
+          installUpdate: shell.installUpdate.bind(shell),
+          onUpdateState: shell.onUpdateState.bind(shell),
+          openExternal: shell.openExternal.bind(shell),
+        }
+      : null;
   toastManager.add(
     stackedThreadToast({
       type: "success",
