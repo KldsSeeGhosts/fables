@@ -1,7 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import {
   CaptainAvatarColor,
-  CaptainAvatarPreset,
   CaptainId,
   clampManagedRuntimeMode,
   DEFAULT_SERVER_SETTINGS,
@@ -33,7 +32,12 @@ import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
-import { CaptainAvatar, captainAvatarIcons, captainAvatarSwatches } from "./CaptainAvatar";
+import {
+  CaptainAvatar,
+  captainAvatarShapes,
+  captainAvatarSwatches,
+  randomCaptainAvatar,
+} from "./CaptainAvatar";
 import { CaptainScope } from "./CaptainScope";
 import { captainCommandError } from "./useCaptain";
 
@@ -59,9 +63,7 @@ export function CaptainEditorDialog({
   const [name, setName] = useState(captain?.name ?? "");
   const [role, setRole] = useState(captain?.role ?? "");
   const [instructions, setInstructions] = useState(captain?.instructions ?? "");
-  const [avatar, setAvatar] = useState<Avatar>(
-    captain?.avatar ?? { color: "violet", preset: "compass" },
-  );
+  const [avatar, setAvatar] = useState<Avatar>(captain?.avatar ?? randomCaptainAvatar());
   const [scopedProjectIds, setScope] = useState<ReadonlyArray<ProjectId>>(
     captain?.scopedProjectIds ?? [],
   );
@@ -74,13 +76,16 @@ export function CaptainEditorDialog({
   const update = useAtomCommand(serverEnvironment.updateCaptain, { reportFailure: false });
   const projects = useProjects().filter((project) => project.environmentId === environmentId);
   const canSave = captain === undefined ? canCreate : canUpdate;
-  const presetLabels = {
-    compass: gt("Compass"),
-    mountain: gt("Mountain"),
-    terminal: gt("Terminal"),
-    flag: gt("Flag", { $context: "Captain avatar icon" }),
+  const shapeLabels = {
+    circle: gt("Circle"),
+    squircle: gt("Rounded square"),
+    drop: gt("Drop", { $context: "Captain avatar shape" }),
+    hexagon: gt("Hexagon"),
+    cloud: gt("Cloud", { $context: "Captain avatar shape" }),
+    diamond: gt("Diamond"),
   };
   const colorLabels = {
+    ink: gt("Ink", { $context: "color" }),
     violet: gt("Violet"),
     blue: gt("Blue"),
     emerald: gt("Emerald"),
@@ -231,27 +236,24 @@ export function CaptainEditorDialog({
             </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               <ToggleGroup
-                aria-label={gt("Avatar icon")}
+                aria-label={gt("Avatar shape")}
                 value={[avatar.preset]}
                 disabled={saving}
                 onValueChange={(value) => {
-                  const preset = CaptainAvatarPreset.literals.find((preset) => preset === value[0]);
-                  if (preset) setAvatar({ ...avatar, preset });
+                  const preset = captainAvatarShapes.find((shape) => shape === value[0]);
+                  if (preset) setAvatar((current) => ({ ...current, preset }));
                 }}
               >
-                {CaptainAvatarPreset.literals.map((preset) => {
-                  const Icon = captainAvatarIcons[preset];
-                  return (
-                    <Toggle
-                      key={preset}
-                      value={preset}
-                      aria-label={presetLabels[preset]}
-                      title={presetLabels[preset]}
-                    >
-                      <Icon />
-                    </Toggle>
-                  );
-                })}
+                {captainAvatarShapes.map((shape) => (
+                  <Toggle
+                    key={shape}
+                    value={shape}
+                    aria-label={shapeLabels[shape]}
+                    title={shapeLabels[shape]}
+                  >
+                    <CaptainAvatar avatar={{ preset: shape, color: avatar.color }} size="picker" />
+                  </Toggle>
+                ))}
               </ToggleGroup>
               <ToggleGroup
                 aria-label={gt("Avatar color")}
@@ -259,7 +261,7 @@ export function CaptainEditorDialog({
                 disabled={saving}
                 onValueChange={(value) => {
                   const color = CaptainAvatarColor.literals.find((color) => color === value[0]);
-                  if (color) setAvatar({ ...avatar, color });
+                  if (color) setAvatar((current) => ({ ...current, color }));
                 }}
               >
                 {CaptainAvatarColor.literals.map((color) => (
