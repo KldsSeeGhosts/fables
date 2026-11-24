@@ -515,6 +515,7 @@ const COMMAND_LABELS: Partial<Record<string, string>> = {
   "layout.moveWorkspaceDown": msg("Move workspace down"),
   "layout.moveWorkspaceUp": msg("Move workspace up"),
   "layout.overview": msg("Overview", { $context: "shortcut, shows every workspace at once" }),
+  "captains.open": msg("Open Captains"),
   "usage.open": msg("Open usage"),
   "usage.cost": msg("Show usage by cost"),
   "usage.tokens": msg("Show usage by tokens"),

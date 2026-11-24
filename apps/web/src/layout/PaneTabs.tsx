@@ -19,6 +19,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   GitForkIcon,
+  CompassIcon,
   WorkflowIcon,
   PanelRightIcon,
   PlusIcon,
@@ -110,7 +111,7 @@ import {
 } from "../motion/gesture";
 import { useClientSettings } from "../hooks/useSettings";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { surfaceTabTitle, terminalTabTitle } from "./surfaceTabLabels";
+import { layoutPageTabTitle, surfaceTabTitle, terminalTabTitle } from "./surfaceTabLabels";
 
 const EMPTY_TABS: readonly LayoutTab[] = [];
 
@@ -1734,16 +1735,7 @@ export function useLayoutTabLabel(tab: LayoutTab): {
   })();
   const project = useProject(projectRef);
   if (isLayoutPageContent(tab.content)) {
-    const title =
-      tab.content.kind === "settings"
-        ? gt("Settings")
-        : tab.content.kind === "usage"
-          ? gt("Usage")
-          : tab.content.kind === "issues"
-            ? gt("Issues", { $context: "sidebar link to the list of issues" })
-            : tab.content.kind === "workflows"
-              ? gt("Workflows")
-              : gt("Pull requests");
+    const title = layoutPageTabTitle(tab.content.kind, messages);
     const Icon =
       tab.content.kind === "settings"
         ? SettingsIcon
@@ -1753,7 +1745,9 @@ export function useLayoutTabLabel(tab: LayoutTab): {
             ? IssueGlyph.issue
             : tab.content.kind === "workflows"
               ? WorkflowIcon
-              : PullRequestGlyph.pullRequest;
+              : tab.content.kind === "captains"
+                ? CompassIcon
+                : PullRequestGlyph.pullRequest;
     return {
       icon: <Icon aria-hidden className="size-3.5 shrink-0" />,
       title,

@@ -6,6 +6,7 @@ import {
   captainForThread,
   captainRecentlyFinishedTasks,
 } from "@t3tools/client-runtime/state/captains";
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import {
   isOrchestrationV2WorkActive,
   type OrchestrationV2RemoteTaskChild,
@@ -51,7 +52,7 @@ import { captainCommandError, useCaptains } from "./useCaptain";
 
 const RECENTLY_FINISHED_LIMIT = 5;
 
-function CaptainTaskRow({
+export function CaptainTaskRow({
   tone,
   status,
   title,
@@ -70,7 +71,11 @@ function CaptainTaskRow({
 }) {
   return (
     <li>
-      <ContentButton variant="inset-row" disabled={disabled} onClick={onOpen}>
+      <ContentButton
+        variant={detail ? "inset-row-multiline" : "inset-row"}
+        disabled={disabled}
+        onClick={onOpen}
+      >
         <StatusDot tone={tone} />
         <span className="sr-only">{status}</span>
         <span className="min-w-0 flex-1">
@@ -96,6 +101,7 @@ function RemoteCaptainChild({
   title,
   tone,
   status,
+  badge,
   detail,
 }: {
   parent: ScopedThreadRef;
@@ -103,6 +109,7 @@ function RemoteCaptainChild({
   title: string;
   tone: StatusDotTone;
   status: string;
+  badge?: string | undefined;
   detail?: ReactNode;
 }) {
   const opener = useLinkedThreadOpener(parent, child, title);
@@ -111,7 +118,7 @@ function RemoteCaptainChild({
       tone={tone}
       status={status}
       title={title}
-      badge={child.label}
+      badge={badge ?? child.label}
       detail={detail}
       disabled={opener === null}
       onOpen={() => opener?.open("primary")}
@@ -122,10 +129,12 @@ function RemoteCaptainChild({
 function FinishedCaptainTask({
   parent,
   task,
+  badge,
   onOpen,
 }: {
   parent: ScopedThreadRef;
   task: OrchestrationV2Subagent;
+  badge?: string | undefined;
   onOpen: (threadId: ThreadId) => void;
 }) {
   const gt = useGT();
@@ -145,6 +154,7 @@ function FinishedCaptainTask({
         title={title}
         tone={tone}
         status={status}
+        badge={badge}
         detail={detail}
       />
     );
@@ -155,6 +165,7 @@ function FinishedCaptainTask({
       tone={tone}
       status={status}
       title={title}
+      badge={badge}
       detail={detail}
       disabled={childThreadId === null}
       onOpen={() => {
@@ -164,40 +175,143 @@ function FinishedCaptainTask({
   );
 }
 
-function CaptainBrief({
-  captain,
-  environmentId,
+const delegatedTasks = (subagents: ReadonlyArray<OrchestrationV2Subagent> | undefined) =>
+  (subagents ?? []).filter((task) => task.origin === "app_owned");
+
+/** Rows for a Captain's local delegated threads that are still running or waiting on the user. */
+export function CaptainLocalTaskRows({
+  threads,
+  badge,
   onOpen,
-  onDelete,
 }: {
-  captain: Captain;
-  environmentId: EnvironmentId;
+  threads: ReadonlyArray<EnvironmentThreadShell>;
+  badge: (thread: EnvironmentThreadShell) => string | undefined;
   onOpen: (threadId: ThreadId) => void;
-  onDelete: () => void;
 }) {
   const gt = useGT();
-  const fieldId = useId();
-  const environment = useEnvironment(environmentId);
-  const projects = useProjects().filter((project) => project.environmentId === environmentId);
-  const parent = scopeThreadRef(environmentId, captain.primaryThreadId);
+  const needsYou = gt("Needs input", { $context: "delegated task status" });
+  const working = gt("Working", { $context: "delegated task status" });
+  return threads.map((child) => {
+    const blocked =
+      child.hasPendingApprovals ||
+      child.hasPendingUserInput ||
+      child.pendingSubagentRequest != null;
+    return (
+      <CaptainTaskRow
+        key={child.id}
+        tone={blocked ? "warning" : "info"}
+        status={blocked ? needsYou : working}
+        title={child.title}
+        badge={badge(child)}
+        detail={blocked ? needsYou : undefined}
+        onOpen={() => onOpen(child.id)}
+      />
+    );
+  });
+}
+
+/** Rows for a Captain's delegated tasks running on linked environments. */
+export function CaptainRemoteTaskRows({
+  parent,
+  badge,
+}: {
+  parent: ScopedThreadRef;
+  badge?: string | undefined;
+}) {
+  const gt = useGT();
+  const working = gt("Working", { $context: "delegated task status" });
+  const delegated = delegatedTasks(useQuietThreadProjection(parent)?.projection.subagents);
+  return delegated.flatMap(({ remoteChild, id, status, title }) =>
+    remoteChild && isOrchestrationV2WorkActive(status)
+      ? [
+          <RemoteCaptainChild
+            key={id}
+            parent={parent}
+            child={remoteChild}
+            title={title ?? remoteChild.title ?? gt("Subagent")}
+            tone="info"
+            status={working}
+            badge={badge}
+          />,
+        ]
+      : [],
+  );
+}
+
+/** Rows for a Captain's most recently finished delegated tasks. */
+export function CaptainFinishedTaskRows({
+  parent,
+  badge,
+  limit = RECENTLY_FINISHED_LIMIT,
+  onOpen,
+}: {
+  parent: ScopedThreadRef;
+  badge?: string | undefined;
+  limit?: number;
+  onOpen: (threadId: ThreadId) => void;
+}) {
+  const delegated = delegatedTasks(useQuietThreadProjection(parent)?.projection.subagents);
+  return captainRecentlyFinishedTasks(delegated, limit).map((task) => (
+    <FinishedCaptainTask key={task.id} parent={parent} task={task} badge={badge} onOpen={onOpen} />
+  ));
+}
+
+/**
+ * A list that shows `empty` when none of its rows render. Row components return nothing when they
+ * have no rows, so the list's own emptiness decides.
+ */
+export function CaptainTaskList({ empty, children }: { empty: ReactNode; children: ReactNode }) {
+  return (
+    <>
+      <ul className="peer">{children}</ul>
+      <p className="hidden text-meta text-muted-foreground peer-empty:block">{empty}</p>
+    </>
+  );
+}
+
+/** Active delegated threads of one Captain, local and remote. */
+export function CaptainActiveTasks({
+  parent,
+  onOpen,
+}: {
+  parent: ScopedThreadRef;
+  onOpen: (threadId: ThreadId) => void;
+}) {
+  const projects = useProjects();
+  const projectTitles = new Map(
+    projects
+      .filter((project) => project.environmentId === parent.environmentId)
+      .map((project) => [project.id, project.title]),
+  );
   const children = useChildThreadInputs(parent).filter(
     (thread) =>
       thread.archivedAt === null &&
       thread.lineage.relationshipToParent === "subagent" &&
       captainChildIsActive(thread),
   );
-  const delegated = (useQuietThreadProjection(parent)?.projection.subagents ?? []).filter(
-    (task) => task.origin === "app_owned",
+  return (
+    <CaptainTaskList empty={<T>No active delegated threads.</T>}>
+      <CaptainLocalTaskRows
+        threads={children}
+        badge={(thread) => projectTitles.get(thread.projectId)}
+        onOpen={onOpen}
+      />
+      <CaptainRemoteTaskRows parent={parent} />
+    </CaptainTaskList>
   );
-  const remoteChildren = delegated.flatMap(({ remoteChild, id, status, title }) =>
-    remoteChild && isOrchestrationV2WorkActive(status)
-      ? [{ id, child: remoteChild, title: title ?? remoteChild.title }]
-      : [],
-  );
-  const finished = captainRecentlyFinishedTasks(delegated, RECENTLY_FINISHED_LIMIT);
-  const projectTitles = new Map(projects.map((project) => [project.id, project.title]));
-  const needsYou = gt("Needs input", { $context: "delegated task status" });
-  const working = gt("Working", { $context: "delegated task status" });
+}
+
+/** Edit, archive, restore and delete for one Captain; render `CaptainProfileDialogs` with it. */
+export function useCaptainProfile({
+  captain,
+  environmentId,
+  onDelete,
+}: {
+  captain: Captain;
+  environmentId: EnvironmentId;
+  onDelete: () => void;
+}) {
+  const gt = useGT();
   const canUpdate = useAtomValue(serverEnvironment.updateCaptain.permissionAtom(environmentId));
   const canArchive = useAtomValue(serverEnvironment.archiveCaptain.permissionAtom(environmentId));
   const canRestore = useAtomValue(serverEnvironment.unarchiveCaptain.permissionAtom(environmentId));
@@ -253,155 +367,59 @@ function CaptainBrief({
     else onDelete();
   };
 
+  return {
+    captain,
+    environmentId,
+    current,
+    archived,
+    pending,
+    error,
+    editing,
+    confirmDelete,
+    canUpdate,
+    canArchive: archived ? canRestore : canArchive,
+    canDelete,
+    save,
+    changeArchive,
+    remove,
+    edit: () => setEditing(true),
+    stopEditing: () => setEditing(false),
+    apply: (profile: Captain) => {
+      setApplied(profile);
+      setEditing(false);
+    },
+    requestDelete: () => {
+      setError(null);
+      setConfirmDelete(true);
+    },
+    cancelDelete: () => {
+      setError(null);
+      setConfirmDelete(false);
+    },
+  };
+}
+
+type CaptainProfile = ReturnType<typeof useCaptainProfile>;
+
+/** The edit and delete dialogs that `useCaptainProfile` opens. */
+export function CaptainProfileDialogs({ profile }: { profile: CaptainProfile }) {
+  const environment = useEnvironment(profile.environmentId);
+  const { captain, environmentId, error, pending } = profile;
   return (
-    <div className="space-y-5">
-      <section className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="truncate text-label">{captain.name}</h3>
-          {captain.role ? (
-            <p className="break-words text-body text-muted-foreground">{captain.role}</p>
-          ) : null}
-        </div>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          disabled={!canUpdate}
-          onClick={() => setEditing(true)}
-          aria-label={gt("Edit Captain")}
-          title={gt("Edit Captain")}
-        >
-          <PencilIcon />
-        </Button>
-      </section>
-      <CaptainScope
-        projects={projects}
-        selected={current.scopedProjectIds}
-        disabled={!canUpdate || pending}
-        onChange={(scopedProjectIds) => void save({ scopedProjectIds })}
-      />
-      <section className="space-y-2">
-        <h3 id={`${fieldId}-report-policy`} className="text-label">
-          <T>When a delegated task finishes</T>
-        </h3>
-        <CaptainReportPolicyPicker
-          labelledBy={`${fieldId}-report-policy`}
-          value={current.reportPolicy}
-          disabled={!canUpdate || pending}
-          onChange={(reportPolicy) => void save({ reportPolicy })}
-        />
-      </section>
-      <section className="space-y-1">
-        <h3 className="text-label">
-          <T>Active delegated threads</T>
-        </h3>
-        {children.length === 0 && remoteChildren.length === 0 ? (
-          <p className="text-meta text-muted-foreground">
-            <T>No active delegated threads.</T>
-          </p>
-        ) : (
-          <ul>
-            {children.map((child) => {
-              const blocked =
-                child.hasPendingApprovals ||
-                child.hasPendingUserInput ||
-                child.pendingSubagentRequest != null;
-              return (
-                <CaptainTaskRow
-                  key={child.id}
-                  tone={blocked ? "warning" : "info"}
-                  status={blocked ? needsYou : working}
-                  title={child.title}
-                  badge={projectTitles.get(child.projectId)}
-                  detail={blocked ? needsYou : undefined}
-                  onOpen={() => onOpen(child.id)}
-                />
-              );
-            })}
-            {remoteChildren.map(({ id, child, title }) => (
-              <RemoteCaptainChild
-                key={id}
-                parent={parent}
-                child={child}
-                title={title ?? gt("Subagent")}
-                tone="info"
-                status={working}
-              />
-            ))}
-          </ul>
-        )}
-      </section>
-      {finished.length > 0 ? (
-        <section className="space-y-1">
-          <h3 className="text-label">
-            <T>Recently finished</T>
-          </h3>
-          <ul>
-            {finished.map((task) => (
-              <FinishedCaptainTask key={task.id} parent={parent} task={task} onOpen={onOpen} />
-            ))}
-          </ul>
-        </section>
-      ) : null}
-      {captain.earlierThreadIds.length > 0 ? (
-        <section className="space-y-1">
-          <h3 className="text-label">
-            <T>Earlier conversations</T>
-          </h3>
-          <CaptainEarlierConversations
-            captain={captain}
-            environmentId={environmentId}
-            onOpen={onOpen}
-          />
-        </section>
-      ) : null}
-      {error !== null && !confirmDelete ? (
-        <p role="alert" className="text-body text-destructive-foreground">
-          {error}
-        </p>
-      ) : null}
-      <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-        <CaptainResetButton captain={captain} environmentId={environmentId} onReset={onOpen} />
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={pending || !(archived ? canRestore : canArchive)}
-          onClick={() => void changeArchive()}
-        >
-          {archived ? <T>Restore Captain</T> : <T>Archive Captain</T>}
-        </Button>
-        {archived ? (
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={pending || !canDelete}
-            onClick={() => {
-              setError(null);
-              setConfirmDelete(true);
-            }}
-          >
-            <T>Delete Captain</T>
-          </Button>
-        ) : null}
-      </div>
-      {editing ? (
+    <>
+      {profile.editing ? (
         <CaptainEditorDialog
           captain={captain}
           destination={{ id: environmentId, label: environment?.label ?? environmentId }}
-          onClose={() => setEditing(false)}
-          onSave={(_environmentId, profile) => {
-            setApplied(profile);
-            setEditing(false);
-          }}
+          onClose={profile.stopEditing}
+          onSave={(_environmentId, saved) => profile.apply(saved)}
         />
       ) : null}
-      {confirmDelete ? (
+      {profile.confirmDelete ? (
         <AlertDialog
           open
           onOpenChange={(open) => {
-            if (!open && !pending) {
-              setError(null);
-              setConfirmDelete(false);
-            }
+            if (!open && !pending) profile.cancelDelete();
           }}
         >
           <AlertDialogPopup>
@@ -422,20 +440,13 @@ function CaptainBrief({
               </p>
             ) : null}
             <AlertDialogFooter>
-              <Button
-                variant="secondary"
-                disabled={pending}
-                onClick={() => {
-                  setError(null);
-                  setConfirmDelete(false);
-                }}
-              >
+              <Button variant="secondary" disabled={pending} onClick={profile.cancelDelete}>
                 <T>Cancel</T>
               </Button>
               <Button
                 variant="destructive"
-                disabled={pending || !canDelete}
-                onClick={() => void remove()}
+                disabled={pending || !profile.canDelete}
+                onClick={() => void profile.remove()}
               >
                 <T>Delete Captain</T>
               </Button>
@@ -443,6 +454,118 @@ function CaptainBrief({
           </AlertDialogPopup>
         </AlertDialog>
       ) : null}
+    </>
+  );
+}
+
+function CaptainBrief({
+  captain,
+  environmentId,
+  onOpen,
+  onDelete,
+}: {
+  captain: Captain;
+  environmentId: EnvironmentId;
+  onOpen: (threadId: ThreadId) => void;
+  onDelete: () => void;
+}) {
+  const gt = useGT();
+  const fieldId = useId();
+  const projects = useProjects().filter((project) => project.environmentId === environmentId);
+  const parent = scopeThreadRef(environmentId, captain.primaryThreadId);
+  const profile = useCaptainProfile({ captain, environmentId, onDelete });
+  const { current, archived, pending, error, canUpdate } = profile;
+
+  return (
+    <div className="space-y-5">
+      <section className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="truncate text-label">{captain.name}</h3>
+          {captain.role ? (
+            <p className="break-words text-body text-muted-foreground">{captain.role}</p>
+          ) : null}
+        </div>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          disabled={!canUpdate}
+          onClick={profile.edit}
+          aria-label={gt("Edit Captain")}
+          title={gt("Edit Captain")}
+        >
+          <PencilIcon />
+        </Button>
+      </section>
+      <CaptainScope
+        projects={projects}
+        selected={current.scopedProjectIds}
+        disabled={!canUpdate || pending}
+        onChange={(scopedProjectIds) => void profile.save({ scopedProjectIds })}
+      />
+      <section className="space-y-2">
+        <h3 id={`${fieldId}-report-policy`} className="text-label">
+          <T>When a delegated task finishes</T>
+        </h3>
+        <CaptainReportPolicyPicker
+          labelledBy={`${fieldId}-report-policy`}
+          value={current.reportPolicy}
+          disabled={!canUpdate || pending}
+          onChange={(reportPolicy) => void profile.save({ reportPolicy })}
+        />
+      </section>
+      <section className="space-y-1">
+        <h3 className="text-label">
+          <T>Active delegated threads</T>
+        </h3>
+        <CaptainActiveTasks parent={parent} onOpen={onOpen} />
+      </section>
+      <section className="space-y-1 has-[ul:empty]:hidden">
+        <h3 className="text-label">
+          <T>Recently finished</T>
+        </h3>
+        <ul className="space-y-1">
+          <CaptainFinishedTaskRows parent={parent} onOpen={onOpen} />
+        </ul>
+      </section>
+      {captain.earlierThreadIds.length > 0 ? (
+        <section className="space-y-1">
+          <h3 className="text-label">
+            <T>Earlier conversations</T>
+          </h3>
+          <CaptainEarlierConversations
+            captain={captain}
+            environmentId={environmentId}
+            onOpen={onOpen}
+          />
+        </section>
+      ) : null}
+      {error !== null && !profile.confirmDelete ? (
+        <p role="alert" className="text-body text-destructive-foreground">
+          {error}
+        </p>
+      ) : null}
+      <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+        <CaptainResetButton captain={captain} environmentId={environmentId} onReset={onOpen} />
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={pending || !profile.canArchive}
+          onClick={() => void profile.changeArchive()}
+        >
+          {archived ? <T>Restore Captain</T> : <T>Archive Captain</T>}
+        </Button>
+        {profile.canDelete ? (
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={pending}
+            onClick={profile.requestDelete}
+          >
+            <T>Delete Captain</T>
+          </Button>
+        ) : null}
+      </div>
+      <CaptainProfileDialogs profile={profile} />
     </div>
   );
 }

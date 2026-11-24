@@ -127,6 +127,19 @@ it("shows a tab in an unfocused pane that runs off screen with one click on it",
   await vi.waitFor(() => expect(focusedTabId()).toBe(tabs.second.id));
 });
 
+it("replaces a split launcher with the Captains workspace", async () => {
+  using tabs = setup(0.5);
+  useLayoutStore.getState().focusTab(tabs.second.id);
+  await using screen = await renderHost({ viewport: 1280 });
+  const pane = screen.container.querySelector(`[data-layout-tab-id="${tabs.second.id}"]`)!;
+  const entry = page.elementLocator(pane).getByRole("button", { name: "Captains", exact: true });
+  await expect.element(entry).toBeVisible();
+  (entry.element() as HTMLButtonElement).click();
+  await expect.element(screen.getByRole("heading", { name: "Captains" })).toBeVisible();
+  expect(focusedTabId()).toBe(tabs.second.id);
+  expect(screen.router?.state.location.pathname).toBe("/captains");
+});
+
 async function renderStrip({
   edges = [0, 0],
   viewport = 900,

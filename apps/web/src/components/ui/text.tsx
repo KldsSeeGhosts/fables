@@ -8,6 +8,10 @@ const textVariants = cva("", {
   defaultVariants: { variant: "body", tone: "default" },
   variants: {
     variant: {
+      /** 36/500 in the display face: hero headings, such as a page's greeting. */
+      "display-lg": "font-display text-display-lg",
+      /** 28/500 in the display face: page headings that introduce a workspace. */
+      display: "font-display text-display",
       /** 22/600: page and section titles. */
       title: "text-title",
       /** 14/400: typed text, such as the prompt, a search field or a chat bubble. */
@@ -46,7 +50,7 @@ type TextProps = Omit<useRender.ComponentProps<"span">, "className" | "style"> &
   VariantProps<typeof textVariants>;
 
 /**
- * Text in one of the seven type roles. Pick the role and a tone; the element
+ * Text in one of the nine type roles. Pick the role and a tone; the element
  * defaults to a span, so pass `render={<h3 />}` or `render={<p />}` for
  * headings and paragraphs.
  */

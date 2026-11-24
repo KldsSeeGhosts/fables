@@ -1,6 +1,7 @@
 /* Clerk injects its component styles into the clerk layer (clerkAppearance.cssLayerName). */
 @layer theme, base, clerk, components, utilities;
 @import "tailwindcss";
+@import "./themes/ksg-salon.css";
 
 /* Light, black chrome (html.black-chrome) renders [data-chrome-scope] surfaces
    dark inside the light appearance. The chrome selectors sit in :where() so
@@ -164,6 +165,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
      the prompt role, which fields use, stays at 16px or more so iOS does not
      zoom into a focused field. In rem, so the interface font-size preference
      scales them. */
+  --type-display-lg: 2.25rem;
+  --type-display: 1.75rem;
   --type-title: 1.5rem;
   --type-prompt: max(1rem, 16px);
   --type-label: 0.9375rem;
@@ -179,6 +182,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
 
   @variant sm {
     --workspace-gutter: 1.25rem;
+    --type-display-lg: 2rem;
+    --type-display: 1.625rem;
     --type-title: 1.375rem;
     --type-prompt: 0.875rem;
     --type-label: 0.875rem;
@@ -757,6 +762,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     -apple-system, BlinkMacSystemFont, "Inter Variable", "Segoe UI", system-ui, sans-serif;
   --font-mono:
     ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  /* Hero and page headings; themes may swap in a display face. */
+  --font-display: var(--font-sans);
 }
 
 @theme inline {
@@ -777,6 +784,12 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
      --type-* variables on :root, which step up on phones. Text color is
      separate: pick a text tier (strong, default, muted, dim). Render them
      through <Text>. */
+  --text-display-lg: var(--type-display-lg);
+  --text-display-lg--line-height: 1.15;
+  --text-display-lg--font-weight: 500;
+  --text-display: var(--type-display);
+  --text-display--line-height: 1.2;
+  --text-display--font-weight: 500;
   --text-title: var(--type-title);
   --text-title--line-height: 1.27;
   --text-title--font-weight: 600;
@@ -832,6 +845,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --color-warning-foreground: var(--warning-foreground);
   --color-warning: var(--warning);
   --color-warning-surface: var(--warning-surface);
+  /* The hairline around a request waiting on the user, such as a Captain's approval card. */
+  --color-approval-boundary: color-mix(in srgb, var(--warning) 40%, var(--border));
   --color-error-foreground: var(--error-foreground);
   --color-tool-error-icon: var(--tool-error-icon);
   --color-error: var(--error);
@@ -940,7 +955,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --radius-composer: calc(var(--radius-2xl) - 1px);
   --radius-composer-pill: calc(var(--radius-composer) - 8px);
   --radius-composer-pill-button: calc(var(--radius-composer-pill) - 1px);
-  --radius-thread-details: 20px;
+  --radius-thread-details: var(--thread-details-radius, 20px);
   --radius-project-icon: 9px;
   @keyframes skeleton {
     /* The single loading-bar breath used by every skeleton: one opacity pulse

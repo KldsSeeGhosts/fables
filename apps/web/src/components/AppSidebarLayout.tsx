@@ -56,6 +56,7 @@ import { HistorySwipeNavigation } from "./HistorySwipeNavigation";
 import ThreadSidebar from "./Sidebar";
 import { isAppModalPage } from "./sidebar/mainAppLocation";
 import { resolveThreadRouteTarget } from "../threadRoutes";
+import { layoutRoutePage } from "../layout/pageNavigation";
 import { selectFocusedTab } from "../layout/layoutModel";
 import { useLayoutStore } from "../layout/layoutStore";
 import { isLayoutDragActive } from "../layout/layoutDrag";
@@ -227,29 +228,19 @@ function registerWorkspaceFocusCommands(router: AnyRouter): () => void {
   };
 }
 
-// Escape leaves the pull requests or issues page when no scope (a selection, a dialog,
+// Escape leaves a layout page when no scope (a selection, a dialog,
 // a drag) claimed it, so it observes after every other scope.
-function registerPullRequestsEscapeCommand(router: AnyRouter): () => void {
+function registerLayoutPageEscapeCommand(router: AnyRouter): () => void {
   return registerCommands(
     {},
     {
       observe: (event, consumed) => {
         if (consumed || event.repeat || event.isComposing || event.key !== "Escape") return;
-        const page = router.state.location.pathname;
-        if (
-          (page !== "/pull-requests" && page !== "/issues" && page !== "/workflows") ||
-          isCommandPaletteOpen() ||
-          isModalDialogOpen() ||
-          isLayoutDragActive()
-        )
+        const page = layoutRoutePage(router.state.location);
+        if (page === null || isCommandPaletteOpen() || isModalDialogOpen() || isLayoutDragActive())
           return;
         const focusedKind = selectFocusedTab(useLayoutStore.getState().layout)?.content.kind;
-        if (
-          focusedKind !== "pull-requests" &&
-          focusedKind !== "issues" &&
-          focusedKind !== "workflows"
-        )
-          return;
+        if (focusedKind !== page.kind) return;
         event.preventDefault();
         const activeElement = document.activeElement;
         if (activeElement instanceof HTMLElement) activeElement.blur();
@@ -344,7 +335,7 @@ function registerAppShellCommands(router: AnyRouter, shellElement: Element): () 
     registerThreadUndoCommands(router, readSidebarVisible),
     registerNavigationHistoryCommands(router),
     registerWorkspaceFocusCommands(router),
-    registerPullRequestsEscapeCommand(router),
+    registerLayoutPageEscapeCommand(router),
     registerMenuAction("open-settings", () => {
       if (!/^\/settings(\/|$)/.test(router.state.location.pathname))
         void router.navigate({ to: "/settings", search: { pane: undefined } });

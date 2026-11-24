@@ -18,6 +18,7 @@ import {
   selectLayoutThreadKeys,
 } from "../layout/layoutModel";
 import { followLayoutCompanions } from "../layout/openRules";
+import { useOpenLayoutPage } from "../layout/pageNavigation";
 import { isThreadlessSurfacesRef } from "../threadlessSurfaces";
 import { useLayoutStore } from "../layout/layoutStore";
 import {
@@ -67,7 +68,11 @@ import {
   type ShownOrder,
 } from "@t3tools/client-runtime/state/thread-search";
 import { foldSearchQuery, rankMessageMatches } from "@t3tools/shared/paletteSearch";
-import { CaptainsShelf, useCaptainConversationKeys } from "./captains/CaptainsShelf";
+import {
+  CaptainsHubRow,
+  CaptainsShelf,
+  useCaptainConversationKeys,
+} from "./captains/CaptainsShelf";
 import { findForMessageMatch, openThreadFindOnQuery } from "./chat/threadFindStore";
 import {
   threadRuntimeCanArchive,
@@ -1206,6 +1211,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       : null;
   });
   const currentThreadRef = focusedSurfaceThreadRef ?? routeThreadRef;
+  const captainsPageFocused = useLayoutStore(
+    (state) => selectFocusedTab(state.layout)?.content.kind === "captains",
+  );
+  const openLayoutPage = useOpenLayoutPage();
 
   // A selection made under one scope can hold threads the next scope hides.
   // The viewport outlives the scope and does not anchor, so a new list starts at the top.
@@ -3591,6 +3600,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               searchResultCount={threadSearchResults.length}
               activeSearchResultIndex={activeSearchResultIndex}
               onClearSearch={clearThreadSearch}
+            />
+            <CaptainsHubRow
+              active={captainsPageFocused}
+              onOpen={() => {
+                if (isMobile) setOpenMobile(false);
+                void openLayoutPage("captains");
+              }}
             />
           </SidebarGroup>
         }

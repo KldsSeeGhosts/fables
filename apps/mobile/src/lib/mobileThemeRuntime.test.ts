@@ -18,8 +18,8 @@ describe("mobileThemeRuntime", () => {
       (operation) => operation.kind === "update-text-variables",
     );
 
-    expect(variableOperations).toHaveLength(18);
-    expect(variableOperations.at(-1)?.themeName).toBe("cursor-dark");
+    expect(variableOperations).toHaveLength(20);
+    expect(variableOperations.at(-1)?.themeName).toBe("ksg-salon-dark");
     expect(operations.at(-1)).toEqual({
       kind: "set-appearance-mode",
       appearance: "light",
@@ -42,11 +42,11 @@ describe("mobileThemeRuntime", () => {
       baseFontSize: 18,
     });
 
-    expect(operations).toHaveLength(18);
+    expect(operations).toHaveLength(20);
     expect(operations.every((operation) => operation.kind === "update-text-variables")).toBe(true);
     expect(operations.at(-1)).toMatchObject({
       kind: "update-text-variables",
-      themeName: "cursor-dark",
+      themeName: "ksg-salon-dark",
     });
   });
 });

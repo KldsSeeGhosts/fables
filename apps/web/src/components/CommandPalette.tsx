@@ -65,6 +65,7 @@ import {
   ChartNoAxesColumnIcon,
   CheckIcon,
   ChevronRightIcon,
+  CompassIcon,
   CornerLeftUpIcon,
   FileSearchIcon,
   FolderGit2Icon,
@@ -1926,6 +1927,18 @@ function OpenCommandPaletteDialog(props: {
       },
     });
   }
+
+  actionItems.push({
+    kind: "action",
+    value: "action:captains",
+    searchTerms: ["captains", "captain", "brief"],
+    title: gt("Open Captains"),
+    icon: <CompassIcon className={ITEM_ICON_CLASS} />,
+    shortcutCommand: "captains.open",
+    run: async () => {
+      await openLayoutPage("captains");
+    },
+  });
 
   actionItems.push({
     kind: "action",

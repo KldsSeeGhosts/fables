@@ -461,6 +461,18 @@ describe("blank workspaces", () => {
     expect(moved.workspaces.map(isBlankLayoutWorkspace)).toEqual([false, false, true]);
   });
 
+  it("restores a split Captains page with its deep link", () => {
+    const content = {
+      kind: "captains",
+      href: "/captains?env=local&captain=maria&view=tasks",
+    } as const;
+    const layout = openLayoutTab(layoutOf([[["A!"]]]), content, { placement: "new-column" });
+    const saved: unknown = JSON.parse(JSON.stringify(layout));
+    const restored = decodePersistedLayoutState(saved);
+    expect(columnsOf(restored)).toEqual([[chatOf("A")], [content]]);
+    expect(selectFocusedTab(restored)?.content).toEqual(content);
+  });
+
   it("loads a layout saved with tabless empty workspaces as blank tabs", () => {
     const saved = JSON.parse(
       JSON.stringify({ ...layoutOf([[["A"]]], [], []), focusedWorkspaceId: "w1" }),

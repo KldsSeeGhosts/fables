@@ -464,7 +464,7 @@ function UsageRow({
           )}
           <span className="flex items-center justify-end gap-1.5">
             {fill !== null ? (
-              <span className="relative h-1 min-w-12 flex-1 rounded-full bg-muted-foreground/20">
+              <span className="relative h-1 min-w-12 flex-1 rounded-full bg-(--usage-meter-track,color-mix(in_oklab,var(--contrast-muted-foreground)_20%,transparent))">
                 {fill > 0 ? (
                   <span
                     className={cn(
@@ -473,7 +473,7 @@ function UsageRow({
                         ? "bg-error"
                         : tone === "warning"
                           ? "bg-warning"
-                          : "bg-foreground/80",
+                          : "bg-(--usage-meter-fill,color-mix(in_oklab,var(--contrast-foreground)_80%,transparent))",
                     )}
                     style={{ width: `max(${fill}%, 2px)` }}
                   />

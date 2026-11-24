@@ -23,6 +23,8 @@ describe("generate mobile Uniwind themes", () => {
       "claude-dark",
       "cursor-light",
       "cursor-dark",
+      "ksg-salon-light",
+      "ksg-salon-dark",
     ]);
 
     const stylesheet = renderUniwindThemesCSS();

@@ -23,7 +23,7 @@ export function ContextWindowSegments({
   const minimum = `min(${minSegmentWidth}px, calc(${available} / ${segments.length}))`;
   return (
     <span
-      className="block h-1 min-w-0 overflow-hidden rounded-full bg-black/10 dark:bg-white/[0.063]"
+      className="block h-1 min-w-0 overflow-hidden rounded-full bg-(--usage-meter-track,rgb(0_0_0/10%)) dark:bg-(--usage-meter-track,rgb(255_255_255/6.3%))"
       role="progressbar"
       aria-valuemin={0}
       aria-valuemax={100}

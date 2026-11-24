@@ -355,6 +355,7 @@ export function createWorkspaceFocusController(doc: Document) {
               element.dataset.workspaceArea === "pull-requests" ||
               element.dataset.workspaceArea === "issues" ||
               element.dataset.workspaceArea === "workflows" ||
+              element.dataset.workspaceArea === "captains" ||
               element.matches("main"),
           ) ??
           candidates.find((element) => element.dataset.workspaceArea === "conversation") ??
@@ -628,6 +629,8 @@ export function startWorkspaceFocus(router: AnyRouter): () => void {
       requestWorkspaceFocus({ area: "issues" });
     if (toLocation.pathname === "/workflows" && fromLocation?.pathname !== "/workflows")
       requestWorkspaceFocus({ area: "workflows" });
+    if (toLocation.pathname === "/captains" && fromLocation?.pathname !== "/captains")
+      requestWorkspaceFocus({ area: "captains" });
   });
   return () => {
     stopPanels();
