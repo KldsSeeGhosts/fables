@@ -46,10 +46,14 @@ export const captainUnavailable = (cause: unknown) =>
 
 const missing = () => new CaptainError({ code: "not_found", message: "Captain not found." });
 
+/** `profile` changes the Captain list; `content` only that Captain's documents or memories. */
+type CaptainChange = { readonly captainId: CaptainId; readonly kind: "profile" | "content" };
+
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
-  const changes = yield* PubSub.sliding<void>(1);
-  const notify = PubSub.publish(changes, undefined).pipe(Effect.asVoid);
+  const changes = yield* PubSub.unbounded<CaptainChange>();
+  const notify = (captainId: CaptainId, kind: CaptainChange["kind"] = "profile") =>
+    PubSub.publish(changes, { captainId, kind }).pipe(Effect.asVoid);
   const transact = sql.withTransaction;
 
   const profiles = sql`SELECT id, name, role, instructions, avatar,
@@ -128,7 +132,7 @@ const make = Effect.gen(function* () {
 
   const remove = Effect.fn("CaptainStore.remove")(function* (id: CaptainId) {
     yield* sql`DELETE FROM captains WHERE id = ${id}`;
-    yield* notify;
+    yield* notify(id);
   }, Effect.catch(captainUnavailable));
 
   const document = Effect.fn("CaptainStore.document")(function* (
@@ -182,7 +186,7 @@ const make = Effect.gen(function* () {
           return updated;
         }),
       );
-      yield* notify;
+      yield* notify(input.captainId, "content");
       return updated;
     },
     Effect.catchTags({ SqlError: captainUnavailable }),
@@ -220,7 +224,7 @@ const make = Effect.gen(function* () {
           return updated;
         }),
       );
-      yield* notify;
+      yield* notify(input.captainId, "content");
       return updated;
     },
     Effect.catchTags({ SqlError: captainUnavailable, SchemaError: captainUnavailable }),
@@ -244,7 +248,7 @@ const make = Effect.gen(function* () {
           yield* sql`DELETE FROM captain_memories WHERE captain_id = ${input.captainId} AND id = ${input.id}`;
         }),
       );
-      yield* notify;
+      yield* notify(input.captainId, "content");
     },
     Effect.catchTags({ SqlError: captainUnavailable }),
   );
@@ -293,7 +297,14 @@ const make = Effect.gen(function* () {
         const subscription = yield* PubSub.subscribe(changes);
         return Stream.concat(
           Stream.fromEffect(snapshot(input)),
-          Stream.fromSubscription(subscription).pipe(Stream.mapEffect(() => snapshot(input))),
+          Stream.fromSubscription(subscription).pipe(
+            Stream.filter(({ captainId, kind }) =>
+              input.captainId === undefined ? kind === "profile" : captainId === input.captainId,
+            ),
+            // Coalesce a burst of matching changes into one snapshot.
+            Stream.buffer({ capacity: 1, strategy: "sliding" }),
+            Stream.mapEffect(() => snapshot(input)),
+          ),
         );
       }),
     );

@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 
 import { IsoDateTime, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { ModelSelection } from "./modelSelection.ts";
+import { OrchestrationV2CreationSource } from "./orchestrationV2.ts";
 import { ProviderInteractionMode, RuntimeMode } from "./providerPolicy.ts";
 
 export const CaptainId = TrimmedNonEmptyString.check(Schema.isMaxLength(128)).pipe(
@@ -149,6 +150,7 @@ export const CaptainCreateInput = Schema.Struct({
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
+  creationSource: Schema.optional(OrchestrationV2CreationSource),
 });
 export type CaptainCreateInput = typeof CaptainCreateInput.Type;
 

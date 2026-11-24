@@ -1,6 +1,9 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { captainThreadActivity } from "@t3tools/client-runtime/state/captains";
+import {
+  captainConversationKeys,
+  captainThreadActivity,
+} from "@t3tools/client-runtime/state/captains";
 import {
   AuthOrchestrationReadScope,
   type Captain,
@@ -32,6 +35,32 @@ const captainResults = environmentAtomList("captain-shelf:environments", (enviro
 const createPermissions = environmentAtomList("captain-shelf:create", (environmentId) =>
   serverEnvironment.createCaptain.permissionAtom(environmentId),
 );
+
+function useCaptainEnvironments() {
+  const { environments } = useEnvironments();
+  const readable = useEnvironmentsWithScope(environments, AuthOrchestrationReadScope);
+  const supporting = environments.filter(
+    ({ environmentId, serverConfig }) =>
+      readable.has(environmentId) && serverConfig?.environment.capabilities.captains === true,
+  );
+  const key = environmentIdsKey(supporting.map(({ environmentId }) => environmentId));
+  const results = useAtomValue(captainResults(key));
+  return { supporting, key, results };
+}
+
+/** Thread keys of Captain conversations, which the shelf lists instead of their project. */
+export function useCaptainConversationKeys(): ReadonlySet<string> {
+  const { supporting, results } = useCaptainEnvironments();
+  const joined = captainConversationKeys(
+    supporting.map(({ environmentId }, index) => ({
+      environmentId,
+      captains: AsyncResult.getOrElse(results[index]!, () => null)?.captains ?? [],
+    })),
+  );
+  return joined === "" ? NO_CAPTAIN_CONVERSATIONS : new Set(joined.split("\n"));
+}
+
+const NO_CAPTAIN_CONVERSATIONS: ReadonlySet<string> = new Set();
 
 export function CaptainShelfList({
   rows,
@@ -189,14 +218,7 @@ export function CaptainsShelf({
   onOpen: (threadRef: ScopedThreadRef) => void;
   onReveal: (header: HTMLElement) => void;
 }) {
-  const { environments } = useEnvironments();
-  const readable = useEnvironmentsWithScope(environments, AuthOrchestrationReadScope);
-  const supporting = environments.filter(
-    ({ environmentId, serverConfig }) =>
-      readable.has(environmentId) && serverConfig?.environment.capabilities.captains === true,
-  );
-  const key = environmentIdsKey(supporting.map(({ environmentId }) => environmentId));
-  const results = useAtomValue(captainResults(key));
+  const { supporting, key, results } = useCaptainEnvironments();
   const permissions = useAtomValue(createPermissions(key));
   const shells = useThreadShells(supporting.length > 0);
   const [creating, setCreating] = useState(false);

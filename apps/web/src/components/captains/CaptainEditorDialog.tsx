@@ -5,6 +5,7 @@ import {
   DEFAULT_SERVER_SETTINGS,
   type Captain,
   type CaptainAvatar as Avatar,
+  type CaptainReportPolicy,
   type EnvironmentId,
   type ProjectId,
 } from "@t3tools/contracts";
@@ -39,6 +40,7 @@ import {
   normalizeCaptainAvatar,
   randomCaptainAvatar,
 } from "./CaptainAvatar";
+import { CaptainReportPolicyPicker } from "./CaptainReportPolicyPicker";
 import { CaptainScope } from "./CaptainScope";
 import { captainCommandError } from "./useCaptain";
 
@@ -67,6 +69,7 @@ export function CaptainEditorDialog({
   const [avatar, setAvatar] = useState<Avatar>(() =>
     normalizeCaptainAvatar(captain?.avatar ?? randomCaptainAvatar()),
   );
+  const [reportPolicy, setReportPolicy] = useState<CaptainReportPolicy>("react");
   const [scopedProjectIds, setScope] = useState<ReadonlyArray<ProjectId>>(
     captain?.scopedProjectIds ?? [],
   );
@@ -139,12 +142,13 @@ export function CaptainEditorDialog({
         input: {
           ...profile,
           captainId,
-          reportPolicy: "context",
+          reportPolicy,
           modelSelection,
           runtimeMode:
             clampManagedRuntimeMode(config?.managedPolicy, defaults.defaultRuntimeMode) ??
             defaults.defaultRuntimeMode,
           interactionMode: "default",
+          creationSource: "web",
         },
       });
     })();
@@ -344,6 +348,19 @@ export function CaptainEditorDialog({
               disabled={saving}
               onChange={setScope}
             />
+            {captain === undefined ? (
+              <div className="grid gap-2">
+                <span id={`${fieldId}-report-policy`} className="text-label">
+                  <T>When a delegated task finishes</T>
+                </span>
+                <CaptainReportPolicyPicker
+                  labelledBy={`${fieldId}-report-policy`}
+                  value={reportPolicy}
+                  disabled={saving}
+                  onChange={setReportPolicy}
+                />
+              </div>
+            ) : null}
             {error !== null ? (
               <p role="alert" className="text-body text-destructive-foreground">
                 {error}

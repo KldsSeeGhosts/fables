@@ -1,4 +1,10 @@
-import { isCaptainThreadId, type Captain, type CaptainMemory } from "@t3tools/contracts";
+import {
+  isCaptainThreadId,
+  type Captain,
+  type CaptainMemory,
+  type OrchestrationV2AppThreadLineage,
+  type ThreadId,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -45,9 +51,37 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
   const sql = yield* Effect.serviceOption(SqlClient.SqlClient);
   const projects = yield* ProjectService.ProjectService;
 
+  // A delegated child gets the Captain's crew rules only, never its private profile or memories.
+  const readCrewContext = Effect.fn("CaptainService.crewContext")(function* (
+    parentThreadId: ThreadId,
+  ) {
+    if (Option.isNone(store)) return "";
+    const captain = yield* store.value.findByConversation(parentThreadId);
+    if (captain === undefined || captain.archivedAt !== null) return "";
+    const crew = yield* store.value.document(captain, "CREW.md");
+    return crew.content.trim() === ""
+      ? ""
+      : `Crew rules from Captain ${captain.name} (CREW.md):\n${prefix(crew.content, 2_000)}`;
+  });
+
   return Effect.fn("CaptainService.turnContext")(
-    function* (threadId: Captain["primaryThreadId"]) {
-      if (!isCaptainThreadId(threadId) || Option.isNone(store)) return "";
+    function* (thread: {
+      readonly id: ThreadId;
+      readonly lineage: Pick<
+        OrchestrationV2AppThreadLineage,
+        "parentThreadId" | "relationshipToParent"
+      >;
+    }) {
+      const threadId = thread.id;
+      if (Option.isNone(store)) return "";
+      if (!isCaptainThreadId(threadId)) {
+        const { parentThreadId, relationshipToParent } = thread.lineage;
+        return relationshipToParent === "subagent" &&
+          parentThreadId !== null &&
+          isCaptainThreadId(parentThreadId)
+          ? yield* readCrewContext(parentThreadId)
+          : "";
+      }
       const captain = yield* store.value.byThread(threadId);
       if (captain === undefined) return "";
       const { document, listMemories } = store.value;
@@ -64,8 +98,16 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
           ),
         ),
       );
+      // Earlier conversations can't be woken, so their late reports surface here under react too.
+      const reportThreadIds =
+        captain.reportPolicy === "context"
+          ? [threadId, ...captain.earlierThreadIds]
+          : captain.reportPolicy === "react"
+            ? captain.earlierThreadIds
+            : [];
+      const onlySinceLastTurn = captain.reportPolicy === "react";
       const reports =
-        captain.reportPolicy === "context" && Option.isSome(sql)
+        reportThreadIds.length > 0 && Option.isSome(sql)
           ? yield* sql.value<{
               readonly id: string;
               readonly title: string | null;
@@ -74,9 +116,16 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
           SELECT subagent_id AS id, json_extract(payload_json, '$.title') AS title,
             substr(json_extract(payload_json, '$.result'), 1, 701) AS result
           FROM orchestration_v2_projection_subagents
-          WHERE thread_id = ${threadId} AND origin = 'app_owned'
+          WHERE ${sql.value.in("thread_id", reportThreadIds)}
+            AND origin = 'app_owned'
             AND status IN ('completed', 'failed', 'cancelled', 'interrupted')
             AND json_extract(payload_json, '$.result') IS NOT NULL
+            AND (${onlySinceLastTurn ? 1 : 0} = 0 OR completed_at > COALESCE(
+              (SELECT max(requested_at) FROM orchestration_v2_projection_runs
+                WHERE thread_id = ${threadId} AND completed_at IS NOT NULL),
+              (SELECT created_at FROM orchestration_v2_projection_threads
+                WHERE thread_id = ${threadId}),
+              ''))
           ORDER BY completed_at DESC, subagent_id DESC LIMIT 4
         `
           : [];

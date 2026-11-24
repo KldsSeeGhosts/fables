@@ -1,11 +1,15 @@
 import { useAtom, useAtomValue } from "@effect/atom-react";
 import { Tabs } from "@base-ui/react/tabs";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { captainChildIsActive, captainForThread } from "@t3tools/client-runtime/state/captains";
 import {
-  CaptainReportPolicy,
+  captainChildIsActive,
+  captainForThread,
+  captainRecentlyFinishedTasks,
+} from "@t3tools/client-runtime/state/captains";
+import {
   isOrchestrationV2WorkActive,
   type OrchestrationV2RemoteTaskChild,
+  type OrchestrationV2Subagent,
   type Captain,
   type EnvironmentId,
   type ScopedThreadRef,
@@ -14,7 +18,7 @@ import {
 import { useRouter } from "@tanstack/react-router";
 import { T, useGT } from "gt-react";
 import { ArrowUpRightIcon, PencilIcon } from "lucide-react";
-import { useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 
 import { followLayoutCompanions } from "../../layout/openRules";
 import { useLayoutStore } from "../../layout/layoutStore";
@@ -32,39 +36,131 @@ import {
   AlertDialogPopup,
   AlertDialogTitle,
 } from "../ui/alert-dialog";
+import { Badge } from "../ui/badge";
 import { Button, ContentButton } from "../ui/button";
-import { Toggle, ToggleGroup } from "../ui/toggle-group";
+import { StatusDot, type StatusDotTone } from "../ui/status-dot";
 import { captainBriefTabAtom } from "./captainBriefTab";
 import { CaptainDocuments } from "./CaptainDocuments";
 import { CaptainEarlierConversations } from "./CaptainEarlierConversations";
 import { CaptainEditorDialog } from "./CaptainEditorDialog";
 import { CaptainMemories } from "./CaptainMemories";
+import { CaptainReportPolicyPicker } from "./CaptainReportPolicyPicker";
 import { CaptainResetButton } from "./CaptainResetButton";
 import { CaptainScope } from "./CaptainScope";
 import { captainCommandError, useCaptains } from "./useCaptain";
+
+const RECENTLY_FINISHED_LIMIT = 5;
+
+function CaptainTaskRow({
+  tone,
+  status,
+  title,
+  badge,
+  detail,
+  disabled = false,
+  onOpen,
+}: {
+  tone: StatusDotTone;
+  status: string;
+  title: string;
+  badge?: string | undefined;
+  detail?: ReactNode;
+  disabled?: boolean;
+  onOpen: () => void;
+}) {
+  return (
+    <li>
+      <ContentButton variant="inset-row" disabled={disabled} onClick={onOpen}>
+        <StatusDot tone={tone} />
+        <span className="sr-only">{status}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-body">{title}</span>
+          {detail ? (
+            <span className="line-clamp-2 block text-meta text-muted-foreground">{detail}</span>
+          ) : null}
+        </span>
+        {badge ? (
+          <Badge size="sm" className="max-w-24">
+            <span className="truncate">{badge}</span>
+          </Badge>
+        ) : null}
+        <ArrowUpRightIcon aria-hidden className="size-3.5 shrink-0" />
+      </ContentButton>
+    </li>
+  );
+}
 
 function RemoteCaptainChild({
   parent,
   child,
   title,
+  tone,
+  status,
+  detail,
 }: {
   parent: ScopedThreadRef;
   child: OrchestrationV2RemoteTaskChild;
   title: string;
+  tone: StatusDotTone;
+  status: string;
+  detail?: ReactNode;
 }) {
   const opener = useLinkedThreadOpener(parent, child, title);
   return (
-    <li>
-      <ContentButton
-        variant="inset-row"
-        disabled={opener === null}
-        onClick={() => opener?.open("primary")}
-      >
-        <span className="min-w-0 flex-1 truncate text-body">{title}</span>
-        <span className="max-w-24 truncate text-micro text-muted-foreground">{child.label}</span>
-        <ArrowUpRightIcon aria-hidden className="size-3.5 shrink-0" />
-      </ContentButton>
-    </li>
+    <CaptainTaskRow
+      tone={tone}
+      status={status}
+      title={title}
+      badge={child.label}
+      detail={detail}
+      disabled={opener === null}
+      onOpen={() => opener?.open("primary")}
+    />
+  );
+}
+
+function FinishedCaptainTask({
+  parent,
+  task,
+  onOpen,
+}: {
+  parent: ScopedThreadRef;
+  task: OrchestrationV2Subagent;
+  onOpen: (threadId: ThreadId) => void;
+}) {
+  const gt = useGT();
+  const title = task.title ?? task.remoteChild?.title ?? gt("Subagent");
+  const [tone, status]: [StatusDotTone, string] =
+    task.status === "completed"
+      ? ["success", gt("Completed", { $context: "delegated task status" })]
+      : task.status === "failed"
+        ? ["danger", gt("Failed", { $context: "delegated task status" })]
+        : ["neutral", gt("Stopped", { $context: "delegated task status" })];
+  const detail = task.result?.trim().split("\n", 1)[0];
+  if (task.remoteChild) {
+    return (
+      <RemoteCaptainChild
+        parent={parent}
+        child={task.remoteChild}
+        title={title}
+        tone={tone}
+        status={status}
+        detail={detail}
+      />
+    );
+  }
+  const childThreadId = task.childThreadId;
+  return (
+    <CaptainTaskRow
+      tone={tone}
+      status={status}
+      title={title}
+      detail={detail}
+      disabled={childThreadId === null}
+      onOpen={() => {
+        if (childThreadId !== null) onOpen(childThreadId);
+      }}
+    />
   );
 }
 
@@ -80,6 +176,7 @@ function CaptainBrief({
   onDelete: () => void;
 }) {
   const gt = useGT();
+  const fieldId = useId();
   const environment = useEnvironment(environmentId);
   const projects = useProjects().filter((project) => project.environmentId === environmentId);
   const parent = scopeThreadRef(environmentId, captain.primaryThreadId);
@@ -89,12 +186,18 @@ function CaptainBrief({
       thread.lineage.relationshipToParent === "subagent" &&
       captainChildIsActive(thread),
   );
-  const remoteChildren = (useQuietThreadProjection(parent)?.projection.subagents ?? []).flatMap(
-    ({ remoteChild, id, status, title }) =>
-      remoteChild && isOrchestrationV2WorkActive(status)
-        ? [{ id, child: remoteChild, title: title ?? remoteChild.title }]
-        : [],
+  const delegated = (useQuietThreadProjection(parent)?.projection.subagents ?? []).filter(
+    (task) => task.origin === "app_owned",
   );
+  const remoteChildren = delegated.flatMap(({ remoteChild, id, status, title }) =>
+    remoteChild && isOrchestrationV2WorkActive(status)
+      ? [{ id, child: remoteChild, title: title ?? remoteChild.title }]
+      : [],
+  );
+  const finished = captainRecentlyFinishedTasks(delegated, RECENTLY_FINISHED_LIMIT);
+  const projectTitles = new Map(projects.map((project) => [project.id, project.title]));
+  const needsYou = gt("Needs input", { $context: "delegated task status" });
+  const working = gt("Working", { $context: "delegated task status" });
   const canUpdate = useAtomValue(serverEnvironment.updateCaptain.permissionAtom(environmentId));
   const canArchive = useAtomValue(serverEnvironment.archiveCaptain.permissionAtom(environmentId));
   const canRestore = useAtomValue(serverEnvironment.unarchiveCaptain.permissionAtom(environmentId));
@@ -110,20 +213,10 @@ function CaptainBrief({
   const [applied, setApplied] = useState<Captain | null>(null);
   const current = applied && applied.updatedAt > captain.updatedAt ? applied : captain;
   const archived = current.archivedAt !== null;
-  const labels = {
-    react: gt("React", { $context: "Captain report policy" }),
-    context: gt("Context", { $context: "Captain report policy" }),
-    ignore: gt("Ignore", { $context: "Captain report policy" }),
-  };
-  const description = {
-    react: gt("A delegated task report can start a Captain turn."),
-    context: gt("Recent reports are included on the next Captain turn."),
-    ignore: gt("Reports stay in the delegated task’s history."),
-  };
 
   const save = async (changes: {
     scopedProjectIds?: Captain["scopedProjectIds"];
-    reportPolicy?: CaptainReportPolicy;
+    reportPolicy?: Captain["reportPolicy"];
   }) => {
     if (!canUpdate || pending) return;
     setPending(true);
@@ -187,26 +280,15 @@ function CaptainBrief({
         onChange={(scopedProjectIds) => void save({ scopedProjectIds })}
       />
       <section className="space-y-2">
-        <h3 className="text-label">
-          <T>Report policy</T>
+        <h3 id={`${fieldId}-report-policy`} className="text-label">
+          <T>When a delegated task finishes</T>
         </h3>
-        <ToggleGroup
-          aria-label={gt("Report policy")}
-          value={[current.reportPolicy]}
+        <CaptainReportPolicyPicker
+          labelledBy={`${fieldId}-report-policy`}
+          value={current.reportPolicy}
           disabled={!canUpdate || pending}
-          onValueChange={(value) => {
-            const reportPolicy = CaptainReportPolicy.literals.find((policy) => value[0] === policy);
-            if (reportPolicy !== undefined && reportPolicy !== current.reportPolicy)
-              void save({ reportPolicy });
-          }}
-        >
-          {CaptainReportPolicy.literals.map((policy) => (
-            <Toggle key={policy} value={policy}>
-              {labels[policy]}
-            </Toggle>
-          ))}
-        </ToggleGroup>
-        <p className="text-meta text-muted-foreground">{description[current.reportPolicy]}</p>
+          onChange={(reportPolicy) => void save({ reportPolicy })}
+        />
       </section>
       <section className="space-y-1">
         <h3 className="text-label">
@@ -218,25 +300,48 @@ function CaptainBrief({
           </p>
         ) : (
           <ul>
-            {children.map((child) => (
-              <li key={child.id}>
-                <ContentButton variant="inset-row" onClick={() => onOpen(child.id)}>
-                  <span className="min-w-0 flex-1 truncate text-body">{child.title}</span>
-                  <ArrowUpRightIcon aria-hidden className="size-3.5 shrink-0" />
-                </ContentButton>
-              </li>
-            ))}
+            {children.map((child) => {
+              const blocked =
+                child.hasPendingApprovals ||
+                child.hasPendingUserInput ||
+                child.pendingSubagentRequest != null;
+              return (
+                <CaptainTaskRow
+                  key={child.id}
+                  tone={blocked ? "warning" : "info"}
+                  status={blocked ? needsYou : working}
+                  title={child.title}
+                  badge={projectTitles.get(child.projectId)}
+                  detail={blocked ? needsYou : undefined}
+                  onOpen={() => onOpen(child.id)}
+                />
+              );
+            })}
             {remoteChildren.map(({ id, child, title }) => (
               <RemoteCaptainChild
                 key={id}
                 parent={parent}
                 child={child}
                 title={title ?? gt("Subagent")}
+                tone="info"
+                status={working}
               />
             ))}
           </ul>
         )}
       </section>
+      {finished.length > 0 ? (
+        <section className="space-y-1">
+          <h3 className="text-label">
+            <T>Recently finished</T>
+          </h3>
+          <ul>
+            {finished.map((task) => (
+              <FinishedCaptainTask key={task.id} parent={parent} task={task} onOpen={onOpen} />
+            ))}
+          </ul>
+        </section>
+      ) : null}
       {captain.earlierThreadIds.length > 0 ? (
         <section className="space-y-1">
           <h3 className="text-label">

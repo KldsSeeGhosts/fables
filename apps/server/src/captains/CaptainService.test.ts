@@ -131,6 +131,7 @@ it.effect("creates one primary thread, validates scope, and falls back to Scratc
       assert.deepStrictEqual(repeated, created);
       assert.equal(launches.size, 1);
       assert.equal(launches.get(created.primaryThreadId)?.projectId, scratch);
+      assert.equal(launches.get(created.primaryThreadId)?.creationSource, "web");
       const scoped = yield* service.create({
         ...input,
         captainId: CaptainId.make("scoped"),
@@ -164,7 +165,12 @@ it.effect(
         const service = yield* CaptainService.CaptainService;
         const store = yield* CaptainStore.CaptainStore;
         const sql = yield* SqlClient.SqlClient;
-        const captain = yield* service.create({ ...input, scopedProjectIds: [project] });
+        const captain = yield* service.create({
+          ...input,
+          scopedProjectIds: [project],
+          creationSource: "mcp",
+        });
+        assert.equal(f.launches.get(captain.primaryThreadId)?.creationSource, "mcp");
         const date = DateTime.formatIso(yield* DateTime.now);
         yield* sql`
         INSERT INTO scheduled_tasks (
@@ -206,6 +212,7 @@ it.effect(
         assert.isTrue(yield* canWake(next.primaryThreadId));
         assert.deepStrictEqual(next.earlierThreadIds, [captain.primaryThreadId]);
         assert.equal(f.launches.get(next.primaryThreadId)?.projectId, project);
+        assert.equal(f.launches.get(next.primaryThreadId)?.creationSource, "mcp");
         assert.deepStrictEqual(
           f.launches.get(next.primaryThreadId)?.modelSelection,
           modelSelection,
@@ -315,15 +322,45 @@ it.effect(
           content: "Notes are included",
           expectedRevision: 0,
         });
-        const read = yield* makeReadCaptainTurnContext;
+        yield* service.updateDocument({
+          captainId: captain.id,
+          name: "CREW.md",
+          content: "Run the tests before reporting.",
+          expectedRevision: 0,
+        });
+        const readContext = yield* makeReadCaptainTurnContext;
+        const read = (id: ThreadId, parentThreadId: ThreadId | null = null) =>
+          readContext({
+            id,
+            lineage: {
+              parentThreadId,
+              relationshipToParent: parentThreadId === null ? null : "subagent",
+            },
+          });
         const context = yield* read(captain.primaryThreadId);
         assert.include(context, "Captain profile: Maria (Coordinator)");
         assert.include(context, "Workspace [project]");
         assert.include(context, "Always mention this");
         assert.include(context, "Notes are included");
         assert.notInclude(context, "Keep this optional");
+        assert.notInclude(context, "Run the tests before reporting.");
         assert.isBelow(context.length, 5_000);
         assert.equal(yield* read(ThreadId.make("ordinary")), "");
+        const crew = yield* read(ThreadId.make("child"), captain.primaryThreadId);
+        assert.include(crew, "Run the tests before reporting.");
+        assert.notInclude(crew, "Always mention this");
+        assert.notInclude(crew, "Notes are included");
+        assert.equal(yield* read(ThreadId.make("grandchild"), ThreadId.make("child")), "");
+        const next = yield* service.resetConversation({
+          captainId: captain.id,
+          expectedThreadId: captain.primaryThreadId,
+        });
+        assert.include(
+          yield* read(ThreadId.make("pre-reset-child"), captain.primaryThreadId),
+          "Run the tests before reporting.",
+        );
+        yield* service.archive({ captainId: next.id });
+        assert.equal(yield* read(ThreadId.make("child"), next.primaryThreadId), "");
         assert.equal(
           yield* captainDelegationProject({ captain, currentProjectId: scratch }),
           project,
@@ -340,4 +377,108 @@ it.effect(
         );
       }).pipe(Effect.provide(layer));
     }),
+);
+
+it.effect("streams only the changes a subscription shows", () =>
+  Effect.gen(function* () {
+    const { layer } = fixture();
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainService.CaptainService;
+      const maria = yield* service.create(input);
+      const other = yield* service.create({ ...input, captainId: CaptainId.make("other") });
+      const note = (captainId: typeof maria.id, content: string) =>
+        service.updateDocument({ captainId, name: "NOTES.md", content, expectedRevision: 0 });
+
+      const list = yield* service.subscribe({}).pipe(
+        Stream.tap((snapshot) =>
+          snapshot.captains.some((captain) => captain.name === "Renamed")
+            ? Effect.void
+            : note(maria.id, "Not a list change").pipe(
+                Effect.andThen(service.update({ captainId: maria.id, name: "Renamed" })),
+              ),
+        ),
+        Stream.take(2),
+        Stream.runCollect,
+      );
+      assert.equal(list[1]?.captains.find(({ id }) => id === maria.id)?.name, "Renamed");
+
+      const detail = yield* service.subscribe({ captainId: other.id }).pipe(
+        Stream.tap((snapshot) =>
+          snapshot.documents.find(({ name }) => name === "NOTES.md")?.revision === 0
+            ? service
+                .updateDocument({
+                  captainId: maria.id,
+                  name: "NOTES.md",
+                  content: "Not mine",
+                  expectedRevision: 1,
+                })
+                .pipe(
+                  Effect.andThen(service.update({ captainId: maria.id, role: "Someone else" })),
+                  Effect.andThen(note(other.id, "Mine")),
+                )
+            : Effect.void,
+        ),
+        Stream.take(2),
+        Stream.runCollect,
+      );
+      assert.equal(detail[1]?.documents.find(({ name }) => name === "NOTES.md")?.content, "Mine");
+    }).pipe(Effect.provide(layer));
+  }),
+);
+
+it.effect("surfaces reports from conversations before a reset on the current conversation", () =>
+  Effect.gen(function* () {
+    const { layer } = fixture();
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainService.CaptainService;
+      const sql = yield* SqlClient.SqlClient;
+      const captain = yield* service.create({ ...input, reportPolicy: "react" });
+      const next = yield* service.resetConversation({
+        captainId: captain.id,
+        expectedThreadId: captain.primaryThreadId,
+      });
+      const readContext = yield* makeReadCaptainTurnContext;
+      const read = () =>
+        readContext({
+          id: next.primaryThreadId,
+          lineage: { parentThreadId: null, relationshipToParent: null },
+        });
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_threads (
+          thread_id, project_id, title, default_provider, runtime_mode, interaction_mode,
+          created_at, updated_at, payload_json
+        ) VALUES (${next.primaryThreadId}, ${scratch}, 'Maria', 'codex', 'approval-required',
+          'default', '2026-11-24T10:00:00.000Z', '2026-11-24T10:00:00.000Z', '{}')
+      `;
+      const report = (id: string, threadId: ThreadId, completedAt: string) => sql`
+        INSERT INTO orchestration_v2_projection_subagents (
+          subagent_id, thread_id, parent_node_id, provider, origin, status,
+          completed_at, updated_at, payload_json
+        ) VALUES (${id}, ${threadId}, 'node', 'codex', 'app_owned', 'completed',
+          ${completedAt}, ${completedAt}, ${JSON.stringify({ title: id, result: `${id} result` })})
+      `;
+      yield* report("before-reset", captain.primaryThreadId, "2026-11-24T09:00:00.000Z");
+      yield* report("after-reset", captain.primaryThreadId, "2026-11-24T11:00:00.000Z");
+      yield* report("current", next.primaryThreadId, "2026-11-24T11:00:00.000Z");
+
+      const reacting = yield* read();
+      assert.include(reacting, "after-reset result");
+      assert.notInclude(reacting, "before-reset result");
+      assert.notInclude(reacting, "current result");
+
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_runs (
+          run_id, thread_id, ordinal, provider, status, requested_at, completed_at, payload_json
+        ) VALUES ('run', ${next.primaryThreadId}, 1, 'codex', 'completed',
+          '2026-11-24T12:00:00.000Z', '2026-11-24T12:05:00.000Z', '{}')
+      `;
+      assert.notInclude(yield* read(), "after-reset result");
+
+      yield* service.update({ captainId: captain.id, reportPolicy: "context" });
+      const included = yield* read();
+      assert.include(included, "before-reset result");
+      assert.include(included, "after-reset result");
+      assert.include(included, "current result");
+    }).pipe(Effect.provide(layer));
+  }),
 );

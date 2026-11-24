@@ -7,6 +7,7 @@ import {
   type CaptainId,
   type CaptainResetInput,
   type CaptainUpdateInput,
+  type OrchestrationV2CreationSource,
   type ProjectId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -54,7 +55,9 @@ const make = Effect.gen(function* () {
     threadId: ThreadId,
     projectId: ProjectId,
     title: string,
-    settings: Pick<CaptainCreateInput, "modelSelection" | "runtimeMode" | "interactionMode">,
+    settings: Pick<CaptainCreateInput, "modelSelection" | "runtimeMode" | "interactionMode"> & {
+      readonly creationSource: OrchestrationV2CreationSource;
+    },
   ) {
     yield* launch
       .launch({
@@ -68,7 +71,7 @@ const make = Effect.gen(function* () {
         interactionMode: settings.interactionMode,
         workspaceStrategy: { type: "root" },
         createdBy: "user",
-        creationSource: "web",
+        creationSource: settings.creationSource,
       })
       .pipe(Effect.catch(CaptainStore.captainUnavailable));
   });
@@ -92,7 +95,10 @@ const make = Effect.gen(function* () {
       const { name, role, instructions, avatar, reportPolicy } = input;
       const now = yield* timestamp;
       const primaryThreadId = captainPrimaryThreadId(input.captainId, 0);
-      yield* createPrimaryThread(primaryThreadId, projectId, name, input);
+      yield* createPrimaryThread(primaryThreadId, projectId, name, {
+        ...input,
+        creationSource: input.creationSource ?? "web",
+      });
       const captain = yield* store.save({
         id: input.captainId,
         name,
@@ -107,7 +113,7 @@ const make = Effect.gen(function* () {
         updatedAt: now,
         archivedAt: null,
       });
-      yield* store.notify;
+      yield* store.notify(captain.id);
       return captain;
     },
     Effect.uninterruptible,
@@ -131,7 +137,7 @@ const make = Effect.gen(function* () {
             : yield* validateScope(scopedProjectIds),
         updatedAt: yield* timestamp,
       });
-      yield* store.notify;
+      yield* store.notify(captain.id);
       return captain;
     },
     Effect.uninterruptible,
@@ -148,7 +154,7 @@ const make = Effect.gen(function* () {
         archivedAt: archived ? now : null,
         updatedAt: now,
       });
-      yield* store.notify;
+      yield* store.notify(captain.id);
       return captain;
     },
     Effect.uninterruptible,
@@ -195,7 +201,7 @@ const make = Effect.gen(function* () {
         )
         .pipe(Effect.catchTags({ SqlError: CaptainStore.captainUnavailable }));
       yield* schedules.invalidateList;
-      yield* store.notify;
+      yield* store.notify(captain.id);
       return captain;
     },
     Effect.uninterruptible,
