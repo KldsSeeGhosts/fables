@@ -1,4 +1,12 @@
-import type { Captain, CaptainSnapshot, EnvironmentId, ThreadId } from "@t3tools/contracts";
+import {
+  isOrchestrationV2WorkActive,
+  type Captain,
+  type CaptainSnapshot,
+  type EnvironmentId,
+  type OrchestrationV2Subagent,
+  type ThreadId,
+} from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 
 import { threadRuntimeIsActive, type EnvironmentThreadShell } from "./models.ts";
 
@@ -43,3 +51,21 @@ export function captainThreadActivity(
       (primary?.pendingBackgroundTasks.length ?? 0) > 0,
   };
 }
+
+/** The Captain's delegated tasks that finished most recently, newest first. */
+export const captainRecentlyFinishedTasks = (
+  subagents: ReadonlyArray<OrchestrationV2Subagent>,
+  limit: number,
+) =>
+  subagents
+    .flatMap((task) =>
+      task.origin === "app_owned" &&
+      task.completedAt !== null &&
+      task.status !== "idle" &&
+      !isOrchestrationV2WorkActive(task.status)
+        ? [{ task, completedAt: DateTime.toEpochMillis(task.completedAt) }]
+        : [],
+    )
+    .sort((a, b) => b.completedAt - a.completedAt)
+    .slice(0, limit)
+    .map(({ task }) => task);
