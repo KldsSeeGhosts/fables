@@ -58,7 +58,7 @@ export function chatPaneHeaderClassName({
   return cn(
     // Keep tab menus above the timeline. Ease the collapsed-sidebar inset with the sidebar so the
     // tab moves with its pane.
-    "relative z-10 bg-background md:pl-0",
+    "relative z-10 bg-background md:pl-0 duet:h-13 duet:min-h-13 duet:border-b-0 duet:bg-background",
     COLLAPSED_SIDEBAR_INSET_EASE_CLASS,
     isElectron
       ? cn(

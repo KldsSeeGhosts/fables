@@ -8,6 +8,7 @@
    the variants keep their original specificity against theme overrides. */
 @custom-variant dark (&:is(.dark, .dark *, :where(.black-chrome [data-chrome-scope], .black-chrome [data-chrome-scope] *)));
 @custom-variant light (&:not(.dark, .dark *):not(:where(.black-chrome [data-chrome-scope], .black-chrome [data-chrome-scope] *)));
+@custom-variant duet (&:where(html[data-theme-id="ksg-salon"] *));
 /* Window Controls Overlay: active when Electron exposes native titlebar control geometry. */
 @custom-variant wco (&:is(.wco, .wco *));
 /* The design system catalog sets data-focus-preview to show a control's focus
