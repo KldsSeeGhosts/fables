@@ -1,10 +1,4 @@
-import {
-  EnvironmentId,
-  NodeId,
-  ThreadId,
-  type Captain,
-  type OrchestrationV2Subagent,
-} from "@t3tools/contracts";
+import { EnvironmentId, NodeId, ThreadId, type OrchestrationV2Subagent } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import { expect, it } from "vite-plus/test";
 
@@ -43,7 +37,7 @@ it("keys every current and earlier Captain conversation by environment", () => {
   const captain = {
     primaryThreadId: ThreadId.make("captain:maria:1"),
     earlierThreadIds: [ThreadId.make("captain:maria:0")],
-  } as Captain;
+  };
   expect(captainConversationKeys([])).toBe("");
   expect(captainConversationKeys([{ environmentId, captains: [captain] }]).split("\n")).toEqual([
     threadKey({ environmentId, threadId: ThreadId.make("captain:maria:0") }),

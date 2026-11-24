@@ -78,7 +78,7 @@ export const captainRecentlyFinishedTasks = (
 export const captainConversationKeys = (
   environments: ReadonlyArray<{
     readonly environmentId: EnvironmentId;
-    readonly captains: ReadonlyArray<Captain>;
+    readonly captains: ReadonlyArray<Pick<Captain, "primaryThreadId" | "earlierThreadIds">>;
   }>,
 ) =>
   environments
