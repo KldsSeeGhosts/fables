@@ -4,6 +4,7 @@ import {
   type CaptainAvatar as Avatar,
 } from "@t3tools/contracts";
 
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { cn } from "../../lib/utils";
 import { captainAvatarEyes, captainAvatarPaths } from "./captainAvatarData";
 import "./CaptainAvatar.css";
@@ -82,6 +83,25 @@ export const captainAvatarSwatches = {
 
 export type CaptainAvatarState = "archived" | "idle" | "waiting" | "working";
 
+const workingShapeSequence = [
+  "hexagon",
+  "triangle",
+  "circle",
+  "pentagon",
+  "drop",
+  "diamond",
+  "pill",
+] as const satisfies ReadonlyArray<CaptainAvatarPickerShape>;
+
+const orbitDots = [
+  { color: "#FF4D6D", opacity: 0.95, r: 0.11, x: 1.02, y: 0 },
+  { color: "#FFB020", opacity: 0.84, r: 0.085, x: 0.82, y: -0.3 },
+  { color: "#3DDC97", opacity: 0.92, r: 0.1, x: 0.2, y: -0.43 },
+  { color: "#00C2FF", opacity: 0.84, r: 0.085, x: -0.66, y: -0.33 },
+  { color: "#B14CFF", opacity: 0.95, r: 0.11, x: -1.02, y: 0 },
+  { color: "#FF6BD6", opacity: 0.88, r: 0.085, x: -0.38, y: 0.41 },
+] as const;
+
 export function normalizeCaptainAvatar(avatar: Avatar): Avatar {
   return {
     preset: shapeOf[avatar.preset],
@@ -112,6 +132,22 @@ export function CaptainAvatar({
   const gap = 0.36 * eyeScale;
   const width = 0.15 * eyeScale;
   const height = 0.4 * eyeScale;
+  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const animateWorking = state === "working" && !reduceMotion;
+  const workingShapes = animateWorking
+    ? [shape, ...workingShapeSequence.filter((candidate) => candidate !== shape), shape]
+    : [];
+  const keyTimes = workingShapes
+    .map((_, index) => (index / Math.max(1, workingShapes.length - 1)).toFixed(3))
+    .join(";");
+  const morphValues = workingShapes.map((candidate) => captainAvatarPaths[candidate]).join(";");
+  const eyeAnchorValues = workingShapes
+    .map((candidate) => {
+      const [candidateX, candidateY, candidateScale] = captainAvatarEyes[candidate];
+      const candidateOffset = 0.35 * 0.34 * candidateScale;
+      return `${candidateX + candidateOffset} ${candidateY - candidateOffset}`;
+    })
+    .join(";");
 
   return (
     <svg
@@ -133,8 +169,29 @@ export function CaptainAvatar({
       data-captain-state={state}
       data-captain-animate-on-mount={animateOnMount ? "true" : undefined}
     >
-      <path data-captain-avatar-body="" d={captainAvatarPaths[shape]} fill="currentColor" />
+      {animateWorking ? <CaptainAvatarOrbit placement="back" /> : null}
+      <path data-captain-avatar-body="" d={captainAvatarPaths[shape]} fill="currentColor">
+        {animateWorking ? (
+          <animate
+            attributeName="d"
+            dur="8s"
+            keyTimes={keyTimes}
+            repeatCount="indefinite"
+            values={morphValues}
+          />
+        ) : null}
+      </path>
       <g transform={`translate(${eyeX + lookOffset} ${eyeY - lookOffset})`}>
+        {animateWorking ? (
+          <animateTransform
+            attributeName="transform"
+            dur="8s"
+            keyTimes={keyTimes}
+            repeatCount="indefinite"
+            type="translate"
+            values={eyeAnchorValues}
+          />
+        ) : null}
         <g data-captain-avatar-eyes="">
           {[-1, 1].map((side) => (
             <g
@@ -154,6 +211,26 @@ export function CaptainAvatar({
           ))}
         </g>
       </g>
+      {animateWorking ? <CaptainAvatarOrbit placement="front" /> : null}
     </svg>
+  );
+}
+
+function CaptainAvatarOrbit({ placement }: { placement: "back" | "front" }) {
+  return (
+    <g data-captain-avatar-orbit={placement}>
+      {orbitDots
+        .filter((_, index) => (placement === "front" ? index % 2 === 0 : index % 2 === 1))
+        .map((dot) => (
+          <circle
+            key={`${placement}:${dot.color}:${dot.x}:${dot.y}`}
+            cx={dot.x}
+            cy={dot.y}
+            fill={dot.color}
+            opacity={dot.opacity}
+            r={dot.r}
+          />
+        ))}
+    </g>
   );
 }
