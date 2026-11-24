@@ -1,10 +1,10 @@
-/* oxlint-disable t3code/no-styled-raw-controls, t3code/no-raw-type-classes, shadcn/no-arbitrary-values -- Duet section labels use Claude Desktop geometry and colors outside the shared control variants. */
 import { CollapsibleSectionHeader } from "../ui/collapsible-section-header";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { type ReactNode, useLayoutEffect } from "react";
-import { useTheme } from "~/hooks/useTheme";
+import { useDuetShell } from "~/hooks/useDuetShell";
 import { cn } from "~/lib/utils";
+import { Button } from "../ui/button";
 import {
   animateSidebarLayoutChanges,
   sidebarMarkerId,
@@ -130,7 +130,7 @@ export function SidebarSectionHeader(props: {
       : props.marker === "snoozed-header"
         ? "snoozed"
         : "settled";
-  const isDuet = useTheme().theme === "ksg-salon";
+  const isDuet = useDuetShell();
   return (
     <SortableSidebarMarker
       marker={props.marker}
@@ -138,8 +138,10 @@ export function SidebarSectionHeader(props: {
       className={cn("relative mx-0.5 h-8", props.className)}
     >
       {isDuet ? (
-        <button
+        <Button
           type="button"
+          variant="ghost-muted"
+          size="compact"
           data-sidebar-row={`shelf:${shelf}`}
           aria-hidden={props.concealed ? true : undefined}
           tabIndex={props.concealed ? -1 : undefined}
@@ -148,19 +150,19 @@ export function SidebarSectionHeader(props: {
           disabled={props.toggle === null}
           aria-expanded={props.toggle?.expanded}
           data-testid={`sidebar-${shelf}-shelf-toggle`}
-          className={cn(
-            "flex h-7 w-full cursor-pointer items-center gap-1.5 rounded-md px-2 text-left text-xs font-medium text-[#8a8a8a] hover:text-[#555555] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 focus-visible:outline-none disabled:cursor-default dark:hover:text-[#c8c8c8]",
-            props.isDropTarget && "text-primary",
-          )}
+          className="w-full justify-start"
         >
           <span className="min-w-0 truncate">{props.label}</span>
-          <span className="text-xs tabular-nums">{props.count}</span>
+          <span className="text-meta tabular-nums">{props.count}</span>
           {props.toggle?.expanded === undefined ? null : (
-            <span aria-hidden className={cn("text-[10px]", !props.toggle.expanded && "-rotate-90")}>
+            <span
+              aria-hidden
+              className={cn("text-micro leading-none", !props.toggle.expanded && "-rotate-90")}
+            >
               ⌄
             </span>
           )}
-        </button>
+        </Button>
       ) : (
         <CollapsibleSectionHeader
           data-sidebar-row={`shelf:${shelf}`}
