@@ -403,3 +403,60 @@ it.effect("streams only the changes a subscription shows", () =>
     }).pipe(Effect.provide(layer));
   }),
 );
+
+it.effect("surfaces reports from conversations before a reset on the current conversation", () =>
+  Effect.gen(function* () {
+    const { layer } = fixture();
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainService.CaptainService;
+      const sql = yield* SqlClient.SqlClient;
+      const captain = yield* service.create({ ...input, reportPolicy: "react" });
+      const next = yield* service.resetConversation({
+        captainId: captain.id,
+        expectedThreadId: captain.primaryThreadId,
+      });
+      const readContext = yield* makeReadCaptainTurnContext;
+      const read = () =>
+        readContext({
+          id: next.primaryThreadId,
+          lineage: { parentThreadId: null, relationshipToParent: null },
+        });
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_threads (
+          thread_id, project_id, title, default_provider, runtime_mode, interaction_mode,
+          created_at, updated_at, payload_json
+        ) VALUES (${next.primaryThreadId}, ${scratch}, 'Maria', 'codex', 'approval-required',
+          'default', '2026-11-24T10:00:00.000Z', '2026-11-24T10:00:00.000Z', '{}')
+      `;
+      const report = (id: string, threadId: ThreadId, completedAt: string) => sql`
+        INSERT INTO orchestration_v2_projection_subagents (
+          subagent_id, thread_id, parent_node_id, provider, origin, status,
+          completed_at, updated_at, payload_json
+        ) VALUES (${id}, ${threadId}, 'node', 'codex', 'app_owned', 'completed',
+          ${completedAt}, ${completedAt}, ${JSON.stringify({ title: id, result: `${id} result` })})
+      `;
+      yield* report("before-reset", captain.primaryThreadId, "2026-11-24T09:00:00.000Z");
+      yield* report("after-reset", captain.primaryThreadId, "2026-11-24T11:00:00.000Z");
+      yield* report("current", next.primaryThreadId, "2026-11-24T11:00:00.000Z");
+
+      const reacting = yield* read();
+      assert.include(reacting, "after-reset result");
+      assert.notInclude(reacting, "before-reset result");
+      assert.notInclude(reacting, "current result");
+
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_runs (
+          run_id, thread_id, ordinal, provider, status, requested_at, completed_at, payload_json
+        ) VALUES ('run', ${next.primaryThreadId}, 1, 'codex', 'completed',
+          '2026-11-24T12:00:00.000Z', '2026-11-24T12:05:00.000Z', '{}')
+      `;
+      assert.notInclude(yield* read(), "after-reset result");
+
+      yield* service.update({ captainId: captain.id, reportPolicy: "context" });
+      const included = yield* read();
+      assert.include(included, "before-reset result");
+      assert.include(included, "after-reset result");
+      assert.include(included, "current result");
+    }).pipe(Effect.provide(layer));
+  }),
+);

@@ -98,8 +98,16 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
           ),
         ),
       );
+      // Earlier conversations can't be woken, so their late reports surface here under react too.
+      const reportThreadIds =
+        captain.reportPolicy === "context"
+          ? [threadId, ...captain.earlierThreadIds]
+          : captain.reportPolicy === "react"
+            ? captain.earlierThreadIds
+            : [];
+      const onlySinceLastTurn = captain.reportPolicy === "react";
       const reports =
-        captain.reportPolicy === "context" && Option.isSome(sql)
+        reportThreadIds.length > 0 && Option.isSome(sql)
           ? yield* sql.value<{
               readonly id: string;
               readonly title: string | null;
@@ -108,9 +116,16 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
           SELECT subagent_id AS id, json_extract(payload_json, '$.title') AS title,
             substr(json_extract(payload_json, '$.result'), 1, 701) AS result
           FROM orchestration_v2_projection_subagents
-          WHERE thread_id = ${threadId} AND origin = 'app_owned'
+          WHERE ${sql.value.in("thread_id", reportThreadIds)}
+            AND origin = 'app_owned'
             AND status IN ('completed', 'failed', 'cancelled', 'interrupted')
             AND json_extract(payload_json, '$.result') IS NOT NULL
+            AND (${onlySinceLastTurn ? 1 : 0} = 0 OR completed_at > COALESCE(
+              (SELECT max(requested_at) FROM orchestration_v2_projection_runs
+                WHERE thread_id = ${threadId} AND completed_at IS NOT NULL),
+              (SELECT created_at FROM orchestration_v2_projection_threads
+                WHERE thread_id = ${threadId}),
+              ''))
           ORDER BY completed_at DESC, subagent_id DESC LIMIT 4
         `
           : [];
