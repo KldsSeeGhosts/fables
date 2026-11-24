@@ -161,6 +161,7 @@ import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { registerSettleAndAdvance } from "../settleAndAdvance";
 import { resolveThreadActionProjectRef, startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings } from "../hooks/useSettings";
+import { useTheme } from "../hooks/useTheme";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -1028,6 +1029,7 @@ function revealSidebarShelf(header: HTMLElement) {
 
 export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReveal }) {
   const gt = useGT();
+  const isDuet = useTheme().theme === "ksg-salon";
   const messages = useMessages();
   const {
     projects,
@@ -3355,7 +3357,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     shortcutLabelForCommand(keybindings, "chat.newLocal");
   return (
     <SidebarFolderDrop>
-      <SidebarChromeHeader isElectron={isElectron} />
+      <SidebarChromeHeader
+        isElectron={isElectron}
+        onNewThread={() => handleNewThreadClick()}
+        onAddProject={() => openCommandPalette({ open: "add-project" })}
+        onOpenProjectScope={() => threadSearchInputRef.current?.focus()}
+        onSearch={() => threadSearchInputRef.current?.focus()}
+      />
       <SidebarContent
         ref={sidebarContentRef}
         className="min-h-full"
@@ -3785,7 +3793,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           scopeThreadRef(thread.environmentId, thread.id),
                         );
                         const isCard =
-                          section === "active" || section === "pinned" || section === "working";
+                          !isDuet &&
+                          (section === "active" || section === "pinned" || section === "working");
                         const folderRow =
                           typeof folderOrGhost === "string" ? folderOrGhost : undefined;
                         const rowVariant = folderRow
@@ -3989,7 +3998,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               <SidebarDragBoundary
                                 key="pinned-divider"
                                 marker="pinned-divider"
-                                label={gt("Active", { $context: "sidebar section" })}
+                                label={
+                                  isDuet
+                                    ? gt("Threads", { $context: "sidebar section" })
+                                    : gt("Active", { $context: "sidebar section" })
+                                }
                                 visible={from !== null}
                                 isDropTarget={dragTargetSection === "active"}
                               />,
@@ -4000,7 +4013,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               <SidebarSectionPlaceholder
                                 key="active-placeholder"
                                 marker="active-placeholder"
-                                label={gt("Active", { $context: "sidebar section" })}
+                                label={
+                                  isDuet
+                                    ? gt("Threads", { $context: "sidebar section" })
+                                    : gt("Active", { $context: "sidebar section" })
+                                }
                                 showHint={
                                   from !== null &&
                                   (activeThreads.length === 0 ||

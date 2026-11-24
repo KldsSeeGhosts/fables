@@ -1,7 +1,9 @@
+/* oxlint-disable t3code/no-styled-raw-controls, t3code/no-raw-type-classes, shadcn/no-arbitrary-values -- Duet section labels use Claude Desktop geometry and colors outside the shared control variants. */
 import { CollapsibleSectionHeader } from "../ui/collapsible-section-header";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { type ReactNode, useLayoutEffect } from "react";
+import { useTheme } from "~/hooks/useTheme";
 import { cn } from "~/lib/utils";
 import {
   animateSidebarLayoutChanges,
@@ -128,28 +130,55 @@ export function SidebarSectionHeader(props: {
       : props.marker === "snoozed-header"
         ? "snoozed"
         : "settled";
+  const isDuet = useTheme().theme === "ksg-salon";
   return (
     <SortableSidebarMarker
       marker={props.marker}
       data-testid={`sidebar-${props.marker}`}
       className={cn("relative mx-0.5 h-8", props.className)}
     >
-      <CollapsibleSectionHeader
-        data-sidebar-row={`shelf:${shelf}`}
-        aria-hidden={props.concealed ? true : undefined}
-        tabIndex={props.concealed ? -1 : undefined}
-        // A click must not focus the toggle: Chromium shows the focus ring on
-        // a clicked button once any key is pressed, even a lone modifier.
-        onPointerDown={(event) => event.preventDefault()}
-        onClick={(event) => props.toggle?.onToggle(event.currentTarget)}
-        disabled={props.toggle === null}
-        expanded={props.toggle?.expanded}
-        tone={props.isDropTarget ? "accent" : props.dragging ? "emphasized" : "shelf"}
-        data-testid={`sidebar-${shelf}-shelf-toggle`}
-        accessory={<span className="text-meta tabular-nums">{props.count}</span>}
-      >
-        {props.label}
-      </CollapsibleSectionHeader>
+      {isDuet ? (
+        <button
+          type="button"
+          data-sidebar-row={`shelf:${shelf}`}
+          aria-hidden={props.concealed ? true : undefined}
+          tabIndex={props.concealed ? -1 : undefined}
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={(event) => props.toggle?.onToggle(event.currentTarget)}
+          disabled={props.toggle === null}
+          aria-expanded={props.toggle?.expanded}
+          data-testid={`sidebar-${shelf}-shelf-toggle`}
+          className={cn(
+            "flex h-7 w-full cursor-pointer items-center gap-1.5 rounded-md px-2 text-left text-xs font-medium text-[#8a8a8a] hover:text-[#555555] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 focus-visible:outline-none disabled:cursor-default dark:hover:text-[#c8c8c8]",
+            props.isDropTarget && "text-primary",
+          )}
+        >
+          <span className="min-w-0 truncate">{props.label}</span>
+          <span className="text-xs tabular-nums">{props.count}</span>
+          {props.toggle?.expanded === undefined ? null : (
+            <span aria-hidden className={cn("text-[10px]", !props.toggle.expanded && "-rotate-90")}>
+              ⌄
+            </span>
+          )}
+        </button>
+      ) : (
+        <CollapsibleSectionHeader
+          data-sidebar-row={`shelf:${shelf}`}
+          aria-hidden={props.concealed ? true : undefined}
+          tabIndex={props.concealed ? -1 : undefined}
+          // A click must not focus the toggle: Chromium shows the focus ring on
+          // a clicked button once any key is pressed, even a lone modifier.
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={(event) => props.toggle?.onToggle(event.currentTarget)}
+          disabled={props.toggle === null}
+          expanded={props.toggle?.expanded}
+          tone={props.isDropTarget ? "accent" : props.dragging ? "emphasized" : "shelf"}
+          data-testid={`sidebar-${shelf}-shelf-toggle`}
+          accessory={<span className="text-meta tabular-nums">{props.count}</span>}
+        >
+          {props.label}
+        </CollapsibleSectionHeader>
+      )}
     </SortableSidebarMarker>
   );
 }

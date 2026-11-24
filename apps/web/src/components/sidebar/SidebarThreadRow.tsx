@@ -9,6 +9,7 @@ import { contextMenuSourceOf } from "../../contextMenuSource";
 import { requestCustomSnooze } from "../CustomSnoozeDialog";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { useDeadlinePassed } from "~/hooks/useDeadline";
+import { useTheme } from "~/hooks/useTheme";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/client-runtime/thread-pull-requests";
 import { useDraggable } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
@@ -807,6 +808,7 @@ function ThreadRenameInput(props: {
 export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowProps) {
   const gt = useGT();
   const messages = useMessages();
+  const isDuet = useTheme().theme === "ksg-salon";
   const {
     isRenaming,
     onCancelRename,
@@ -1455,7 +1457,9 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                   rowSurfaceClassName,
                   multiline
                     ? "flex flex-col justify-center px-2.5 py-1.5"
-                    : "flex h-9 items-center gap-2.5 px-2.5",
+                    : isDuet
+                      ? "flex h-7.5 items-center gap-2 rounded-lg px-2"
+                      : "flex h-9 items-center gap-2.5 px-2.5",
                   // Lines titles up with the folder name, past its chevron and icon.
                   inFolder && "ps-9",
                 )}
@@ -1504,8 +1508,27 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                     jumpHintLabel && JUMP_HINT_SLOT_CLASS_NAME,
                   )}
                 >
+                  {isDuet ? (
+                    <span
+                      aria-hidden
+                      className="size-1.5 shrink-0 rounded-full"
+                      style={{
+                        backgroundColor:
+                          topStatus === "working" || topStatus === "preparing"
+                            ? "#d97757"
+                            : topStatus === "input" ||
+                                topStatus === "request" ||
+                                topStatus === "waiting"
+                              ? "#a98546"
+                              : isUnread
+                                ? "#2f67b3"
+                                : "transparent",
+                      }}
+                    />
+                  ) : null}
                   <span
                     className={cn(
+                      isDuet && "hidden",
                       "inline-flex justify-end tabular-nums text-secondary-label",
                       variantAction === "unsettle" && "text-(--sidebar-settled-meta)",
                       !isWoke &&

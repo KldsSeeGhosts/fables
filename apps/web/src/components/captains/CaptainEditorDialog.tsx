@@ -15,7 +15,7 @@ import { useId, useState } from "react";
 
 import { resolveProjectDefaultProviderModelSelection } from "../../providerInstances";
 import { useProjects } from "../../state/entities";
-import { cn, randomUUID } from "../../lib/utils";
+import { randomUUID } from "../../lib/utils";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
@@ -32,14 +32,15 @@ import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
+import { CaptainAvatar, normalizeCaptainAvatar, randomCaptainAvatar } from "./CaptainAvatar";
 import {
-  CaptainAvatar,
-  captainAvatarColors,
-  captainAvatarShapes,
-  captainAvatarSwatches,
-  normalizeCaptainAvatar,
-  randomCaptainAvatar,
-} from "./CaptainAvatar";
+  DUET_EMBLEM_ORDER,
+  DUET_PALETTE_ORDER,
+  DUET_PALETTE_SWATCH,
+  DUET_PICKER,
+  type DuetEmblem,
+  type DuetPalette,
+} from "./captainPalette";
 import { CaptainReportPolicyPicker } from "./CaptainReportPolicyPicker";
 import { CaptainScope } from "./CaptainScope";
 import { captainCommandError } from "./useCaptain";
@@ -82,33 +83,25 @@ export function CaptainEditorDialog({
   const update = useAtomCommand(serverEnvironment.updateCaptain, { reportFailure: false });
   const projects = useProjects().filter((project) => project.environmentId === environmentId);
   const canSave = captain === undefined ? canCreate : canUpdate;
-  const shapeLabels = {
-    circle: gt("Circle"),
-    cloud: gt("Cloud", { $context: "Captain avatar shape" }),
-    diamond: gt("Tilted square", { $context: "Captain avatar shape" }),
-    sparkle: gt("Sparkle", { $context: "Captain avatar shape" }),
-    clover: gt("Clover", { $context: "Captain avatar shape" }),
-    pebble: gt("Pebble", { $context: "Captain avatar shape" }),
-    flower: gt("Flower", { $context: "Captain avatar shape" }),
-    drop: gt("Drop", { $context: "Captain avatar shape" }),
-    pill: gt("Pill", { $context: "Captain avatar shape" }),
-    triangle: gt("Triangle", { $context: "Captain avatar shape" }),
-    pentagon: gt("Pentagon", { $context: "Captain avatar shape" }),
-    gear: gt("Burst", { $context: "Captain avatar shape" }),
-    hexagon: gt("Hexagon", { $context: "Captain avatar shape" }),
+  const emblemLabels: Record<DuetEmblem, string> = {
+    orb: gt("Orb", { $context: "Captain avatar emblem" }),
+    sunburst: gt("Sunburst", { $context: "Captain avatar emblem" }),
+    "twin-arcs": gt("Twin arcs", { $context: "Captain avatar emblem" }),
+    "heart-wave": gt("Heart wave", { $context: "Captain avatar emblem" }),
+    terminal: gt("Terminal", { $context: "Captain avatar emblem" }),
+    prism: gt("Prism", { $context: "Captain avatar emblem" }),
+    orbit: gt("Orbit", { $context: "Captain avatar emblem" }),
+    horizon: gt("Horizon", { $context: "Captain avatar emblem" }),
   };
-  const colorLabels = {
-    black: gt("Black", { $context: "color" }),
-    brown: gt("Brown", { $context: "color" }),
-    red: gt("Red", { $context: "color" }),
-    tangerine: gt("Tangerine", { $context: "color" }),
-    orange: gt("Orange", { $context: "color" }),
-    green: gt("Green", { $context: "color" }),
-    teal: gt("Teal", { $context: "color" }),
-    blue: gt("Blue"),
-    purple: gt("Purple", { $context: "color" }),
-    pink: gt("Pink", { $context: "color" }),
-    gray: gt("Gray", { $context: "color" }),
+  const paletteLabels: Record<DuetPalette, string> = {
+    terracotta: gt("Terracotta", { $context: "color" }),
+    rose: gt("Rose", { $context: "color" }),
+    cobalt: gt("Cobalt", { $context: "color" }),
+    sage: gt("Sage", { $context: "color" }),
+    ochre: gt("Ochre", { $context: "color" }),
+    plum: gt("Plum", { $context: "color" }),
+    coral: gt("Coral", { $context: "color" }),
+    slate: gt("Slate", { $context: "color" }),
   };
 
   const save = async () => {
@@ -263,10 +256,10 @@ export function CaptainEditorDialog({
             <div className="grid gap-3">
               <div className="grid gap-1.5">
                 <span className="text-label">
-                  <T>Shape</T>
+                  <T>Emblem</T>
                 </span>
                 <ToggleGroup
-                  aria-label={gt("Avatar shape")}
+                  aria-label={gt("Avatar emblem")}
                   variant="default"
                   size="compact"
                   detached
@@ -274,18 +267,28 @@ export function CaptainEditorDialog({
                   value={[avatar.preset]}
                   disabled={saving}
                   onValueChange={(value) => {
-                    const preset = captainAvatarShapes.find((shape) => shape === value[0]);
-                    if (preset) setAvatar((current) => ({ ...current, preset }));
+                    const emblem = DUET_EMBLEM_ORDER.find(
+                      (entry) => DUET_PICKER.emblems[entry] === value[0],
+                    );
+                    if (emblem) {
+                      setAvatar((current) => ({
+                        ...current,
+                        preset: DUET_PICKER.emblems[emblem],
+                      }));
+                    }
                   }}
                 >
-                  {captainAvatarShapes.map((shape) => (
+                  {DUET_EMBLEM_ORDER.map((emblem) => (
                     <Toggle
-                      key={shape}
-                      value={shape}
-                      aria-label={shapeLabels[shape]}
-                      title={shapeLabels[shape]}
+                      key={emblem}
+                      value={DUET_PICKER.emblems[emblem]}
+                      aria-label={emblemLabels[emblem]}
+                      title={emblemLabels[emblem]}
                     >
-                      <CaptainAvatar avatar={{ preset: shape, color: "gray" }} size="picker" />
+                      <CaptainAvatar
+                        avatar={{ preset: DUET_PICKER.emblems[emblem], color: avatar.color }}
+                        size="picker"
+                      />
                     </Toggle>
                   ))}
                 </ToggleGroup>
@@ -303,23 +306,28 @@ export function CaptainEditorDialog({
                   value={[avatar.color]}
                   disabled={saving}
                   onValueChange={(value) => {
-                    const color = captainAvatarColors.find((color) => color === value[0]);
-                    if (color) setAvatar((current) => ({ ...current, color }));
+                    const palette = DUET_PALETTE_ORDER.find(
+                      (entry) => DUET_PICKER.palettes[entry] === value[0],
+                    );
+                    if (palette) {
+                      setAvatar((current) => ({
+                        ...current,
+                        color: DUET_PICKER.palettes[palette],
+                      }));
+                    }
                   }}
                 >
-                  {captainAvatarColors.map((color) => (
+                  {DUET_PALETTE_ORDER.map((palette) => (
                     <Toggle
-                      key={color}
-                      value={color}
-                      aria-label={colorLabels[color]}
-                      title={colorLabels[color]}
+                      key={palette}
+                      value={DUET_PICKER.palettes[palette]}
+                      aria-label={paletteLabels[palette]}
+                      title={paletteLabels[palette]}
                     >
                       <span
                         aria-hidden
-                        className={cn(
-                          "size-3.5 rounded-full ring-1 ring-border",
-                          captainAvatarSwatches[color],
-                        )}
+                        className="size-3.5 rounded-full ring-1 ring-border"
+                        style={{ backgroundColor: DUET_PALETTE_SWATCH[palette].ink }}
                       />
                     </Toggle>
                   ))}

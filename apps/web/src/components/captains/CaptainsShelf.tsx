@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-styled-raw-controls, shadcn/no-arbitrary-values -- Duet channel rows use exact Anthropic theme geometry and palette colors outside the shared control variants. */
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   captainAttentionTotal,
@@ -8,11 +9,12 @@ import type { Captain, EnvironmentId, ScopedThreadRef } from "@t3tools/contracts
 import { AsyncResult } from "effect/reactivity";
 import * as Schema from "effect/Schema";
 import { T, useGT } from "gt-react";
-import { CompassIcon, EllipsisIcon, PlusIcon } from "lucide-react";
+import { CompassIcon, EllipsisIcon, LayersIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 import { flushSync } from "react-dom";
 
 import { useLocalStorage } from "../../hooks/useLocalStorage";
+import { useTheme } from "../../hooks/useTheme";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { cn } from "../../lib/utils";
 import { useThreadShells } from "../../state/entities";
@@ -44,6 +46,7 @@ const NO_CAPTAIN_CONVERSATIONS: ReadonlySet<string> = new Set();
 /** The sidebar's entry to the Captains page, with the number of Captains waiting on the user. */
 export function CaptainsHubRow({ active, onOpen }: { active: boolean; onOpen: () => void }) {
   const gt = useGT();
+  const isDuet = useTheme().theme === "ksg-salon";
   const { supporting, results } = useCaptainEnvironments();
   const shells = useThreadShells(supporting.length > 0);
   if (supporting.length === 0) return null;
@@ -54,6 +57,40 @@ export function CaptainsHubRow({ active, onOpen }: { active: boolean; onOpen: ()
     })),
     shells,
   );
+  const badge =
+    attention > 0 ? (
+      <Badge
+        variant="warning"
+        size="sm"
+        aria-label={gt(
+          "{count, plural, one {{count} Captain needs input} other {{count} Captains need input}}",
+          { count: attention },
+        )}
+      >
+        {attention}
+      </Badge>
+    ) : null;
+  if (isDuet) {
+    return (
+      <button
+        type="button"
+        data-sidebar-row="nav:captains"
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left text-label text-[#141413] outline-none select-none hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring dark:text-[#ececec] dark:hover:bg-white/7",
+          active &&
+            "bg-[var(--duet-row-active,var(--sidebar-accent))] hover:bg-[var(--duet-row-active,var(--sidebar-accent))]",
+        )}
+        onClick={onOpen}
+      >
+        <LayersIcon aria-hidden className="size-4 shrink-0 text-[#d97757]" />
+        <span className="min-w-0 flex-1 truncate">
+          <T context="the Captains home page">Everything</T>
+        </span>
+        {badge}
+      </button>
+    );
+  }
   return (
     <SidebarMenuButton
       data-sidebar-row="nav:captains"
@@ -66,19 +103,22 @@ export function CaptainsHubRow({ active, onOpen }: { active: boolean; onOpen: ()
       <span className="min-w-0 flex-1 truncate">
         <T context="the Captains home page">Everything</T>
       </span>
-      {attention > 0 ? (
-        <Badge
-          variant="warning"
-          size="sm"
-          aria-label={gt(
-            "{count, plural, one {{count} Captain needs input} other {{count} Captains need input}}",
-            { count: attention },
-          )}
-        >
-          {attention}
-        </Badge>
-      ) : null}
+      {badge}
     </SidebarMenuButton>
+  );
+}
+
+function DuetTreeConnector() {
+  return (
+    <svg
+      aria-hidden
+      className="pointer-events-none absolute top-[-2px] left-0 h-[calc(100%+4px)] w-[30px] overflow-visible text-[#e5e5e5] dark:text-[#333333]"
+      viewBox="0 0 30 32"
+      fill="none"
+    >
+      <path d="M15.5 -6V38" stroke="currentColor" strokeWidth="1" />
+      <path d="M15.5 10Q15.5 16 21.5 16H29" stroke="currentColor" strokeWidth="1" />
+    </svg>
   );
 }
 
@@ -100,6 +140,7 @@ function CaptainShelfRow({
   onOpen: (threadRef: ScopedThreadRef) => void;
 }) {
   const gt = useGT();
+  const isDuet = useTheme().theme === "ksg-salon";
   const threadRef = scopeThreadRef(environmentId, captain.primaryThreadId);
   const openView = (view: CaptainChannelView) => {
     appAtomRegistry.set(captainChannelViewAtom(threadRef), view);
@@ -118,6 +159,87 @@ function CaptainShelfRow({
       : working
         ? gt("Working", { $context: "Captain status" })
         : gt("Ready");
+  const avatarState = archived
+    ? "archived"
+    : attention > 0
+      ? "waiting"
+      : working
+        ? "working"
+        : "idle";
+  const menu = (
+    <Menu>
+      <MenuTrigger
+        render={<Button size="icon-xs" variant="ghost" />}
+        aria-label={gt("Actions for {name}", { name: current.name })}
+      >
+        <EllipsisIcon />
+      </MenuTrigger>
+      <MenuPopup align="end">
+        <MenuItem onClick={() => openView("tasks")}>
+          <T>Open Tasks</T>
+        </MenuItem>
+        <MenuItem onClick={() => openView("make")}>
+          <T>Open Docs</T>
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem disabled={!canUpdate} onClick={profile.edit}>
+          <T>Edit Captain</T>
+        </MenuItem>
+        <MenuItem
+          disabled={pending || !profile.canArchive}
+          onClick={() => void profile.changeArchive()}
+        >
+          {archived ? <T>Restore Captain</T> : <T>Archive Captain</T>}
+        </MenuItem>
+        {profile.canDelete ? (
+          <>
+            <MenuSeparator />
+            <MenuItem variant="destructive" disabled={pending} onClick={profile.requestDelete}>
+              <T>Delete Captain</T>
+            </MenuItem>
+          </>
+        ) : null}
+      </MenuPopup>
+    </Menu>
+  );
+
+  if (isDuet) {
+    return (
+      <li className="group/captain-row relative flex h-8 items-center">
+        <DuetTreeConnector />
+        <button
+          type="button"
+          aria-current={selected ? "page" : undefined}
+          aria-label={gt("{name}, {status}", { name: current.name, status })}
+          className={cn(
+            "relative flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md pr-8 pl-7.5 text-left text-label text-[#141413] outline-none select-none hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring dark:text-[#ececec] dark:hover:bg-white/7",
+            selected &&
+              "bg-[var(--duet-row-active,var(--sidebar-accent))] hover:bg-[var(--duet-row-active,var(--sidebar-accent))]",
+          )}
+          onClick={() => onOpen(threadRef)}
+        >
+          <CaptainAvatar avatar={current.avatar} state={avatarState} />
+          <span className="min-w-0 flex-1 truncate">{current.name}</span>
+          <span className="ml-auto flex shrink-0 items-center gap-1 group-hover/captain-row:opacity-0 group-focus-within/captain-row:opacity-0">
+            {!archived && attention > 0 ? (
+              <>
+                <span className="size-1.5 rounded-full" style={{ backgroundColor: "#a98546" }} />
+                <span className="text-meta tabular-nums" style={{ color: "#a98546" }}>
+                  {attention}
+                </span>
+              </>
+            ) : !archived && working ? (
+              <span className="size-1.5 rounded-full" style={{ backgroundColor: "#d97757" }} />
+            ) : null}
+          </span>
+        </button>
+        <div className="absolute right-1 shrink-0 opacity-0 transition-opacity group-focus-within/captain-row:opacity-100 group-hover/captain-row:opacity-100">
+          {menu}
+        </div>
+        <CaptainProfileDialogs profile={profile} />
+      </li>
+    );
+  }
 
   return (
     <li
@@ -132,10 +254,7 @@ function CaptainShelfRow({
         aria-label={gt("{name}, {status}", { name: current.name, status })}
         onClick={() => onOpen(threadRef)}
       >
-        <CaptainAvatar
-          avatar={current.avatar}
-          state={archived ? "archived" : attention > 0 ? "waiting" : working ? "working" : "idle"}
-        />
+        <CaptainAvatar avatar={current.avatar} state={avatarState} />
         <span className="grid min-w-0 flex-1">
           <span className="truncate text-label">{current.name}</span>
           <span
@@ -156,40 +275,7 @@ function CaptainShelfRow({
         ) : null}
       </ContentButton>
       <div className="shrink-0 opacity-0 transition-opacity group-focus-within/captain-row:opacity-100 group-hover/captain-row:opacity-100">
-        <Menu>
-          <MenuTrigger
-            render={<Button size="icon-xs" variant="ghost" />}
-            aria-label={gt("Actions for {name}", { name: current.name })}
-          >
-            <EllipsisIcon />
-          </MenuTrigger>
-          <MenuPopup align="end">
-            <MenuItem onClick={() => openView("tasks")}>
-              <T>Open Tasks</T>
-            </MenuItem>
-            <MenuItem onClick={() => openView("make")}>
-              <T>Open Make</T>
-            </MenuItem>
-            <MenuSeparator />
-            <MenuItem disabled={!canUpdate} onClick={profile.edit}>
-              <T>Edit Captain</T>
-            </MenuItem>
-            <MenuItem
-              disabled={pending || !profile.canArchive}
-              onClick={() => void profile.changeArchive()}
-            >
-              {archived ? <T>Restore Captain</T> : <T>Archive Captain</T>}
-            </MenuItem>
-            {profile.canDelete ? (
-              <>
-                <MenuSeparator />
-                <MenuItem variant="destructive" disabled={pending} onClick={profile.requestDelete}>
-                  <T>Delete Captain</T>
-                </MenuItem>
-              </>
-            ) : null}
-          </MenuPopup>
-        </Menu>
+        {menu}
       </div>
       <CaptainProfileDialogs profile={profile} />
     </li>
@@ -216,6 +302,7 @@ export function CaptainShelfList({
   onReveal?: ((header: HTMLElement) => void) | undefined;
 }) {
   const gt = useGT();
+  const isDuet = useTheme().theme === "ksg-salon";
   const [expanded, setExpanded] = useLocalStorage(
     "t3code:sidebar:captains-expanded",
     true,
@@ -226,6 +313,46 @@ export function CaptainShelfList({
     (count, row) => count + Number(row.captain.archivedAt === null && row.attention > 0),
     0,
   );
+  const rowList = rows.map(({ captain, environmentId, label, attention, working }) => (
+    <CaptainShelfRow
+      key={`${environmentId}:${captain.id}`}
+      captain={captain}
+      environmentId={environmentId}
+      {...(label !== undefined ? { label } : {})}
+      attention={attention}
+      working={working}
+      selected={
+        activeThread?.environmentId === environmentId &&
+        activeThread.threadId === captain.primaryThreadId
+      }
+      onOpen={onOpen}
+    />
+  ));
+
+  if (isDuet) {
+    return (
+      <li className="list-none">
+        <ul className="flex flex-col">{rowList}</ul>
+        {onCreate ? (
+          <button
+            type="button"
+            className="flex h-8 w-full cursor-pointer items-center gap-2 rounded-md pr-2 pl-7.75 text-left text-label outline-none select-none hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring dark:hover:bg-white/7"
+            style={{ color: "#717075" }}
+            onClick={onCreate}
+            aria-label={gt("New channel")}
+          >
+            <PlusIcon aria-hidden className="size-3.5" />
+            <T>New channel</T>
+          </button>
+        ) : null}
+        <div
+          aria-hidden
+          className="mx-3 mt-1 h-px"
+          style={{ backgroundColor: "var(--duet-hairline, var(--border))" }}
+        />
+      </li>
+    );
+  }
 
   return (
     <li className="mx-0.5 mb-1 list-none">
@@ -274,25 +401,7 @@ export function CaptainShelfList({
           </Button>
         ) : null}
       </div>
-      {expanded ? (
-        <ul className="space-y-0.5">
-          {rows.map(({ captain, environmentId, label, attention, working }) => (
-            <CaptainShelfRow
-              key={`${environmentId}:${captain.id}`}
-              captain={captain}
-              environmentId={environmentId}
-              {...(label !== undefined ? { label } : {})}
-              attention={attention}
-              working={working}
-              selected={
-                activeThread?.environmentId === environmentId &&
-                activeThread.threadId === captain.primaryThreadId
-              }
-              onOpen={onOpen}
-            />
-          ))}
-        </ul>
-      ) : null}
+      {expanded ? <ul className="space-y-0.5">{rowList}</ul> : null}
     </li>
   );
 }
