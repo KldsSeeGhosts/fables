@@ -47,7 +47,7 @@ const input = {
   interactionMode: "default",
 } satisfies CaptainCreateInput;
 
-const fixture = () => {
+const fixture = ({ scratchUnavailable = false } = {}) => {
   const launches = new Map<ThreadId, ThreadLaunchInput>();
   let failRebind = false;
   let listInvalidations = 0;
@@ -66,7 +66,9 @@ const fixture = () => {
     }),
     Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
       namedProjectsRoot: "/unused",
-      ensureScratchProject: Effect.succeed({ projectId: scratch }),
+      ensureScratchProject: scratchUnavailable
+        ? Effect.fail(new ManagedProjectFolders.ScratchUnavailableError({ baseDir: "/home" }))
+        : Effect.succeed({ projectId: scratch }),
     }),
     Layer.mock(ProjectService.ProjectService)({
       getById: (id) =>
@@ -136,6 +138,19 @@ it.effect("creates one primary thread, validates scope, and falls back to Scratc
       });
       assert.deepStrictEqual(scoped.scopedProjectIds, [project, secondProject]);
       assert.equal(launches.get(scoped.primaryThreadId)?.projectId, project);
+    }).pipe(Effect.provide(layer));
+  }),
+);
+
+it.effect("asks for a scoped project when the environment has no Scratch", () =>
+  Effect.gen(function* () {
+    const { layer, launches } = fixture({ scratchUnavailable: true });
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainService.CaptainService;
+      const error = yield* Effect.flip(service.create(input));
+      assert.equal(error.code, "invalid_request");
+      assert.include(error.message, "workspace scope");
+      assert.equal(launches.size, 0);
     }).pipe(Effect.provide(layer));
   }),
 );

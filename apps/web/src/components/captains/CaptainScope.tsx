@@ -27,18 +27,23 @@ export function CaptainScope({
   ];
   return (
     <fieldset className="min-w-0 space-y-2" disabled={disabled}>
-      <legend className="mb-1 text-label">
+      <legend className="text-label">
         <T>Workspace scope</T>
       </legend>
-      {selected.length === 0 ? (
-        <p className="text-meta text-muted-foreground">
-          <T>No projects selected</T>
-        </p>
-      ) : null}
+      <p className="text-meta text-muted-foreground">
+        {selected.length === 0 ? (
+          <T>Not limited to any project. The Captain works in a scratch folder.</T>
+        ) : (
+          <T>The Captain can delegate work only to the selected projects.</T>
+        )}
+      </p>
       {choices.length > 0 ? (
-        <div className="max-h-40 space-y-2 overflow-y-auto p-0.5">
+        <div className="max-h-40 overflow-y-auto rounded-lg border border-border p-1">
           {choices.map(({ id, title }) => (
-            <label key={id} className="flex items-center gap-2 text-body">
+            <label
+              key={id}
+              className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-body hover:bg-accent"
+            >
               <Checkbox
                 checked={selected.includes(id)}
                 disabled={disabled}
@@ -46,7 +51,7 @@ export function CaptainScope({
                   onChange(checked ? [...selected, id] : selected.filter((value) => value !== id))
                 }
               />
-              <span className="min-w-0 break-words">
+              <span className="min-w-0 truncate">
                 <Var>{title}</Var>
               </span>
             </label>
