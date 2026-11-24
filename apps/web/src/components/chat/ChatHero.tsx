@@ -6,7 +6,6 @@ import { useDuetShell } from "../../hooks/useDuetShell";
 import { CaptainAvatar } from "../captains/CaptainAvatar";
 import { useCaptain } from "../captains/useCaptain";
 import { Button } from "../ui/button";
-import { DuetOrbMark } from "./DuetStatusOrb";
 import { Text } from "../ui/text";
 
 /** "Good morning", "Good afternoon" or "Good evening" for the user's local time. */
@@ -90,15 +89,19 @@ export function ChatHeroGreeting({
   const captain = useCaptain(threadRef);
   const duet = useDuetShell();
   return (
-    <div data-chat-hero="" className="flex flex-col items-center gap-3 text-center">
+    <div data-chat-hero="" className="flex flex-col items-center gap-3 duet:gap-1 text-center">
       {duet ? (
-        <DuetOrbMark size={40} state="idle" />
+        captain ? (
+          <div className="mb-2">
+            <CaptainAvatar avatar={captain.avatar} size="hero" state="idle" />
+          </div>
+        ) : null
       ) : captain ? (
         <CaptainAvatar avatar={captain.avatar} size="profile" state="idle" />
       ) : (
         <ChatHeroMark />
       )}
-      <Text variant="display-lg" render={<h1 className="text-balance" />}>
+      <Text variant={duet ? "display" : "display-lg"} render={<h1 className="text-balance" />}>
         {captain ? captain.name : greeting}
       </Text>
       {captain?.role ? (
@@ -123,6 +126,7 @@ export function ChatHeroStarters({
   onPick: (prompt: string) => void;
 }) {
   const gt = useGT();
+  const duet = useDuetShell();
   const starters = useChatHeroStarters(captain);
   return (
     <div
@@ -133,8 +137,8 @@ export function ChatHeroStarters({
       {starters.map((starter) => (
         <Button
           key={starter.label}
-          variant="pill"
-          size="sm-pill"
+          variant={duet ? "quiet-pill" : "pill"}
+          {...(duet ? {} : { size: "sm-pill" })}
           onPointerDown={(event) => event.preventDefault()}
           onClick={() => onPick(starter.prompt)}
         >

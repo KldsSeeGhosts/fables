@@ -328,7 +328,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   const showsPill = pillBranchLabel !== null || contextPercent !== null;
   const threadPanelToggle = showsPill ? (
     <Button
-      className="relative max-w-56 shrink-0 [-webkit-app-region:no-drag]"
+      className="relative max-w-56 shrink-0 self-center [-webkit-app-region:no-drag]"
       aria-expanded={threadPanelOpen}
       onClick={threadPanelPresentation === "popover" ? undefined : onToggleThreadPanel}
       disabled={disabledReason !== null}

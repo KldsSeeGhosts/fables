@@ -323,6 +323,10 @@ html:root[data-theme-id="ksg-salon"] {
     text-underline-offset: 2px;
   }
 
+  [data-chat-hero] h1 {
+    font-weight: 400;
+  }
+
   [data-duet-task-highlight="true"] {
     animation: duet-task-highlight 1s ease-out;
   }

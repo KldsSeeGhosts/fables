@@ -4048,7 +4048,7 @@ export default function ChatView(props: ChatViewProps) {
             >
               {heroLayout ? (
                 // A short split pane has no room above the composer.
-                <div className="chat-composer-lane flex w-full shrink-0 justify-center pb-7 [@container_draft-hero_(max-height:440px)]:hidden">
+                <div className="chat-composer-lane flex w-full shrink-0 justify-center pb-7 duet:pb-6 [@container_draft-hero_(max-height:440px)]:hidden">
                   <div
                     className="pointer-events-auto mx-auto flex w-full max-w-(--chat-content-max-width) flex-col items-center"
                     style={

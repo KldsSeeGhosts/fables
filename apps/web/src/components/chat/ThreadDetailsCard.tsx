@@ -152,6 +152,7 @@ export function ThreadDetailsCard({
           requestWorkspaceFocus({ area: "details" });
           return false;
         }}
+        finalFocus={(closeType) => closeType === "keyboard"}
         anchor={anchor}
         align="end"
         // Account for the find panel's 8px card padding.
