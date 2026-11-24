@@ -2140,7 +2140,7 @@ export const layer: Layer.Layer<
           const captainContext =
             compact || slashCommand || turnInput.resume
               ? ""
-              : yield* readCaptainContext(input.threadId);
+              : yield* readCaptainContext(projection.thread);
           const context = [delivery.context, sideChatContext, restartNote, captainContext]
             .filter((part) => part !== "")
             .join("\n\n");

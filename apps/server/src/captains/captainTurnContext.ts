@@ -1,4 +1,10 @@
-import { isCaptainThreadId, type Captain, type CaptainMemory } from "@t3tools/contracts";
+import {
+  isCaptainThreadId,
+  type Captain,
+  type CaptainMemory,
+  type OrchestrationV2AppThreadLineage,
+  type ThreadId,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -45,9 +51,37 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
   const sql = yield* Effect.serviceOption(SqlClient.SqlClient);
   const projects = yield* ProjectService.ProjectService;
 
+  // A delegated child gets the Captain's crew rules only, never its private profile or memories.
+  const readCrewContext = Effect.fn("CaptainService.crewContext")(function* (
+    parentThreadId: ThreadId,
+  ) {
+    if (Option.isNone(store)) return "";
+    const captain = yield* store.value.findByConversation(parentThreadId);
+    if (captain === undefined || captain.archivedAt !== null) return "";
+    const crew = yield* store.value.document(captain, "CREW.md");
+    return crew.content.trim() === ""
+      ? ""
+      : `Crew rules from Captain ${captain.name} (CREW.md):\n${prefix(crew.content, 2_000)}`;
+  });
+
   return Effect.fn("CaptainService.turnContext")(
-    function* (threadId: Captain["primaryThreadId"]) {
-      if (!isCaptainThreadId(threadId) || Option.isNone(store)) return "";
+    function* (thread: {
+      readonly id: ThreadId;
+      readonly lineage: Pick<
+        OrchestrationV2AppThreadLineage,
+        "parentThreadId" | "relationshipToParent"
+      >;
+    }) {
+      const threadId = thread.id;
+      if (Option.isNone(store)) return "";
+      if (!isCaptainThreadId(threadId)) {
+        const { parentThreadId, relationshipToParent } = thread.lineage;
+        return relationshipToParent === "subagent" &&
+          parentThreadId !== null &&
+          isCaptainThreadId(parentThreadId)
+          ? yield* readCrewContext(parentThreadId)
+          : "";
+      }
       const captain = yield* store.value.byThread(threadId);
       if (captain === undefined) return "";
       const { document, listMemories } = store.value;

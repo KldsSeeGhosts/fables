@@ -300,15 +300,45 @@ it.effect(
           content: "Notes are included",
           expectedRevision: 0,
         });
-        const read = yield* makeReadCaptainTurnContext;
+        yield* service.updateDocument({
+          captainId: captain.id,
+          name: "CREW.md",
+          content: "Run the tests before reporting.",
+          expectedRevision: 0,
+        });
+        const readContext = yield* makeReadCaptainTurnContext;
+        const read = (id: ThreadId, parentThreadId: ThreadId | null = null) =>
+          readContext({
+            id,
+            lineage: {
+              parentThreadId,
+              relationshipToParent: parentThreadId === null ? null : "subagent",
+            },
+          });
         const context = yield* read(captain.primaryThreadId);
         assert.include(context, "Captain profile: Maria (Coordinator)");
         assert.include(context, "Workspace [project]");
         assert.include(context, "Always mention this");
         assert.include(context, "Notes are included");
         assert.notInclude(context, "Keep this optional");
+        assert.notInclude(context, "Run the tests before reporting.");
         assert.isBelow(context.length, 5_000);
         assert.equal(yield* read(ThreadId.make("ordinary")), "");
+        const crew = yield* read(ThreadId.make("child"), captain.primaryThreadId);
+        assert.include(crew, "Run the tests before reporting.");
+        assert.notInclude(crew, "Always mention this");
+        assert.notInclude(crew, "Notes are included");
+        assert.equal(yield* read(ThreadId.make("grandchild"), ThreadId.make("child")), "");
+        const next = yield* service.resetConversation({
+          captainId: captain.id,
+          expectedThreadId: captain.primaryThreadId,
+        });
+        assert.include(
+          yield* read(ThreadId.make("pre-reset-child"), captain.primaryThreadId),
+          "Run the tests before reporting.",
+        );
+        yield* service.archive({ captainId: next.id });
+        assert.equal(yield* read(ThreadId.make("child"), next.primaryThreadId), "");
         assert.equal(
           yield* captainDelegationProject({ captain, currentProjectId: scratch }),
           project,
