@@ -100,7 +100,7 @@ const make = Effect.gen(function* () {
         updatedAt: now,
         archivedAt: null,
       });
-      yield* store.notify;
+      yield* store.notify(captain.id);
       return captain;
     },
     Effect.uninterruptible,
@@ -124,7 +124,7 @@ const make = Effect.gen(function* () {
             : yield* validateScope(scopedProjectIds),
         updatedAt: yield* timestamp,
       });
-      yield* store.notify;
+      yield* store.notify(captain.id);
       return captain;
     },
     Effect.uninterruptible,
@@ -141,7 +141,7 @@ const make = Effect.gen(function* () {
         archivedAt: archived ? now : null,
         updatedAt: now,
       });
-      yield* store.notify;
+      yield* store.notify(captain.id);
       return captain;
     },
     Effect.uninterruptible,
@@ -188,7 +188,7 @@ const make = Effect.gen(function* () {
         )
         .pipe(Effect.catchTags({ SqlError: CaptainStore.captainUnavailable }));
       yield* schedules.invalidateList;
-      yield* store.notify;
+      yield* store.notify(captain.id);
       return captain;
     },
     Effect.uninterruptible,

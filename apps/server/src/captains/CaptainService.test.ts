@@ -326,3 +326,50 @@ it.effect(
       }).pipe(Effect.provide(layer));
     }),
 );
+
+it.effect("streams only the changes a subscription shows", () =>
+  Effect.gen(function* () {
+    const { layer } = fixture();
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainService.CaptainService;
+      const maria = yield* service.create(input);
+      const other = yield* service.create({ ...input, captainId: CaptainId.make("other") });
+      const note = (captainId: typeof maria.id, content: string) =>
+        service.updateDocument({ captainId, name: "NOTES.md", content, expectedRevision: 0 });
+
+      const list = yield* service.subscribe({}).pipe(
+        Stream.tap((snapshot) =>
+          snapshot.captains.some((captain) => captain.name === "Renamed")
+            ? Effect.void
+            : note(maria.id, "Not a list change").pipe(
+                Effect.andThen(service.update({ captainId: maria.id, name: "Renamed" })),
+              ),
+        ),
+        Stream.take(2),
+        Stream.runCollect,
+      );
+      assert.equal(list[1]?.captains.find(({ id }) => id === maria.id)?.name, "Renamed");
+
+      const detail = yield* service.subscribe({ captainId: other.id }).pipe(
+        Stream.tap((snapshot) =>
+          snapshot.documents.find(({ name }) => name === "NOTES.md")?.revision === 0
+            ? service
+                .updateDocument({
+                  captainId: maria.id,
+                  name: "NOTES.md",
+                  content: "Not mine",
+                  expectedRevision: 1,
+                })
+                .pipe(
+                  Effect.andThen(service.update({ captainId: maria.id, role: "Someone else" })),
+                  Effect.andThen(note(other.id, "Mine")),
+                )
+            : Effect.void,
+        ),
+        Stream.take(2),
+        Stream.runCollect,
+      );
+      assert.equal(detail[1]?.documents.find(({ name }) => name === "NOTES.md")?.content, "Mine");
+    }).pipe(Effect.provide(layer));
+  }),
+);
