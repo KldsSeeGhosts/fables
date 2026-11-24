@@ -3658,6 +3658,8 @@
   "897019a4047b8ae6": "A delegated task report can start a Captain turn.",
   "311d18d8c8b8cad6": "Recent reports are included on the next Captain turn.",
   "1da26ebfc8136482": "Reports stay in the delegated task’s history.",
+  "81df09d327f2e4fd": "{count, plural, =1 {A delegated task is still running. It keeps running after the reset.} other {{count} delegated tasks are still running. They keep running after the reset.}}",
+  "de842a4e8dc6c9d4": "{count, plural, =1 {A delegated task is still running. Its report will show on the new conversation’s next turn.} other {{count} delegated tasks are still running. Their reports will show on the new conversation’s next turn.}}",
   "2186885e86876c86": "Could not reset conversation.",
   "ea3e655077462923": "Reset conversation",
   "a93bca3726a10e0c": "Reset conversation",

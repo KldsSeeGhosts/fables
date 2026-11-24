@@ -1,9 +1,16 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { Captain, EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import {
+  isOrchestrationV2WorkActive,
+  type Captain,
+  type EnvironmentId,
+  type ThreadId,
+} from "@t3tools/contracts";
 import { T, useGT } from "gt-react";
-import { RotateCcwIcon } from "lucide-react";
+import { AlertTriangleIcon, RotateCcwIcon } from "lucide-react";
 import { useState } from "react";
 
+import { useQuietThreadProjection } from "../../state/entities";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import {
@@ -14,8 +21,42 @@ import {
   AlertDialogPopup,
   AlertDialogTitle,
 } from "../ui/alert-dialog";
+import { Alert, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
 import { captainCommandError } from "./useCaptain";
+
+function RunningTasksWarning({
+  captain,
+  environmentId,
+}: {
+  captain: Captain;
+  environmentId: EnvironmentId;
+}) {
+  const gt = useGT();
+  const projection = useQuietThreadProjection(
+    scopeThreadRef(environmentId, captain.primaryThreadId),
+  )?.projection;
+  const count = (projection?.subagents ?? []).filter(
+    (task) => task.origin === "app_owned" && isOrchestrationV2WorkActive(task.status),
+  ).length;
+  if (count === 0) return null;
+  return (
+    <Alert variant="warning" role="status">
+      <AlertTriangleIcon aria-hidden />
+      <AlertDescription>
+        {captain.reportPolicy === "ignore"
+          ? gt(
+              "{count, plural, =1 {A delegated task is still running. It keeps running after the reset.} other {{count} delegated tasks are still running. They keep running after the reset.}}",
+              { count },
+            )
+          : gt(
+              "{count, plural, =1 {A delegated task is still running. Its report will show on the new conversation’s next turn.} other {{count} delegated tasks are still running. Their reports will show on the new conversation’s next turn.}}",
+              { count },
+            )}
+      </AlertDescription>
+    </Alert>
+  );
+}
 
 export function CaptainResetButton({
   captain,
@@ -94,6 +135,7 @@ export function CaptainResetButton({
                 </T>
               </AlertDialogDescription>
             </AlertDialogHeader>
+            <RunningTasksWarning captain={captain} environmentId={environmentId} />
             {error ? (
               <p role="alert" className="text-body text-destructive-foreground">
                 {error}
