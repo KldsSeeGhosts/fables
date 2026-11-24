@@ -19,8 +19,28 @@ export const CaptainMemoryId = TrimmedNonEmptyString.check(Schema.isMaxLength(12
 );
 export type CaptainMemoryId = typeof CaptainMemoryId.Type;
 
-export const CaptainAvatarPreset = Schema.Literals(["compass", "mountain", "terminal", "flag"]);
-export const CaptainAvatarColor = Schema.Literals(["violet", "blue", "emerald", "amber", "rose"]);
+export const CaptainAvatarShape = Schema.Literals([
+  "circle",
+  "squircle",
+  "drop",
+  "hexagon",
+  "cloud",
+  "diamond",
+]);
+export type CaptainAvatarShape = typeof CaptainAvatarShape.Type;
+// The icon presets predate shapes and stay readable for Captains saved with them.
+export const CaptainAvatarPreset = Schema.Union([
+  CaptainAvatarShape,
+  Schema.Literals(["compass", "mountain", "terminal", "flag"]),
+]);
+export const CaptainAvatarColor = Schema.Literals([
+  "ink",
+  "violet",
+  "blue",
+  "emerald",
+  "amber",
+  "rose",
+]);
 export const CaptainAvatar = Schema.Struct({
   preset: CaptainAvatarPreset,
   color: CaptainAvatarColor,
