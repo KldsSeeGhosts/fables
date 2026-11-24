@@ -1,6 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
 import {
-  CaptainAvatarColor,
   CaptainId,
   clampManagedRuntimeMode,
   DEFAULT_SERVER_SETTINGS,
@@ -34,8 +33,10 @@ import { Textarea } from "../ui/textarea";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import {
   CaptainAvatar,
+  captainAvatarColors,
   captainAvatarShapes,
   captainAvatarSwatches,
+  normalizeCaptainAvatar,
   randomCaptainAvatar,
 } from "./CaptainAvatar";
 import { CaptainScope } from "./CaptainScope";
@@ -63,7 +64,9 @@ export function CaptainEditorDialog({
   const [name, setName] = useState(captain?.name ?? "");
   const [role, setRole] = useState(captain?.role ?? "");
   const [instructions, setInstructions] = useState(captain?.instructions ?? "");
-  const [avatar, setAvatar] = useState<Avatar>(captain?.avatar ?? randomCaptainAvatar());
+  const [avatar, setAvatar] = useState<Avatar>(() =>
+    normalizeCaptainAvatar(captain?.avatar ?? randomCaptainAvatar()),
+  );
   const [scopedProjectIds, setScope] = useState<ReadonlyArray<ProjectId>>(
     captain?.scopedProjectIds ?? [],
   );
@@ -78,19 +81,31 @@ export function CaptainEditorDialog({
   const canSave = captain === undefined ? canCreate : canUpdate;
   const shapeLabels = {
     circle: gt("Circle"),
-    squircle: gt("Rounded square"),
-    drop: gt("Drop", { $context: "Captain avatar shape" }),
-    hexagon: gt("Hexagon"),
     cloud: gt("Cloud", { $context: "Captain avatar shape" }),
-    diamond: gt("Diamond"),
+    diamond: gt("Tilted square", { $context: "Captain avatar shape" }),
+    sparkle: gt("Sparkle", { $context: "Captain avatar shape" }),
+    clover: gt("Clover", { $context: "Captain avatar shape" }),
+    pebble: gt("Pebble", { $context: "Captain avatar shape" }),
+    flower: gt("Flower", { $context: "Captain avatar shape" }),
+    drop: gt("Drop", { $context: "Captain avatar shape" }),
+    pill: gt("Pill", { $context: "Captain avatar shape" }),
+    triangle: gt("Triangle", { $context: "Captain avatar shape" }),
+    pentagon: gt("Pentagon", { $context: "Captain avatar shape" }),
+    gear: gt("Burst", { $context: "Captain avatar shape" }),
+    hexagon: gt("Hexagon", { $context: "Captain avatar shape" }),
   };
   const colorLabels = {
-    ink: gt("Ink", { $context: "color" }),
-    violet: gt("Violet"),
+    black: gt("Black", { $context: "color" }),
+    brown: gt("Brown", { $context: "color" }),
+    red: gt("Red", { $context: "color" }),
+    tangerine: gt("Tangerine", { $context: "color" }),
+    orange: gt("Orange", { $context: "color" }),
+    green: gt("Green", { $context: "color" }),
+    teal: gt("Teal", { $context: "color" }),
     blue: gt("Blue"),
-    emerald: gt("Emerald"),
-    amber: gt("Amber"),
-    rose: gt("Rose", { $context: "color" }),
+    purple: gt("Purple", { $context: "color" }),
+    pink: gt("Pink", { $context: "color" }),
+    gray: gt("Gray", { $context: "color" }),
   };
 
   const save = async () => {
@@ -198,8 +213,15 @@ export function CaptainEditorDialog({
                 </Select>
               </div>
             ) : null}
-            <div className="flex gap-3">
-              <CaptainAvatar avatar={avatar} size="large" />
+            <div className="flex items-start gap-3">
+              <div className="flex size-16 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/45">
+                <CaptainAvatar
+                  key={`${avatar.preset}:${avatar.color}`}
+                  avatar={avatar}
+                  size="profile"
+                  animateOnMount
+                />
+              </div>
               <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
                 <div className="grid min-w-0 gap-1.5">
                   <label htmlFor={`${fieldId}-name`} className="text-label">
@@ -234,50 +256,71 @@ export function CaptainEditorDialog({
                 </div>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <ToggleGroup
-                aria-label={gt("Avatar shape")}
-                value={[avatar.preset]}
-                disabled={saving}
-                onValueChange={(value) => {
-                  const preset = captainAvatarShapes.find((shape) => shape === value[0]);
-                  if (preset) setAvatar((current) => ({ ...current, preset }));
-                }}
-              >
-                {captainAvatarShapes.map((shape) => (
-                  <Toggle
-                    key={shape}
-                    value={shape}
-                    aria-label={shapeLabels[shape]}
-                    title={shapeLabels[shape]}
-                  >
-                    <CaptainAvatar avatar={{ preset: shape, color: avatar.color }} size="picker" />
-                  </Toggle>
-                ))}
-              </ToggleGroup>
-              <ToggleGroup
-                aria-label={gt("Avatar color")}
-                value={[avatar.color]}
-                disabled={saving}
-                onValueChange={(value) => {
-                  const color = CaptainAvatarColor.literals.find((color) => color === value[0]);
-                  if (color) setAvatar((current) => ({ ...current, color }));
-                }}
-              >
-                {CaptainAvatarColor.literals.map((color) => (
-                  <Toggle
-                    key={color}
-                    value={color}
-                    aria-label={colorLabels[color]}
-                    title={colorLabels[color]}
-                  >
-                    <span
-                      aria-hidden
-                      className={cn("size-3 rounded-full", captainAvatarSwatches[color])}
-                    />
-                  </Toggle>
-                ))}
-              </ToggleGroup>
+            <div className="grid gap-3">
+              <div className="grid gap-1.5">
+                <span className="text-label">
+                  <T>Shape</T>
+                </span>
+                <ToggleGroup
+                  aria-label={gt("Avatar shape")}
+                  variant="default"
+                  size="compact"
+                  detached
+                  className="flex w-full flex-wrap"
+                  value={[avatar.preset]}
+                  disabled={saving}
+                  onValueChange={(value) => {
+                    const preset = captainAvatarShapes.find((shape) => shape === value[0]);
+                    if (preset) setAvatar((current) => ({ ...current, preset }));
+                  }}
+                >
+                  {captainAvatarShapes.map((shape) => (
+                    <Toggle
+                      key={shape}
+                      value={shape}
+                      aria-label={shapeLabels[shape]}
+                      title={shapeLabels[shape]}
+                    >
+                      <CaptainAvatar avatar={{ preset: shape, color: "gray" }} size="picker" />
+                    </Toggle>
+                  ))}
+                </ToggleGroup>
+              </div>
+              <div className="grid gap-1.5">
+                <span className="text-label">
+                  <T>Color</T>
+                </span>
+                <ToggleGroup
+                  aria-label={gt("Avatar color")}
+                  variant="default"
+                  size="compact"
+                  detached
+                  className="flex w-full flex-wrap"
+                  value={[avatar.color]}
+                  disabled={saving}
+                  onValueChange={(value) => {
+                    const color = captainAvatarColors.find((color) => color === value[0]);
+                    if (color) setAvatar((current) => ({ ...current, color }));
+                  }}
+                >
+                  {captainAvatarColors.map((color) => (
+                    <Toggle
+                      key={color}
+                      value={color}
+                      aria-label={colorLabels[color]}
+                      title={colorLabels[color]}
+                    >
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "size-3.5 rounded-full ring-1 ring-border",
+                          captainAvatarSwatches[color],
+                        )}
+                      />
+                    </Toggle>
+                  ))}
+                </ToggleGroup>
+              </div>
             </div>
             <div className="grid gap-1.5">
               <label htmlFor={`${fieldId}-instructions`} className="text-label">

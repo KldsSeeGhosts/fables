@@ -19,13 +19,26 @@ export const CaptainMemoryId = TrimmedNonEmptyString.check(Schema.isMaxLength(12
 );
 export type CaptainMemoryId = typeof CaptainMemoryId.Type;
 
-export const CaptainAvatarShape = Schema.Literals([
+const captainAvatarPickerShapeLiterals = [
   "circle",
-  "squircle",
-  "drop",
-  "hexagon",
   "cloud",
   "diamond",
+  "sparkle",
+  "clover",
+  "pebble",
+  "flower",
+  "drop",
+  "pill",
+  "triangle",
+  "pentagon",
+  "gear",
+  "hexagon",
+] as const;
+export const CaptainAvatarPickerShape = Schema.Literals(captainAvatarPickerShapeLiterals);
+export type CaptainAvatarPickerShape = typeof CaptainAvatarPickerShape.Type;
+export const CaptainAvatarShape = Schema.Literals([
+  ...captainAvatarPickerShapeLiterals,
+  "squircle",
 ]);
 export type CaptainAvatarShape = typeof CaptainAvatarShape.Type;
 // The icon presets predate shapes and stay readable for Captains saved with them.
@@ -33,10 +46,25 @@ export const CaptainAvatarPreset = Schema.Union([
   CaptainAvatarShape,
   Schema.Literals(["compass", "mountain", "terminal", "flag"]),
 ]);
+const captainAvatarPickerColorLiterals = [
+  "black",
+  "brown",
+  "red",
+  "tangerine",
+  "orange",
+  "green",
+  "teal",
+  "blue",
+  "purple",
+  "pink",
+  "gray",
+] as const;
+export const CaptainAvatarPickerColor = Schema.Literals(captainAvatarPickerColorLiterals);
+export type CaptainAvatarPickerColor = typeof CaptainAvatarPickerColor.Type;
 export const CaptainAvatarColor = Schema.Literals([
+  ...captainAvatarPickerColorLiterals,
   "ink",
   "violet",
-  "blue",
   "emerald",
   "amber",
   "rose",
