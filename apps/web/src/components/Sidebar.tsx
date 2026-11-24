@@ -67,6 +67,7 @@ import {
   type ShownOrder,
 } from "@t3tools/client-runtime/state/thread-search";
 import { foldSearchQuery, rankMessageMatches } from "@t3tools/shared/paletteSearch";
+import { CaptainsShelf } from "./captains/CaptainsShelf";
 import { findForMessageMatch, openThreadFindOnQuery } from "./chat/threadFindStore";
 import {
   threadRuntimeCanArchive,
@@ -3883,6 +3884,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           : null;
                       const from = isContextDrag ? null : (dragState?.activeSection ?? null);
                       const items: ReactNode[] = [
+                        <CaptainsShelf
+                          key="captains-shelf"
+                          primaryEnvironmentId={primaryEnvironmentId}
+                          activeThread={currentThreadRef}
+                          onOpen={navigateToThread}
+                          onReveal={revealSidebarShelf}
+                        />,
                         <SidebarDraftBlock
                           key="draft-sessions"
                           draftIds={draftIds}

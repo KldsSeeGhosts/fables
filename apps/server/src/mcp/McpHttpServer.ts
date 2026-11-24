@@ -18,6 +18,7 @@ import type * as Types from "effect/Types";
 import { AiError, McpProtocol, McpSchema, McpServer, Tool, Toolkit } from "effect/ai";
 import { HttpBody, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import {
+  isCaptainThreadId,
   AuthSessionId,
   DeviceToolError,
   OrchestratorMcpFailure,
@@ -72,6 +73,9 @@ import * as ProjectHandlers from "./toolkits/project/handlers.ts";
 import { AttachmentToolkit } from "./toolkits/attachment/tools.ts";
 import * as AttachmentHandlers from "./toolkits/attachment/handlers.ts";
 import { ThreadToolkit } from "./toolkits/thread/tools.ts";
+import * as CaptainStore from "../captains/CaptainStore.ts";
+import * as CaptainHandlers from "./toolkits/captain/handlers.ts";
+import { CaptainToolkit } from "./toolkits/captain/tools.ts";
 import { WorkflowToolkit } from "./toolkits/workflow/tools.ts";
 import * as WorkflowHandlers from "./toolkits/workflow/handlers.ts";
 import * as ThreadHandlers from "./toolkits/thread/handlers.ts";
@@ -283,6 +287,7 @@ const linkedEnvironmentsOff = HttpServerResponse.jsonUnsafe(
 );
 
 const makeMcpAuthMiddleware = Effect.gen(function* () {
+  const captainStore = yield* Effect.serviceOption(CaptainStore.CaptainStore);
   const registry = yield* McpSessionRegistry.McpSessionRegistry;
   const clients = yield* Effect.serviceOption(McpClientAuthenticator);
   const serverSettings = yield* ServerSettings.ServerSettingsService;
@@ -378,8 +383,17 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
       limited.thread === undefined
         ? undefined
         : yield* Cache.get(forgeOfThread, limited.thread.threadId);
+    const threadId = limited.thread?.threadId;
+    const captain =
+      threadId !== undefined && isCaptainThreadId(threadId) && Option.isSome(captainStore)
+        ? yield* captainStore.value.byThread(threadId).pipe(
+            Effect.map((profile) => profile !== undefined),
+            Effect.orElseSucceed(() => false),
+          )
+        : false;
     return {
       ...limited,
+      captain,
       linkedEnvironments,
       agentFeedback,
       workflows,
@@ -1446,6 +1460,7 @@ export const layerTools = Layer.mergeAll(
   layerOrchestratorToolkit,
   layerThreadToolkit,
   layerWorkflowToolkit,
+  toolkitRegistration(CaptainToolkit, CaptainHandlers.layer),
   layerAttachmentToolkit,
   layerProjectRegistration,
   layerFeedbackToolkit,

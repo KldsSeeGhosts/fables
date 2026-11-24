@@ -4094,7 +4094,15 @@ const OrchestrationV2InternalCommand = Schema.Union([
 ]);
 export type OrchestrationV2InternalCommand = typeof OrchestrationV2InternalCommand.Type;
 
-export type OrchestrationV2ServerCommand = OrchestrationV2Command | OrchestrationV2InternalCommand;
+type DelegatedTaskRequest = Extract<
+  OrchestrationV2Command,
+  { readonly type: "delegated_task.request" }
+>;
+
+export type OrchestrationV2ServerCommand =
+  | Exclude<OrchestrationV2Command, DelegatedTaskRequest>
+  | (DelegatedTaskRequest & { readonly projectId?: ProjectId })
+  | OrchestrationV2InternalCommand;
 
 export const ORCHESTRATION_V2_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",

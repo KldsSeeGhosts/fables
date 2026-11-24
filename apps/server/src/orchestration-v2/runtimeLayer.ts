@@ -63,6 +63,8 @@ import * as ThreadIssueService from "./ThreadIssueService.ts";
 import * as ThreadLaunchService from "./ThreadLaunchService.ts";
 import * as ThreadForkService from "./ThreadForkService.ts";
 import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
+import * as CaptainService from "../captains/CaptainService.ts";
+import * as CaptainStore from "../captains/CaptainStore.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as FeedbackStore from "../feedback/FeedbackStore.ts";
@@ -186,6 +188,7 @@ const layerRunExecutionServiceProvided = RunExecutionService.layer.pipe(
 const layerProviderTurnStartServiceProvided = ProviderTurnStartService.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
+      CaptainStore.layer,
       layerContextHandoffServiceProvided,
       layerEventSink,
       IdAllocator.layer,
@@ -244,6 +247,7 @@ const layerRunFinalizationServiceProvided = RunFinalizationService.layer.pipe(
 const layerOrchestratorProvided = Orchestrator.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
+      CaptainStore.layer,
       layerCheckpointServiceProvided,
       CommandPolicy.layer,
       layerStores,
@@ -344,6 +348,18 @@ const layerScheduledTaskProvided = ScheduledTaskService.layer.pipe(
     ),
   ),
 );
+const layerCaptainProvided = CaptainService.layer.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      CaptainStore.layer,
+      layerThreadManagementProvided,
+      layerThreadLaunchProvided,
+      layerManagedProjectFoldersProvided,
+      layerProjectService,
+      layerScheduledTaskProvided,
+    ),
+  ),
+);
 const layerScratchThreadPromotionProvided = ScratchThreadPromotion.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
@@ -439,6 +455,8 @@ export const layerProduction = Layer.mergeAll(
   layerThreadLaunchProvided,
   layerScheduledTaskProvided,
   layerWorkflowsProvided,
+  layerCaptainProvided,
+  CaptainStore.layer,
   layerScratchThreadPromotionProvided,
   layerSecretRequestsProvided,
   layerFeedbackStoreProvided,

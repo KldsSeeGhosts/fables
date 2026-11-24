@@ -117,6 +117,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as ProjectStore from "./ProjectStore.ts";
+import { makeCaptainCanWake } from "../captains/captainDelegation.ts";
 import * as TaskFolderStore from "../workspace/TaskFolderStore.ts";
 import {
   isCheckpointRestoreIsolated,
@@ -1641,6 +1642,7 @@ const hasRunningDelegatedTasks = (subagents: ReadonlyArray<OrchestrationV2Subage
   );
 
 const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(function* () {
+  const captainCanWake = yield* makeCaptainCanWake;
   const checkpointService = yield* CheckpointServiceV2;
   const commandPolicy = yield* CommandPolicyV2;
   const contextHandoffService = yield* ContextHandoffServiceV2;
@@ -9967,7 +9969,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
 
   const dispatchDelegatedTaskRequest = Effect.fn("orchestrationV2.dispatch.delegatedTaskRequest")(
     function* (
-      command: Extract<OrchestrationV2Command, { readonly type: "delegated_task.request" }>,
+      command: Extract<OrchestrationV2ServerCommand, { readonly type: "delegated_task.request" }>,
       events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
       effects: Ref.Ref<Array<PendingOrchestrationEffectV2>>,
     ) {
@@ -10058,7 +10060,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         }),
         runtimeMode: command.runtimeMode,
         interactionMode: command.interactionMode,
-        ...(command.workspaceStrategy === undefined ? {} : { branch: null, worktreePath: null }),
+        ...(command.workspaceStrategy === undefined && command.projectId === undefined
+          ? {}
+          : { branch: null, worktreePath: null }),
+        ...(command.projectId === undefined ? {} : { projectId: command.projectId }),
       };
       const task: OrchestrationV2Subagent = {
         id: taskNodeId,
@@ -14970,7 +14975,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       input.parentRun === undefined ||
       input.parentProjection.thread.archivedAt !== null ||
       input.parentProjection.thread.deletedAt !== null ||
-      (cohort !== undefined && cohort.disposition !== "open")
+      (cohort !== undefined && cohort.disposition !== "open") ||
+      !(yield* captainCanWake(input.parentProjection.thread.id))
     ) {
       return {
         task: {
@@ -15742,7 +15748,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       cohort.disposition === "open" &&
       projection.thread.archivedAt === null &&
       projection.thread.deletedAt === null &&
-      pendingTaskIds.length > 0;
+      pendingTaskIds.length > 0 &&
+      (yield* captainCanWake(projection.thread.id));
     const nextDelivery = canReserveFollowUp
       ? {
           generation: cohort.nextGeneration,

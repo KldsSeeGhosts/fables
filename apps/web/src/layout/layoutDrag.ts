@@ -515,6 +515,7 @@ function openLayoutDragSurface(threadRef: ScopedThreadRef, surface: LayoutDragSu
       return panels.open(threadRef, "diff");
     case "files":
     case "pull-requests":
+    case "captain-brief":
       return panels.open(threadRef, surface.kind);
     case "device":
       return surface.target

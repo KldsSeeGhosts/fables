@@ -454,6 +454,7 @@ import {
   ScheduledTaskUpsertInput,
   ScheduledTaskMutationResult,
 } from "./scheduledTask.ts";
+import * as Captains from "./captain.ts";
 import { SecretRequestAnswerInput, SecretRequestError } from "./secretRequest.ts";
 import { AgentFeedbackAnswerInput, AgentFeedbackRequestError } from "./agentFeedback.ts";
 import {
@@ -645,6 +646,16 @@ export const WS_METHODS = {
   workflowsSaveDefinition: "workflows.saveDefinition",
   workflowsDeleteDefinition: "workflows.deleteDefinition",
 
+  captainsSubscribe: "captains.subscribe",
+  captainsCreate: "captains.create",
+  captainsUpdate: "captains.update",
+  captainsArchive: "captains.archive",
+  captainsUnarchive: "captains.unarchive",
+  captainsDelete: "captains.delete",
+  captainsResetConversation: "captains.resetConversation",
+  captainsUpdateDocument: "captains.updateDocument",
+  captainsUpsertMemory: "captains.upsertMemory",
+  captainsDeleteMemory: "captains.deleteMemory",
   scheduledTasksSubscribe: "scheduledTasks.subscribe",
   scheduledTasksUpsert: "scheduledTasks.upsert",
   scheduledTasksSetEnabled: "scheduledTasks.setEnabled",
@@ -2381,6 +2392,67 @@ const WsWorkflowsDeleteDefinitionRpc = Rpc.make(WS_METHODS.workflowsDeleteDefini
   error: EnvironmentAuthorizationError,
 });
 
+const WsCaptainsSubscribeRpc = Rpc.make(WS_METHODS.captainsSubscribe, {
+  payload: Captains.CaptainSubscribeInput,
+  success: Captains.CaptainSnapshot,
+  error: Schema.Union([Captains.CaptainError, EnvironmentAuthorizationError]),
+  stream: true,
+});
+
+const WsCaptainsCreateRpc = Rpc.make(WS_METHODS.captainsCreate, {
+  payload: Captains.CaptainCreateInput,
+  success: Captains.Captain,
+  error: Schema.Union([Captains.CaptainError, EnvironmentAuthorizationError]),
+});
+
+const WsCaptainsUpdateRpc = Rpc.make(WS_METHODS.captainsUpdate, {
+  payload: Captains.CaptainUpdateInput,
+  success: Captains.Captain,
+  error: Schema.Union([Captains.CaptainError, EnvironmentAuthorizationError]),
+});
+
+const WsCaptainsArchiveRpc = Rpc.make(WS_METHODS.captainsArchive, {
+  payload: Captains.CaptainKey,
+  success: Captains.Captain,
+  error: Schema.Union([Captains.CaptainError, EnvironmentAuthorizationError]),
+});
+
+const WsCaptainsUnarchiveRpc = Rpc.make(WS_METHODS.captainsUnarchive, {
+  payload: Captains.CaptainKey,
+  success: Captains.Captain,
+  error: Schema.Union([Captains.CaptainError, EnvironmentAuthorizationError]),
+});
+
+const WsCaptainsDeleteRpc = Rpc.make(WS_METHODS.captainsDelete, {
+  payload: Captains.CaptainKey,
+  success: Schema.Void,
+  error: Schema.Union([Captains.CaptainError, EnvironmentAuthorizationError]),
+});
+
+const WsCaptainsResetConversationRpc = Rpc.make(WS_METHODS.captainsResetConversation, {
+  payload: Captains.CaptainResetInput,
+  success: Captains.Captain,
+  error: Schema.Union([Captains.CaptainError, EnvironmentAuthorizationError]),
+});
+
+const WsCaptainsUpdateDocumentRpc = Rpc.make(WS_METHODS.captainsUpdateDocument, {
+  payload: Captains.CaptainUpdateDocumentInput,
+  success: Captains.CaptainDocument,
+  error: Schema.Union([Captains.CaptainError, EnvironmentAuthorizationError]),
+});
+
+const WsCaptainsUpsertMemoryRpc = Rpc.make(WS_METHODS.captainsUpsertMemory, {
+  payload: Captains.CaptainUpsertMemoryInput,
+  success: Captains.CaptainMemory,
+  error: Schema.Union([Captains.CaptainError, EnvironmentAuthorizationError]),
+});
+
+const WsCaptainsDeleteMemoryRpc = Rpc.make(WS_METHODS.captainsDeleteMemory, {
+  payload: Captains.CaptainDeleteMemoryInput,
+  success: Schema.Void,
+  error: Schema.Union([Captains.CaptainError, EnvironmentAuthorizationError]),
+});
+
 const WsScheduledTasksSubscribeRpc = Rpc.make(WS_METHODS.scheduledTasksSubscribe, {
   payload: ScheduledTaskListInput,
   success: ScheduledTaskListResult,
@@ -2565,6 +2637,16 @@ export const WsRpcGroup = RpcGroup.make(
   WsWorkflowsGetDefinitionRpc,
   WsWorkflowsSaveDefinitionRpc,
   WsWorkflowsDeleteDefinitionRpc,
+  WsCaptainsSubscribeRpc,
+  WsCaptainsCreateRpc,
+  WsCaptainsUpdateRpc,
+  WsCaptainsArchiveRpc,
+  WsCaptainsUnarchiveRpc,
+  WsCaptainsDeleteRpc,
+  WsCaptainsResetConversationRpc,
+  WsCaptainsUpdateDocumentRpc,
+  WsCaptainsUpsertMemoryRpc,
+  WsCaptainsDeleteMemoryRpc,
   WsScheduledTasksSubscribeRpc,
   WsScheduledTasksUpsertRpc,
   WsScheduledTasksSetEnabledRpc,

@@ -131,6 +131,9 @@ import SideThreadPane from "./chat/SideThreadPane";
 import { m } from "../i18n/messages";
 import { confirmTerminalClose } from "../lib/terminalCloseConfirm";
 
+const CaptainBriefPanel = lazy(async () => ({
+  default: (await import("./captains/CaptainBriefPanel")).CaptainBriefPanel,
+}));
 const PreviewPanel = lazy(() =>
   import("./preview/PreviewPanel").then((module) => ({ default: module.PreviewPanel })),
 );
@@ -720,6 +723,15 @@ function ThreadSurfaceContent({
   };
 
   switch (surface.kind) {
+    case "captain-brief":
+      return (
+        <Suspense fallback={null}>
+          <CaptainBriefPanel
+            threadRef={threadRef}
+            onDelete={() => void closeThreadSurface(threadRef, surface.id)}
+          />
+        </Suspense>
+      );
     case "thread":
       // Not lazy: revealing a suspended tiptap editor tears down its view and crashes the composer.
       return (

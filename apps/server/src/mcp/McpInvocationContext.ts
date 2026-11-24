@@ -157,6 +157,7 @@ export interface McpInvocationScope {
   readonly agentFeedback?: AgentFeedbackMode;
   /** True while Labs → Workflows is on here; `/mcp` reads it per request. Unset is off. */
   readonly workflows?: boolean;
+  readonly captain?: boolean;
   /**
    * The origin this `/mcp` request reached, e.g. a T3 Connect tunnel. Hosted clients cannot
    * see the URL they were configured with, so links they must fetch carry it. Unset in-process.
@@ -207,6 +208,11 @@ export const hiddenFromOutsideClients = (): boolean => {
   const fiber = Fiber.getCurrent();
   const scope = fiber && Context.getOrUndefined(fiber.context, McpInvocationContext);
   return scope === undefined || scope.thread !== undefined;
+};
+
+export const captainOnly = (): boolean => {
+  const fiber = Fiber.getCurrent();
+  return Boolean(fiber && Context.getOrUndefined(fiber.context, McpInvocationContext)?.captain);
 };
 
 /** `hiddenFromOutsideClients`, and hidden from a thread whose provider cannot hold for background work. */

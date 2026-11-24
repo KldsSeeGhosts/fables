@@ -134,6 +134,7 @@ import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManag
 import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as DocumentText from "./provider/DocumentText.ts";
+import * as Captains from "./captains/CaptainService.ts";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as Workflows from "./workflows/Workflows.ts";
 import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
@@ -1509,6 +1510,7 @@ export const layerWsRpc = (
       const commandOutputHub = yield* CommandOutputHub.CommandOutputHub;
       const threadViewers = yield* ThreadViewers.ThreadViewers;
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+      const captains = yield* Captains.CaptainService;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const workflows = yield* Workflows.Workflows;
       const workflowDefinitions = yield* WorkflowRuntime.WorkflowDefinitions;
@@ -2405,6 +2407,16 @@ export const layerWsRpc = (
         [WS_METHODS.workflowsSaveDefinition]: (input) =>
           workflowDefinitions.save(input.name, input.source),
         [WS_METHODS.workflowsDeleteDefinition]: (input) => workflowDefinitions.remove(input.name),
+        [WS_METHODS.captainsSubscribe]: (input) => captains.subscribe(input),
+        [WS_METHODS.captainsCreate]: (input) => captains.create(input),
+        [WS_METHODS.captainsUpdate]: (input) => captains.update(input),
+        [WS_METHODS.captainsArchive]: (input) => captains.archive(input),
+        [WS_METHODS.captainsUnarchive]: (input) => captains.unarchive(input),
+        [WS_METHODS.captainsDelete]: (input) => captains.delete(input),
+        [WS_METHODS.captainsResetConversation]: (input) => captains.resetConversation(input),
+        [WS_METHODS.captainsUpdateDocument]: (input) => captains.updateDocument(input),
+        [WS_METHODS.captainsUpsertMemory]: (input) => captains.upsertMemory(input),
+        [WS_METHODS.captainsDeleteMemory]: (input) => captains.deleteMemory(input),
         [WS_METHODS.scheduledTasksSubscribe]: (_input) =>
           scheduledTasks.subscribeList().pipe(Stream.map(withVisibleWebhookUrls)),
         [WS_METHODS.scheduledTasksUpsert]: (input) => scheduledTasks.upsert(input),

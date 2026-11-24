@@ -151,7 +151,7 @@ export function toggleThreadSidePane(threadRef: ScopedThreadRef, openDefault: ()
  */
 export function toggleThreadSurfaceTab(
   threadRef: ScopedThreadRef,
-  surfaceId: "diff" | "pull-requests",
+  surfaceId: "diff" | "pull-requests" | "captain-brief",
   toggle: () => void,
 ): void {
   const layout = useLayoutStore.getState().layout;

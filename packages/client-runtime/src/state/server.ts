@@ -1658,6 +1658,10 @@ export function createServerEnvironmentAtoms<R, E>(
         return Atom.make((get) => snapshot(get)?.definition?.revision);
       },
     }),
+    captainsLive: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:server:captains:live",
+      tag: WS_METHODS.captainsSubscribe,
+    }),
     scheduledTasksLive: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:server:scheduled-tasks:live",
       tag: WS_METHODS.scheduledTasksSubscribe,
@@ -1923,6 +1927,42 @@ export function createServerEnvironmentAtoms<R, E>(
     signalProcess: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:signal-process",
       tag: WS_METHODS.serverSignalProcess,
+    }),
+    createCaptain: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:captains:create",
+      tag: WS_METHODS.captainsCreate,
+    }),
+    updateCaptain: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:captains:update",
+      tag: WS_METHODS.captainsUpdate,
+    }),
+    archiveCaptain: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:captains:archive",
+      tag: WS_METHODS.captainsArchive,
+    }),
+    unarchiveCaptain: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:captains:unarchive",
+      tag: WS_METHODS.captainsUnarchive,
+    }),
+    deleteCaptain: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:captains:delete",
+      tag: WS_METHODS.captainsDelete,
+    }),
+    resetCaptainConversation: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:captains:resetConversation",
+      tag: WS_METHODS.captainsResetConversation,
+    }),
+    updateCaptainDocument: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:captains:updateDocument",
+      tag: WS_METHODS.captainsUpdateDocument,
+    }),
+    upsertCaptainMemory: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:captains:upsertMemory",
+      tag: WS_METHODS.captainsUpsertMemory,
+    }),
+    deleteCaptainMemory: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:captains:deleteMemory",
+      tag: WS_METHODS.captainsDeleteMemory,
     }),
     upsertScheduledTask: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:scheduled-task:upsert",

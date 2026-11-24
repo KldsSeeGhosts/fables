@@ -20,6 +20,9 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { isTrailingDoubleClick } from "../Sidebar.logic";
+import { CaptainAvatar } from "../captains/CaptainAvatar";
+import { CaptainHeaderActions } from "../captains/CaptainHeaderActions";
+import { useCaptain } from "../captains/useCaptain";
 import { Badge } from "../ui/badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
@@ -144,6 +147,8 @@ export const ChatHeader = memo(function ChatHeader({
   const activeProjectName = activeProject?.isScratch ? gt("No project") : activeProject?.title;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const activeThreadRef = scopeThreadRef(activeThreadEnvironmentId, activeThreadId);
+  const captain = useCaptain(isServerThread ? activeThreadRef : null);
+  const displayTitle = captain?.name ?? activeThreadTitle;
   const canOperateThread = useEnvironmentScope(
     activeThreadEnvironmentId,
     AuthOrchestrationOperateScope,
@@ -301,6 +306,8 @@ export const ChatHeader = memo(function ChatHeader({
   };
   const tabIcon = ghostOf ? (
     <GitForkIcon aria-hidden className="size-3.5 shrink-0" />
+  ) : captain ? (
+    <CaptainAvatar avatar={captain.avatar} />
   ) : isServerThread ? (
     activeProject ? (
       <ProjectFavicon project={activeProject} className="size-3.5" />
@@ -411,9 +418,9 @@ export const ChatHeader = memo(function ChatHeader({
                       PANE_TAB_TITLE_CLASS,
                       ghostShown && PANE_GHOST_TAB_TITLE_CLASS,
                     )}
-                    dir={textDirection(activeThreadTitle)}
+                    dir={textDirection(displayTitle)}
                   >
-                    {activeThreadTitle}
+                    {displayTitle}
                   </h2>
                 </TooltipTrigger>
                 <TooltipPopup side="bottom" className="whitespace-pre-line">
@@ -495,6 +502,9 @@ export const ChatHeader = memo(function ChatHeader({
           </Tooltip>
         ) : null}
       </PaneNotch>
+      {captain ? (
+        <CaptainHeaderActions captain={captain} threadRef={activeThreadRef} onOpen={onOpenThread} />
+      ) : null}
       {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
     </div>
   );

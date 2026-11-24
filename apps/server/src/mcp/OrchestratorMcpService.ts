@@ -1,4 +1,5 @@
 import {
+  isCaptainThreadId,
   CommandId,
   type RunId,
   idleCompactionOf,
@@ -112,6 +113,8 @@ import {
   delegatedTaskRuns,
   runOutcome,
 } from "../orchestration-v2/RestartBackgroundNote.ts";
+import * as CaptainStore from "../captains/CaptainStore.ts";
+import { captainDelegationProject } from "../captains/captainDelegation.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import { placeholderThreadTitle } from "../orchestration-v2/placeholderThreadTitle.ts";
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
@@ -1319,6 +1322,7 @@ function timelineItemsWithinBudget(
 
 const make = Effect.gen(function* () {
   const random = yield* SecureRandom.SecureRandom;
+  const captainStore = yield* Effect.serviceOption(CaptainStore.CaptainStore);
   const threadManagement = yield* ThreadManagementService.ThreadManagementService;
   const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
   const providerAdapters = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
@@ -2857,7 +2861,25 @@ const make = Effect.gen(function* () {
         input.target === undefined
           ? undefined
           : PeerForwarding.remoteTarget(callerScope, input.target.environmentId);
+      const callerThreadId = callerScope.thread?.threadId;
+      const captain =
+        callerThreadId !== undefined &&
+        isCaptainThreadId(callerThreadId) &&
+        Option.isSome(captainStore)
+          ? yield* captainStore.value
+              .findPrimary(callerThreadId)
+              .pipe(Effect.mapError((error) => failure("orchestration_error", error.message)))
+          : undefined;
+      if (captain?.archivedAt != null) {
+        return yield* failure("invalid_request", "Restore this Captain before delegating work.");
+      }
       if (input.target !== undefined && environmentId !== undefined) {
+        if (captain?.scopedProjectIds.length) {
+          return yield* failure(
+            "invalid_request",
+            "A scoped Captain can delegate only to its local workspace projects.",
+          );
+        }
         yield* requireCapability(callerScope);
         const scope = yield* requireThreadScope(callerScope, "delegate_task");
         // The task's child runs as an ordinary thread there; this thread keeps the task.
@@ -2871,6 +2893,7 @@ const make = Effect.gen(function* () {
       }
       const { scope, parent } = yield* loadThreadCaller(callerScope, "delegate_task");
       if (
+        !captain?.scopedProjectIds.length &&
         input.target?.projectId !== undefined &&
         input.target.projectId !== parent.thread.projectId
       ) {
@@ -2879,6 +2902,26 @@ const make = Effect.gen(function* () {
           "A local task runs in this thread's project. Omit target.projectId, or pass target.environmentId to run it in that environment's project.",
         );
       }
+      const delegatedProjectId = yield* captainDelegationProject({
+        captain,
+        currentProjectId: parent.thread.projectId,
+        requestedProjectId: input.target?.projectId,
+      });
+      const differentProject = delegatedProjectId !== parent.thread.projectId;
+      const targetProject = differentProject
+        ? yield* requireProject(delegatedProjectId)
+        : undefined;
+      const targetParent = differentProject
+        ? {
+            ...parent,
+            thread: {
+              ...parent.thread,
+              projectId: delegatedProjectId,
+              branch: null,
+              worktreePath: null,
+            },
+          }
+        : parent;
       const parentRun =
         ThreadManagementService.latestActiveRun(parent) ??
         (yield* backgroundSubagentRun(scope, parent.thread.id));
@@ -2901,10 +2944,10 @@ const make = Effect.gen(function* () {
       });
       const isRetryOfAcceptedDelegation = yield* threadManagement.hasReceipt(commandId);
       const target = yield* resolveTargetRechecking({
-        parent,
+        parent: targetParent,
         target: input.target,
         providers,
-        cwd: yield* parentWorkspaceCwd(parent),
+        cwd: targetProject?.workspaceRoot ?? (yield* parentWorkspaceCwd(parent)),
         skipProjectEnablementFilter: isRetryOfAcceptedDelegation,
       });
       const runtimeMode = yield* resolveRuntimeMode(
@@ -2918,10 +2961,10 @@ const make = Effect.gen(function* () {
       );
       let workspaceStrategy: OrchestrationV2ThreadLaunchWorkspaceStrategy | undefined;
       if (input.isolation === "worktree" && !isRetryOfAcceptedDelegation) {
-        const project = yield* requireProject(parent.thread.projectId);
+        const project = targetProject ?? (yield* requireProject(delegatedProjectId));
         const base = yield* gitDriver
           .resolveCommit({
-            cwd: parent.thread.worktreePath ?? project.workspaceRoot,
+            cwd: targetParent.thread.worktreePath ?? project.workspaceRoot,
             revision: "HEAD",
           })
           .pipe(
@@ -2932,7 +2975,7 @@ const make = Effect.gen(function* () {
         // Launch preparation creates the worktree from the project root, so a
         // parent checkout in another repository (such as a Git folder inside
         // Scratch) would hand it a commit it cannot find.
-        if (parent.thread.worktreePath !== null) {
+        if (targetParent.thread.worktreePath !== null) {
           yield* gitDriver
             .resolveCommit({ cwd: project.workspaceRoot, revision: base.commitSha })
             .pipe(
@@ -2963,6 +3006,7 @@ const make = Effect.gen(function* () {
               parentThreadId: scope.thread.threadId,
               parentRunId: parentRun.id,
               parentNodeId,
+              ...(differentProject ? { projectId: delegatedProjectId } : {}),
               task: taskPrompt(input),
               ...(input.title === undefined ? {} : { title: input.title }),
               modelSelection: target.modelSelection,

@@ -367,6 +367,10 @@
       "types": "./src/state/usageProgress.ts",
       "default": "./src/state/usageProgress.ts"
     },
+    "./state/captains": {
+      "types": "./src/state/captains.ts",
+      "default": "./src/state/captains.ts"
+    },
     "./state/server": {
       "types": "./src/state/server.ts",
       "default": "./src/state/server.ts"

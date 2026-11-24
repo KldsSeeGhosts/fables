@@ -283,6 +283,12 @@ export class ScheduledTaskService extends Context.Service<
       readonly threadIds: ReadonlyArray<ThreadId>;
       readonly projectId: ProjectId;
     }) => Effect.Effect<void, ScheduledTaskError>;
+    /** Rebinds tasks inside the caller's transaction. Invalidate the list after commit. */
+    readonly rebindThreadTasks: (
+      from: ThreadId,
+      to: ThreadId,
+    ) => Effect.Effect<void, ScheduledTaskError>;
+    readonly invalidateList: Effect.Effect<void>;
     /** The dispatched thread, or null if dispatch failed; leaves the task's binding unchanged. */
     readonly runNow: (
       input: ScheduledTaskRunNowInput,
@@ -1760,6 +1766,17 @@ export const layer = Layer.effect(
       if (moved.length > 0) yield* notifyChanged;
     });
 
+    const rebindThreadTasks = Effect.fn("ScheduledTaskService.rebindThreadTasks")(function* (
+      from: ThreadId,
+      to: ThreadId,
+    ) {
+      yield* sql`UPDATE scheduled_tasks SET thread_id = ${to} WHERE thread_id = ${from}`.pipe(
+        Effect.mapError((cause) =>
+          taskError("Could not rebind the thread's scheduled tasks.", { cause }),
+        ),
+      );
+    });
+
     const runNow: ScheduledTaskService["Service"]["runNow"] = Effect.fn(
       "ScheduledTaskService.runNow",
     )(function* (input: ScheduledTaskRunNowInput) {
@@ -2692,6 +2709,8 @@ export const layer = Layer.effect(
       delete: deleteTask,
       deleteForThread,
       moveThreadTasks,
+      rebindThreadTasks,
+      invalidateList: notifyChanged,
       runNow,
       rotateWebhookToken,
       listWebhookDeliveries,

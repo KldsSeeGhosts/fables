@@ -27,6 +27,8 @@ export function surfaceTabTitle(
   resolve: MessageResolver = m,
 ): string {
   switch (surface.kind) {
+    case "captain-brief":
+      return resolve(msg("Captain Brief"));
     case "diff":
       return resolve(msg("Diff"));
     case "files":
