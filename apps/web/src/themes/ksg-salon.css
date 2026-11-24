@@ -59,13 +59,31 @@ html:root[data-theme-id="ksg-salon"][data-theme-id] {
     --sidebar-active-label: var(--sidebar-foreground);
   }
 
-  /* The send pill takes the terracotta action color. */
-  & [data-composer-send-pill] {
-    --pill-fill: var(--lit-fill);
-    --pill-rim: var(--lit-rim);
-    --pill-foreground: var(--primary-foreground);
-    --pill-icon: var(--primary-foreground);
-    --pill-shadow: none;
+  /* Thread cards keep their measured height; the open one lifts as a soft card instead of a ring. */
+  & [data-app-sidebar] div[role="button"][data-sidebar-row] {
+    border-radius: 12px;
+  }
+
+  &
+    [data-app-sidebar]
+    div[role="button"][data-sidebar-row]:is([aria-current="page"], [aria-current="true"]) {
+    box-shadow:
+      0 1px 2px rgb(64 44 24 / 6%),
+      0 8px 18px -12px rgb(64 44 24 / 28%);
+  }
+
+  /* The composer's round send and stop take the terracotta action color. */
+  & [data-composer-send] {
+    --lit-fill: linear-gradient(#c96442, #c96442);
+    --lit-rim: linear-gradient(#c96442, #c96442);
+    --lit-hover-fill: linear-gradient(#b5573a, #b5573a);
+    --lit-shadow: 0 1px 2px rgb(120 50 20 / 25%);
+    color: #fff;
+  }
+
+  /* The hero spark and empty states use the same terracotta. */
+  & [data-chat-hero-mark] {
+    color: #c96442;
   }
 
   /* Editorial reading rhythm for agent prose and Captain digests. */

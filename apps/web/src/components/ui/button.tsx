@@ -27,6 +27,8 @@ const buttonVariants = cva(
         "icon-sm":
           "size-8 sm:size-7 [&_svg:not([class*='size-'])]:size-3.5 sm:[&_svg:not([class*='size-'])]:size-3.5",
         "icon-sm-pill": "size-8 rounded-full before:rounded-full sm:size-7",
+        /** A 32px round action, such as the composer's send and stop. */
+        "icon-pill": "size-8 rounded-full before:rounded-full",
         "icon-fixed-xs": "size-6 [&_svg:not([class*='size-'])]:size-3.5",
         "icon-xs":
           "size-7 sm:size-6 not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-4 sm:not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-3.5",

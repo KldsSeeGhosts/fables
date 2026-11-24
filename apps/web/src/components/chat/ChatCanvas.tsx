@@ -83,6 +83,7 @@ export function ChatCanvas({
         threadRef,
         preview,
         detailsCardInlineOpen,
+        detailsCardFloats: true,
       }),
     (a, b) => chatCanvasDrawnKey(a) === chatCanvasDrawnKey(b),
   );

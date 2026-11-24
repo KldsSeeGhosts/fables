@@ -64,10 +64,10 @@ it("shows collapsed Captain attention and opens the primary thread on selection"
     </ul>,
   );
   await expect.element(screen.getByRole("button", { name: /Maria, Needs input/ })).toBeVisible();
-  await activate(screen.getByRole("button", { name: /^Crew/ }));
+  await activate(screen.getByRole("button", { name: /^Channels/ }));
   await expect.element(screen.getByLabelText("1 Captain needs input")).toBeVisible();
   await expect.element(screen.getByText("Maria")).not.toBeInTheDocument();
-  await activate(screen.getByRole("button", { name: /^Crew/ }));
+  await activate(screen.getByRole("button", { name: /^Channels/ }));
   await activate(screen.getByRole("button", { name: /Maria, Needs input/ }));
   expect(open).toHaveBeenCalledWith(threadRef);
 });

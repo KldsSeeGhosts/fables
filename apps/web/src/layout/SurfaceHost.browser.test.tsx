@@ -132,10 +132,10 @@ it("replaces a split launcher with the Captains workspace", async () => {
   useLayoutStore.getState().focusTab(tabs.second.id);
   await using screen = await renderHost({ viewport: 1280 });
   const pane = screen.container.querySelector(`[data-layout-tab-id="${tabs.second.id}"]`)!;
-  const entry = page.elementLocator(pane).getByRole("button", { name: "Captains", exact: true });
+  const entry = page.elementLocator(pane).getByRole("button", { name: "Everything", exact: true });
   await expect.element(entry).toBeVisible();
   (entry.element() as HTMLButtonElement).click();
-  await expect.element(screen.getByRole("heading", { name: "Captains" })).toBeVisible();
+  await expect.element(screen.getByRole("heading", { name: "Everything" })).toBeVisible();
   expect(focusedTabId()).toBe(tabs.second.id);
   expect(screen.router?.state.location.pathname).toBe("/captains");
 });
@@ -533,13 +533,15 @@ it("keeps an unfocused pane's joined tab with a dim rim, and black chrome keeps 
   // The bar runs the pane's whole width; the notch ends at its tabs.
   expect(getComputedStyle(notch, "::before").right).not.toBe("0px");
   const join = inSecondPane("[data-pane-join]");
-  const position = join.style.getPropertyValue("--jx");
-  const width = join.style.getPropertyValue("--jw");
   await vi.waitFor(() => {
+    expect(join.style.getPropertyValue("--jx")).not.toBe("");
     expect(getComputedStyle(join.querySelector("[data-jb]")!).opacity).toBe("1");
     expect(getComputedStyle(join.querySelector("[data-jr]")!).opacity).toBe("0.45");
     expect(getComputedStyle(join.querySelector("[data-jm]")!, "::after").opacity).toBe("0.45");
   });
+  // Read once the join has measured its tab, which can land after the first render.
+  const position = join.style.getPropertyValue("--jx");
+  const width = join.style.getPropertyValue("--jw");
 
   useLayoutStore
     .getState()

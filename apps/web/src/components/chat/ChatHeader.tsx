@@ -23,6 +23,7 @@ import {
 } from "react";
 import { isTrailingDoubleClick } from "../Sidebar.logic";
 import { CaptainAvatar, type CaptainAvatarState } from "../captains/CaptainAvatar";
+import { CaptainChannelSwitcher } from "../captains/CaptainChannelBoard";
 import { CaptainHeaderActions } from "../captains/CaptainHeaderActions";
 import { useCaptain } from "../captains/useCaptain";
 import { Badge } from "../ui/badge";
@@ -518,7 +519,16 @@ export const ChatHeader = memo(function ChatHeader({
         ) : null}
       </PaneNotch>
       {captain ? (
-        <CaptainHeaderActions captain={captain} threadRef={activeThreadRef} onOpen={onOpenThread} />
+        <>
+          <div className="flex min-w-0 flex-1 justify-center px-2">
+            <CaptainChannelSwitcher threadRef={activeThreadRef} />
+          </div>
+          <CaptainHeaderActions
+            captain={captain}
+            threadRef={activeThreadRef}
+            onOpen={onOpenThread}
+          />
+        </>
       ) : null}
       {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
     </div>

@@ -117,52 +117,50 @@ vi.mock(import("../../state/query"), async (importOriginal) => ({
     }) as never,
 }));
 
+import { appAtomRegistry } from "../../rpc/atomRegistry";
+import { CaptainChannelBoard } from "./CaptainChannelBoard";
+import { captainChannelViewAtom } from "./captainBriefTab";
 import { CaptainsWorkspace } from "./CaptainsWorkspace";
+
+const threadRef = { environmentId, threadId: captain.primaryThreadId };
 
 async function activate(locator: Locator) {
   (locator.element() as HTMLElement).focus();
   await userEvent.keyboard("{Enter}");
 }
 
-it("walks the Inbox, a Captain's tabs, and opens its threads beside the page", async () => {
+it("lays out everything waiting, running and briefed, and opens a brief on its Make view", async () => {
   await using screen = await render(<CaptainsWorkspace />, { router: "/captains" });
-  const threadRef = { environmentId, threadId: captain.primaryThreadId };
 
   await expect
     .element(screen.getByRole("heading", { name: /^Good (morning|afternoon|evening)$/ }))
     .toBeVisible();
   await expect.element(screen.getByText("1 needs you")).toBeVisible();
-  await expect.element(screen.getByLabelText("1 Captain needs input")).toBeVisible();
+  await expect.element(screen.getByText("1 channel")).toBeVisible();
   await expect.element(screen.getByText(/Shipped the release candidate\./)).toBeVisible();
   await activate(screen.getByRole("button", { name: "Review" }));
   expect(openThread).toHaveBeenLastCalledWith(threadRef);
 
-  await activate(screen.getByRole("button", { name: "Maria, Needs input" }));
-  await expect.element(screen.getByRole("heading", { name: "Maria", level: 2 })).toBeVisible();
-  expect(screen.router?.state.location.search).toEqual({
-    env: environmentId,
-    captain: captain.id,
-    view: "brief",
-  });
+  openThread.mockClear();
+  await activate(screen.getByRole("button", { name: "Open Maria's brief" }));
+  expect(openThread).toHaveBeenCalledWith(threadRef);
+  expect(appAtomRegistry.get(captainChannelViewAtom(threadRef))).toBe("make");
+});
+
+it("shows a Captain's task board and deliverables in its pane", async () => {
+  await using screen = await render(<CaptainChannelBoard threadRef={threadRef} view="tasks" />);
+  await expect.element(screen.getByRole("heading", { name: "Needs you" })).toBeVisible();
+  await expect.element(screen.getByText("Weekly review")).toBeVisible();
+  await expect.element(screen.getByText("Paused")).toBeVisible();
+
+  await screen.rerender(<CaptainChannelBoard threadRef={threadRef} view="make" />);
   await expect
     .element(screen.getByRole("article", { name: "DIGEST.md" }).getByRole("heading"))
     .toHaveTextContent("Today");
-  await expect.element(screen.getByRole("button", { name: "Review" })).toBeVisible();
-
-  await activate(screen.getByRole("tab", { name: "Tasks" }));
-  await expect.element(screen.getByText("Weekly review")).toBeVisible();
-  await expect.element(screen.getByText("Paused")).toBeVisible();
-  expect(screen.router?.state.location.search).toMatchObject({ view: "tasks" });
-
-  await activate(screen.getByRole("tab", { name: "Docs" }));
   await expect
     .element(screen.getByRole("textbox", { name: "NOTES.md" }))
     .toHaveValue("Check the release.");
-
-  await activate(screen.getByRole("tab", { name: "Memory" }));
+  await activate(screen.getByRole("button", { name: "Open AGENTS.md" }));
+  await expect.element(screen.getByRole("textbox", { name: "AGENTS.md" })).toBeVisible();
   await expect.element(screen.getByText("Keep the patch small.")).toBeVisible();
-
-  openThread.mockClear();
-  await activate(screen.getByRole("button", { name: "Talk to Maria" }));
-  expect(openThread).toHaveBeenCalledWith(threadRef);
 });

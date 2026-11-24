@@ -130,14 +130,7 @@ const EMPTY_CHILD_APPROVALS_BY_THREAD_KEY: ReadonlyMap<
 > = new Map();
 const EMPTY_CHILD_APPROVAL_THREAD_IDS: ReadonlySet<ThreadId> = new Set();
 import { type ChatFileAttachment, type TurnDiffSummary } from "../../types";
-import {
-  ArrowRightIcon,
-  BotIcon,
-  Minimize2Icon,
-  CircleAlertIcon,
-  Clock3Icon,
-  MessageSquareIcon,
-} from "lucide-react";
+import { ArrowRightIcon, BotIcon, Minimize2Icon, CircleAlertIcon, Clock3Icon } from "lucide-react";
 import type { HandoffEndpoints } from "@t3tools/client-runtime/handoff";
 import { Skeleton } from "../ui/skeleton";
 import { ExpandedImagePreview } from "./ExpandedImagePreview";
@@ -193,7 +186,8 @@ import {
 } from "./timelineViewport";
 import { ThreadActivityAnnouncer } from "./ThreadActivityAnnouncer";
 import { formatUpcomingTimestamp } from "../../timestampFormat";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
+import { Text } from "../ui/text";
+import { ChatHeroMark } from "./ChatHero";
 import { DiffStatBlocks } from "./DiffStatLabel";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { useDeadlinePassed } from "../../hooks/useDeadline";
@@ -1855,19 +1849,15 @@ const ConversationTimeline = memo(function ConversationTimeline({
           className="h-full ps-(--chat-lane-inset-start) pe-(--chat-lane-inset-end)"
           style={{ paddingBottom: emptyPlaceholderInset }}
         >
-          <Empty size="compact" className="h-full">
-            <EmptyMedia variant="icon">
-              <MessageSquareIcon />
-            </EmptyMedia>
-            <EmptyHeader>
-              <EmptyTitle>
-                <T>No messages yet</T>
-              </EmptyTitle>
-              <EmptyDescription>
-                <T>Send a message to start the conversation.</T>
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+            <ChatHeroMark />
+            <Text variant="display" render={<h2 />}>
+              <T>Start the conversation</T>
+            </Text>
+            <Text variant="body" tone="muted" render={<p />}>
+              <T>Ask anything, attach files, or pick up where you left off.</T>
+            </Text>
+          </div>
         </div>
       </>
     );

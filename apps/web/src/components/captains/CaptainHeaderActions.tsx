@@ -3,7 +3,6 @@ import { Plural, T, useGT, Var } from "gt-react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ChevronDownIcon,
-  CompassIcon,
   FolderIcon,
   PanelRightIcon,
   PencilIcon,
@@ -99,21 +98,6 @@ export function CaptainHeaderActions({
             </div>
 
             <div className="flex flex-col gap-0.5">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="justify-start"
-                onClick={() => {
-                  setOpen(false);
-                  void navigate({
-                    to: "/captains",
-                    search: { env: environmentId, captain: current.id, view: "brief" },
-                  });
-                }}
-              >
-                <CompassIcon />
-                <T>Open in Captains</T>
-              </Button>
               <Button
                 variant="ghost"
                 size="sm"

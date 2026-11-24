@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { AuthOrchestrationReadScope, type EnvironmentId } from "@t3tools/contracts";
+import { AuthOrchestrationReadScope, type Captain, type EnvironmentId } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
 
 import { useThreadShells } from "../../state/entities";
@@ -39,6 +39,13 @@ export function useCaptainDestinations(primaryEnvironmentId: EnvironmentId | nul
     destinations,
     destination: destinations.find(({ id }) => id === primaryEnvironmentId) ?? destinations[0],
   };
+}
+
+/** One environment's Captains, as the Captains page lists them. */
+export interface CaptainChannelEnvironment {
+  readonly environmentId: EnvironmentId;
+  readonly label: string;
+  readonly captains: ReadonlyArray<Captain>;
 }
 
 /** Every Captain on every environment, with the thread shells their activity comes from. */

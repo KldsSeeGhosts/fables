@@ -74,7 +74,7 @@ import {
   type ComponentProps,
 } from "react";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
-import { createPortal, flushSync } from "react-dom";
+import { flushSync } from "react-dom";
 import {
   clampCollapsedComposerCursor,
   type ComposerTrigger,
@@ -500,8 +500,6 @@ export interface ChatComposerProps {
   threadPullRequests: ReadonlyArray<ThreadPullRequestLink> | undefined;
   /** Where approval, question and plan cards render, above the tray. */
   requestCardHost: HTMLDivElement | null;
-  trayControlsHost?: HTMLDivElement | null;
-  stashHost?: HTMLDivElement | null;
   /** The thread's branch, shown on command approvals next to the working directory. */
   onComposerOverlayHeightChange: (height: number) => void;
 
@@ -1405,6 +1403,7 @@ export function ChatComposer(props: ChatComposerProps) {
   const editPromptFromTraitsStable = useStableCallback(editPromptFromTraits);
   const promptUltrathink = readPromptUltrathink(prompt);
 
+  const [toolbarControlsHost, setToolbarControlsHost] = useState<HTMLDivElement | null>(null);
   const {
     controlsRef: restingComposerControlsRef,
     attachControls: attachExpandedComposerControls,
@@ -1412,7 +1411,7 @@ export function ChatComposer(props: ChatComposerProps) {
     iconOnlyBlockCount: expandedControlsIconOnlyBlockCount,
     traitsIconOnly: expandedControlsTraitsIconOnly,
     pickerIconOnly: expandedControlsPickerIconOnly,
-  } = useRestingComposerControlsLayout(props.trayControlsHost ?? null);
+  } = useRestingComposerControlsLayout(toolbarControlsHost);
   const pendingPrimaryAction = activePendingProgress
     ? {
         questionIndex: activePendingProgress.questionIndex,
@@ -3864,28 +3863,6 @@ export function ChatComposer(props: ChatComposerProps) {
           {requestCard}
         </InComposerHost>
       ) : null}
-      {/* Each portal host takes React's whole delegated listener set, so an empty badge mounts none. */}
-      {props.stashHost && stashQueue.length > 0
-        ? createPortal(
-            <ComposerStashBadge
-              count={stashQueue.length}
-              menuOpen={isStashMenuOpen}
-              pulseKey={stashPulseKey}
-              onToggleMenu={toggleStashMenuStable}
-            />,
-            props.stashHost,
-          )
-        : null}
-      {props.trayControlsHost ? (
-        <InComposerHost
-          host={props.trayControlsHost}
-          ref={attachExpandedComposerControls}
-          data-chat-composer-resting-controls="true"
-          className="flex min-w-0 items-center gap-0.5"
-        >
-          {composerControls}
-        </InComposerHost>
-      ) : null}
       <ComposerBanner.Dock>
         <ComposerBannerStack items={shelfItems} />
       </ComposerBanner.Dock>
@@ -4017,7 +3994,7 @@ export function ChatComposer(props: ChatComposerProps) {
               ref={attachComposerBody}
               data-chat-composer-body="true"
               className={cn(
-                "composer-prompt-body relative grid min-h-12 grid-cols-1 items-center py-2 ps-3.5 pe-2",
+                "composer-prompt-body relative grid min-h-12 grid-cols-1 items-center pt-3 pb-0.5 ps-4.5 pe-4",
                 isComposerCollapsedMobile && "hidden",
               )}
             >
@@ -4199,12 +4176,39 @@ export function ChatComposer(props: ChatComposerProps) {
                   />
                 </ComposerContextActionsContext>
               </div>
+            </div>
+            <div
+              data-chat-composer-toolbar="true"
+              className={cn(
+                "flex min-h-11 min-w-0 items-center gap-1 ps-2 pe-2 pb-2",
+                isComposerCollapsedMobile && "hidden",
+              )}
+            >
+              <div className="flex min-w-0 flex-1 items-center gap-0.5">
+                {composerAttachButton}
+                <div ref={setToolbarControlsHost} className="flex min-w-0 flex-1 items-center">
+                  <div
+                    ref={attachExpandedComposerControls}
+                    data-chat-composer-resting-controls="true"
+                    className="flex min-w-0 items-center gap-0.5"
+                  >
+                    {composerControls}
+                  </div>
+                </div>
+                {stashQueue.length > 0 ? (
+                  <ComposerStashBadge
+                    count={stashQueue.length}
+                    menuOpen={isStashMenuOpen}
+                    pulseKey={stashPulseKey}
+                    onToggleMenu={toggleStashMenuStable}
+                  />
+                ) : null}
+              </div>
               <div
                 data-chat-composer-actions="right"
                 data-chat-composer-transition-actions="true"
-                className="z-1 flex w-max max-w-full items-center justify-end gap-1.5 self-start justify-self-end [grid-area:prompt] in-data-composer-multiline:self-end"
+                className="flex shrink-0 items-center gap-1.5"
               >
-                {composerAttachButton}
                 <ComposerFooterPrimaryActions
                   // Stop state belongs to one thread; the composer stays mounted across threads.
                   key={`${environmentId}:${activeThreadId ?? "new"}`}

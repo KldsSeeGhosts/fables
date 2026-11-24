@@ -11,9 +11,9 @@ import { T, useGT } from "gt-react";
 import { CompassIcon, EllipsisIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 import { flushSync } from "react-dom";
-import { useNavigate } from "@tanstack/react-router";
 
 import { useLocalStorage } from "../../hooks/useLocalStorage";
+import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { cn } from "../../lib/utils";
 import { useThreadShells } from "../../state/entities";
 import { Badge } from "../ui/badge";
@@ -22,6 +22,7 @@ import { CollapsibleSectionHeader, SectionHeaderStatus } from "../ui/collapsible
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
 import { SidebarMenuButton } from "../ui/sidebar";
 import { CaptainAvatar } from "./CaptainAvatar";
+import { captainChannelViewAtom, type CaptainChannelView } from "./captainBriefTab";
 import { CaptainProfileDialogs, useCaptainProfile } from "./CaptainBriefPanel";
 import { CaptainEditorDialog } from "./CaptainEditorDialog";
 import { useCaptainDestinations, useCaptainEnvironments } from "./captainsDirectory";
@@ -63,7 +64,7 @@ export function CaptainsHubRow({ active, onOpen }: { active: boolean; onOpen: ()
     >
       <CompassIcon />
       <span className="min-w-0 flex-1 truncate">
-        <T>Captains</T>
+        <T context="the Captains home page">Everything</T>
       </span>
       {attention > 0 ? (
         <Badge
@@ -99,7 +100,11 @@ function CaptainShelfRow({
   onOpen: (threadRef: ScopedThreadRef) => void;
 }) {
   const gt = useGT();
-  const navigate = useNavigate();
+  const threadRef = scopeThreadRef(environmentId, captain.primaryThreadId);
+  const openView = (view: CaptainChannelView) => {
+    appAtomRegistry.set(captainChannelViewAtom(threadRef), view);
+    onOpen(threadRef);
+  };
   const profile = useCaptainProfile({
     captain,
     environmentId,
@@ -125,7 +130,7 @@ function CaptainShelfRow({
         variant="inset-row-multiline"
         aria-current={selected ? "page" : undefined}
         aria-label={gt("{name}, {status}", { name: current.name, status })}
-        onClick={() => onOpen(scopeThreadRef(environmentId, current.primaryThreadId))}
+        onClick={() => onOpen(threadRef)}
       >
         <CaptainAvatar
           avatar={current.avatar}
@@ -159,16 +164,13 @@ function CaptainShelfRow({
             <EllipsisIcon />
           </MenuTrigger>
           <MenuPopup align="end">
-            <MenuItem
-              onClick={() =>
-                void navigate({
-                  to: "/captains",
-                  search: { env: environmentId, captain: current.id, view: "brief" },
-                })
-              }
-            >
-              <T>Open in Captains</T>
+            <MenuItem onClick={() => openView("tasks")}>
+              <T>Open Tasks</T>
             </MenuItem>
+            <MenuItem onClick={() => openView("make")}>
+              <T>Open Make</T>
+            </MenuItem>
+            <MenuSeparator />
             <MenuItem disabled={!canUpdate} onClick={profile.edit}>
               <T>Edit Captain</T>
             </MenuItem>
@@ -258,7 +260,7 @@ export function CaptainShelfList({
             )
           }
         >
-          <T>Crew</T>
+          <T>Channels</T>
         </CollapsibleSectionHeader>
         {onCreate ? (
           <Button

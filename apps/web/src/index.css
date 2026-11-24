@@ -6568,41 +6568,9 @@ body {
   word-spacing: 0.01px;
 }
 
+/* The actions sit on the toolbar row under the prompt, so the text keeps the full width. */
 .composer-prompt-body {
   grid-template-areas: "attachments" "prompt";
-  --composer-actions-gap: calc(var(--spacing) * 1.5);
-}
-
-.composer-prompt-body .composer-text::before {
-  content: "";
-  float: inline-end;
-  width: calc(var(--composer-actions-width, 100px) + var(--composer-actions-gap));
-  height: 1lh;
-}
-
-/* Past one line the actions drop to the bottom corner, so the text keeps their column clear
-   (the first line's width is unchanged); a float can't follow the last line there. */
-.composer-prompt-body[data-composer-multiline]
-  :is([data-composer-empty="false"] [data-testid="composer-editor"]),
-.composer-prompt-body[data-composer-multiline]
-  [data-composer-placeholder][data-composer-placeholder] {
-  padding-inline-end: calc(
-    var(--composer-actions-width, 100px) + var(--composer-actions-gap) + var(--spacing)
-  );
-}
-
-/* Separate from the rule above: a nested pseudo-element under a selector list compiles to
-   one :is() that every element tries. The repeated attribute keeps the list's specificity. */
-.composer-prompt-body[data-composer-multiline]
-  :is([data-composer-empty="false"] [data-testid="composer-editor"])::before,
-.composer-prompt-body[data-composer-multiline]
-  [data-composer-placeholder][data-composer-placeholder]::before {
-  display: none;
-}
-
-.composer-prompt-body[data-composer-overflow]
-  [data-testid="composer-editor"]::-webkit-scrollbar-track {
-  margin-bottom: calc(var(--composer-actions-height, 2rem) + var(--composer-actions-gap));
 }
 
 /* A suffix that would run under the actions or past the edge stays hidden, as text never wraps for it. */

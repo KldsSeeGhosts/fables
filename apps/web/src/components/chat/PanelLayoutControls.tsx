@@ -1,4 +1,4 @@
-import { ListFilterIcon, Maximize2Icon, Minimize2Icon } from "lucide-react";
+import { GitBranchIcon, ListFilterIcon, Maximize2Icon, Minimize2Icon } from "lucide-react";
 import { useGT } from "gt-react";
 
 import { memo } from "react";
@@ -19,6 +19,33 @@ export interface PanelLayoutControlsProps {
   onToggleThreadPanel: () => void;
   /** Shown instead of the toggle's label when there is no thread to detail. */
   disabledReason?: string | null;
+  /** The thread's branch, named on the details pill. */
+  branchLabel?: string | null;
+  /** How full the context window is, 0 to 100, drawn as a ring on the details pill. */
+  contextPercent?: number | null;
+}
+
+/** A static ring for the context window; it repaints only when usage changes. */
+function ContextRing({ percent }: { percent: number }) {
+  const radius = 5.5;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.max(0, Math.min(100, percent));
+  return (
+    <svg aria-hidden="true" viewBox="0 0 14 14" className="size-3.5 shrink-0 -rotate-90">
+      <circle cx="7" cy="7" r={radius} fill="none" strokeWidth="2" className="stroke-border" />
+      <circle
+        cx="7"
+        cy="7"
+        r={radius}
+        fill="none"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={circumference * (1 - clamped / 100)}
+        className={clamped >= 85 ? "stroke-warning" : "stroke-primary"}
+      />
+    </svg>
+  );
 }
 
 export const PanelLayoutControls = memo(function PanelLayoutControls({
@@ -29,11 +56,35 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   threadPanelShortcutLabel,
   onToggleThreadPanel,
   disabledReason = null,
+  branchLabel = null,
+  contextPercent = null,
 }: PanelLayoutControlsProps) {
   const gt = useGT();
   const mobileSidebarSheetMounted = useMobileSidebarSheetMounted();
   if (mobileSidebarSheetMounted) return null;
-  const threadPanelToggle = (
+  const showsPill = branchLabel !== null || contextPercent !== null;
+  const threadPanelToggle = showsPill ? (
+    <Button
+      className="relative max-w-56 shrink-0 [-webkit-app-region:no-drag]"
+      aria-expanded={threadPanelOpen}
+      onClick={threadPanelPresentation === "popover" ? undefined : onToggleThreadPanel}
+      disabled={disabledReason !== null}
+      aria-label={gt("Toggle thread details panel")}
+      data-thread-details-pill
+      variant="pill"
+      size="sm-pill"
+    >
+      {branchLabel !== null ? (
+        <>
+          <GitBranchIcon className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 truncate text-meta">{branchLabel}</span>
+        </>
+      ) : (
+        <ListFilterIcon className="size-3.5 shrink-0 text-muted-foreground" />
+      )}
+      {contextPercent !== null ? <ContextRing percent={contextPercent} /> : null}
+    </Button>
+  ) : (
     <Button
       className="relative shrink-0 [-webkit-app-region:no-drag]"
       aria-expanded={threadPanelOpen}
