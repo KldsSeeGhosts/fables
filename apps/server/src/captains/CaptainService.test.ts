@@ -129,6 +129,7 @@ it.effect("creates one primary thread, validates scope, and falls back to Scratc
       assert.deepStrictEqual(repeated, created);
       assert.equal(launches.size, 1);
       assert.equal(launches.get(created.primaryThreadId)?.projectId, scratch);
+      assert.equal(launches.get(created.primaryThreadId)?.creationSource, "web");
       const scoped = yield* service.create({
         ...input,
         captainId: CaptainId.make("scoped"),
@@ -149,7 +150,12 @@ it.effect(
         const service = yield* CaptainService.CaptainService;
         const store = yield* CaptainStore.CaptainStore;
         const sql = yield* SqlClient.SqlClient;
-        const captain = yield* service.create({ ...input, scopedProjectIds: [project] });
+        const captain = yield* service.create({
+          ...input,
+          scopedProjectIds: [project],
+          creationSource: "mcp",
+        });
+        assert.equal(f.launches.get(captain.primaryThreadId)?.creationSource, "mcp");
         const date = DateTime.formatIso(yield* DateTime.now);
         yield* sql`
         INSERT INTO scheduled_tasks (
@@ -191,6 +197,7 @@ it.effect(
         assert.isTrue(yield* canWake(next.primaryThreadId));
         assert.deepStrictEqual(next.earlierThreadIds, [captain.primaryThreadId]);
         assert.equal(f.launches.get(next.primaryThreadId)?.projectId, project);
+        assert.equal(f.launches.get(next.primaryThreadId)?.creationSource, "mcp");
         assert.deepStrictEqual(
           f.launches.get(next.primaryThreadId)?.modelSelection,
           modelSelection,

@@ -120,6 +120,7 @@ export function CaptainEditorDialog({
             clampManagedRuntimeMode(config?.managedPolicy, defaults.defaultRuntimeMode) ??
             defaults.defaultRuntimeMode,
           interactionMode: "default",
+          creationSource: "web",
         },
       });
     })();
