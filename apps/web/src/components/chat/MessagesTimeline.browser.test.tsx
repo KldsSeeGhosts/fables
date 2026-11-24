@@ -22,6 +22,7 @@ import {
 } from "@t3tools/contracts";
 import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
 import { __setClientSettingsForTests } from "~/hooks/useSettings";
+import { setTheme } from "../../hooks/useTheme";
 import { type LegendListRef } from "@legendapp/list/react";
 import {
   createRef,
@@ -3315,4 +3316,35 @@ describe("MessagesTimeline work rows", () => {
     });
     expect(screen.text()).toContain("Latest result stays outside the fold.");
   });
+});
+
+it("renders a Captain conversation as a Duet channel stream", async () => {
+  setTheme("ksg-salon");
+  environmentQuery.data = { captains: [], documents: [], memories: [] };
+  onTestFinished(() => {
+    setTheme("system");
+    environmentQuery.data = null;
+  });
+  const first = {
+    ...message("Please review it", {}, "duet-user"),
+    createdAt: "2026-03-17T10:00:00.000Z",
+  };
+  const second = {
+    ...message(
+      "Finished [Fix checkout](<t3-thread://v2/environment-local/thread%3Afix-checkout>).\n\n[DIGEST.md](DIGEST.md)",
+      { role: "assistant" },
+      "duet-assistant",
+    ),
+    createdAt: "2026-03-17T10:16:01.000Z",
+  };
+  await using screen = await renderTimeline([first, second], {
+    routeThreadKey: "environment-local:captain:maria:0",
+  });
+  void screen;
+
+  expect(document.querySelector('[data-duet-stream="channel"]')).not.toBeNull();
+  expect(document.querySelectorAll("[data-duet-timestamp-divider]")).toHaveLength(2);
+  expect(document.querySelector("[data-assistant-bubble]")).not.toBeNull();
+  expect(document.querySelector('a[href^="#duet-thread/"]')?.textContent).toBe("○ Fix checkout");
+  expect(document.querySelector("[data-thread-find-ignore]")?.textContent).toContain("DIGEST.md");
 });

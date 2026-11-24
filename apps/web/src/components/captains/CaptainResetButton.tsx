@@ -7,7 +7,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { T, useGT } from "gt-react";
-import { AlertTriangleIcon, RotateCcwIcon } from "lucide-react";
+import { AlertTriangleIcon } from "lucide-react";
 import { useState } from "react";
 
 import { useQuietThreadProjection } from "../../state/entities";
@@ -55,47 +55,6 @@ function RunningTasksWarning({
             )}
       </AlertDescription>
     </Alert>
-  );
-}
-
-export function CaptainResetButton({
-  captain,
-  environmentId,
-  onReset,
-  compact = false,
-}: {
-  captain: Captain;
-  environmentId: EnvironmentId;
-  onReset: (threadId: ThreadId) => void;
-  compact?: boolean;
-}) {
-  const gt = useGT();
-  const [open, setOpen] = useState(false);
-  const allowed = useAtomValue(
-    serverEnvironment.resetCaptainConversation.permissionAtom(environmentId),
-  );
-  return (
-    <>
-      <Button
-        size={compact ? "icon-xs" : "sm"}
-        variant={compact ? "ghost" : "secondary"}
-        disabled={!allowed || captain.archivedAt !== null}
-        title={gt("Reset conversation")}
-        aria-label={gt("Reset conversation")}
-        onClick={() => setOpen(true)}
-      >
-        <RotateCcwIcon />
-        {compact ? null : <T>Reset conversation</T>}
-      </Button>
-      {open ? (
-        <CaptainResetDialog
-          captain={captain}
-          environmentId={environmentId}
-          onReset={onReset}
-          onClose={() => setOpen(false)}
-        />
-      ) : null}
-    </>
   );
 }
 

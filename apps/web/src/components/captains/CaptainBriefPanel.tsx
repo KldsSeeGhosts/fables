@@ -1,9 +1,6 @@
-import { useAtom, useAtomValue } from "@effect/atom-react";
-import { Tabs } from "@base-ui/react/tabs";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { useAtomValue } from "@effect/atom-react";
 import {
   captainChildIsActive,
-  captainForThread,
   captainRecentlyFinishedTasks,
 } from "@t3tools/client-runtime/state/captains";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
@@ -16,19 +13,15 @@ import {
   type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
-import { useRouter } from "@tanstack/react-router";
 import { T, useGT } from "gt-react";
-import { ArrowUpRightIcon, PencilIcon } from "lucide-react";
-import { useId, useState, type ReactNode } from "react";
+import { ArrowUpRightIcon } from "lucide-react";
+import { useState, type ReactNode } from "react";
 
-import { followLayoutCompanions } from "../../layout/openRules";
-import { useLayoutStore } from "../../layout/layoutStore";
 import { useChildThreadInputs, useProjects, useQuietThreadProjection } from "../../state/entities";
 import { useEnvironment } from "../../state/environments";
 import { useLinkedThreadOpener } from "../../state/linkedThreadView";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { buildThreadRouteParams } from "../../threadRoutes";
 import {
   AlertDialog,
   AlertDialogDescription,
@@ -40,15 +33,9 @@ import {
 import { Badge } from "../ui/badge";
 import { Button, ContentButton } from "../ui/button";
 import { StatusDot, type StatusDotTone } from "../ui/status-dot";
-import { captainBriefTabAtom } from "./captainBriefTab";
-import { CaptainDocuments } from "./CaptainDocuments";
-import { CaptainEarlierConversations } from "./CaptainEarlierConversations";
 import { CaptainEditorDialog } from "./CaptainEditorDialog";
-import { CaptainMemories } from "./CaptainMemories";
-import { CaptainReportPolicyPicker } from "./CaptainReportPolicyPicker";
-import { CaptainResetButton } from "./CaptainResetButton";
-import { CaptainScope } from "./CaptainScope";
-import { captainCommandError, useCaptains } from "./useCaptain";
+import { captainCommandError } from "./useCaptain";
+import { CaptainTasksDrawer } from "./CaptainTasksDrawer";
 
 const RECENTLY_FINISHED_LIMIT = 5;
 
@@ -458,118 +445,6 @@ export function CaptainProfileDialogs({ profile }: { profile: CaptainProfile }) 
   );
 }
 
-function CaptainBrief({
-  captain,
-  environmentId,
-  onOpen,
-  onDelete,
-}: {
-  captain: Captain;
-  environmentId: EnvironmentId;
-  onOpen: (threadId: ThreadId) => void;
-  onDelete: () => void;
-}) {
-  const gt = useGT();
-  const fieldId = useId();
-  const projects = useProjects().filter((project) => project.environmentId === environmentId);
-  const parent = scopeThreadRef(environmentId, captain.primaryThreadId);
-  const profile = useCaptainProfile({ captain, environmentId, onDelete });
-  const { current, archived, pending, error, canUpdate } = profile;
-
-  return (
-    <div className="space-y-5">
-      <section className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="truncate text-label">{captain.name}</h3>
-          {captain.role ? (
-            <p className="break-words text-body text-muted-foreground">{captain.role}</p>
-          ) : null}
-        </div>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          disabled={!canUpdate}
-          onClick={profile.edit}
-          aria-label={gt("Edit Captain")}
-          title={gt("Edit Captain")}
-        >
-          <PencilIcon />
-        </Button>
-      </section>
-      <CaptainScope
-        projects={projects}
-        selected={current.scopedProjectIds}
-        disabled={!canUpdate || pending}
-        onChange={(scopedProjectIds) => void profile.save({ scopedProjectIds })}
-      />
-      <section className="space-y-2">
-        <h3 id={`${fieldId}-report-policy`} className="text-label">
-          <T>When a delegated task finishes</T>
-        </h3>
-        <CaptainReportPolicyPicker
-          labelledBy={`${fieldId}-report-policy`}
-          value={current.reportPolicy}
-          disabled={!canUpdate || pending}
-          onChange={(reportPolicy) => void profile.save({ reportPolicy })}
-        />
-      </section>
-      <section className="space-y-1">
-        <h3 className="text-label">
-          <T>Active delegated threads</T>
-        </h3>
-        <CaptainActiveTasks parent={parent} onOpen={onOpen} />
-      </section>
-      <section className="space-y-1 has-[ul:empty]:hidden">
-        <h3 className="text-label">
-          <T>Recently finished</T>
-        </h3>
-        <ul className="space-y-1">
-          <CaptainFinishedTaskRows parent={parent} onOpen={onOpen} />
-        </ul>
-      </section>
-      {captain.earlierThreadIds.length > 0 ? (
-        <section className="space-y-1">
-          <h3 className="text-label">
-            <T>Earlier conversations</T>
-          </h3>
-          <CaptainEarlierConversations
-            captain={captain}
-            environmentId={environmentId}
-            onOpen={onOpen}
-          />
-        </section>
-      ) : null}
-      {error !== null && !profile.confirmDelete ? (
-        <p role="alert" className="text-body text-destructive-foreground">
-          {error}
-        </p>
-      ) : null}
-      <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-        <CaptainResetButton captain={captain} environmentId={environmentId} onReset={onOpen} />
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={pending || !profile.canArchive}
-          onClick={() => void profile.changeArchive()}
-        >
-          {archived ? <T>Restore Captain</T> : <T>Archive Captain</T>}
-        </Button>
-        {profile.canDelete ? (
-          <Button
-            variant="destructive"
-            size="sm"
-            disabled={pending}
-            onClick={profile.requestDelete}
-          >
-            <T>Delete Captain</T>
-          </Button>
-        ) : null}
-      </div>
-      <CaptainProfileDialogs profile={profile} />
-    </div>
-  );
-}
-
 export function CaptainBriefPanel({
   threadRef,
   onDelete,
@@ -577,88 +452,5 @@ export function CaptainBriefPanel({
   threadRef: ScopedThreadRef;
   onDelete: () => void;
 }) {
-  const router = useRouter();
-  const [tab, setTab] = useAtom(captainBriefTabAtom(threadRef));
-  const query = useCaptains(threadRef.environmentId);
-  const { environmentId, threadId } = threadRef;
-  const captain = captainForThread(query.data, threadId);
-  const details = useCaptains(captain ? environmentId : null, captain?.id);
-  if (captain === undefined) {
-    return (
-      <p className="p-4 text-body text-muted-foreground">
-        {query.isPending ? (
-          <T>Loading Captain…</T>
-        ) : (
-          <T>This conversation has no Captain profile.</T>
-        )}
-      </p>
-    );
-  }
-
-  const open = (id: ThreadId) => {
-    const target = scopeThreadRef(environmentId, id);
-    followLayoutCompanions(() =>
-      useLayoutStore.getState().focusChat({ kind: "server", threadRef: target }),
-    );
-    void router.navigate({
-      to: "/$environmentId/$threadId",
-      params: buildThreadRouteParams(target),
-    });
-  };
-  const detailLoading = (
-    <p className="text-body text-muted-foreground">{details.error ?? <T>Loading Captain…</T>}</p>
-  );
-  const tabClass =
-    "border-b-2 border-transparent px-2 py-2 text-body text-muted-foreground data-active:border-primary data-active:text-foreground focus-visible:outline-2 focus-visible:outline-ring";
-
-  return (
-    <Tabs.Root
-      value={tab}
-      onValueChange={setTab}
-      className="flex h-full min-h-0 flex-col overflow-hidden"
-    >
-      <Tabs.List className="flex shrink-0 gap-2 border-b border-border px-3">
-        <Tabs.Tab value="brief" className={tabClass}>
-          <T>Brief</T>
-        </Tabs.Tab>
-        <Tabs.Tab value="docs" className={tabClass}>
-          <T>Docs</T>
-        </Tabs.Tab>
-        <Tabs.Tab value="memory" className={tabClass}>
-          <T>Memory</T>
-        </Tabs.Tab>
-      </Tabs.List>
-      <Tabs.Panel value="brief" className="min-h-0 flex-1 overflow-y-auto p-4">
-        <CaptainBrief
-          captain={captain}
-          environmentId={environmentId}
-          onOpen={open}
-          onDelete={onDelete}
-        />
-      </Tabs.Panel>
-      <Tabs.Panel value="docs" keepMounted className="min-h-0 flex-1 overflow-y-auto p-4">
-        {details.data === null ? (
-          detailLoading
-        ) : (
-          <CaptainDocuments
-            captain={captain}
-            environmentId={environmentId}
-            documents={details.data.documents}
-            refresh={details.refresh}
-          />
-        )}
-      </Tabs.Panel>
-      <Tabs.Panel value="memory" keepMounted className="min-h-0 flex-1 overflow-y-auto p-4">
-        {details.data === null ? (
-          detailLoading
-        ) : (
-          <CaptainMemories
-            captainId={captain.id}
-            environmentId={environmentId}
-            memories={details.data.memories}
-          />
-        )}
-      </Tabs.Panel>
-    </Tabs.Root>
-  );
+  return <CaptainTasksDrawer threadRef={threadRef} onClose={onDelete} />;
 }

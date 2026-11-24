@@ -4,12 +4,11 @@ import { T, useGT } from "gt-react";
 import { CompassIcon } from "lucide-react";
 import { useState } from "react";
 
-import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { workspaceAreaProps } from "../../lib/workspaceFocus";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { SettingsPaneHeader, SettingsTabNotch } from "../settings/SettingsTabNotch";
 import { SidebarInset } from "../ui/sidebar";
-import { captainChannelViewAtom } from "./captainBriefTab";
+import { openCaptainTasks } from "./captainBriefTab";
 import { CaptainEditorDialog } from "./CaptainEditorDialog";
 import { CaptainsInbox } from "./CaptainsInbox";
 import { useCaptainDestinations, useCaptainsDirectory } from "./captainsDirectory";
@@ -24,7 +23,7 @@ export function CaptainsWorkspace() {
   const openThread = useOpenCaptainThread();
   const openCaptain = (environmentId: EnvironmentId, captain: Captain, view: "chat" | "make") => {
     const threadRef = scopeThreadRef(environmentId, captain.primaryThreadId);
-    appAtomRegistry.set(captainChannelViewAtom(threadRef), view);
+    if (view === "make") openCaptainTasks(threadRef, "docs");
     openThread(threadRef);
   };
 

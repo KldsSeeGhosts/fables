@@ -42,7 +42,7 @@ export function surfaceTabTitle(
 ): string {
   switch (surface.kind) {
     case "captain-brief":
-      return resolve(msg("Captain Brief"));
+      return resolve(msg("Tasks"));
     case "diff":
       return resolve(msg("Diff"));
     case "files":

@@ -72,7 +72,7 @@ it("shows collapsed Captain attention and opens the primary thread on selection"
   expect(open).toHaveBeenCalledWith(threadRef);
 });
 
-it("opens Brief, server documents with revisions, and locked memory", async () => {
+it("opens drawer documents with revisions and locked memory", async () => {
   const notes = {
     captainId: captain.id,
     name: "NOTES.md",
@@ -98,8 +98,7 @@ it("opens Brief, server documents with revisions, and locked memory", async () =
   await using screen = await render(
     <CaptainBriefPanel threadRef={threadRef} onDelete={() => {}} />,
   );
-  await expect.element(screen.getByText("Workspace scope")).toBeVisible();
-  await expect.element(screen.getByText("Earlier conversations")).toBeVisible();
+  await expect.element(screen.getByText("Tasks in #Maria")).toBeVisible();
   await activate(screen.getByRole("tab", { name: "Docs" }));
   await expect
     .element(screen.getByRole("textbox", { name: "NOTES.md" }))
@@ -107,7 +106,6 @@ it("opens Brief, server documents with revisions, and locked memory", async () =
   await expect.element(screen.getByText("Server revision 4")).toBeVisible();
   await activate(screen.getByRole("button", { name: "AGENTS.md" }));
   await expect.element(screen.getByRole("textbox", { name: "AGENTS.md" })).toHaveValue("");
-  await activate(screen.getByRole("tab", { name: "Memory" }));
   await expect.element(screen.getByText("Keep the patch small.")).toBeVisible();
   await expect.element(screen.getByText("Locked")).toBeVisible();
   await expect.element(screen.getByText("Essential", { exact: true })).toBeVisible();

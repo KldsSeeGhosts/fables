@@ -119,7 +119,7 @@ vi.mock(import("../../state/query"), async (importOriginal) => ({
 
 import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { CaptainChannelBoard } from "./CaptainChannelBoard";
-import { captainChannelViewAtom } from "./captainBriefTab";
+import { captainDrawerTabAtom } from "./captainBriefTab";
 import { CaptainsWorkspace } from "./CaptainsWorkspace";
 
 const threadRef = { environmentId, threadId: captain.primaryThreadId };
@@ -129,7 +129,7 @@ async function activate(locator: Locator) {
   await userEvent.keyboard("{Enter}");
 }
 
-it("lays out everything waiting, running and briefed, and opens a brief on its Make view", async () => {
+it("lays out everything waiting, running and briefed, and opens a brief in its Docs drawer", async () => {
   await using screen = await render(<CaptainsWorkspace />, { router: "/captains" });
 
   await expect
@@ -144,7 +144,7 @@ it("lays out everything waiting, running and briefed, and opens a brief on its M
   openThread.mockClear();
   await activate(screen.getByRole("button", { name: "Open Maria's brief" }));
   expect(openThread).toHaveBeenCalledWith(threadRef);
-  expect(appAtomRegistry.get(captainChannelViewAtom(threadRef))).toBe("make");
+  expect(appAtomRegistry.get(captainDrawerTabAtom(threadRef))).toBe("docs");
 });
 
 it("shows a Captain's task board and deliverables in its pane", async () => {

@@ -24,7 +24,7 @@ import { CollapsibleSectionHeader, SectionHeaderStatus } from "../ui/collapsible
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
 import { SidebarMenuButton } from "../ui/sidebar";
 import { CaptainAvatar } from "./CaptainAvatar";
-import { captainChannelViewAtom, type CaptainChannelView } from "./captainBriefTab";
+import { captainBriefTabAtom, openCaptainTasks, type CaptainDrawerTab } from "./captainBriefTab";
 import { CaptainProfileDialogs, useCaptainProfile } from "./CaptainBriefPanel";
 import { CaptainEditorDialog } from "./CaptainEditorDialog";
 import { useCaptainDestinations, useCaptainEnvironments } from "./captainsDirectory";
@@ -142,8 +142,9 @@ function CaptainShelfRow({
   const gt = useGT();
   const isDuet = useTheme().theme === "ksg-salon";
   const threadRef = scopeThreadRef(environmentId, captain.primaryThreadId);
-  const openView = (view: CaptainChannelView) => {
-    appAtomRegistry.set(captainChannelViewAtom(threadRef), view);
+  const openView = (tab: CaptainDrawerTab) => {
+    appAtomRegistry.set(captainBriefTabAtom(threadRef), tab === "docs" ? "docs" : "brief");
+    openCaptainTasks(threadRef, tab);
     onOpen(threadRef);
   };
   const profile = useCaptainProfile({
@@ -175,10 +176,10 @@ function CaptainShelfRow({
         <EllipsisIcon />
       </MenuTrigger>
       <MenuPopup align="end">
-        <MenuItem onClick={() => openView("tasks")}>
+        <MenuItem onClick={() => openView("today")}>
           <T>Open Tasks</T>
         </MenuItem>
-        <MenuItem onClick={() => openView("make")}>
+        <MenuItem onClick={() => openView("docs")}>
           <T>Open Docs</T>
         </MenuItem>
         <MenuSeparator />

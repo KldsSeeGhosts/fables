@@ -16,6 +16,7 @@ import {
   type PreviewAnnotationPayload,
   type ProjectId,
   type ScopedThreadRef,
+  isCaptainThreadId,
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { orchestrationV2WorktreePending } from "@t3tools/shared/orchestrationV2ThreadError";
@@ -127,6 +128,10 @@ import { Button } from "./ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { LinkedThreadPane } from "./chat/LinkedThreadPane";
+import { DuetTaskDrawerHeader } from "./captains/DuetTaskDrawerHeader";
+import { useDuetShell } from "../hooks/useDuetShell";
+import { captainForThread } from "@t3tools/client-runtime/state/captains";
+import { useCaptains } from "./captains/useCaptain";
 import SideThreadPane from "./chat/SideThreadPane";
 import { m } from "../i18n/messages";
 import { confirmTerminalClose } from "../lib/terminalCloseConfirm";
@@ -713,6 +718,11 @@ function ThreadSurfaceContent({
   const terminal = useTerminalSurfaceActions(threadRef, surface, context);
   const shortcutLabels = useTerminalShortcutLabels();
   const shell = context.serverThread;
+  const isDuetShell = useDuetShell();
+  const captainsQuery = useCaptains(
+    isDuetShell && isCaptainThreadId(threadRef.threadId) ? threadRef.environmentId : null,
+  );
+  const captain = captainForThread(captainsQuery.data, threadRef.threadId);
   const sideChatParentPanel: SideChatParentPanel = {
     hostRef: threadRef,
     openToolDiff: (target) => {
@@ -732,9 +742,9 @@ function ThreadSurfaceContent({
           />
         </Suspense>
       );
-    case "thread":
+    case "thread": {
       // Not lazy: revealing a suspended tiptap editor tears down its view and crashes the composer.
-      return (
+      const pane = (
         <SideThreadPane
           key={surface.id}
           parentRef={threadRef}
@@ -743,6 +753,19 @@ function ThreadSurfaceContent({
           onClose={() => void closeThreadSurface(threadRef, surface.id)}
         />
       );
+      if (!isDuetShell || !isCaptainThreadId(threadRef.threadId)) return pane;
+      return (
+        <DuetTaskDrawerHeader
+          parentThreadRef={threadRef}
+          childThreadId={surface.threadId}
+          channelName={captain?.name ?? null}
+          onBack={() => void closeThreadSurface(threadRef, surface.id)}
+          onClose={() => void closeThreadSurface(threadRef, surface.id)}
+        >
+          {pane}
+        </DuetTaskDrawerHeader>
+      );
+    }
     case "linked-thread":
       return (
         <LinkedThreadPane
