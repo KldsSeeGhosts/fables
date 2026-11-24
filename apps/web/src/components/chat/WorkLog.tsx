@@ -15,10 +15,12 @@ const GroupedRows = createContext(false);
 export function WorkLogBlock({
   layout = "standalone",
   continues = false,
+  precedesPrompt = false,
   children,
 }: {
   layout?: "standalone" | "group-header" | "group-content";
   continues?: boolean | undefined;
+  precedesPrompt?: boolean | undefined;
   children: ReactNode;
 }) {
   return (
@@ -26,9 +28,12 @@ export function WorkLogBlock({
       className={
         continues || layout === "group-header"
           ? "pb-0"
-          : layout === "group-content"
-            ? "pb-1"
-            : "pb-2"
+          : // Ends a turn: reply footers keep air under their icon buttons, so pb-6 keeps their pb-4 gap.
+            precedesPrompt
+            ? "pb-6"
+            : layout === "group-content"
+              ? "pb-1"
+              : "pb-2"
       }
     >
       {children}

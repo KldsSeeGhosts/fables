@@ -1396,6 +1396,9 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   background: var(--card-background, var(--card-fill));
   box-shadow: var(--card-shadow, none);
 }
+@utility surface-card-fill {
+  background: var(--card-top, var(--card-fill));
+}
 @utility surface-card-settings {
   background: var(--card-settings-background, var(--card-settings-fill));
   box-shadow: var(--card-shadow, none);
@@ -3568,6 +3571,15 @@ html[data-theme-id] [data-chat-header] [data-slot="menu-trigger"][data-pressed],
 html[data-theme-id] [data-chat-header] [data-toolbar-control]:hover,
 html[data-theme-id] [data-chat-header] [data-toolbar-control][data-pressed] {
   background-color: var(--toolbar-control-hover);
+}
+
+/* The strip's floating chevrons sit over tab labels: lay a translucent hover
+   tint over the opaque control fill so the labels never show through. */
+html[data-theme-id]
+  [data-chat-header]
+  .surface-floating[data-slot="button"]:is(:hover, [data-pressed]) {
+  background-color: var(--toolbar-control);
+  background-image: linear-gradient(var(--toolbar-control-hover), var(--toolbar-control-hover));
 }
 
 html[data-theme-id] [data-chat-header] [data-slot="separator"] {
@@ -6855,10 +6867,177 @@ body {
   syntax: "*";
   inherits: false;
 }
+@property --pane-join-foot-x {
+  syntax: "*";
+  inherits: false;
+}
+@property --pane-join-foot-w {
+  syntax: "*";
+  inherits: false;
+}
+@property --pane-join-layer-x {
+  syntax: "*";
+  inherits: false;
+}
+@property --pane-join-layer-w {
+  syntax: "*";
+  inherits: false;
+}
+@property --pane-join-scroll {
+  syntax: "*";
+  inherits: false;
+}
+@property --pane-join-max-scroll {
+  syntax: "*";
+  inherits: false;
+}
+@property --pane-join-lead-x {
+  syntax: "*";
+  inherits: false;
+}
+@keyframes pane-join-scroll {
+  from {
+    translate: 0 0;
+  }
+  to {
+    translate: calc(var(--pane-join-max-scroll, 0px) * -1) 0;
+  }
+}
+
+/* The strip's edge fade reads these on the strip alone (PaneTabs.tsx,
+   markStripOverflow). Inherited, each scroll step restyled every tab. */
+@property --strip-overflow-start {
+  syntax: "*";
+  inherits: false;
+}
+@property --strip-overflow-end {
+  syntax: "*";
+  inherits: false;
+}
+@property --strip-overflowing-start {
+  syntax: "*";
+  inherits: false;
+}
+@property --strip-overflowing-end {
+  syntax: "*";
+  inherits: false;
+}
+@property --strip-fade-lead {
+  syntax: "*";
+  inherits: false;
+}
+@property --strip-fade-start {
+  syntax: "*";
+  inherits: false;
+}
+@property --strip-fade-end {
+  syntax: "*";
+  inherits: false;
+}
+@property --strip-fade-end-at {
+  syntax: "*";
+  inherits: false;
+}
 @property --strip-fade-start-shown {
   syntax: "<number>";
   inherits: false;
   initial-value: 1;
+}
+@property --strip-chevron-space {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+/* Pane tab strip scroll chevrons (PaneTabs.tsx): mouse/fine pointer only, and
+   only on a side with hidden tabs. Touch keeps the edge fade alone. */
+[data-layout-tab-strip] {
+  scroll-padding-inline-start: calc(
+    var(--pane-join-ear, 0px) + (1.5rem + var(--strip-chevron-space)) *
+      var(--strip-overflowing-start, 0)
+  );
+  scroll-padding-inline-end: calc(
+    var(--pane-join-ear, 0px) + var(--pane-join-tail, 0px) + (1.5rem + var(--strip-chevron-space)) *
+      var(--strip-overflowing-end, 0)
+  );
+}
+
+[data-strip-scroll-button] {
+  display: none;
+}
+
+@media (any-pointer: fine) {
+  [data-layout-tab-strip] {
+    --strip-chevron-space: 1.5rem;
+  }
+
+  [data-strip-scroll-button] {
+    display: inline-flex;
+    visibility: hidden;
+    opacity: 0;
+    scale: 0.75;
+    pointer-events: none;
+    transition:
+      visibility 0s var(--panel-animation-duration, 150ms),
+      box-shadow var(--panel-animation-duration, 150ms) ease-out,
+      opacity var(--panel-animation-duration, 150ms) ease-out,
+      scale var(--panel-animation-duration, 150ms) ease-out;
+  }
+
+  [data-strip-scroll-button][data-can-scroll] {
+    visibility: visible;
+    opacity: 1;
+    scale: 1;
+    pointer-events: auto;
+    transition:
+      visibility 0s 0s,
+      box-shadow var(--panel-animation-duration, 150ms) ease-out,
+      opacity var(--panel-animation-duration, 150ms) ease-out,
+      scale var(--panel-animation-duration, 150ms) ease-out;
+  }
+
+  [data-strip-scroll-button][data-can-scroll]:active {
+    scale: 0.97;
+  }
+
+  /* At an end, keep the hovered button disabled at half opacity so a fast
+     extra click does not hit the tab underneath, then hide it 500ms after the
+     last press. Changing min-width with visibility forces Chromium to refresh
+     the cursor and hover hit-test without pointer movement. */
+  [data-strip-scroll-button][aria-disabled="true"]:is(:hover, :focus-visible) {
+    visibility: visible;
+    opacity: 0.5;
+    scale: 1;
+    pointer-events: auto;
+    transition:
+      visibility 0s 0s,
+      box-shadow var(--panel-animation-duration, 150ms) ease-out,
+      opacity var(--panel-animation-duration, 150ms) ease-out,
+      scale var(--panel-animation-duration, 150ms) ease-out;
+  }
+
+  [data-strip-scroll-button][aria-disabled="true"]:hover:not(:active, :focus-visible) {
+    visibility: hidden;
+    min-width: 1px;
+    transition:
+      visibility 0s 500ms,
+      min-width 0s 500ms allow-discrete,
+      opacity var(--panel-animation-duration, 150ms) ease-out;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-strip-scroll-button],
+  [data-strip-scroll-button][data-can-scroll],
+  [data-strip-scroll-button][aria-disabled="true"]:is(:hover, :focus-visible) {
+    transition: none;
+  }
+
+  [data-strip-scroll-button][aria-disabled="true"]:hover:not(:active, :focus-visible) {
+    transition:
+      visibility 0s 500ms,
+      min-width 0s 500ms allow-discrete;
+  }
 }
 
 [data-slot="sidebar-inset"] {
@@ -6869,6 +7048,7 @@ body {
   --pane-join-rim: var(--raised-rim);
 }
 
+[data-pane-join-layer],
 [data-pane-join],
 [data-pane-join-foot],
 [data-pane-bar-corner] {
@@ -6956,7 +7136,7 @@ body {
     & [data-layout-pane-id][data-pane-joined-start] > [data-pane-cut="start-notch"] {
       opacity: 0;
     }
-    & [data-pane-join-start] [data-pane-notch=""] [data-layout-tab-strip] {
+    & [data-pane-join-start=""] [data-pane-notch=""] [data-layout-tab-strip] {
       --strip-fade-start-shown: 0;
     }
     & [data-pane-bar-corner="end"] {
@@ -6975,7 +7155,6 @@ body {
         calc(var(--pane-join-drop) * -1 - 1px) calc(var(--pane-join-ear) * -1);
       /* Its padding passes presses on to the controls it runs under. */
       pointer-events: none;
-      scroll-padding-inline: var(--pane-join-ear);
       /* Every title gets the active one's room, so activating a tab moves no
          other tab under the sliding shape. */
       --pane-inactive-tab-title-max: 17rem;
@@ -7092,14 +7271,39 @@ body {
       right: max(0px, calc(100% - var(--pane-lit-from)));
     }
 
-    & [data-pane-notch=""] [data-pane-join] {
+    /* The joined tab shape sits behind the strip's alpha mask, clipped to its
+       visible ends, so its fill and rim never dissolve into the chrome while
+       the tab labels above it still fade into what is behind them. */
+    & [data-pane-notch=""] > [data-layout-tab-strip-slot] > [data-pane-join-layer] {
       display: block;
       position: absolute;
       z-index: -1;
+      inset-block-start: calc(2px - var(--pane-join-shift));
+      inset-inline-start: var(--pane-join-layer-x, 0px);
+      width: var(--pane-join-layer-w, 0px);
+      height: calc(var(--pane-join-h) + 1px);
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    @supports (timeline-scope: --pane-strip-scroll) {
+      & [data-pane-notch=""] {
+        timeline-scope: --pane-strip-scroll;
+      }
+
+      & [data-pane-notch=""] [data-layout-tab-strip] {
+        scroll-timeline: --pane-strip-scroll inline;
+      }
+    }
+
+    & [data-pane-notch=""] [data-pane-join] {
+      display: block;
+      position: absolute;
       inset-block-start: 0;
       inset-inline-start: 0;
       width: 0;
       height: var(--pane-join-h);
+      translate: calc(var(--pane-join-scroll, 0px) * -1) 0;
       pointer-events: none;
       color: var(--pane-bar-fg);
       --jx: 0px;
@@ -7107,6 +7311,17 @@ body {
       --jm: 0;
       --e: var(--pane-join-ear);
       --r: var(--pane-join-radius);
+
+      /* Lock the sibling join shape to the strip's scroll position on the
+         compositor so smooth chevron/wheel scrolling never lags a frame behind.
+         Keep the base translate at -scrollLeft so the first frame after moving
+         into a new header (before its timeline attaches) never jumps to 0. */
+      @supports (timeline-scope: --pane-strip-scroll) {
+        inset-inline-start: calc(var(--pane-join-lead-x, 0px) * -1);
+        translate: calc(var(--pane-join-lead-x, 0px) - var(--pane-join-scroll, 0px)) 0;
+        animation: pane-join-scroll linear both;
+        animation-timeline: --pane-strip-scroll;
+      }
 
       &[hidden] {
         display: none;
@@ -7242,13 +7457,16 @@ body {
        apart from the bar, and at a fractional zoom showed its last row or
        covered a row of content (PaneTabs.tsx, markJoinFoot). */
     & [data-pane-notch=""][data-pane-join-footed] {
-      --e: var(--pane-join-ear);
-      --pane-join-foot-l: calc(100vw + var(--pane-join-foot-x) + var(--e));
-      --pane-join-foot-r: calc(
-        100vw + var(--pane-join-foot-x) + var(--pane-join-foot-w) - var(--e)
-      );
-
+      /* Only the foot and the bar's cut read where the foot is: set on the
+         notch, it restyled every tab in the bar on each tab press. */
       &::before {
+        --e: var(--pane-join-ear);
+        --pane-join-foot-x: inherit;
+        --pane-join-foot-w: inherit;
+        --pane-join-foot-l: calc(100vw + var(--pane-join-foot-x) + var(--e));
+        --pane-join-foot-r: calc(
+          100vw + var(--pane-join-foot-x) + var(--pane-join-foot-w) - var(--e)
+        );
         clip-path: polygon(
           0 -10px,
           100% -10px,
@@ -7268,6 +7486,7 @@ body {
       }
 
       & > [data-layout-tab-strip-slot] > [data-pane-join-foot] {
+        --e: var(--pane-join-ear);
         /* Inside the ear fill's edge, which still draws it. */
         --ear-in: transparent calc(var(--e) + 0.5px), var(--pane-join-fill) calc(var(--e) + 1.5px);
         display: block;

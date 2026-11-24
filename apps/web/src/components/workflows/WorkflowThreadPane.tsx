@@ -44,7 +44,7 @@ export default function WorkflowThreadPane({ threadRef }: { readonly threadRef: 
     runShellCommand: openFull,
   };
   return shell === null ? (
-    <p className="p-3 text-caption text-muted-foreground" role="status">
+    <p className="p-3 text-meta text-muted-foreground" role="status">
       {snapshotLoaded ? gt("This thread is no longer there.") : gt("Loading the thread…")}
     </p>
   ) : (

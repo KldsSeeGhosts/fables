@@ -61,6 +61,7 @@ vi.mock("../hooks/useScratchProject", () => ({
 }));
 vi.mock("../hooks/useNewProject", () => ({ useNewProject: () => async () => undefined }));
 vi.mock("../hooks/useHandleNewThread", () => ({
+  readPendingWorkspaceDefault: () => null,
   useHandleNewThread: () => ({
     activeDraftThread: null,
     activeThread: null,
