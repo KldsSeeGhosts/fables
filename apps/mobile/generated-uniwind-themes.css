@@ -2944,9 +2944,9 @@
       --color-card-alt: #ffffff;
       --color-card-translucent: rgba(255, 255, 255, 0.8);
       --color-thread-canvas: #ffffff;
-      --color-thread-selected: #e0e0e0;
+      --color-thread-selected: #e5e5e5;
       --color-thread-selected-foreground: #242424;
-      --color-thread-selected-foreground-muted: #636363;
+      --color-thread-selected-foreground-muted: #666666;
       --color-thread-hover: #f0f0f0;
       --color-row-hover: #f0f0f0;
       --color-composer-panel: rgba(255, 255, 255, 0.88);
@@ -3107,9 +3107,9 @@
       --color-card-alt: #252525;
       --color-card-translucent: rgba(31, 31, 31, 0.8);
       --color-thread-canvas: #191919;
-      --color-thread-selected: #474747;
+      --color-thread-selected: #404040;
       --color-thread-selected-foreground: #d6d6d6;
-      --color-thread-selected-foreground-muted: #b5b5b5;
+      --color-thread-selected-foreground-muted: #ababab;
       --color-thread-hover: #2c2c2c;
       --color-row-hover: #2c2c2c;
       --color-composer-panel: rgba(25, 25, 25, 0.92);

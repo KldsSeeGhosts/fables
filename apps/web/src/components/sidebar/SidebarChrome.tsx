@@ -1,8 +1,8 @@
-/* oxlint-disable t3code/no-raw-type-classes, shadcn/no-arbitrary-values, shadcn/no-restyle -- Duet chrome uses exact Claude Desktop geometry and colors outside the shared control variants. */
 import {
   ArrowLeftIcon,
   ChartNoAxesColumnIcon,
   EllipsisIcon,
+  MonitorIcon,
   MoonIcon,
   SearchIcon,
   SettingsIcon,
@@ -16,6 +16,7 @@ import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { useTheme } from "../../hooks/useTheme";
+import { useDuetShell } from "../../hooks/useDuetShell";
 import { cn } from "../../lib/utils";
 import { observeResize } from "../../lib/observeResize";
 import {
@@ -29,7 +30,7 @@ import {
   SidebarStageBackdrop,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
-import { TooltipProvider } from "../ui/tooltip";
+import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 import { Badge } from "../ui/badge";
 import { T3Wordmark } from "../T3Wordmark";
 import {
@@ -42,7 +43,6 @@ import {
 } from "../ui/sidebar";
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
 import { beginLayoutContentDrag } from "../../layout/layoutDrag";
-import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Button } from "../ui/button";
 import { useOpenLayoutPage } from "../../layout/pageNavigation";
@@ -54,6 +54,7 @@ import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { SidebarUpstreamUpdatePill } from "./SidebarUpstreamUpdatePill";
+import { NavigationHistoryButton } from "../NavigationHistoryButton";
 
 const SIDEBAR_BRAND_OFFSET = "ml-[var(--workspace-titlebar-content-left)]";
 
@@ -116,23 +117,20 @@ function SidebarBrandMark({ onBackdrop }: { onBackdrop: boolean }) {
   );
 }
 
+const DUET_WORDMARK_CLASS_NAME =
+  "min-w-0 truncate font-display text-title text-sidebar-foreground max-md:pl-2 [[data-macos-window-controls]_&]:hidden";
+
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
-  onNewThread,
-  onAddProject,
-  onOpenProjectScope,
   onSearch,
 }: {
   isElectron: boolean;
-  onNewThread?: (() => void) | undefined;
-  onAddProject?: (() => void) | undefined;
-  onOpenProjectScope?: (() => void) | undefined;
   onSearch?: (() => void) | undefined;
 }) {
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   const backdropVariant = useSidebarStageBackdropVariant(environmentIdentificationMode);
   const gt = useGT();
-  const isDuet = useTheme().theme === "ksg-salon";
+  const isDuet = useDuetShell();
 
   return (
     // The sidebar's share of the window chrome row, not a padded SidebarHeader.
@@ -155,41 +153,30 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         />
       </div>
       {isDuet ? (
-        <div className="relative z-10 flex min-w-0 flex-1 items-center gap-2 md:pl-[var(--workspace-titlebar-content-left)]">
-          <div className="min-w-0 flex-1 truncate font-display text-[19px] font-medium text-[#141413] dark:text-[#ececec] max-md:pl-2">
+        <div className="relative z-10 flex min-w-0 flex-1 items-center">
+          <div
+            aria-hidden
+            className="hidden w-[calc(var(--workspace-controls-left)+var(--workspace-titlebar-control-size)+0.5rem)] shrink-0 md:block"
+          />
+          <div className={DUET_WORDMARK_CLASS_NAME}>
             {/* oxlint-disable-next-line t3code/no-untranslated-copy -- product wordmark */}
             KSG Duet
           </div>
-          <div className="flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
-            <Menu>
-              <MenuTrigger
-                render={<Button size="icon-sm" variant="ghost" />}
-                aria-label={gt("Sidebar actions")}
-              >
-                <EllipsisIcon className="size-4" />
-              </MenuTrigger>
-              <MenuPopup align="end">
-                <MenuItem onClick={() => onNewThread?.()}>
-                  <T>New thread</T>
-                </MenuItem>
-                <MenuItem onClick={() => onAddProject?.()}>
-                  <T>Add project</T>
-                </MenuItem>
-                <MenuItem onClick={() => onOpenProjectScope?.()}>
-                  <T>Project scope</T>
-                </MenuItem>
-              </MenuPopup>
-            </Menu>
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label={gt("Search")}
-              title={gt("Search")}
-              onClick={() => onSearch?.()}
-            >
-              <SearchIcon className="size-4" />
-            </Button>
+          <div className="order-3 flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag] [[data-macos-window-controls]_&]:order-1">
+            <NavigationHistoryButton direction="back" onStageBackdrop={false} />
+            <NavigationHistoryButton direction="forward" onStageBackdrop={false} />
           </div>
+          <div className="order-2 flex-1" />
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            className="order-4 [-webkit-app-region:no-drag]"
+            aria-label={gt("Search")}
+            title={gt("Search")}
+            onClick={() => onSearch?.()}
+          >
+            <SearchIcon className="size-4" />
+          </Button>
         </div>
       ) : (
         <div className="relative z-10 flex h-8 min-w-0 flex-1 flex-wrap content-start items-center gap-x-2 overflow-hidden py-0.5 md:hidden">
@@ -229,18 +216,20 @@ function SidebarStagePill({ className }: { className?: string }) {
 function SidebarUtilityItem({
   icon,
   label,
+  size = "footer",
   onClick,
   onPointerDown,
 }: {
   icon: ReactNode;
   label: string;
+  size?: "header" | "footer";
   onClick: () => void;
   onPointerDown?: ((event: ReactPointerEvent) => void) | undefined;
 }) {
   return (
     <SidebarHeaderIconButton
       label={label}
-      size="footer"
+      size={size}
       onClick={onClick}
       onPointerDown={onPointerDown}
     >
@@ -360,9 +349,13 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 
 const DuetSidebarUtilityMenu = memo(function DuetSidebarUtilityMenu() {
   const navigate = useNavigate();
+  const openLayoutPage = useOpenLayoutPage();
   const gt = useGT();
   const { isMobile, setOpenMobile } = useSidebar();
   const connectedCount = useConnectedEnvironmentIds().length;
+  const pullRequestsSupported = usePullRequestsSupported();
+  const issuesSupported = useIssuesSupported();
+  const workflowsReachable = useWorkflowEnvironmentIds().length > 0;
   const { resolvedTheme, setAppearanceChoice } = useTheme();
   const closeMobileSidebar = () => {
     if (isMobile) setOpenMobile(false);
@@ -375,29 +368,95 @@ const DuetSidebarUtilityMenu = memo(function DuetSidebarUtilityMenu() {
     closeMobileSidebar();
     void navigate({ to: "/settings/connections" });
   };
+  const openPullRequests = () => {
+    closeMobileSidebar();
+    void openLayoutPage("pull-requests");
+  };
+  const openIssues = () => {
+    closeMobileSidebar();
+    void openLayoutPage("issues");
+  };
+  const openWorkflows = () => {
+    closeMobileSidebar();
+    void openLayoutPage("workflows");
+  };
+  const openUsage = () => {
+    closeMobileSidebar();
+    void navigate({ to: "/usage" });
+  };
   const dark = resolvedTheme === "dark";
   return (
     <TooltipProvider>
-      <div className="flex h-12 items-center gap-1 border-t border-[var(--duet-hairline,var(--border))] px-1">
+      <ul className="flex w-full min-w-0 flex-row items-center gap-1 px-2">
+        <SidebarThreadUndoNotice />
+        <SidebarUpstreamUpdatePill />
+        <SidebarUpdatePill />
+      </ul>
+      <div className="flex h-12 items-center gap-0.5 border-t border-(--duet-hairline) px-2">
         <SidebarUtilityItem
+          size="header"
           icon={<SettingsIcon className="size-4" />}
           label={gt("Settings")}
           onClick={openSettings}
         />
-        <SidebarUtilityItem
-          icon={
-            <span className="relative inline-flex items-center">
-              <EnvironmentMachineIcon kind="server" className="size-4" />
-              <span className="absolute -right-1 -bottom-1 rounded-full bg-sidebar px-0.5 text-[9px] leading-3 text-muted-foreground tabular-nums">
-                {connectedCount}
-              </span>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="compact"
+                aria-label={gt("Linked environments")}
+                onClick={openLinkedEnvironments}
+              />
+            }
+          >
+            <MonitorIcon className="size-4" />
+            <span className="text-meta tabular-nums text-sidebar-muted-foreground">
+              {connectedCount}
             </span>
-          }
-          label={gt("Linked environments")}
-          onClick={openLinkedEnvironments}
-        />
+          </TooltipTrigger>
+          <TooltipPopup side="top">{gt("Linked environments")}</TooltipPopup>
+        </Tooltip>
+        <Menu>
+          <MenuTrigger
+            render={<Button size="icon-sm" variant="ghost" />}
+            aria-label={gt("Sidebar actions")}
+          >
+            <EllipsisIcon className="size-4" />
+          </MenuTrigger>
+          <MenuPopup align="start" side="top">
+            {pullRequestsSupported ? (
+              <MenuItem
+                onClick={openPullRequests}
+                onPointerDown={(event) => beginLayoutContentDrag(event, { kind: "pull-requests" })}
+              >
+                <T>Pull requests</T>
+              </MenuItem>
+            ) : null}
+            {issuesSupported ? (
+              <MenuItem
+                onClick={openIssues}
+                onPointerDown={(event) => beginLayoutContentDrag(event, { kind: "issues" })}
+              >
+                <T>Issues</T>
+              </MenuItem>
+            ) : null}
+            {workflowsReachable ? (
+              <MenuItem
+                onClick={openWorkflows}
+                onPointerDown={(event) => beginLayoutContentDrag(event, { kind: "workflows" })}
+              >
+                <T>Workflows</T>
+              </MenuItem>
+            ) : null}
+            <MenuItem onClick={openUsage}>
+              <T>Usage</T>
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
         <span className="flex-1" />
         <SidebarUtilityItem
+          size="header"
           icon={dark ? <SunIcon className="size-4" /> : <MoonIcon className="size-4" />}
           label={dark ? gt("Use light appearance") : gt("Use dark appearance")}
           onClick={() => setAppearanceChoice(dark ? "light" : "dark")}
@@ -408,12 +467,19 @@ const DuetSidebarUtilityMenu = memo(function DuetSidebarUtilityMenu() {
 });
 
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
-  const isDuet = useTheme().theme === "ksg-salon";
-  return (
-    <SidebarFooter className={isDuet ? "gap-0 px-0 pt-0" : undefined}>
+  const isDuet = useDuetShell();
+  const content = isDuet ? <DuetSidebarUtilityMenu /> : <SidebarUtilityMenu />;
+  return isDuet ? (
+    <div data-sidebar="footer" className="flex flex-col">
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
-      {isDuet ? <DuetSidebarUtilityMenu /> : <SidebarUtilityMenu />}
+      {content}
+    </div>
+  ) : (
+    <SidebarFooter>
+      <SidebarProviderUpdatePill />
+      <SidebarUpdateArchitectureWarning />
+      {content}
     </SidebarFooter>
   );
 });
