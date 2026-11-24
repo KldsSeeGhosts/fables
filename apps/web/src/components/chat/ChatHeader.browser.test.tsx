@@ -4,6 +4,10 @@ import { userEvent } from "vite-plus/test/browser";
 
 const persisted = vi.hoisted(() => ({ title: "" }));
 const openMenu = vi.hoisted(() => vi.fn());
+const duetShell = vi.hoisted(() => ({ enabled: false }));
+vi.mock(import("../../hooks/useDuetShell"), () => ({
+  useDuetShell: () => duetShell.enabled,
+}));
 vi.mock(import("../../state/session"), async (importOriginal) => ({
   ...(await importOriginal()),
   useEnvironmentScope: () => true,
@@ -131,4 +135,32 @@ it("keeps the Escape that cancels a rename from also reaching window shortcuts",
   await expect.element(input).not.toBeInTheDocument();
   expect(persisted.title).toBe("New thread");
   expect(windowEscapes).toEqual([true]);
+});
+
+it("uses the tabless Duet header with a centered status orb and no terminal chip tab", async () => {
+  duetShell.enabled = true;
+  try {
+    await using screen = await render(
+      <ChatHeader
+        activeThreadEnvironmentId={EnvironmentId.make("environment")}
+        activeThreadId={ThreadId.make("thread")}
+        activeThreadTitle="New thread"
+        isServerThread
+        activeProject={null}
+        parentThreadLink={null}
+        onOpenThread={() => {}}
+        rightPanelOpen={false}
+        hiddenTerminal={{ shortcutLabel: null, running: false, onShow: () => {} }}
+      />,
+    );
+
+    await expect
+      .element(screen.getByRole("button", { name: "Thread actions for New thread" }))
+      .toBeVisible();
+    await expect.element(screen.getByRole("button", { name: "Status: Idle" })).toBeVisible();
+    expect(screen.container.querySelector("[data-pane-notch]")).toBeNull();
+    expect(screen.container.querySelector("[data-hidden-terminal-chip]")).toBeNull();
+  } finally {
+    duetShell.enabled = false;
+  }
 });

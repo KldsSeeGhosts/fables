@@ -94,6 +94,7 @@ import {
   type ThreadId,
   isCaptainThreadId,
   ProviderInteractionMode,
+  resolveEnvironmentMachineKind,
   resolveIdleCompaction,
   RuntimeMode,
 } from "@t3tools/contracts";
@@ -207,6 +208,7 @@ import {
 } from "./preview/ThreadPreviewMiniPlayer";
 import { createChatCanvasStore, resolveChatCanvasModel } from "./chat/canvasStore";
 import { usePreviewSession } from "./preview/usePreviewSession";
+import { dispatchPreviewAction } from "./preview/previewActionBus";
 
 import {
   previewMiniPlayerSourceKey,
@@ -311,8 +313,6 @@ import { useEnvironmentShellHasSnapshot } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ChatHeroGreeting, ChatHeroStarters } from "./chat/ChatHero";
-import { CaptainChannelBoard } from "./captains/CaptainChannelBoard";
-import { useCaptainChannelView } from "./captains/captainBriefTab";
 import { ExpandedImageDialogHost, openExpandedImagePreview } from "./chat/ExpandedImageDialog";
 import {
   BranchRestoreConfirmHost,
@@ -1816,9 +1816,6 @@ export default function ChatView(props: ChatViewProps) {
     threadSyncPhase === null &&
     worktreeSetup === null;
   const heroLayout = isDraftHeroState || isEmptyThreadHero;
-  const captainChannelView = useCaptainChannelView(
-    isServerThread && !embedded ? activeThreadRef : null,
-  );
   const {
     transitionGroupRef: draftHeroTransitionGroupRef,
     composerAnchorRef: draftHeroComposerAnchorRef,
@@ -3710,6 +3707,57 @@ export default function ChatView(props: ChatViewProps) {
       ? null
       : timelineFooterContent;
 
+  const duetHeaderMachineControl =
+    activeThreadRef !== null && activeEnvironment !== null
+      ? {
+          label: activeEnvironment.label,
+          machine:
+            activeEnvironmentOption?.machine ??
+            resolveEnvironmentMachineKind(activeEnvironment.serverConfig),
+          environmentId: activeThread.environmentId,
+          unavailable: activeEnvironmentUnavailableState !== null,
+          environments: logicalProjectEnvironments,
+          locked: envLocked,
+          ...(canChangeEnvironment ? { onChange: onEnvironmentChangeStable } : {}),
+          autoLabel: autoEnvironmentLabel,
+          ...(draftId &&
+          !envLocked &&
+          canAutoBalanceEnvironments &&
+          loadBalancingSettings.loadBalancingEnabled
+            ? { onAuto: onAutoEnvironmentStable }
+            : {}),
+        }
+      : null;
+  const duetHeaderControls =
+    activeThreadRef === null
+      ? null
+      : {
+          ...(sideChat.available ? { onNew: openNewSideChatStable } : {}),
+          machine: duetHeaderMachineControl,
+          terminal: {
+            label: gt("Terminal"),
+            onClick: hiddenTerminalChip?.onShow ?? toggleTerminalVisibilityStable,
+            active:
+              terminalUiState.terminalOpen ||
+              rightPanelState.surfaces.some((surface) => surface.kind === "terminal"),
+          },
+          browser: browserAvailable
+            ? {
+                label: gt("Browser"),
+                onClick: () => dispatchPreviewAction("toggle-panel"),
+                active: previewPanelOpen,
+                disabled: !canOperatePreview && !previewPanelOpen,
+              }
+            : null,
+          diff:
+            isServerThread && diffAvailable
+              ? {
+                  label: gt("Diff"),
+                  onClick: openChangesFromThreadPanelStable,
+                  active: diffOpen,
+                }
+              : null,
+        };
   const panelToggleControlProps = {
     threadPanelOpen,
     threadPanelPresentation,
@@ -3718,6 +3766,8 @@ export default function ChatView(props: ChatViewProps) {
     onToggleThreadPanel: toggleThreadPanelStable,
     branchLabel: activeThreadBranch,
     contextPercent: activeContextWindow?.usedPercentage ?? null,
+    threadRef: activeThreadRef,
+    duetControls: duetHeaderControls,
   } satisfies PanelLayoutControlsProps;
   const panelToggleControls = (
     <PanelLayoutControls
@@ -3805,14 +3855,7 @@ export default function ChatView(props: ChatViewProps) {
           </ChatPaneHeader>
         )}
 
-        {captainChannelView !== "chat" && activeThreadRef !== null ? (
-          <CaptainChannelBoard threadRef={activeThreadRef} view={captainChannelView} />
-        ) : null}
-        {/* Hidden, not unmounted, so the draft and scroll position survive a Duet view switch. */}
-        <div
-          className="relative flex min-h-0 min-w-0 flex-1"
-          hidden={captainChannelView !== "chat"}
-        >
+        <div className="relative flex min-h-0 min-w-0 flex-1">
           <ThreadFindCanvas
             findOptions={{
               skills: timelineSkills,

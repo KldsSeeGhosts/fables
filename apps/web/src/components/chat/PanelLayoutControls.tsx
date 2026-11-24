@@ -1,14 +1,85 @@
-import { GitBranchIcon, ListFilterIcon, Maximize2Icon, Minimize2Icon } from "lucide-react";
-import { useGT } from "gt-react";
+/* oxlint-disable t3code/no-styled-raw-controls -- Duet header utility buttons use exact square icon-button geometry outside shared button variants. */
+import "./DuetStatusOrb.css";
 
-import { memo } from "react";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import {
+  isCaptainThreadId,
+  type EnvironmentId,
+  type EnvironmentMachineKind,
+  type ScopedThreadRef,
+} from "@t3tools/contracts";
+import { T, useGT } from "gt-react";
+import {
+  EllipsisIcon,
+  FileDiffIcon,
+  FolderIcon,
+  GitBranchIcon,
+  GlobeIcon,
+  ListChecksIcon,
+  ListFilterIcon,
+  Maximize2Icon,
+  Minimize2Icon,
+  MonitorIcon,
+  SquarePenIcon,
+  TerminalIcon,
+} from "lucide-react";
+import { memo, useState, type ReactElement } from "react";
 
+import { useNavigate } from "@tanstack/react-router";
+
+import { useDuetShell } from "../../hooks/useDuetShell";
 import type { ThreadPanelPresentation } from "../../rightPanelLayout";
+import { selectActiveRightPanel, useRightPanelStore } from "../../rightPanelStore";
+import { useEnvironment, usePrimaryEnvironmentId } from "../../state/environments";
+import { useProjects, useQuietThreadShell } from "../../state/entities";
+import { buildThreadRouteParams } from "../../threadRoutes";
+import type { EnvironmentOption } from "../BranchToolbar.logic";
+import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
+import { CaptainResetDialog } from "../captains/CaptainResetButton";
+import { useCaptain } from "../captains/useCaptain";
 import { Button } from "../ui/button";
+import {
+  Menu,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuTrigger,
+} from "../ui/menu";
 import { PopoverCreateHandle, PopoverTrigger } from "../ui/popover";
 import { useMobileSidebarSheetMounted } from "../ui/sidebar";
 import { Toggle } from "../ui/toggle";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { toggleThreadSurfaceTab } from "../../layout/openRules";
+
+export interface DuetHeaderAction {
+  readonly label: string;
+  readonly onClick?: (() => void) | undefined;
+  readonly active?: boolean | undefined;
+  readonly disabled?: boolean | undefined;
+}
+
+export interface DuetMachineControl {
+  readonly label: string;
+  readonly machine: EnvironmentMachineKind;
+  readonly environmentId: EnvironmentId;
+  readonly unavailable: boolean;
+  readonly environments: ReadonlyArray<EnvironmentOption>;
+  readonly locked: boolean;
+  readonly onChange?: ((environmentId: EnvironmentId) => void) | undefined;
+  readonly autoLabel?: string | null | undefined;
+  readonly onAuto?: (() => void) | undefined;
+}
+
+export interface DuetHeaderControls {
+  readonly onNew?: (() => void) | undefined;
+  readonly machine?: DuetMachineControl | null | undefined;
+  readonly terminal?: DuetHeaderAction | null | undefined;
+  readonly browser?: DuetHeaderAction | null | undefined;
+  readonly diff?: DuetHeaderAction | null | undefined;
+}
 
 export interface PanelLayoutControlsProps {
   showThreadPanelControl?: boolean;
@@ -23,6 +94,10 @@ export interface PanelLayoutControlsProps {
   branchLabel?: string | null;
   /** How full the context window is, 0 to 100, drawn as a ring on the details pill. */
   contextPercent?: number | null;
+  /** The live thread, for Duet's tasks button, Captain scope, and environment prefix. */
+  threadRef?: ScopedThreadRef | null | undefined;
+  /** Duet header utility buttons, in their fixed order after the details pill. */
+  duetControls?: DuetHeaderControls | null | undefined;
 }
 
 /** A static ring for the context window; it repaints only when usage changes. */
@@ -48,6 +123,145 @@ function ContextRing({ percent }: { percent: number }) {
   );
 }
 
+function DuetIconButton({
+  action,
+  icon,
+  className,
+}: {
+  action: DuetHeaderAction;
+  icon: ReactElement;
+  className?: string;
+}) {
+  const button = (
+    <button
+      type="button"
+      aria-label={action.label}
+      aria-pressed={action.active}
+      disabled={action.disabled}
+      onClick={action.onClick}
+      data-duet-header-icon
+      className={`shrink-0 ${action.active ? "bg-(--duet-row-active)" : ""} ${className ?? ""}`}
+    >
+      {icon}
+    </button>
+  );
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="flex shrink-0" />}>{button}</TooltipTrigger>
+      <TooltipPopup side="bottom">{action.label}</TooltipPopup>
+    </Tooltip>
+  );
+}
+
+function DuetMachineButton({ machine }: { machine: DuetMachineControl }) {
+  const gt = useGT();
+  const trigger = (
+    <button
+      type="button"
+      aria-label={gt("Choose machine")}
+      data-duet-header-icon
+      className="shrink-0"
+    >
+      <MonitorIcon aria-hidden className="size-4" />
+    </button>
+  );
+  return (
+    <Menu>
+      <MenuTrigger render={trigger} aria-label={gt("Choose machine")} />
+      <MenuPopup align="end" width="wide">
+        <MenuGroup>
+          <MenuGroupLabel>
+            <T>Run on</T>
+          </MenuGroupLabel>
+          {machine.environments.length > 0 ? (
+            <MenuRadioGroup
+              value={machine.autoLabel ? "auto" : machine.environmentId}
+              onValueChange={(value) =>
+                value === "auto" ? machine.onAuto?.() : machine.onChange?.(value as EnvironmentId)
+              }
+            >
+              {machine.onAuto ? (
+                <MenuRadioItem value="auto" disabled={machine.locked} closeOnClick>
+                  <span className="min-w-0 truncate">
+                    {machine.autoLabel ?? gt("Auto balance")}
+                  </span>
+                </MenuRadioItem>
+              ) : null}
+              {machine.environments.map((environment) => (
+                <MenuRadioItem
+                  key={environment.environmentId}
+                  value={environment.environmentId}
+                  disabled={
+                    machine.locked ||
+                    (!machine.onChange && environment.environmentId !== machine.environmentId)
+                  }
+                  closeOnClick
+                >
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <EnvironmentMachineIcon kind={environment.machine} className="size-3" />
+                    <span className="min-w-0 truncate">{environment.label}</span>
+                  </span>
+                </MenuRadioItem>
+              ))}
+            </MenuRadioGroup>
+          ) : (
+            <div className="px-2 py-1.5 text-muted-foreground text-body">{machine.label}</div>
+          )}
+        </MenuGroup>
+      </MenuPopup>
+    </Menu>
+  );
+}
+
+function DuetOverflowMenu({
+  terminal,
+  browser,
+  diff,
+}: {
+  terminal?: DuetHeaderAction | null | undefined;
+  browser?: DuetHeaderAction | null | undefined;
+  diff?: DuetHeaderAction | null | undefined;
+}) {
+  const gt = useGT();
+  const entries = [
+    terminal
+      ? { key: "terminal", action: terminal, icon: <TerminalIcon className="size-3.5" /> }
+      : null,
+    browser ? { key: "browser", action: browser, icon: <GlobeIcon className="size-3.5" /> } : null,
+    diff ? { key: "diff", action: diff, icon: <FileDiffIcon className="size-3.5" /> } : null,
+  ].filter((entry) => entry !== null);
+  if (entries.length === 0) return null;
+  return (
+    <Menu>
+      <MenuTrigger
+        render={
+          <button
+            type="button"
+            data-duet-header-icon
+            className="shrink-0 @min-[720px]/header-actions:hidden"
+          >
+            <EllipsisIcon aria-hidden className="size-4" />
+          </button>
+        }
+        aria-label={gt("More header actions")}
+      />
+      <MenuPopup align="end">
+        {entries.map((entry) => (
+          <MenuItem
+            key={entry.key}
+            disabled={entry.action.disabled}
+            closeOnClick
+            onClick={entry.action.onClick}
+          >
+            {entry.icon}
+            {entry.action.label}
+          </MenuItem>
+        ))}
+      </MenuPopup>
+    </Menu>
+  );
+}
+
 export const PanelLayoutControls = memo(function PanelLayoutControls({
   showThreadPanelControl = true,
   threadPanelOpen,
@@ -58,11 +272,60 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   disabledReason = null,
   branchLabel = null,
   contextPercent = null,
+  threadRef = null,
+  duetControls = null,
 }: PanelLayoutControlsProps) {
   const gt = useGT();
+  const duet = useDuetShell();
   const mobileSidebarSheetMounted = useMobileSidebarSheetMounted();
+  const captain = useCaptain(duet ? threadRef : null);
+  const [captainResetOpen, setCaptainResetOpen] = useState(false);
+  const navigate = useNavigate();
+  const projects = useProjects();
+  const shell = useQuietThreadShell(duet ? threadRef : null);
+  const environment = useEnvironment(threadRef?.environmentId ?? null);
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+
+  const captainScopedProjects = captain
+    ? projects.filter(
+        (project) =>
+          project.environmentId === threadRef?.environmentId &&
+          captain.scopedProjectIds.includes(project.id),
+      )
+    : [];
+  const captainScopeLabel = captain
+    ? captainScopedProjects.length === 1
+      ? (captainScopedProjects[0]?.title ?? null)
+      : captainScopedProjects.length > 1
+        ? gt("{count} projects", { count: captainScopedProjects.length })
+        : gt("No scope")
+    : null;
+  const parentThreadId = shell?.lineage.parentThreadId ?? null;
+  const captainTasksRef =
+    threadRef === null
+      ? null
+      : captain
+        ? threadRef
+        : parentThreadId !== null && isCaptainThreadId(parentThreadId)
+          ? scopeThreadRef(threadRef.environmentId, parentThreadId)
+          : null;
+  const tasksActive = useRightPanelStore(
+    (state) => selectActiveRightPanel(state.byThreadKey, captainTasksRef) === "captain-brief",
+  );
   if (mobileSidebarSheetMounted) return null;
-  const showsPill = branchLabel !== null || contextPercent !== null;
+  const toggleTasks = () => {
+    if (captainTasksRef === null) return;
+    toggleThreadSurfaceTab(captainTasksRef, "captain-brief", () =>
+      useRightPanelStore.getState().toggle(captainTasksRef, "captain-brief"),
+    );
+  };
+
+  const remoteEnvironment =
+    duet && environment !== null && environment.environmentId !== primaryEnvironmentId
+      ? environment
+      : null;
+  const pillBranchLabel = captain ? captainScopeLabel : branchLabel;
+  const showsPill = pillBranchLabel !== null || contextPercent !== null;
   const threadPanelToggle = showsPill ? (
     <Button
       className="relative max-w-56 shrink-0 [-webkit-app-region:no-drag]"
@@ -74,10 +337,36 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
       variant="pill"
       size="sm-pill"
     >
-      {branchLabel !== null ? (
+      {remoteEnvironment ? (
         <>
+          <EnvironmentMachineIcon
+            kind={duetControls?.machine?.machine ?? "server"}
+            className="size-3 shrink-0 text-muted-foreground"
+          />
+          <span className="max-w-20 truncate text-meta text-muted-foreground">
+            {remoteEnvironment.label}
+          </span>
+        </>
+      ) : null}
+      {captain ? (
+        <>
+          {remoteEnvironment ? (
+            <span aria-hidden className="text-muted-foreground">
+              /
+            </span>
+          ) : null}
+          <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 max-w-40 truncate text-meta">{pillBranchLabel}</span>
+        </>
+      ) : pillBranchLabel !== null ? (
+        <>
+          {remoteEnvironment ? (
+            <span aria-hidden className="text-muted-foreground">
+              /
+            </span>
+          ) : null}
           <GitBranchIcon className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 truncate text-meta">{branchLabel}</span>
+          <span className="min-w-0 max-w-40 truncate text-meta">{pillBranchLabel}</span>
         </>
       ) : (
         <ListFilterIcon className="size-3.5 shrink-0 text-muted-foreground" />
@@ -115,6 +404,18 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
     </Tooltip>
   );
 
+  const newAction: DuetHeaderAction | null = captain
+    ? {
+        label: gt("New conversation"),
+        onClick: () => setCaptainResetOpen(true),
+      }
+    : duetControls?.onNew
+      ? {
+          label: gt("New side chat"),
+          onClick: duetControls.onNew,
+        }
+      : null;
+
   return (
     <div
       className="flex h-full shrink-0 items-center gap-1 [-webkit-app-region:no-drag]"
@@ -122,6 +423,74 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
     >
       {/* The workspace menu (pen ZVAPz) is the pane's only top-right control. */}
       {showThreadPanelControl ? threadPanelControl : null}
+      {duet && duetControls ? (
+        <>
+          {captainTasksRef !== null ? (
+            <DuetIconButton
+              action={{
+                label: gt("Tasks"),
+                onClick: toggleTasks,
+                active: tasksActive,
+              }}
+              icon={
+                captain ? (
+                  <span className="relative flex size-4 items-center justify-center">
+                    <ListChecksIcon aria-hidden className="size-4" />
+                  </span>
+                ) : (
+                  <ListChecksIcon aria-hidden className="size-4" />
+                )
+              }
+            />
+          ) : null}
+          {newAction ? (
+            <DuetIconButton
+              action={newAction}
+              icon={<SquarePenIcon aria-hidden className="size-4" />}
+            />
+          ) : null}
+          {duetControls.machine ? <DuetMachineButton machine={duetControls.machine} /> : null}
+          {duetControls.terminal ? (
+            <DuetIconButton
+              action={duetControls.terminal}
+              className="@max-[720px]/header-actions:hidden"
+              icon={<TerminalIcon aria-hidden className="size-4" />}
+            />
+          ) : null}
+          {duetControls.browser ? (
+            <DuetIconButton
+              action={duetControls.browser}
+              className="@max-[720px]/header-actions:hidden"
+              icon={<GlobeIcon aria-hidden className="size-4" />}
+            />
+          ) : null}
+          {duetControls.diff ? (
+            <DuetIconButton
+              action={duetControls.diff}
+              className="@max-[720px]/header-actions:hidden"
+              icon={<FileDiffIcon aria-hidden className="size-4" />}
+            />
+          ) : null}
+          <DuetOverflowMenu
+            terminal={duetControls.terminal}
+            browser={duetControls.browser}
+            diff={duetControls.diff}
+          />
+        </>
+      ) : null}
+      {captainResetOpen && captain && threadRef ? (
+        <CaptainResetDialog
+          captain={captain}
+          environmentId={threadRef.environmentId}
+          onClose={() => setCaptainResetOpen(false)}
+          onReset={(threadId) => {
+            void navigate({
+              to: "/$environmentId/$threadId",
+              params: buildThreadRouteParams(scopeThreadRef(threadRef.environmentId, threadId)),
+            });
+          }}
+        />
+      ) : null}
     </div>
   );
 });

@@ -2,9 +2,11 @@ import type { ScopedThreadRef } from "@t3tools/contracts";
 import { useGT } from "gt-react";
 
 import { useNowMinute } from "../../hooks/useNowMinute";
+import { useDuetShell } from "../../hooks/useDuetShell";
 import { CaptainAvatar } from "../captains/CaptainAvatar";
 import { useCaptain } from "../captains/useCaptain";
 import { Button } from "../ui/button";
+import { DuetOrbMark } from "./DuetStatusOrb";
 import { Text } from "../ui/text";
 
 /** "Good morning", "Good afternoon" or "Good evening" for the user's local time. */
@@ -86,9 +88,12 @@ export function ChatHeroGreeting({
   const gt = useGT();
   const greeting = useTimeOfDayGreeting();
   const captain = useCaptain(threadRef);
+  const duet = useDuetShell();
   return (
     <div data-chat-hero="" className="flex flex-col items-center gap-3 text-center">
-      {captain ? (
+      {duet ? (
+        <DuetOrbMark size={40} state="idle" />
+      ) : captain ? (
         <CaptainAvatar avatar={captain.avatar} size="profile" state="idle" />
       ) : (
         <ChatHeroMark />

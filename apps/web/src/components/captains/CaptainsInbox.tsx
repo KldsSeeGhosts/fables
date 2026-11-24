@@ -69,7 +69,7 @@ function DuetCard({ children }: { children: ReactNode }) {
 }
 
 /** One request waiting on the user, from a Captain's conversation or its delegated thread. */
-export function CaptainInboxCard({
+function CaptainInboxCard({
   item,
   captain,
   onReview,

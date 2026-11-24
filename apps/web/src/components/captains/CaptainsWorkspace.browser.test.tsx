@@ -118,7 +118,6 @@ vi.mock(import("../../state/query"), async (importOriginal) => ({
 }));
 
 import { appAtomRegistry } from "../../rpc/atomRegistry";
-import { CaptainChannelBoard } from "./CaptainChannelBoard";
 import { captainDrawerTabAtom } from "./captainBriefTab";
 import { CaptainsWorkspace } from "./CaptainsWorkspace";
 
@@ -145,22 +144,4 @@ it("lays out everything waiting, running and briefed, and opens a brief in its D
   await activate(screen.getByRole("button", { name: "Open Maria's brief" }));
   expect(openThread).toHaveBeenCalledWith(threadRef);
   expect(appAtomRegistry.get(captainDrawerTabAtom(threadRef))).toBe("docs");
-});
-
-it("shows a Captain's task board and deliverables in its pane", async () => {
-  await using screen = await render(<CaptainChannelBoard threadRef={threadRef} view="tasks" />);
-  await expect.element(screen.getByRole("heading", { name: "Needs you" })).toBeVisible();
-  await expect.element(screen.getByText("Weekly review")).toBeVisible();
-  await expect.element(screen.getByText("Paused")).toBeVisible();
-
-  await screen.rerender(<CaptainChannelBoard threadRef={threadRef} view="make" />);
-  await expect
-    .element(screen.getByRole("article", { name: "DIGEST.md" }).getByRole("heading"))
-    .toHaveTextContent("Today");
-  await expect
-    .element(screen.getByRole("textbox", { name: "NOTES.md" }))
-    .toHaveValue("Check the release.");
-  await activate(screen.getByRole("button", { name: "Open AGENTS.md" }));
-  await expect.element(screen.getByRole("textbox", { name: "AGENTS.md" })).toBeVisible();
-  await expect.element(screen.getByText("Keep the patch small.")).toBeVisible();
 });
