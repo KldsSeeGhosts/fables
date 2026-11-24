@@ -3936,7 +3936,10 @@ export function ChatComposer(props: ChatComposerProps) {
         if (isInsideRestingComposerControlScope(event.target)) return;
         composerMentionDragHandlers.onDrop(event);
       }}
-      className="mx-auto w-full min-w-0 max-w-(--chat-content-max-width) rounded-[inherit]"
+      className={cn(
+        "mx-auto w-full min-w-0 max-w-(--chat-content-max-width) rounded-[inherit]",
+        isDuetShell && (isCaptainPrimaryThread ? "max-w-166" : "max-w-168"),
+      )}
       data-chat-composer-form="true"
       {...threadContextDropTargetProps()}
     >
@@ -4077,7 +4080,7 @@ export function ChatComposer(props: ChatComposerProps) {
               data-chat-composer-body="true"
               className={cn(
                 isDuetShell
-                  ? "composer-prompt-body relative grid min-h-11 grid-cols-1 items-center rounded-xl border border-input bg-(--composer-fill) px-3.5 pt-1.5 pb-1.5 pe-11"
+                  ? "composer-prompt-body relative grid min-h-11 grid-cols-1 items-center rounded-xl border border-input bg-(--composer-fill) ps-4 pe-11 py-1.5"
                   : "composer-prompt-body relative grid min-h-12 grid-cols-1 items-center pt-3 pb-0.5 ps-4.5 pe-4",
                 isComposerCollapsedMobile && "hidden",
               )}
@@ -4267,7 +4270,7 @@ export function ChatComposer(props: ChatComposerProps) {
                 <div
                   data-chat-composer-actions="right"
                   data-chat-composer-transition-actions="true"
-                  className="absolute right-1.5 bottom-1.5 z-10 flex items-center"
+                  className="absolute right-2 bottom-1.5 z-10 flex items-center"
                 >
                   {composerFooterPrimaryActions}
                 </div>
@@ -4278,7 +4281,7 @@ export function ChatComposer(props: ChatComposerProps) {
               data-duet-composer-footer={isDuetShell ? "" : undefined}
               className={cn(
                 isDuetShell
-                  ? "relative mt-1.5 flex h-7 min-w-0 items-center gap-1 px-1"
+                  ? "relative mt-2 flex h-7 min-w-0 items-center gap-1"
                   : "flex min-h-11 min-w-0 items-center gap-1 ps-2 pe-2 pb-2",
                 isComposerCollapsedMobile && "hidden",
               )}
