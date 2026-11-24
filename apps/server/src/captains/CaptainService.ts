@@ -80,8 +80,15 @@ const make = Effect.gen(function* () {
       const scopedProjectIds = yield* validateScope(input.scopedProjectIds);
       const projectId =
         scopedProjectIds[0] ??
-        (yield* folders.ensureScratchProject.pipe(Effect.catch(CaptainStore.captainUnavailable)))
-          .projectId;
+        (yield* folders.ensureScratchProject.pipe(
+          Effect.catch((cause) =>
+            cause._tag === "ScratchUnavailableError"
+              ? invalid(
+                  "This environment has no scratch folder. Add a project to the Captain's workspace scope.",
+                )
+              : CaptainStore.captainUnavailable(cause),
+          ),
+        )).projectId;
       const { name, role, instructions, avatar, reportPolicy } = input;
       const now = yield* timestamp;
       const primaryThreadId = captainPrimaryThreadId(input.captainId, 0);

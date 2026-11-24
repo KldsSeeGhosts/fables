@@ -16,16 +16,24 @@ import { useId, useState } from "react";
 
 import { resolveProjectDefaultProviderModelSelection } from "../../providerInstances";
 import { useProjects } from "../../state/entities";
-import { randomUUID } from "../../lib/utils";
+import { cn, randomUUID } from "../../lib/utils";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
-import { Dialog, DialogFooter, DialogHeader, DialogPopup, DialogTitle } from "../ui/dialog";
+import {
+  Dialog,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
-import { CaptainAvatar } from "./CaptainAvatar";
+import { CaptainAvatar, captainAvatarIcons, captainAvatarSwatches } from "./CaptainAvatar";
 import { CaptainScope } from "./CaptainScope";
 import { captainCommandError } from "./useCaptain";
 
@@ -130,6 +138,9 @@ export function CaptainEditorDialog({
     }
   };
 
+  const showEnvironment =
+    captain === undefined && destinations !== undefined && destinations.length > 1;
+
   return (
     <Dialog
       open
@@ -137,133 +148,163 @@ export function CaptainEditorDialog({
         if (!open && !saving) onClose();
       }}
     >
-      <DialogPopup>
-        <DialogHeader>
-          <DialogTitle>
-            {captain === undefined ? <T>New Captain</T> : <T>Edit Captain</T>}
-          </DialogTitle>
-        </DialogHeader>
+      <DialogPopup className="sm:max-w-lg">
         <form
-          className="space-y-4"
+          className="flex min-h-0 flex-col"
           onSubmit={(event) => {
             event.preventDefault();
             void save();
           }}
         >
-          {captain === undefined && destinations && destinations.length > 1 ? (
-            <div className="grid gap-1.5">
-              <label htmlFor={`${fieldId}-environment`} className="text-label">
-                <T>Environment</T>
-              </label>
-              <Select
-                value={environmentId}
+          <DialogHeader>
+            <DialogTitle>
+              {captain === undefined ? <T>New Captain</T> : <T>Edit Captain</T>}
+            </DialogTitle>
+            <DialogDescription>
+              <T>A Captain keeps its own conversation, memories, and documents across sessions.</T>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogPanel>
+            {showEnvironment ? (
+              <div className="grid gap-1.5">
+                <label htmlFor={`${fieldId}-environment`} className="text-label">
+                  <T>Environment</T>
+                </label>
+                <Select
+                  value={environmentId}
+                  items={destinations.map(({ id, label }) => ({ value: id, label }))}
+                  onValueChange={(value) => {
+                    if (value === null) return;
+                    setEnvironmentId(value);
+                    setScope([]);
+                  }}
+                  disabled={saving}
+                >
+                  <SelectTrigger id={`${fieldId}-environment`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    {destinations.map(({ id, label }) => (
+                      <SelectItem key={id} value={id}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+              </div>
+            ) : null}
+            <div className="flex gap-3">
+              <CaptainAvatar avatar={avatar} size="large" />
+              <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
+                <div className="grid min-w-0 gap-1.5">
+                  <label htmlFor={`${fieldId}-name`} className="text-label">
+                    <T>Name</T>
+                  </label>
+                  <Input
+                    id={`${fieldId}-name`}
+                    required
+                    autoFocus
+                    maxLength={80}
+                    placeholder={gt("e.g. Atlas")}
+                    value={name}
+                    disabled={saving}
+                    onChange={(event) => setName(event.target.value)}
+                  />
+                </div>
+                <div className="grid min-w-0 gap-1.5">
+                  <label htmlFor={`${fieldId}-role`} className="text-label">
+                    <T>Role</T>{" "}
+                    <span className="text-muted-foreground">
+                      <T>(optional)</T>
+                    </span>
+                  </label>
+                  <Input
+                    id={`${fieldId}-role`}
+                    maxLength={120}
+                    placeholder={gt("e.g. Release manager")}
+                    value={role}
+                    disabled={saving}
+                    onChange={(event) => setRole(event.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <ToggleGroup
+                aria-label={gt("Avatar icon")}
+                value={[avatar.preset]}
+                disabled={saving}
                 onValueChange={(value) => {
-                  if (value === null) return;
-                  setEnvironmentId(value);
-                  setScope([]);
+                  const preset = CaptainAvatarPreset.literals.find((preset) => preset === value[0]);
+                  if (preset) setAvatar({ ...avatar, preset });
                 }}
-                disabled={saving}
               >
-                <SelectTrigger id={`${fieldId}-environment`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectPopup>
-                  {destinations.map(({ id, label }) => (
-                    <SelectItem key={id} value={id}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            </div>
-          ) : null}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid min-w-0 gap-1.5">
-              <label htmlFor={`${fieldId}-name`} className="text-label">
-                <T>Name</T>
-              </label>
-              <Input
-                id={`${fieldId}-name`}
-                required
-                maxLength={80}
-                value={name}
+                {CaptainAvatarPreset.literals.map((preset) => {
+                  const Icon = captainAvatarIcons[preset];
+                  return (
+                    <Toggle
+                      key={preset}
+                      value={preset}
+                      aria-label={presetLabels[preset]}
+                      title={presetLabels[preset]}
+                    >
+                      <Icon />
+                    </Toggle>
+                  );
+                })}
+              </ToggleGroup>
+              <ToggleGroup
+                aria-label={gt("Avatar color")}
+                value={[avatar.color]}
                 disabled={saving}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </div>
-            <div className="grid min-w-0 gap-1.5">
-              <label htmlFor={`${fieldId}-role`} className="text-label">
-                <T>Role</T>
-              </label>
-              <Input
-                id={`${fieldId}-role`}
-                maxLength={120}
-                value={role}
-                disabled={saving}
-                onChange={(event) => setRole(event.target.value)}
-              />
-            </div>
-          </div>
-          <div className="grid gap-1.5">
-            <label htmlFor={`${fieldId}-instructions`} className="text-label">
-              <T>Instructions</T>
-            </label>
-            <Textarea
-              id={`${fieldId}-instructions`}
-              rows={4}
-              maxLength={16_000}
-              value={instructions}
-              disabled={saving}
-              onChange={(event) => setInstructions(event.target.value)}
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <CaptainAvatar avatar={avatar} size="header" />
-            <ToggleGroup
-              aria-label={gt("Avatar icon")}
-              value={[avatar.preset]}
-              disabled={saving}
-              onValueChange={(value) => {
-                const preset = CaptainAvatarPreset.literals.find((preset) => preset === value[0]);
-                if (preset) setAvatar({ ...avatar, preset });
-              }}
-            >
-              {CaptainAvatarPreset.literals.map((preset) => (
-                <Toggle key={preset} value={preset} aria-label={presetLabels[preset]}>
-                  <CaptainAvatar avatar={{ preset, color: avatar.color }} />
-                </Toggle>
-              ))}
-            </ToggleGroup>
-            <Select
-              value={avatar.color}
-              disabled={saving}
-              onValueChange={(color) => {
-                if (color !== null) setAvatar({ ...avatar, color });
-              }}
-            >
-              <SelectTrigger aria-label={gt("Avatar color")}>
-                <SelectValue>{colorLabels[avatar.color]}</SelectValue>
-              </SelectTrigger>
-              <SelectPopup>
+                onValueChange={(value) => {
+                  const color = CaptainAvatarColor.literals.find((color) => color === value[0]);
+                  if (color) setAvatar({ ...avatar, color });
+                }}
+              >
                 {CaptainAvatarColor.literals.map((color) => (
-                  <SelectItem key={color} value={color}>
-                    {colorLabels[color]}
-                  </SelectItem>
+                  <Toggle
+                    key={color}
+                    value={color}
+                    aria-label={colorLabels[color]}
+                    title={colorLabels[color]}
+                  >
+                    <span
+                      aria-hidden
+                      className={cn("size-3 rounded-full", captainAvatarSwatches[color])}
+                    />
+                  </Toggle>
                 ))}
-              </SelectPopup>
-            </Select>
-          </div>
-          <CaptainScope
-            projects={projects}
-            selected={scopedProjectIds}
-            disabled={saving}
-            onChange={setScope}
-          />
-          {error !== null ? (
-            <p role="alert" className="text-body text-destructive-foreground">
-              {error}
-            </p>
-          ) : null}
+              </ToggleGroup>
+            </div>
+            <div className="grid gap-1.5">
+              <label htmlFor={`${fieldId}-instructions`} className="text-label">
+                <T>Instructions</T>
+              </label>
+              <Textarea
+                id={`${fieldId}-instructions`}
+                rows={5}
+                maxLength={16_000}
+                placeholder={gt(
+                  "What this Captain is responsible for, how it should work, and when to check in with you.",
+                )}
+                value={instructions}
+                disabled={saving}
+                onChange={(event) => setInstructions(event.target.value)}
+              />
+            </div>
+            <CaptainScope
+              projects={projects}
+              selected={scopedProjectIds}
+              disabled={saving}
+              onChange={setScope}
+            />
+            {error !== null ? (
+              <p role="alert" className="text-body text-destructive-foreground">
+                {error}
+              </p>
+            ) : null}
+          </DialogPanel>
           <DialogFooter>
             <Button type="button" variant="secondary" disabled={saving} onClick={onClose}>
               <T>Cancel</T>
