@@ -3954,6 +3954,48 @@ describe("v2 run and attempt history", () => {
     const mainRows = deriveMessagesTimelineRows({ ...input, turnWorkFold: false });
     expect(mainRows.some((row) => row.kind === "turn-fold")).toBe(false);
     expect(mainRows.at(-1)?.id).toBe("interrupt-result");
+    // The interrupt result is a row of its turn: close under the turn, a turn gap before the next prompt.
+    expect(mainRows.find((row) => row.id === "work-entry")).toMatchObject({
+      continuesWorkLog: true,
+    });
+    const tailRows = deriveMessagesTimelineRows({
+      ...input,
+      turnWorkFold: false,
+      timelineEntries: [
+        {
+          id: "reply",
+          kind: "message",
+          createdAt: "2026-01-01T00:00:02Z",
+          message: {
+            id: MessageId.make("reply"),
+            role: "assistant",
+            text: "Partial reply",
+            runId,
+            streaming: false,
+            createdAt: "2026-01-01T00:00:02Z",
+            updatedAt: "2026-01-01T00:00:02Z",
+          },
+        },
+        input.timelineEntries[2]!,
+        {
+          id: "next-prompt",
+          kind: "message",
+          createdAt: "2026-01-01T00:00:04Z",
+          message: {
+            id: MessageId.make("next-prompt"),
+            role: "user",
+            text: "Keep going",
+            runId: null,
+            streaming: false,
+            createdAt: "2026-01-01T00:00:04Z",
+            updatedAt: "2026-01-01T00:00:04Z",
+          },
+        },
+      ],
+    });
+    const resultIndex = tailRows.findIndex((row) => row.id === "interrupt-result");
+    expect(tailRows[resultIndex]).toMatchObject({ precedesPrompt: true });
+    expect(tailRows[resultIndex - 1]).toMatchObject({ turnTailBelow: true });
     const stoppedRows = deriveMessagesTimelineRows({
       timelineEntries: [
         {
@@ -5563,6 +5605,153 @@ describe("working window", () => {
     });
   });
 
+  it("keeps one working window and one settled fold across mid-turn notifications and steers", () => {
+    const notification = (id: string, second: number, entryRunId = runId) => ({
+      id,
+      kind: "work" as const,
+      createdAt: time(second),
+      entry: {
+        id,
+        createdAt: time(second),
+        runId: entryRunId,
+        label: `Delegated task finished: ${id}`,
+        tone: "info" as const,
+        itemType: "notification" as const,
+      },
+    });
+    const cmd = (id: string, second: number, status: "completed" | "inProgress" = "completed") =>
+      work(id, second, {
+        label: `Ran ${id}`,
+        command: id,
+        itemType: "command_execution",
+        toolLifecycleStatus: status,
+      });
+    const entries = [
+      prompt("prompt", 0),
+      cmd("cmd-0", 1),
+      notification("notif-1", 2),
+      cmd("cmd-1", 3),
+      prompt("steer", 4, "steer"),
+      cmd("cmd-2", 5),
+      cmd("cmd-3", 6),
+      notification("notif-2", 7),
+      cmd("cmd-4", 8, "inProgress"),
+    ];
+    const runningRows = run(entries);
+    expect(runningRows.map((row) => row.id)).toEqual([
+      "prompt",
+      "notif-1",
+      "steer",
+      "notif-2",
+      "working-indicator-row",
+    ]);
+    expect(runningRows[1]).toMatchObject({ precedesPrompt: true, continuesWorkLog: false });
+    expect(runningRows[3]).toMatchObject({ precedesPrompt: false, continuesWorkLog: false });
+    expect(workingRow(runningRows)).toMatchObject({
+      createdAt: time(0),
+      window: {
+        key: "steer",
+        items: ["cmd-0", "cmd-1", "cmd-2", "cmd-3", "cmd-4"].map((id) =>
+          expect.objectContaining({ id }),
+        ),
+      },
+    });
+
+    const settledInput = {
+      timelineEntries: [
+        ...entries.slice(0, -1),
+        cmd("cmd-4", 8, "completed"),
+        {
+          id: "answer",
+          kind: "message" as const,
+          createdAt: time(10),
+          message: {
+            id: MessageId.make("answer"),
+            role: "assistant" as const,
+            text: "All done.",
+            runId,
+            createdAt: time(10),
+            updatedAt: time(10),
+            streaming: false,
+          },
+        },
+      ] as never,
+      latestRun: { runId, status: "completed" as const, startedAt: time(0), completedAt: time(10) },
+      isWorking: false,
+      turnDiffSummaries: [],
+      supportsConversationRollback: false,
+      turnWorkFold: true,
+    };
+    const closed = deriveMessagesTimelineRows(settledInput);
+    expect(closed.map((row) => row.id)).toEqual([
+      "prompt",
+      "notif-1",
+      "steer",
+      "notif-2",
+      `turn-fold:${runId}`,
+      "answer",
+    ]);
+    expect(closed[4]).toMatchObject({ createdAt: time(0), label: "Worked for 10s" });
+    const opened = deriveMessagesTimelineRows({
+      ...settledInput,
+      expandedRunIds: new Set([runId]),
+    });
+    expect(opened.map((row) => row.id)).toEqual([
+      "prompt",
+      "notif-1",
+      "steer",
+      "notif-2",
+      `turn-fold:${runId}`,
+      "work-toggle:cmd-0",
+      "answer",
+    ]);
+    expect(opened[5]).toMatchObject({ hiddenCount: 5 });
+
+    // A wake-up notification that starts a new run still begins its own working window.
+    const wakeRunId = RunId.make("wake-run");
+    const wakeEntries = [
+      ...(settledInput.timelineEntries as ReadonlyArray<unknown>),
+      notification("wake-notif", 20, wakeRunId),
+      {
+        ...cmd("wake-cmd", 21, "inProgress"),
+        entry: { ...cmd("wake-cmd", 21, "inProgress").entry, runId: wakeRunId },
+      },
+    ];
+    const wakeInput = {
+      timelineEntries: wakeEntries as never,
+      latestRun: {
+        runId: wakeRunId,
+        status: "running" as const,
+        startedAt: time(20),
+        completedAt: null,
+      },
+      runningRunId: wakeRunId,
+      isWorking: true,
+      activeTurnStartedAt: time(20),
+      turnDiffSummaries: [],
+      supportsConversationRollback: false,
+      turnWorkFold: true,
+    };
+    const wakeRows = applyWorkingWindow(deriveMessagesTimelineRows(wakeInput), wakeInput);
+    expect(wakeRows.map((row) => row.id)).toEqual([
+      "prompt",
+      "notif-1",
+      "steer",
+      "notif-2",
+      `turn-fold:${runId}`,
+      "answer",
+      "wake-notif",
+      "working-indicator-row",
+    ]);
+    expect(workingRow(wakeRows)).toMatchObject({
+      createdAt: time(20),
+      window: {
+        key: "wake-notif",
+        items: [expect.objectContaining({ id: "wake-cmd" })],
+      },
+    });
+  });
+
   it("groups a steer with its prompt once the bar moves below both", () => {
     const rows = run([
       prompt("prompt", 0),
@@ -6385,6 +6574,57 @@ describe("live subagents after their parent turn settles", () => {
     });
     expect(rows.map((row) => row.id)).toEqual([`attempt-fold:${attempt.id}`, "child"]);
   });
+
+  it("keeps a subagent waiting on approval outside the working window", () => {
+    const childThreadId = ThreadId.make("child-awaiting-approval");
+    const subagent = { ...child("waiting-child", 2, "waiting"), childThreadId };
+    const entries = deriveTimelineEntriesFromVisibleTurnItems({
+      visibleTurnItems: (
+        [
+          {
+            ...base("user", 1),
+            status: "completed",
+            type: "user_message",
+            messageId: MessageId.make("user"),
+            inputIntent: "turn_start",
+            text: "Delegate work",
+            attachments: [],
+            createdBy: "user",
+            creationSource: "web",
+          },
+          subagent,
+        ] satisfies OrchestrationV2TurnItem[]
+      ).map(projected),
+      optimisticMessages: [],
+    });
+    const baseInput = {
+      timelineEntries: entries,
+      latestRun: {
+        runId,
+        status: "running" as const,
+        startedAt: DateTime.formatIso(at(0)),
+        completedAt: null,
+      },
+      runningRunId: runId,
+      isWorking: true,
+      activeTurnStartedAt: DateTime.formatIso(at(0)),
+      turnDiffSummaries: [],
+      supportsConversationRollback: false,
+      turnWorkFold: true,
+    };
+    const waitingInput = {
+      ...baseInput,
+      childApprovalThreadIds: new Set([childThreadId]),
+    };
+    const waitingRows = applyWorkingWindow(deriveMessagesTimelineRows(waitingInput), waitingInput);
+    expect(waitingRows.map((row) => row.id)).toEqual([
+      "user",
+      "working-indicator-row",
+      "waiting-child",
+    ]);
+    const settledRows = applyWorkingWindow(deriveMessagesTimelineRows(baseInput), baseInput);
+    expect(settledRows.map((row) => row.id)).toEqual(["user", "working-indicator-row"]);
+  });
 });
 
 describe("parent run waiting on foreground subagents", () => {
@@ -6631,12 +6871,12 @@ describe("slash command prompts", () => {
     updatedAt: at,
     status: "completed" as const,
   };
-  const prompt = (text: string): OrchestrationV2TurnItem => ({
+  const prompt = (text: string, id = "prompt", ordinal = 0): OrchestrationV2TurnItem => ({
     ...base,
-    id: TurnItemId.make("prompt"),
-    ordinal: 0,
+    id: TurnItemId.make(id),
+    ordinal,
     type: "user_message",
-    messageId: MessageId.make("prompt"),
+    messageId: MessageId.make(id),
     createdBy: "user",
     creationSource: "web",
     inputIntent: "turn_start",
@@ -6697,6 +6937,13 @@ describe("slash command prompts", () => {
       target: "182K → 24.1K tokens",
     });
     expect(commandOf(rowsFor([prompt("/compact")], "running"))?.state).toBe("running");
+    const withNext = rowsFor([
+      prompt("/compact"),
+      compaction,
+      prompt("continue", "prompt-next", 2),
+    ]);
+    expect(withNext[0]).toMatchObject({ kind: "message", precedesPrompt: true });
+    expect(rows[0]?.precedesPrompt).toBeFalsy();
   });
 
   it("keeps a running /compact's compaction out of the working window", () => {

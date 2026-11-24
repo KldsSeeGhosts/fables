@@ -1,6 +1,6 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, RunId, ThreadId } from "@t3tools/contracts";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { useDiffPanelStore } from "../diffPanelStore";
 import { fileSurface, selectThreadRightPanelState, useRightPanelStore } from "../rightPanelStore";
@@ -26,6 +26,8 @@ import {
   type LayoutTab,
 } from "./layoutModel";
 import { useLayoutStore } from "./layoutStore";
+
+vi.mock("@pierre/diffs/worker/worker.js?worker", () => ({ default: vi.fn() }));
 
 const threadRef = scopeThreadRef(EnvironmentId.make("env"), ThreadId.make("chat"));
 

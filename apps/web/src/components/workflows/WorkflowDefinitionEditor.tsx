@@ -9,7 +9,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { useBlocker } from "@tanstack/react-router";
 import { T, useGT, Var } from "gt-react";
-import { FileCode2Icon, PlusIcon } from "lucide-react";
+import { CircleAlertIcon, FileCode2Icon, PlusIcon } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 
@@ -22,8 +22,12 @@ import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { DiffWorkerPoolProvider } from "../DiffWorkerPoolProvider";
+import { FILE_LINK_REVEAL_UNSAFE_CSS } from "../files/fileSurfaceChrome";
 import { useEditableAfterHighlight } from "../files/useEditableAfterHighlight";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "../ui/alert";
+import { Badge } from "../ui/badge";
 import { Button, ContentButton } from "../ui/button";
+import { Empty, EmptyDescription, EmptyHeader } from "../ui/empty";
 import { Input } from "../ui/input";
 import { type DiskChange, diskChange, staleAfterSave } from "./WorkflowDefinitionEditor.logic";
 import { WorkflowsEmpty } from "./WorkflowRunsView";
@@ -62,23 +66,32 @@ function ProblemList({
   readonly problems: ReadonlyArray<WorkflowDefinitionProblem>;
 }) {
   return (
-    <div role="alert" className="shrink-0 border-b bg-destructive/4 px-4 py-2 text-caption">
-      <p className="text-destructive-foreground">{title}</p>
-      <ul className="mt-1 max-h-32 space-y-1 overflow-auto text-muted-foreground">
-        {problems.map((problem) => (
-          <li key={`${problem.line}:${problem.message}`} className="whitespace-pre-wrap">
-            {problem.line === undefined ? null : (
-              <span className="font-mono text-foreground">
-                <T>
-                  Line <Var>{problem.line}</Var>:
-                </T>{" "}
-              </span>
-            )}
-            {problem.message}
-          </li>
-        ))}
-      </ul>
-    </div>
+    <Alert
+      variant="error"
+      density="strip"
+      edge="bottom"
+      controlAlignment="first-line"
+      className="shrink-0"
+    >
+      <CircleAlertIcon aria-hidden />
+      <AlertTitle>{title}</AlertTitle>
+      <AlertDescription>
+        <ul className="max-h-32 space-y-1 overflow-auto">
+          {problems.map((problem) => (
+            <li key={`${problem.line}:${problem.message}`} className="whitespace-pre-wrap">
+              {problem.line === undefined ? null : (
+                <span className="font-mono text-foreground">
+                  <T>
+                    Line <Var>{problem.line}</Var>:
+                  </T>{" "}
+                </span>
+              )}
+              {problem.message}
+            </li>
+          ))}
+        </ul>
+      </AlertDescription>
+    </Alert>
   );
 }
 
@@ -246,7 +259,7 @@ function Surface({
         ? null
         : createPortal(
             <>
-              <span className="shrink-0 text-caption text-muted-foreground" role="status">
+              <span className="shrink-0 text-meta text-muted-foreground" role="status">
                 {canSave || offline ? status : gt("Read-only")}
               </span>
               {canSave && onDelete !== undefined ? (
@@ -272,17 +285,17 @@ function Surface({
             actions,
           )}
       {stale ? (
-        <div
-          role="status"
-          className="flex shrink-0 items-center gap-3 border-b px-4 py-2 text-caption"
-        >
-          <span className="min-w-0 flex-1 text-muted-foreground">
+        <Alert variant="warning" density="strip" edge="bottom" role="status" className="shrink-0">
+          <CircleAlertIcon aria-hidden />
+          <AlertDescription>
             <T>The file changed on disk while you were editing. Saving replaces that change.</T>
-          </span>
-          <Button size="xs" variant="secondary" disabled={saving} onClick={adopt}>
-            <T>Load the file and drop my changes</T>
-          </Button>
-        </div>
+          </AlertDescription>
+          <AlertAction>
+            <Button size="xs" variant="secondary" disabled={saving} onClick={adopt}>
+              <T>Load the file and drop my changes</T>
+            </Button>
+          </AlertAction>
+        </Alert>
       ) : null}
       {onDisk.length > 0 && problems.length === 0 ? (
         <ProblemList
@@ -305,7 +318,7 @@ function Surface({
       )}
       <EditProvider createEditor={createEditor}>
         <Virtualizer
-          className="min-h-0 flex-1 overflow-auto"
+          className="file-preview-virtualizer min-h-0 flex-1 overflow-auto [--code-background:var(--code-surface)]"
           config={{ overscrollSize: 600, intersectionObserverMargin: 1200 }}
         >
           <File
@@ -320,6 +333,7 @@ function Surface({
               theme: resolveDiffThemeName(resolvedTheme),
               preferredHighlighter: PREFERRED_HIGHLIGHTER,
               themeType: resolvedTheme,
+              unsafeCSS: FILE_LINK_REVEAL_UNSAFE_CSS,
               onPostRender: (_container, instance, phase) => onPostRender(instance.file, phase),
             }}
             className="min-h-full"
@@ -394,7 +408,7 @@ export default function WorkflowDefinitionEditor({
       );
     }
     return (
-      <p className="p-6 text-meta text-muted-foreground" role="status">
+      <p className="p-6 text-body text-muted-foreground" role="status">
         <T>Loading the workflow files…</T>
       </p>
     );
@@ -439,14 +453,13 @@ export default function WorkflowDefinitionEditor({
   const between = (
     <>
       {away === null ? null : (
-        <div
-          role="status"
-          className="shrink-0 border-b px-4 py-2 text-caption text-muted-foreground"
-        >
-          {gt("{name} is not connected. What you write here stays, and saves once it is back.", {
-            name: away,
-          })}
-        </div>
+        <Alert variant="default" density="strip" edge="bottom" role="status" className="shrink-0">
+          <AlertDescription>
+            {gt("{name} is not connected. What you write here stays, and saves once it is back.", {
+              name: away,
+            })}
+          </AlertDescription>
+        </Alert>
       )}
       {query.error === null || away !== null ? null : (
         <ProblemList
@@ -500,7 +513,7 @@ export default function WorkflowDefinitionEditor({
       <div className="scrollbar-gutter-both min-h-0 flex-1 overflow-auto">
         <div className="mx-auto w-full max-w-3xl space-y-3 p-4 sm:p-6">
           <div className="flex items-start gap-3">
-            <p className="min-w-0 flex-1 text-caption text-muted-foreground">
+            <p className="min-w-0 flex-1 text-meta text-muted-foreground">
               <T>
                 Every file in{" "}
                 <code className="font-mono text-foreground">
@@ -540,31 +553,42 @@ export default function WorkflowDefinitionEditor({
             )}
           </div>
           {files.length === 0 ? (
-            <p className="rounded-lg border border-dashed p-6 text-center text-meta text-muted-foreground">
-              <T>
-                No workflows yet. Make the first file here, or ask an agent to write one in that
-                folder.
-              </T>
-            </p>
+            <div className="surface-card rounded-card">
+              <Empty size="compact">
+                <EmptyHeader>
+                  <EmptyDescription>
+                    <T>
+                      No workflows yet. Make the first file here, or ask an agent to write one in
+                      that folder.
+                    </T>
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            </div>
           ) : (
-            <ul className="divide-y rounded-lg border">
+            <ul className="surface-card divide-y divide-divider overflow-hidden rounded-card">
               {files.map((candidate) => (
                 <li key={candidate.name}>
-                  <ContentButton variant="inset-row-multiline" onClick={() => open(candidate.name)}>
-                    <FileCode2Icon className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-mono text-meta">{candidate.name}</span>
-                      <span className="block truncate text-caption text-muted-foreground">
-                        {candidate.workflows.length === 0
-                          ? gt("Defines no workflows")
-                          : candidate.workflows.map((tag) => tag.replace(/@\d+$/, "")).join(", ")}
+                  <ContentButton
+                    className="group/file block w-full cursor-pointer text-start"
+                    onClick={() => open(candidate.name)}
+                  >
+                    <span className="flex w-full items-center gap-3 px-4 py-3 group-hover/file:surface-ghost-hover group-focus-visible/file:ring-2 group-focus-visible/file:ring-inset group-focus-visible/file:ring-ring">
+                      <FileCode2Icon className="size-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-mono text-body">{candidate.name}</span>
+                        <span className="block truncate text-meta text-muted-foreground">
+                          {candidate.workflows.length === 0
+                            ? gt("Defines no workflows")
+                            : candidate.workflows.map((tag) => tag.replace(/@\d+$/, "")).join(", ")}
+                        </span>
                       </span>
+                      {candidate.problems.length > 0 ? (
+                        <Badge variant="error">
+                          <T>Does not load</T>
+                        </Badge>
+                      ) : null}
                     </span>
-                    {candidate.problems.length > 0 ? (
-                      <span className="shrink-0 text-caption text-destructive-foreground">
-                        <T>Does not load</T>
-                      </span>
-                    ) : null}
                   </ContentButton>
                 </li>
               ))}

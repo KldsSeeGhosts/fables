@@ -855,6 +855,13 @@ export function BranchToolbarBranchSelector({
   });
   const openPrLink = useOpenPrLink(threadRef);
   const linkedIssues = serverThread?.issues ?? [];
+  // The rows below show nothing without one of these.
+  const mayShowPanelRows =
+    branchPr !== null ||
+    linkedIssues.length > 0 ||
+    (serverThread?.pullRequests?.length ?? 0) > 0 ||
+    serverThread?.linkedPullRequest != null ||
+    serverThread?.branchPullRequest != null;
 
   function selectPickerItem(itemValue: string) {
     if (isInitialBranchesLoadPending || isBranchActionPending) return;
@@ -1122,7 +1129,8 @@ export function BranchToolbarBranchSelector({
             </ComboboxTrigger>
           )}
         </span>
-        {displayMode === "panel" && prRowsContainer !== null
+        {/* Each portal host takes React's whole delegated listener set, so a thread with no row to show mounts none. */}
+        {displayMode === "panel" && prRowsContainer !== null && mayShowPanelRows
           ? portalTo(
               prRowsContainer,
               <>

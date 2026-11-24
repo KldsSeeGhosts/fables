@@ -1,6 +1,5 @@
 import { copySnapshot } from "./copySnapshot";
 import { VoiceInputSetup } from "./VoiceInputSetup";
-import { ComposerApprovalPanel } from "./ComposerApprovalPanel";
 import { useComposerTypingGuard } from "./useComposerTypingGuard";
 import { insertAttachmentReferencesForDraft } from "./composerAttachmentReferences";
 import type { ComposerAttachmentInsertion } from "../composerAttachmentInsertion";
@@ -37,7 +36,6 @@ import type {
   EnvironmentContextRecord,
   ResolvedKeybindingsConfig,
   RuntimeMode,
-  ProviderApprovalDecision,
   RuntimeRequestId,
   ScopedThreadRef,
   ServerProvider,
@@ -73,6 +71,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ComponentProps,
 } from "react";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { createPortal, flushSync } from "react-dom";
@@ -316,6 +315,44 @@ import { composerCommandKeyHandler } from "./composerCommandKey";
 import { promptSuggestionToAccept, usePromptSuggestion } from "./usePromptSuggestion";
 import { useFreshSessionArmed } from "./freshSessionArms";
 
+/**
+ * A div moved into `host`, which ChatView renders outside the composer's DOM. Moved, not
+ * portaled: a portal target keeps React's whole delegated listener set for good. The hidden
+ * span is the div's only React parent and leaves with it. The children mount once the div
+ * sits in the host, so their first layout effects measure it there.
+ */
+function InComposerHost({
+  host,
+  children,
+  ...layer
+}: ComponentProps<"div"> & { host: HTMLElement }) {
+  const homeRef = useRef<HTMLSpanElement>(null);
+  const nodeRef = useRef<Element | null>(null);
+  const [placedIn, setPlacedIn] = useState<HTMLElement | null>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Move the div into the host's DOM, then mount the children there.
+  useLayoutEffect(() => {
+    const home = homeRef.current;
+    let node = nodeRef.current;
+    if (!node) {
+      node = home?.firstElementChild ?? null;
+      nodeRef.current = node;
+    }
+    if (!home || !node) return;
+    host.append(node);
+    setPlacedIn(host);
+    // A hidden <Activity> leaves the div in the host, as it left a portal's children.
+    return () =>
+      queueMicrotask(() => {
+        if (!home.isConnected) node.remove();
+      });
+  }, [host]);
+  return (
+    <span ref={homeRef} hidden>
+      <div {...layer}>{placedIn === host ? children : null}</div>
+    </span>
+  );
+}
+
 function consumePasteAsTextShortcut(deadline: { current: number }): boolean {
   const armed = Date.now() <= deadline.current;
   deadline.current = 0;
@@ -427,10 +464,6 @@ export interface ChatComposerProps {
     readonly connection: EnvironmentConnectionPresentation;
   } | null;
 
-  onRespondToApproval?: (
-    requestId: RuntimeRequestId,
-    decision: ProviderApprovalDecision,
-  ) => Promise<unknown>;
   activePendingApproval: PendingApproval | null;
   pendingApprovals: PendingApproval[];
   onHeldRequestIdsChange: (requestIds: ReadonlySet<string>) => void;
@@ -3740,16 +3773,6 @@ export function ChatComposer(props: ChatComposerProps) {
         onPrevious={onPreviousActivePendingUserInputQuestion}
         onWriteAnswer={focusComposer}
       />
-    ) : activePendingApproval && props.onRespondToApproval ? (
-      <ComposerApprovalPanel
-        key={activePendingApproval.requestId}
-        approval={activePendingApproval}
-        workspaceRoot={gitCwd ?? undefined}
-        count={pendingApprovals.length}
-        disabled={!canOperateThread}
-        isResponding={respondingRequestIds.includes(activePendingApproval.requestId)}
-        onRespond={props.onRespondToApproval}
-      />
     ) : null;
 
   return (
@@ -3836,8 +3859,13 @@ export function ChatComposer(props: ChatComposerProps) {
       data-chat-composer-form="true"
       {...threadContextDropTargetProps()}
     >
-      {requestCardHost && requestCard ? createPortal(requestCard, requestCardHost) : null}
-      {props.stashHost
+      {requestCardHost && requestCard ? (
+        <InComposerHost host={requestCardHost} className="contents">
+          {requestCard}
+        </InComposerHost>
+      ) : null}
+      {/* Each portal host takes React's whole delegated listener set, so an empty badge mounts none. */}
+      {props.stashHost && stashQueue.length > 0
         ? createPortal(
             <ComposerStashBadge
               count={stashQueue.length}
@@ -3848,18 +3876,16 @@ export function ChatComposer(props: ChatComposerProps) {
             props.stashHost,
           )
         : null}
-      {props.trayControlsHost
-        ? createPortal(
-            <div
-              ref={attachExpandedComposerControls}
-              data-chat-composer-resting-controls="true"
-              className="flex min-w-0 items-center gap-0.5 @max-[620px]/composer-surface:[--composer-compact-labels:1]"
-            >
-              {composerControls}
-            </div>,
-            props.trayControlsHost,
-          )
-        : null}
+      {props.trayControlsHost ? (
+        <InComposerHost
+          host={props.trayControlsHost}
+          ref={attachExpandedComposerControls}
+          data-chat-composer-resting-controls="true"
+          className="flex min-w-0 items-center gap-0.5"
+        >
+          {composerControls}
+        </InComposerHost>
+      ) : null}
       <ComposerBanner.Dock>
         <ComposerBannerStack items={shelfItems} />
       </ComposerBanner.Dock>

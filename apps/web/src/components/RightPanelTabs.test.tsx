@@ -1,8 +1,10 @@
 import { EnvironmentId, type ThreadPullRequestLink } from "@t3tools/contracts";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { surfaceShortcutActionForKey, surfaceShortcutTargetsTypingContext } from "./RightPanelTabs";
 import { resolvePullRequestTabLink } from "./SurfaceTabIcon";
+
+vi.mock("@pierre/diffs/worker/worker.js?worker", () => ({ default: vi.fn() }));
 
 function shortcutEvent(
   key: string,

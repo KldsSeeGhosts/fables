@@ -22,6 +22,8 @@ import {
   SentMessageTimelineRow,
 } from "./TimelineAssistantRows";
 import {
+  TimelineApprovalCtx,
+  type TimelineApprovalState,
   type TimelinePendingRequest,
   type TimelineRow,
   TimelineRowActivityCtx,
@@ -57,6 +59,7 @@ import { ThreadFindTimelineContext } from "./ThreadFindProvider";
 import { MarkdownFindContext } from "./markdownFindContext";
 import { useRegisterChatCanvasTimeline } from "./ChatCanvasContext";
 import { WorkLogBlock } from "./WorkLog";
+import { TimelineChildApprovalCard } from "./ChildThreadApprovals";
 import { TimelinePendingApprovalRow } from "./TimelinePendingApprovalRow";
 import {
   type WorktreeSetupSnapshot,
@@ -64,13 +67,20 @@ import {
   type EnvironmentId,
   type MessageId,
   type OrchestrationV2TurnItem,
+  type ProviderApprovalDecision,
   type RunAttemptId,
+  type RuntimeRequestId,
   type ServerProviderSkill,
   type RunId,
   ThreadId,
 } from "@t3tools/contracts";
+import type { ChildThreadApproval } from "@t3tools/client-runtime/state/thread-requests";
 import { deriveTimelineMinimapItems } from "./timelineMinimapItems";
-import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
+import {
+  parseScopedThreadKey,
+  scopedThreadKey,
+  scopeThreadRef,
+} from "@t3tools/client-runtime/environment";
 import { resolveWorkGroupScrollAnchor } from "@t3tools/client-runtime/work-log/scroll-anchor";
 import { type WorkflowOpening } from "@t3tools/client-runtime/state/subagentRuntime";
 import { observeResize } from "~/lib/observeResize";
@@ -108,7 +118,17 @@ const TimelineGapRecorder = timelineGapRecorderEnabled
   : null;
 
 const EMPTY_PENDING_APPROVALS: ReadonlyArray<PendingApproval> = [];
-const EMPTY_RESPONDING_REQUEST_IDS: TimelineRowSharedState["respondingRequestIds"] = [];
+const EMPTY_PENDING_APPROVAL_REQUEST_IDS: ReadonlySet<RuntimeRequestId> = new Set();
+const EMPTY_PENDING_APPROVALS_BY_ID: ReadonlyMap<RuntimeRequestId, PendingApproval> = new Map();
+const EMPTY_CHILD_THREAD_APPROVALS: ReadonlyArray<ChildThreadApproval> = [];
+const EMPTY_RESPONDING_REQUEST_IDS: TimelineApprovalState["respondingRequestIds"] = [];
+const EMPTY_RESOLVED_APPROVAL_DECISIONS: ReadonlyMap<RuntimeRequestId, ProviderApprovalDecision> =
+  new Map();
+const EMPTY_CHILD_APPROVALS_BY_THREAD_KEY: ReadonlyMap<
+  string,
+  ReadonlyArray<ChildThreadApproval>
+> = new Map();
+const EMPTY_CHILD_APPROVAL_THREAD_IDS: ReadonlySet<ThreadId> = new Set();
 import { type ChatFileAttachment, type TurnDiffSummary } from "../../types";
 import {
   ArrowRightIcon,
@@ -263,10 +283,13 @@ export interface MessagesTimelineHistoryControls {
 
 interface MessagesTimelineProps {
   pendingApprovals?: ReadonlyArray<PendingApproval>;
+  childThreadApprovals?: ReadonlyArray<ChildThreadApproval>;
   heldApprovalRequestIds?: ReadonlySet<string> | undefined;
-  respondingRequestIds?: TimelineRowSharedState["respondingRequestIds"];
+  respondingRequestIds?: TimelineApprovalState["respondingRequestIds"];
+  resolvedApprovalDecisions?: ReadonlyMap<RuntimeRequestId, ProviderApprovalDecision>;
   canOperateThread?: boolean;
-  onRespondToApproval?: TimelineRowSharedState["onRespondToApproval"];
+  onRespondToApproval?: TimelineApprovalState["onRespondToApproval"];
+  onApprovalAnswered?: (() => void) | null;
   citationRequest?: AssistantCitationRequest | null;
   citationHistory?: CitedHistory;
   onCiteAssistantText?: (
@@ -402,10 +425,13 @@ export function MessagesTimeline(props: MessagesTimelineProps) {
 
 const ConversationTimeline = memo(function ConversationTimeline({
   pendingApprovals = EMPTY_PENDING_APPROVALS,
+  childThreadApprovals = EMPTY_CHILD_THREAD_APPROVALS,
   heldApprovalRequestIds,
   respondingRequestIds = EMPTY_RESPONDING_REQUEST_IDS,
+  resolvedApprovalDecisions = EMPTY_RESOLVED_APPROVAL_DECISIONS,
   canOperateThread = false,
   onRespondToApproval,
+  onApprovalAnswered = null,
   citationRequest = null,
   citationHistory = CITED_HISTORY_LOADING,
   onCiteAssistantText,
@@ -717,13 +743,21 @@ const ConversationTimeline = memo(function ConversationTimeline({
 
   const isVisiblePendingApproval = (approval: PendingApproval) =>
     !heldApprovalRequestIds?.has(approval.requestId);
-  const pendingApprovalRequestIds = new Set(
-    pendingApprovals.filter(isVisiblePendingApproval).map((approval) => approval.requestId),
-  );
+  const pendingApprovalRequestIds =
+    pendingApprovals.length === 0
+      ? EMPTY_PENDING_APPROVAL_REQUEST_IDS
+      : new Set(
+          pendingApprovals.filter(isVisiblePendingApproval).map((approval) => approval.requestId),
+        );
+  const childApprovalThreadIds =
+    childThreadApprovals.length === 0
+      ? EMPTY_CHILD_APPROVAL_THREAD_IDS
+      : new Set(childThreadApprovals.map((entry) => entry.thread.threadId));
   const slashCommandCatalog = useTimelineSlashCommandCatalog(slashCommands, skills);
   const rawRows = useIncrementalTimelineRows(`${listIdentityKey}\0${workspaceRoot ?? ""}`, {
     timelineEntries,
     pendingApprovalRequestIds,
+    childApprovalThreadIds,
     latestRun,
     usageLimitRunId,
     runningRunId,
@@ -751,6 +785,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   const rows = useStableRows(rawRows, listIdentityKey, {
     timelineEntries,
     pendingApprovalRequestIds,
+    childApprovalThreadIds,
     latestRun,
     runningRunId,
     expandedWorkGroupIds,
@@ -939,17 +974,60 @@ const ConversationTimeline = memo(function ConversationTimeline({
     }
   }
   const matchedApprovalRequestIds = new Set<string>();
-  for (const row of pendingApprovalRequestIds.size > 0 ? rows : []) {
-    const entries =
-      row.kind === "work" ? row.groupedEntries : row.kind === "work-live" ? [row.entry] : [];
-    for (const entry of entries) {
-      const item = entry.projectedItem?.item;
-      if (item?.type === "approval_request") matchedApprovalRequestIds.add(item.requestId);
+  const matchedSubagentThreadKeys = new Set<string>();
+  const pendingApprovalRowIds: string[] = [];
+  if (pendingApprovalRequestIds.size > 0 || childThreadApprovals.length > 0) {
+    const childApprovalKeys = new Set(
+      childThreadApprovals.map((entry) => scopedThreadKey(entry.thread)),
+    );
+    for (const row of rows) {
+      let matchedRow = false;
+      if (pendingApprovalRequestIds.size > 0) {
+        const entries =
+          row.kind === "work" ? row.groupedEntries : row.kind === "work-live" ? [row.entry] : [];
+        for (const entry of entries) {
+          const item = entry.projectedItem?.item;
+          if (item?.type === "approval_request") {
+            matchedApprovalRequestIds.add(item.requestId);
+            if (pendingApprovalRequestIds.has(item.requestId)) matchedRow = true;
+          }
+        }
+      }
+      if (
+        childApprovalKeys.size > 0 &&
+        row.kind === "event" &&
+        row.projectedItem.item.type === "subagent"
+      ) {
+        for (const member of row.subagents ?? [row.projectedItem]) {
+          if (member.item.type !== "subagent") continue;
+          const childKey =
+            member.item.remoteChild !== undefined
+              ? scopedThreadKey(
+                  scopeThreadRef(
+                    member.item.remoteChild.environmentId,
+                    member.item.remoteChild.threadId,
+                  ),
+                )
+              : member.item.childThreadId !== null
+                ? scopedThreadKey(
+                    scopeThreadRef(activeThreadEnvironmentId, member.item.childThreadId),
+                  )
+                : null;
+          if (childKey !== null && childApprovalKeys.has(childKey)) {
+            matchedSubagentThreadKeys.add(childKey);
+            matchedRow = true;
+          }
+        }
+      }
+      if (matchedRow) pendingApprovalRowIds.push(row.id);
     }
   }
   const unmatchedPendingApprovals = pendingApprovals.filter(
     (approval) =>
       isVisiblePendingApproval(approval) && !matchedApprovalRequestIds.has(approval.requestId),
+  );
+  const unmatchedChildApprovals = childThreadApprovals.filter(
+    (entry) => !matchedSubagentThreadKeys.has(scopedThreadKey(entry.thread)),
   );
   // Run status/timestamps change per stream event; keep them out of shared row context.
   const runs = useStableHandoffRuns(runsProp);
@@ -964,6 +1042,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   const showsEmptyState =
     rows.length === 0 &&
     unmatchedPendingApprovals.length === 0 &&
+    unmatchedChildApprovals.length === 0 &&
     !isWorking &&
     parentThreadLink === null &&
     historyControls === undefined &&
@@ -1054,6 +1133,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   const alwaysRenderKeys = [
     ...(firstMessageRow ? [firstMessageRow.id] : []),
     ...(lastMessageRow && lastMessageRow !== firstMessageRow ? [lastMessageRow.id] : []),
+    ...pendingApprovalRowIds,
     ...(citationAlwaysRender?.keys ?? []),
     ...(fullscreenAppRowId === null ? [] : [fullscreenAppRowId]),
     ...new Set(
@@ -1306,11 +1386,38 @@ const ConversationTimeline = memo(function ConversationTimeline({
 
   // Built from props after the last hook so the compiler can memoize the row context; a map
   // made before a hook would rebuild it, and re-render every row, on each streamed update.
-  const pendingApprovalsByRequestId = new Map(
-    pendingApprovals
-      .filter(isVisiblePendingApproval)
-      .map((approval) => [approval.requestId, approval]),
-  );
+  const visiblePendingApprovals =
+    pendingApprovals.length === 0
+      ? EMPTY_PENDING_APPROVALS
+      : pendingApprovals.filter(isVisiblePendingApproval);
+  const pendingApprovalsByRequestId =
+    visiblePendingApprovals.length === 0
+      ? EMPTY_PENDING_APPROVALS_BY_ID
+      : new Map(visiblePendingApprovals.map((approval) => [approval.requestId, approval]));
+  const activeShortcutRequestId =
+    visiblePendingApprovals.find((approval) => approval.responseCapability === "live")?.requestId ??
+    null;
+  const childApprovalsByThreadKey = (() => {
+    if (childThreadApprovals.length === 0) return EMPTY_CHILD_APPROVALS_BY_THREAD_KEY;
+    const grouped = new Map<string, ChildThreadApproval[]>();
+    for (const entry of childThreadApprovals) {
+      const key = scopedThreadKey(entry.thread);
+      const list = grouped.get(key);
+      if (list) list.push(entry);
+      else grouped.set(key, [entry]);
+    }
+    return grouped;
+  })();
+  const approvalState: TimelineApprovalState = {
+    pendingApprovals: pendingApprovalsByRequestId,
+    activeShortcutRequestId,
+    respondingRequestIds,
+    resolvedApprovalDecisions,
+    childApprovalsByThreadKey,
+    canOperateThread,
+    onRespondToApproval,
+    onApprovalAnswered,
+  };
   const wakeUpsRail = wakeUpsRailRows(wakeUpsRailKey(rows));
   const wakeUpsRailInteraction = {
     hoveredFoldId: hoveredWakeUpsFoldId,
@@ -1318,10 +1425,6 @@ const ConversationTimeline = memo(function ConversationTimeline({
     onCollapse: collapseWakeUpsFromRail,
   };
   const sharedState: TimelineRowSharedState = {
-    pendingApprovals: pendingApprovalsByRequestId,
-    respondingRequestIds,
-    canOperateThread,
-    onRespondToApproval,
     citationRequest: readyCitationRequest,
     onReplyToResponse,
     listRef,
@@ -1697,7 +1800,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
       onGrow={onFooterGrow}
     >
       {footer}
-      {unmatchedPendingApprovals.length > 0 ? (
+      {unmatchedPendingApprovals.length > 0 || unmatchedChildApprovals.length > 0 ? (
         <TimelineRowCtx value={sharedState}>
           <div className="messages-timeline-row-frame">
             <div
@@ -1708,6 +1811,20 @@ const ConversationTimeline = memo(function ConversationTimeline({
               <WorkLogBlock>
                 {unmatchedPendingApprovals.map((approval) => (
                   <TimelinePendingApprovalRow key={approval.requestId} approval={approval} />
+                ))}
+                {unmatchedChildApprovals.map((entry) => (
+                  <TimelineChildApprovalCard
+                    key={JSON.stringify([
+                      entry.thread.environmentId,
+                      entry.thread.threadId,
+                      entry.approval.requestId,
+                    ])}
+                    entry={entry}
+                    onAnswered={onApprovalAnswered}
+                    onOpenThread={() =>
+                      onOpenThread(entry.thread.threadId, entry.thread.environmentId, "primary")
+                    }
+                  />
                 ))}
               </WorkLogBlock>
             </div>
@@ -1774,77 +1891,79 @@ const ConversationTimeline = memo(function ConversationTimeline({
       <MarkdownFindContext value={findActive}>
         <TimelineWakeUpsRailInteractionCtx value={wakeUpsRailInteraction}>
           <TimelineRowActivityCtx value={activityState}>
-            <TooltipScrollDismissArea
-              ref={attachTimelineViewportElement}
-              className="relative -mt-[var(--timeline-top-inset,0px)] h-[calc(100%+var(--timeline-top-inset,0px))] min-h-0"
-              data-assistant-citation-viewport="true"
-              data-sidebar-slide-track="end"
-              data-pane-slide-track="lane"
-            >
-              {onCiteAssistantText && citationThreadRef ? (
-                <AssistantSelectionToolbar
-                  viewport={timelineViewportElement}
-                  threadRef={citationThreadRef}
-                  onCite={onCiteAssistantText}
+            <TimelineApprovalCtx value={approvalState}>
+              <TooltipScrollDismissArea
+                ref={attachTimelineViewportElement}
+                className="relative -mt-[var(--timeline-top-inset,0px)] h-[calc(100%+var(--timeline-top-inset,0px))] min-h-0"
+                data-assistant-citation-viewport="true"
+                data-sidebar-slide-track="end"
+                data-pane-slide-track="lane"
+              >
+                {onCiteAssistantText && citationThreadRef ? (
+                  <AssistantSelectionToolbar
+                    viewport={timelineViewportElement}
+                    threadRef={citationThreadRef}
+                    onCite={onCiteAssistantText}
+                  />
+                ) : null}
+                <LegendList<MessagesTimelineRow>
+                  ref={setTimelineList}
+                  data={rows}
+                  extraData={listExtraData}
+                  keyExtractor={keyExtractor}
+                  getItemType={getItemType}
+                  renderItem={renderItem}
+                  estimatedItemSize={90}
+                  initialScrollAtEnd={
+                    !findActive && citationRequest === null && rememberedPosition?.atEnd !== false
+                  }
+                  // Legend needs a data refresh to mount new pins without a scroll event.
+                  dataVersion={`${readyCitationRequest?.key ?? listIdentityKey}:${alwaysRenderKeys.join(",")}`}
+                  {...(alwaysRender ? { alwaysRender } : {})}
+                  onLoad={handleListLoad}
+                  {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
+                  contentInsetEndAdjustment={anchoredEndSpace ? contentInsetEndAdjustment : 0}
+                  maintainScrollAtEnd={maintainScrollAtEnd}
+                  maintainVisibleContentPosition={
+                    findActive ||
+                    citationPositioning ||
+                    (restoringThreadPosition && rememberedPosition?.atEnd === false)
+                      ? false
+                      : maintainVisibleContentPosition
+                  }
+                  maintainScrollAtEndThreshold={1}
+                  immediateWebShrinks={workingHistoryCollapsing}
+                  onScroll={handleScroll}
+                  onItemSizeChanged={scheduleMinimapRefresh}
+                  onMetricsChange={scheduleMinimapRefresh}
+                  // Keyboard scrolling only moves the focused element; F6 and clicks land here.
+                  tabIndex={-1}
+                  data-workspace-focus-default
+                  className="messages-timeline-scroll scrollbar-gutter-both h-full min-h-0 scroll-pt-[var(--timeline-top-inset,0px)] overflow-x-hidden overscroll-y-contain [overflow-anchor:none]"
+                  ListHeaderComponent={listHeader}
+                  ListFooterComponent={timelineListFooter}
                 />
-              ) : null}
-              <LegendList<MessagesTimelineRow>
-                ref={setTimelineList}
-                data={rows}
-                extraData={listExtraData}
-                keyExtractor={keyExtractor}
-                getItemType={getItemType}
-                renderItem={renderItem}
-                estimatedItemSize={90}
-                initialScrollAtEnd={
-                  !findActive && citationRequest === null && rememberedPosition?.atEnd !== false
-                }
-                // Legend needs a data refresh to mount new pins without a scroll event.
-                dataVersion={`${readyCitationRequest?.key ?? listIdentityKey}:${alwaysRenderKeys.join(",")}`}
-                {...(alwaysRender ? { alwaysRender } : {})}
-                onLoad={handleListLoad}
-                {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
-                contentInsetEndAdjustment={anchoredEndSpace ? contentInsetEndAdjustment : 0}
-                maintainScrollAtEnd={maintainScrollAtEnd}
-                maintainVisibleContentPosition={
-                  findActive ||
-                  citationPositioning ||
-                  (restoringThreadPosition && rememberedPosition?.atEnd === false)
-                    ? false
-                    : maintainVisibleContentPosition
-                }
-                maintainScrollAtEndThreshold={1}
-                immediateWebShrinks={workingHistoryCollapsing}
-                onScroll={handleScroll}
-                onItemSizeChanged={scheduleMinimapRefresh}
-                onMetricsChange={scheduleMinimapRefresh}
-                // Keyboard scrolling only moves the focused element; F6 and clicks land here.
-                tabIndex={-1}
-                data-workspace-focus-default
-                className="messages-timeline-scroll scrollbar-gutter-both h-full min-h-0 scroll-pt-[var(--timeline-top-inset,0px)] overflow-x-hidden overscroll-y-contain [overflow-anchor:none]"
-                ListHeaderComponent={listHeader}
-                ListFooterComponent={timelineListFooter}
-              />
-              <TimelineMinimap
-                items={minimapItems}
-                hasPersistentGutter={minimapHasPersistentGutter}
-                hitStripWidth={minimapHitStripWidth}
-                currentIndex={minimapCurrentIndex}
-                atEnd={minimapAtEnd}
-                stripMap={minimapStripMap}
-                onWheel={forwardMinimapWheel}
-                onSelect={(item) => {
-                  navigateTimeline();
-                  void listRef.current?.scrollToIndex({
-                    index: item.rowIndex,
-                    animated: !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-                    viewOffset:
-                      TIMELINE_MINIMAP_TARGET_OFFSET +
-                      readTimelineTopInset(listRef.current?.getScrollableNode()),
-                  });
-                }}
-              />
-            </TooltipScrollDismissArea>
+                <TimelineMinimap
+                  items={minimapItems}
+                  hasPersistentGutter={minimapHasPersistentGutter}
+                  hitStripWidth={minimapHitStripWidth}
+                  currentIndex={minimapCurrentIndex}
+                  atEnd={minimapAtEnd}
+                  stripMap={minimapStripMap}
+                  onWheel={forwardMinimapWheel}
+                  onSelect={(item) => {
+                    navigateTimeline();
+                    void listRef.current?.scrollToIndex({
+                      index: item.rowIndex,
+                      animated: !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+                      viewOffset:
+                        TIMELINE_MINIMAP_TARGET_OFFSET +
+                        readTimelineTopInset(listRef.current?.getScrollableNode()),
+                    });
+                  }}
+                />
+              </TooltipScrollDismissArea>
+            </TimelineApprovalCtx>
           </TimelineRowActivityCtx>
         </TimelineWakeUpsRailInteractionCtx>
       </MarkdownFindContext>
@@ -1956,7 +2075,10 @@ function getItemType(item: MessagesTimelineRow) {
 const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: TimelineRow }) {
   const wakeUpsRail = use(TimelineWakeUpsRailCtx).get(row.id);
   const isExpandedToolGroup = row.kind === "work" && row.isExpandedToolGroup;
-  const isSubagentGroup = row.kind === "event" && row.projectedItem.item.type === "subagent";
+  const isWorkLogEvent =
+    row.kind === "event" &&
+    (row.projectedItem.item.type === "subagent" ||
+      row.projectedItem.item.type === "run_interrupt_result");
   const command = row.kind === "message" && row.command?.standalone ? row.command : null;
   const isWorkLogRow =
     command !== null ||
@@ -1972,7 +2094,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
     <div
       className={cn(
         row.superseded && "ms-6",
-        isWorkLogRow || isSubagentGroup
+        isWorkLogRow || isWorkLogEvent
           ? undefined
           : row.kind === "background-activity" && row.precedesPrompt
             ? "pb-4"
@@ -1989,6 +2111,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
                   : (row.kind === "message" &&
                         row.message.role === "assistant" &&
                         !row.showAssistantMeta) ||
+                      row.turnTailBelow ||
                       row.kind === "worktree-setup" ||
                       row.kind === "event" ||
                       row.kind === "attempt-fold" ||
@@ -2021,6 +2144,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       {isWorkLogRow ? (
         <WorkLogBlock
           continues={row.continuesWorkLog}
+          precedesPrompt={row.precedesPrompt}
           layout={
             isExpandedToolGroup
               ? "group-content"
