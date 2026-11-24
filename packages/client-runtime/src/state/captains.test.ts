@@ -1,8 +1,15 @@
-import { NodeId, type OrchestrationV2Subagent } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  NodeId,
+  ThreadId,
+  type Captain,
+  type OrchestrationV2Subagent,
+} from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import { expect, it } from "vite-plus/test";
 
-import { captainRecentlyFinishedTasks } from "./captains.ts";
+import { captainConversationKeys, captainRecentlyFinishedTasks } from "./captains.ts";
+import { threadKey } from "./entities.ts";
 
 const task = (
   id: string,
@@ -29,4 +36,17 @@ it("lists finished delegated tasks newest first, up to the limit", () => {
     2,
   );
   expect(finished.map(({ id }) => id)).toEqual(["failed", "cancelled"]);
+});
+
+it("keys every current and earlier Captain conversation by environment", () => {
+  const environmentId = EnvironmentId.make("environment");
+  const captain = {
+    primaryThreadId: ThreadId.make("captain:maria:1"),
+    earlierThreadIds: [ThreadId.make("captain:maria:0")],
+  } as Captain;
+  expect(captainConversationKeys([])).toBe("");
+  expect(captainConversationKeys([{ environmentId, captains: [captain] }]).split("\n")).toEqual([
+    threadKey({ environmentId, threadId: ThreadId.make("captain:maria:0") }),
+    threadKey({ environmentId, threadId: ThreadId.make("captain:maria:1") }),
+  ]);
 });

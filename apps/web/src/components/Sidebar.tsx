@@ -67,7 +67,7 @@ import {
   type ShownOrder,
 } from "@t3tools/client-runtime/state/thread-search";
 import { foldSearchQuery, rankMessageMatches } from "@t3tools/shared/paletteSearch";
-import { CaptainsShelf } from "./captains/CaptainsShelf";
+import { CaptainsShelf, useCaptainConversationKeys } from "./captains/CaptainsShelf";
 import { findForMessageMatch, openThreadFindOnQuery } from "./chat/threadFindStore";
 import {
   threadRuntimeCanArchive,
@@ -1035,7 +1035,14 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     projectGroupByScopeKey,
     projectScopeItems: lookupProjectScopeItems,
   } = useSidebarLookups();
-  const delegatedUnderParent = useDelegatedUnderParent();
+  const delegatedFromLinkedEnvironments = useDelegatedUnderParent();
+  const captainConversations = useCaptainConversationKeys();
+  // Captain conversations live in the Captains shelf, so project lists skip them like threads
+  // shown under a parent. A deleted Captain's conversations drop out of the set and list again.
+  const delegatedUnderParent =
+    captainConversations.size === 0
+      ? delegatedFromLinkedEnvironments
+      : new Set([...delegatedFromLinkedEnvironments, ...captainConversations]);
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
