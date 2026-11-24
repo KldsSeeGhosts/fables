@@ -16,6 +16,8 @@ import type { Project } from "../types";
 import { installChatRouteCommands } from "./chatRouteCommands";
 import * as dispatcher from "./dispatcher";
 
+vi.mock("@pierre/diffs/worker/worker.js?worker", () => ({ default: vi.fn() }));
+
 function project(id: string): Project {
   return {
     id: ProjectId.make(id),

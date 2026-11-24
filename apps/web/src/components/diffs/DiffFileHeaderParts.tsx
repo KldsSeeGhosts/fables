@@ -1,7 +1,7 @@
 import type { FileDiffMetadata } from "@pierre/diffs";
 import { FileDiffIcon, FileMinusIcon, FilePlusIcon } from "lucide-react";
 
-import { DiffStatLabel, hasNonZeroStat } from "../chat/DiffStatLabel";
+import { DiffStatLabel } from "../chat/DiffStatLabel";
 
 /**
  * Pieces the diff viewers slot into Pierre's file header, shared by the thread diff panel and
@@ -48,7 +48,7 @@ export function DiffFileHeaderStat({
   additions: number;
   deletions: number;
 }) {
-  if (!hasNonZeroStat({ additions, deletions })) return null;
+  if (additions === 0 && deletions === 0) return null;
   return <DiffStatLabel font="mono" layout="inline" additions={additions} deletions={deletions} />;
 }
 

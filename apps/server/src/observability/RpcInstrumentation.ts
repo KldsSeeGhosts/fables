@@ -270,6 +270,16 @@ const RPC_AGGREGATES = {
   [WS_METHODS.subscribeServerConfig]: "server",
   [WS_METHODS.subscribeServerLifecycle]: "server",
   [WS_METHODS.subscribeAuthAccess]: "auth",
+  [WS_METHODS.captainsSubscribe]: "captains",
+  [WS_METHODS.captainsCreate]: "captains",
+  [WS_METHODS.captainsUpdate]: "captains",
+  [WS_METHODS.captainsArchive]: "captains",
+  [WS_METHODS.captainsUnarchive]: "captains",
+  [WS_METHODS.captainsDelete]: "captains",
+  [WS_METHODS.captainsResetConversation]: "captains",
+  [WS_METHODS.captainsUpdateDocument]: "captains",
+  [WS_METHODS.captainsUpsertMemory]: "captains",
+  [WS_METHODS.captainsDeleteMemory]: "captains",
 } as const satisfies Readonly<Record<WsRpcMethod, string>>;
 
 const RPC_SPAN_PREFIX = "ws.rpc";

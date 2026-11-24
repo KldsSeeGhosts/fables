@@ -244,7 +244,7 @@ it("opens an idle child beside the thread, and in its place with the modifier", 
   expect(panel().surfaces).toHaveLength(1);
 });
 
-it("keeps focus on the list when Show more pages reveal the last rows", async () => {
+it("moves focus to the newly revealed agent after the last page", async () => {
   setup();
   const projection = makeThreadProjectionFixture();
   const environmentId = EnvironmentId.make("local");
@@ -283,7 +283,7 @@ it("keeps focus on the list when Show more pages reveal the last rows", async ()
   );
   await screen.getByRole("button", { name: /Previous agents/ }).click();
   await screen.getByRole("button", { name: "Show 1 more" }).click();
-  await expect.element(screen.getByRole("list", { name: "Related threads" })).toHaveFocus();
+  await expect.element(screen.getByRole("button", { name: /Agent 6/ })).toHaveFocus();
 });
 
 it("shows a lineage thread's full title in its tooltip", async () => {
@@ -549,4 +549,28 @@ it.each([1, 18])("continues scrolling the panel past a list of %i subagents", as
   viewport.scrollTop = 0;
   await userEvent.wheel(list, { delta: { y: 300 } });
   await vi.waitFor(() => expect(viewport.scrollTop).toBeGreaterThan(0));
+});
+
+it("hides the Lineage card when an active session has no relatives", async () => {
+  setup();
+  const projection = makeThreadProjectionFixture();
+  state.projection = {
+    ...projection,
+    thread: {
+      ...projection.thread,
+      id: threadId,
+      lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
+      forkedFrom: null,
+    },
+    providerSessions: [{ id: "session", status: "ready" }],
+  };
+  await using _screen = await render(
+    <ThreadRelationshipsPanel
+      environmentId={environmentId}
+      threadId={threadId}
+      showLineage
+      showSideChats
+    />,
+  );
+  await expect.element(page.getByRole("region", { name: "Lineage" })).not.toBeInTheDocument();
 });

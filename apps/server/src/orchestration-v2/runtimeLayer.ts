@@ -355,9 +355,8 @@ const layerCaptainProvided = CaptainService.layer.pipe(
       layerThreadManagementProvided,
       layerThreadLaunchProvided,
       layerManagedProjectFoldersProvided,
-      layerProjectService,
       layerScheduledTaskProvided,
-    ),
+    ).pipe(Layer.provideMerge(layerProjectService)),
   ),
 );
 const layerScratchThreadPromotionProvided = ScratchThreadPromotion.layer.pipe(

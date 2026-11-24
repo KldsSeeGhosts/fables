@@ -1,3 +1,4 @@
+import { contextMenuSourceOf } from "../contextMenuSource";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   threadRuntimeIsActive,
@@ -71,7 +72,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { Menu, MenuPopup, MenuTrigger } from "~/components/ui/menu";
 import { useBrowserDefaults } from "~/browser/browserDefaults";
 import { ScrollArea } from "~/components/ui/scroll-area";
-import { scrollTabStripFromRow } from "../motion/gesture";
+import { scrollLeftByWheel, scrollTabStripFromRow } from "../motion/gesture";
 import { PanelTabCloseButton } from "~/components/ui/panel-tab-close-button";
 import { useTheme } from "~/hooks/useTheme";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
@@ -933,6 +934,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
         { x: event.clientX, y: event.clientY },
         props.keybindings,
         () => setRenamingDevice(surface.id),
+        contextMenuSourceOf(event),
       );
       return;
     }
@@ -991,7 +993,11 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       },
     );
 
-    const action = await api.contextMenu.show(items, { x: event.clientX, y: event.clientY });
+    const action = await api.contextMenu.show(
+      items,
+      { x: event.clientX, y: event.clientY },
+      contextMenuSourceOf(event),
+    );
     switch (action) {
       case "open-in-main-view":
         if (surface.kind === "thread" || surface.kind === "linked-thread") {
@@ -1080,11 +1086,8 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) delta *= 16;
       if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) delta *= viewport.clientWidth;
 
-      const previousScrollLeft = viewport.scrollLeft;
-      viewport.scrollLeft += delta;
-      if (viewport.scrollLeft === previousScrollLeft) return;
+      if (!scrollLeftByWheel(viewport, event, delta)) return;
       event.preventDefault();
-      update();
     };
 
     const content = viewport.firstElementChild;

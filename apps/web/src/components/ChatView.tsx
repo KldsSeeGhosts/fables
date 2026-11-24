@@ -1,7 +1,6 @@
 import { m } from "../i18n/messages";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { msg, useGT, useMessages } from "gt-react";
-import { ChildThreadApprovals } from "./chat/ChildThreadApprovals";
 import { ComposerTaskStatus } from "./chat/ComposerTaskStatus";
 import { isReturnedSurfaceFocus, workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
@@ -88,6 +87,8 @@ import {
   type ModelSelection,
   type PreviewAnnotationPayload,
   ProviderInstanceId,
+  type ProviderApprovalDecision,
+  type RuntimeRequestId,
   type ServerProvider,
   type ScopedThreadRef,
   type ThreadId,
@@ -277,7 +278,7 @@ import { revisionedQuery } from "../state/revisionedQuery";
 import { useEnvironmentScope } from "~/state/session";
 import { primaryServerKeybindingsAtom, serverEnvironment } from "../state/server";
 import { hostEnvironmentIdAtom } from "../state/primaryEnvironment";
-import { threadEnvironment } from "../state/threads";
+import { childThreadApprovalsAtom, threadEnvironment } from "../state/threads";
 import {
   resolveProviderSkillsForCwd,
   resolveProvidersForCwd,
@@ -450,6 +451,22 @@ const EMPTY_RUNS: ThreadStructure["runs"] = [];
 const EMPTY_AUTO_UPDATE_ENVIRONMENTS: ReadonlyArray<EnvironmentPresentation> = [];
 const EMPTY_COMPOSER_BANNER_ITEMS: ReadonlyArray<ComposerBannerStackItem> = [];
 const EMPTY_PROVIDER_SLASH_COMMANDS: ServerProvider["slashCommands"] = [];
+const EMPTY_RESOLVED_APPROVAL_DECISIONS: ReadonlyMap<RuntimeRequestId, ProviderApprovalDecision> =
+  new Map();
+
+function deriveResolvedApprovalDecisions(
+  requests: ThreadStructure["runtimeRequests"] | undefined,
+): ReadonlyMap<RuntimeRequestId, ProviderApprovalDecision> {
+  if (!requests || requests.length === 0) return EMPTY_RESOLVED_APPROVAL_DECISIONS;
+  let map: Map<RuntimeRequestId, ProviderApprovalDecision> | null = null;
+  for (const request of requests) {
+    if (request.status === "resolved" && request.decision !== undefined) {
+      if (map === null) map = new Map();
+      map.set(request.id, request.decision);
+    }
+  }
+  return map ?? EMPTY_RESOLVED_APPROVAL_DECISIONS;
+}
 
 type ChatViewProps =
   | {
@@ -1536,6 +1553,18 @@ export default function ChatView(props: ChatViewProps) {
   const onHeldRequestIdsChange = useStableCallback((requestIds: ReadonlySet<string>) => {
     setHeldApprovalRequestIds((current) => (shallow(current, requestIds) ? current : requestIds));
   });
+  const resolvedApprovalDecisions = deriveResolvedApprovalDecisions(
+    serverProjection?.runtimeRequests,
+  );
+  const childThreadApprovals = useAtomValue(childThreadApprovalsAtom(activeThreadRef));
+  const visiblePendingApprovalCount = pendingApprovals.filter(
+    (approval) => !heldApprovalRequestIds.has(approval.requestId),
+  ).length;
+  const onApprovalAnsweredStable = useStableCallback(() => {
+    if (visiblePendingApprovalCount + childThreadApprovals.length <= 1 && layoutPane.focused) {
+      requestAnimationFrame(() => composerRef.current?.focusAtEnd());
+    }
+  });
   // Answering an approval or question on any client resumes quota spending, so include it in the key.
   const usageLimitsKey =
     activeProviderInstanceId === null || (isServerThread && activeThread === undefined)
@@ -2593,7 +2622,6 @@ export default function ChatView(props: ChatViewProps) {
     : null;
   const {
     onOpenToolDiffStable,
-    onOpenTurnDiffStable,
     openChangesFromThreadPanelStable,
     toggleThreadPanelStable,
     shortcuts: rightPanelShortcuts,
@@ -3784,9 +3812,12 @@ export default function ChatView(props: ChatViewProps) {
                 <ThreadTimeline
                   key={timelineInstance.revision}
                   pendingApprovals={pendingApprovals}
+                  childThreadApprovals={childThreadApprovals}
                   heldApprovalRequestIds={heldApprovalRequestIds}
                   respondingRequestIds={respondingRequestIds}
+                  resolvedApprovalDecisions={resolvedApprovalDecisions}
                   onRespondToApproval={onRespondToApprovalStable}
+                  onApprovalAnswered={onApprovalAnsweredStable}
                   canOperateThread={canOperateThread}
                   threadDetailRef={routeThreadDetailRef}
                   entriesInput={timelineEntriesInput}
@@ -3859,10 +3890,8 @@ export default function ChatView(props: ChatViewProps) {
                   displayThreadKey={displayedTimelineKey}
                   announceTurnStatus={!isProviderSubagent}
                   onOpenToolDiff={parentPanel?.openToolDiff ?? onOpenToolDiffStable}
-                  // Side chat runs keep no checkpoints to diff, and a fork would promote the side chat.
-                  {...(embedded
-                    ? {}
-                    : { onOpenTurnDiff: onOpenTurnDiffStable, onForkFromRun: onForkFromRunStable })}
+                  // A fork would promote the side chat.
+                  {...(embedded ? {} : { onForkFromRun: onForkFromRunStable })}
                   onOpenThread={onOpenRelatedThreadStable}
                   // The header's parent tab already names a subagent's parent here.
                   parentThreadLink={
@@ -3908,7 +3937,20 @@ export default function ChatView(props: ChatViewProps) {
                 visible={showScrollToBottom && !isThreadFindActive}
                 bottom={scrollToEndClearance + 4}
                 summary={scrollToEndSummary}
-                onScrollToEnd={() => scrollToEnd(true)}
+                pendingApprovalCount={visiblePendingApprovalCount}
+                pendingSubagentApprovalCount={childThreadApprovals.length}
+                onScrollToEnd={() => {
+                  if (visiblePendingApprovalCount === 0 && childThreadApprovals.length > 0) {
+                    const target = legendListRef.current
+                      ?.getScrollableNode()
+                      ?.querySelector<HTMLElement>("[data-approval-request-id]");
+                    if (target) {
+                      target.scrollIntoView({ block: "center", behavior: "smooth" });
+                      return;
+                    }
+                  }
+                  scrollToEnd(true);
+                }}
               />
             </div>
 
@@ -3966,7 +4008,6 @@ export default function ChatView(props: ChatViewProps) {
                     }
                   >
                     <ComposerSurface.Shell contextRow={showComposerContextStrip}>
-                      <ChildThreadApprovals threadRef={activeThreadRef} />
                       <div
                         ref={setComposerRequestCardHost}
                         data-chat-composer-request-host="true"
@@ -4138,7 +4179,6 @@ export default function ChatView(props: ChatViewProps) {
                                 supportsPullRequests ? activeProjectRepository : null
                               }
                               threadPullRequests={(activeThreadShell ?? activeThread)?.pullRequests}
-                              onRespondToApproval={onRespondToApprovalStable}
                               requestCardHost={composerRequestCardHost}
                               stashHost={composerStashHost}
                               trayControlsHost={composerTrayControlsHost}

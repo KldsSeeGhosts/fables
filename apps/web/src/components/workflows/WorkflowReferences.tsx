@@ -16,6 +16,7 @@ import { IssueDetailPanel } from "../issue/IssueDetailPanel";
 import { readIssueListPreferences } from "../issue/issueListPreferences";
 import { PullRequestDetailPanel } from "../pullRequest/PullRequestDetailPanel";
 import { PULL_REQUEST_STATE_PRESENTATION } from "../pullRequest/pullRequestIcons";
+import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 
 /** The mark a reference wears: its kind's icon, in the ink its state has on its own page. */
@@ -60,8 +61,8 @@ export function WorkflowReferenceChip({
   const name = title === "" ? label : `${label} ${title}`;
   return (
     <Button
-      size="xs-pill"
       variant={open ? "secondary" : "pill"}
+      size={small ? "chip" : "xs-pill"}
       aria-pressed={open}
       aria-label={name}
       className="min-w-0 max-w-72"
@@ -161,15 +162,23 @@ export function WorkflowReferencePanel({
   }
   // A kind this client does not know yet: what the run knows of it, and where it lives.
   return (
-    <div className="space-y-2 p-4">
-      <h3 className="text-label break-words">
-        {reference.title === "" ? workflowReferenceLabel(reference) : reference.title}
-      </h3>
-      <p className="flex flex-wrap items-center gap-1.5 text-caption text-muted-foreground">
-        <WorkflowReferenceMark reference={reference} />
-        <span>{reference.kind}</span>
-        {reference.state === null ? null : <span>{reference.state}</span>}
-      </p>
+    <div className="space-y-3 p-4">
+      <div className="space-y-1.5">
+        <h3 className="text-title break-words">
+          {reference.title === "" ? workflowReferenceLabel(reference) : reference.title}
+        </h3>
+        <div className="flex flex-wrap items-center gap-2 text-meta text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <WorkflowReferenceMark reference={reference} />
+            <span>{reference.kind}</span>
+          </span>
+          {reference.state === null ? null : (
+            <Badge variant="secondary" size="sm">
+              {reference.state}
+            </Badge>
+          )}
+        </div>
+      </div>
       {reference.url === null ? null : (
         <Button
           size="sm"

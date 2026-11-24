@@ -1,4 +1,5 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { contextMenuSourceOf } from "../contextMenuSource";
 import {
   ClipboardApiUnavailableError,
   ClipboardWriteError,
@@ -257,13 +258,15 @@ const WorkspaceMenu = memo(function WorkspaceMenu({
         <TooltipTrigger
           render={
             <span
-              className="inline-flex h-7 shrink-0 items-center ps-2 pe-0.5 text-muted-foreground sm:h-5.5"
+              // The chips' 12px medium label at every size: caption on phones, meta above.
+              className="inline-flex h-7 min-w-0 shrink-0 items-center gap-1.25 border border-transparent px-2 text-caption text-muted-foreground sm:h-5.5 sm:text-meta"
               data-composer-context-control
               aria-label={workspaceLabel}
             />
           }
         >
           {icon}
+          <ComposerContextLabel>{workspaceLabel}</ComposerContextLabel>
         </TooltipTrigger>
         <TooltipPopup>{workspaceLabel}</TooltipPopup>
       </Tooltip>
@@ -622,10 +625,11 @@ function showWorkspaceContextMenu(event: ReactMouseEvent, workspacePath: string)
   event.preventDefault();
   event.stopPropagation();
   void api.contextMenu
-    .show([{ id: "copy-path", label: resolveMessage(msg("Copy full path")), icon: "copy" }], {
-      x: event.clientX,
-      y: event.clientY,
-    })
+    .show(
+      [{ id: "copy-path", label: resolveMessage(msg("Copy full path")), icon: "copy" }],
+      { x: event.clientX, y: event.clientY },
+      contextMenuSourceOf(event),
+    )
     .then((action) => {
       if (action !== "copy-path") return;
       const clipboardPath = formatFilePathForClipboard(workspacePath);

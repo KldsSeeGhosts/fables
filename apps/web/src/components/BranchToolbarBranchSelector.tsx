@@ -1,4 +1,5 @@
 import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
+import { contextMenuSourceOf } from "../contextMenuSource";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { changeRequestTermKind } from "./pullRequest/changeRequestTerm";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
@@ -531,9 +532,11 @@ export function BranchToolbarBranchSelector({
     const items: ContextMenuItem<"copy-branch-name">[] = [
       { id: "copy-branch-name", label: gt("Copy branch name"), icon: "copy" },
     ];
-    void api.contextMenu.show(items, { x: event.clientX, y: event.clientY }).then((action) => {
-      if (action === "copy-branch-name") copyBranchName(branchName);
-    });
+    void api.contextMenu
+      .show(items, { x: event.clientX, y: event.clientY }, contextMenuSourceOf(event))
+      .then((action) => {
+        if (action === "copy-branch-name") copyBranchName(branchName);
+      });
   };
 
   const runBranchAction = (action: () => Promise<void>) => {
@@ -852,6 +855,13 @@ export function BranchToolbarBranchSelector({
   });
   const openPrLink = useOpenPrLink(threadRef);
   const linkedIssues = serverThread?.issues ?? [];
+  // The rows below show nothing without one of these.
+  const mayShowPanelRows =
+    branchPr !== null ||
+    linkedIssues.length > 0 ||
+    (serverThread?.pullRequests?.length ?? 0) > 0 ||
+    serverThread?.linkedPullRequest != null ||
+    serverThread?.branchPullRequest != null;
 
   function selectPickerItem(itemValue: string) {
     if (isInitialBranchesLoadPending || isBranchActionPending) return;
@@ -1119,7 +1129,8 @@ export function BranchToolbarBranchSelector({
             </ComboboxTrigger>
           )}
         </span>
-        {displayMode === "panel" && prRowsContainer !== null
+        {/* Each portal host takes React's whole delegated listener set, so a thread with no row to show mounts none. */}
+        {displayMode === "panel" && prRowsContainer !== null && mayShowPanelRows
           ? portalTo(
               prRowsContainer,
               <>
