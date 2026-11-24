@@ -136,7 +136,18 @@ export function CaptainShelfList({
                   aria-label={gt("{name}, {status}", { name: captain.name, status })}
                   onClick={() => onOpen(scopeThreadRef(environmentId, captain.primaryThreadId))}
                 >
-                  <CaptainAvatar avatar={captain.avatar} />
+                  <CaptainAvatar
+                    avatar={captain.avatar}
+                    state={
+                      archived
+                        ? "archived"
+                        : attention > 0
+                          ? "waiting"
+                          : working
+                            ? "working"
+                            : "idle"
+                    }
+                  />
                   <span className="grid min-w-0 flex-1">
                     <span className="truncate text-label">{captain.name}</span>
                     <span

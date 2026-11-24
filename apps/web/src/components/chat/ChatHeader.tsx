@@ -11,6 +11,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
+import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/shell";
 import { T, useGT, useMessages, Var } from "gt-react";
 import { GitForkIcon, SquarePenIcon, SquareTerminal } from "lucide-react";
 import {
@@ -21,7 +22,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { isTrailingDoubleClick } from "../Sidebar.logic";
-import { CaptainAvatar } from "../captains/CaptainAvatar";
+import { CaptainAvatar, type CaptainAvatarState } from "../captains/CaptainAvatar";
 import { CaptainHeaderActions } from "../captains/CaptainHeaderActions";
 import { useCaptain } from "../captains/useCaptain";
 import { Badge } from "../ui/badge";
@@ -149,6 +150,18 @@ export const ChatHeader = memo(function ChatHeader({
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const activeThreadRef = scopeThreadRef(activeThreadEnvironmentId, activeThreadId);
   const captain = useCaptain(isServerThread ? activeThreadRef : null);
+  const activeThreadShell = useQuietThreadShell(activeThreadRef);
+  const captainAvatarState: CaptainAvatarState = captain?.archivedAt
+    ? "archived"
+    : activeThreadShell?.hasPendingApprovals ||
+        activeThreadShell?.hasPendingUserInput ||
+        activeThreadShell?.pendingSubagentRequest != null
+      ? "waiting"
+      : activeThreadShell !== null &&
+          (threadRuntimeIsActive(activeThreadShell.runtime) ||
+            activeThreadShell.pendingBackgroundTasks.length > 0)
+        ? "working"
+        : "idle";
   const displayTitle = captain?.name ?? activeThreadTitle;
   const canOperateThread = useEnvironmentScope(
     activeThreadEnvironmentId,
@@ -309,7 +322,7 @@ export const ChatHeader = memo(function ChatHeader({
   const tabIcon = ghostOf ? (
     <GitForkIcon aria-hidden className="size-3.5 shrink-0" />
   ) : captain ? (
-    <CaptainAvatar avatar={captain.avatar} />
+    <CaptainAvatar avatar={captain.avatar} state={captainAvatarState} />
   ) : isServerThread ? (
     activeProject ? (
       <ProjectFavicon project={activeProject} className="size-3.5" />
