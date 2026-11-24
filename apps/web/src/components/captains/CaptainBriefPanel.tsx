@@ -3,7 +3,6 @@ import { Tabs } from "@base-ui/react/tabs";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { captainChildIsActive, captainForThread } from "@t3tools/client-runtime/state/captains";
 import {
-  CaptainReportPolicy,
   isOrchestrationV2WorkActive,
   type OrchestrationV2RemoteTaskChild,
   type Captain,
@@ -14,7 +13,7 @@ import {
 import { useRouter } from "@tanstack/react-router";
 import { T, useGT } from "gt-react";
 import { ArrowUpRightIcon, PencilIcon } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { followLayoutCompanions } from "../../layout/openRules";
 import { useLayoutStore } from "../../layout/layoutStore";
@@ -33,12 +32,12 @@ import {
   AlertDialogTitle,
 } from "../ui/alert-dialog";
 import { Button, ContentButton } from "../ui/button";
-import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { captainBriefTabAtom } from "./captainBriefTab";
 import { CaptainDocuments } from "./CaptainDocuments";
 import { CaptainEarlierConversations } from "./CaptainEarlierConversations";
 import { CaptainEditorDialog } from "./CaptainEditorDialog";
 import { CaptainMemories } from "./CaptainMemories";
+import { CaptainReportPolicyPicker } from "./CaptainReportPolicyPicker";
 import { CaptainResetButton } from "./CaptainResetButton";
 import { CaptainScope } from "./CaptainScope";
 import { captainCommandError, useCaptains } from "./useCaptain";
@@ -80,6 +79,7 @@ function CaptainBrief({
   onDelete: () => void;
 }) {
   const gt = useGT();
+  const fieldId = useId();
   const environment = useEnvironment(environmentId);
   const projects = useProjects().filter((project) => project.environmentId === environmentId);
   const parent = scopeThreadRef(environmentId, captain.primaryThreadId);
@@ -110,20 +110,10 @@ function CaptainBrief({
   const [applied, setApplied] = useState<Captain | null>(null);
   const current = applied && applied.updatedAt > captain.updatedAt ? applied : captain;
   const archived = current.archivedAt !== null;
-  const labels = {
-    react: gt("React", { $context: "Captain report policy" }),
-    context: gt("Context", { $context: "Captain report policy" }),
-    ignore: gt("Ignore", { $context: "Captain report policy" }),
-  };
-  const description = {
-    react: gt("A delegated task report can start a Captain turn."),
-    context: gt("Recent reports are included on the next Captain turn."),
-    ignore: gt("Reports stay in the delegated task’s history."),
-  };
 
   const save = async (changes: {
     scopedProjectIds?: Captain["scopedProjectIds"];
-    reportPolicy?: CaptainReportPolicy;
+    reportPolicy?: Captain["reportPolicy"];
   }) => {
     if (!canUpdate || pending) return;
     setPending(true);
@@ -187,26 +177,15 @@ function CaptainBrief({
         onChange={(scopedProjectIds) => void save({ scopedProjectIds })}
       />
       <section className="space-y-2">
-        <h3 className="text-label">
-          <T>Report policy</T>
+        <h3 id={`${fieldId}-report-policy`} className="text-label">
+          <T>When a delegated task finishes</T>
         </h3>
-        <ToggleGroup
-          aria-label={gt("Report policy")}
-          value={[current.reportPolicy]}
+        <CaptainReportPolicyPicker
+          labelledBy={`${fieldId}-report-policy`}
+          value={current.reportPolicy}
           disabled={!canUpdate || pending}
-          onValueChange={(value) => {
-            const reportPolicy = CaptainReportPolicy.literals.find((policy) => value[0] === policy);
-            if (reportPolicy !== undefined && reportPolicy !== current.reportPolicy)
-              void save({ reportPolicy });
-          }}
-        >
-          {CaptainReportPolicy.literals.map((policy) => (
-            <Toggle key={policy} value={policy}>
-              {labels[policy]}
-            </Toggle>
-          ))}
-        </ToggleGroup>
-        <p className="text-meta text-muted-foreground">{description[current.reportPolicy]}</p>
+          onChange={(reportPolicy) => void save({ reportPolicy })}
+        />
       </section>
       <section className="space-y-1">
         <h3 className="text-label">
