@@ -737,6 +737,10 @@ export default function ChatView(props: ChatViewProps) {
   const branchToolbarRef = useRef<BranchToolbarHandle>(null);
   const threadDetailsPanelRef = useRef<ThreadDetailsPanelHandle>(null);
   const detailsVisibility = useClientSettings(resolveThreadDetailsVisibility);
+  const [composerStashHost, setComposerStashHost] = useState<HTMLDivElement | null>(null);
+  const [composerTrayControlsHost, setComposerTrayControlsHost] = useState<HTMLDivElement | null>(
+    null,
+  );
   const [composerRequestCardHost, setComposerRequestCardHost] = useState<HTMLDivElement | null>(
     null,
   );
@@ -2003,7 +2007,6 @@ export default function ChatView(props: ChatViewProps) {
         );
   const showComposerContextStrip =
     !embedded &&
-    !isServerThread &&
     shouldShowComposerContextStrip({
       isDraftHeroState,
       persistInActiveThreads: true,
@@ -4256,6 +4259,8 @@ export default function ChatView(props: ChatViewProps) {
                               }
                               threadPullRequests={(activeThreadShell ?? activeThread)?.pullRequests}
                               requestCardHost={composerRequestCardHost}
+                              stashHost={composerStashHost}
+                              trayControlsHost={composerTrayControlsHost}
                               onComposerOverlayHeightChange={publishComposerOverlayHeightStable}
                               promptRef={promptRef}
                               composerImagesRef={composerImagesRef}
@@ -4310,8 +4315,7 @@ export default function ChatView(props: ChatViewProps) {
                           data-terminal-open={terminalUiState.terminalOpen ? "true" : undefined}
                           className="relative z-0"
                         >
-                          {/* A started thread shows its workspace in the header's details popover. */}
-                          {composerMounted && !isServerThread && (
+                          {composerMounted && (
                             <div className="pointer-events-auto">
                               <BranchToolbar
                                 onOpenWorkspaceDetails={
@@ -4359,6 +4363,15 @@ export default function ChatView(props: ChatViewProps) {
                                 }
                                 availableEnvironments={logicalProjectEnvironments}
                                 environmentUnavailable={activeEnvironmentUnavailableState !== null}
+                                afterBranch={
+                                  <div ref={setComposerStashHost} className="flex shrink-0" />
+                                }
+                                trailing={
+                                  <div
+                                    ref={setComposerTrayControlsHost}
+                                    className="ms-auto flex min-w-0 flex-1 justify-end"
+                                  />
+                                }
                               />
                             </div>
                           )}

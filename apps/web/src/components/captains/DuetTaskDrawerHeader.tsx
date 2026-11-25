@@ -6,6 +6,9 @@ import { useGT, T } from "gt-react";
 import { ChevronLeftIcon, EllipsisVerticalIcon, XIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { isElectron } from "../../env";
+import { useLayoutPane } from "../../layout/layoutPaneContext";
+import { cn } from "../../lib/utils";
 import { useRightPanelStore } from "../../rightPanelStore";
 import { useQuietThreadShell } from "../../state/entities";
 import { buildThreadRouteParams } from "../../threadRoutes";
@@ -45,6 +48,7 @@ export function DuetTaskDrawerHeader({
 }) {
   const gt = useGT();
   const navigate = useNavigate();
+  const { trailingEdge } = useLayoutPane();
   const childRef = scopeThreadRef(parentThreadRef.environmentId, childThreadId);
   const shell = useQuietThreadShell(childRef);
   const status = shell ? captainTaskRingStatus(shell) : null;
@@ -70,10 +74,17 @@ export function DuetTaskDrawerHeader({
   };
   return (
     <div className="flex h-full min-h-0 flex-col bg-background dark:bg-[#1f1f1f]">
-      <div className="flex h-13 shrink-0 items-center gap-2 border-b border-(--duet-hairline) px-3">
+      <div
+        className={cn(
+          "flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center gap-2 border-b border-(--duet-hairline) px-3",
+          isElectron && "drag-region",
+          isElectron && trailingEdge && "wco:pr-(--workspace-native-controls-inset)",
+        )}
+      >
         <Button
           variant="ghost"
           size="icon-xs"
+          className="[-webkit-app-region:no-drag]"
           aria-label={gt("Back to tasks")}
           onClick={() => {
             useRightPanelStore.getState().open(parentThreadRef, "captain-brief");
@@ -91,7 +102,12 @@ export function DuetTaskDrawerHeader({
         <Menu>
           <MenuTrigger
             render={
-              <Button variant="ghost" size="icon-xs" aria-label={gt("Thread actions")}>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="[-webkit-app-region:no-drag]"
+                aria-label={gt("Thread actions")}
+              >
                 <EllipsisVerticalIcon />
               </Button>
             }
@@ -105,7 +121,13 @@ export function DuetTaskDrawerHeader({
             </MenuItem>
           </MenuPopup>
         </Menu>
-        <Button variant="ghost" size="icon-xs" aria-label={gt("Close panel")} onClick={onClose}>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="[-webkit-app-region:no-drag]"
+          aria-label={gt("Close panel")}
+          onClick={onClose}
+        >
           <XIcon />
         </Button>
       </div>

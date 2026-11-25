@@ -140,7 +140,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         "@container/sidebar-header relative flex h-(--workspace-chrome-row-height) shrink-0 flex-row items-center gap-2 pr-3 md:px-0",
         "md:group-data-[variant=inset]:-ms-(--workspace-sidebar-edge-inset) md:group-data-[variant=inset]:mb-[calc(--spacing(1)-var(--sidebar-content-inset))]",
         isElectron && "drag-region",
-        isDuet && "h-13 pr-2",
+        isDuet && "pr-2",
       )}
     >
       {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}

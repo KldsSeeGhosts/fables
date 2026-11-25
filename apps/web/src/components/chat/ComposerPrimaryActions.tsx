@@ -12,7 +12,6 @@ import {
   ArrowUpIcon,
   CheckIcon,
   ChevronLeftIcon,
-  CornerDownLeftIcon,
   CornerUpRightIcon,
   ListPlusIcon,
   Minimize2Icon,
@@ -22,7 +21,6 @@ import type { MessageResolver } from "~/i18n/messages";
 import { formatContextWindowTokens } from "~/lib/contextWindow";
 import { cn, isMacPlatform } from "~/lib/utils";
 import { useShortcutModifierSelector } from "../../shortcutModifierState";
-import { useDuetShell } from "../../hooks/useDuetShell";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -106,14 +104,18 @@ const STOP_LANDED_CLICK_GUARD_MS = 500;
 const messageActionPillClassName =
   "relative isolate inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-control before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:surface-lit font-medium text-base text-primary-foreground outline-none hover:before:surface-lit-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-64 disabled:shadow-none sm:text-sm";
 
-// The trailing action group: a quiet mic beside a standalone round send or stop button.
-const COMPOSER_PILL_CLASS_NAME = "relative isolate inline-flex h-8 shrink-0 items-center gap-1";
+// The mic + send pill: light gray in light mode, black in dark mode.
+const COMPOSER_PILL_CLASS_NAME =
+  "relative isolate inline-flex h-8 shrink-0 items-center rounded-composer-pill surface-pill";
 
 // One 32px button slot inside the pill (send, stop, and later the mic), concentric
 // with the pill inside its 1px rim.
 // An icon button inside the pill, shared by send and the pane thumbnail's mock composer.
 export const COMPOSER_PILL_BUTTON_CLASS_NAME =
-  "relative isolate flex h-full items-center justify-center gap-1 overflow-hidden rounded-full text-foreground outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring enabled:cursor-pointer enabled:hover:bg-foreground/8 disabled:pointer-events-none disabled:opacity-64 [&_svg]:pointer-events-none";
+  "relative isolate flex h-full items-center justify-center gap-1 overflow-hidden rounded-composer-pill-button text-foreground outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring enabled:cursor-pointer enabled:hover:bg-foreground/8 disabled:pointer-events-none disabled:opacity-64 [&_svg]:pointer-events-none";
+
+const COMPOSER_PILL_SLOT_CLASS_NAME =
+  "relative isolate flex h-full shrink-0 items-center justify-center rounded-composer-pill-button outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring enabled:cursor-pointer enabled:hover:bg-foreground/8 disabled:opacity-64 [&_svg]:pointer-events-none";
 
 /** A labeled primary action on the message-action pill; callers add height, padding and split edges. */
 function MessageActionPill({ className, type = "button", ...props }: ComponentProps<"button">) {
@@ -188,11 +190,9 @@ function StopGenerationSlot({
     <Tooltip>
       <TooltipTrigger
         render={
-          <Button
+          <button
             type="button"
-            variant="default"
-            size={insidePendingAction ? "icon-sm-pill" : "icon-pill"}
-            data-composer-send=""
+            className={cn(COMPOSER_PILL_SLOT_CLASS_NAME, "w-8", insidePendingAction && "sm:w-6.5")}
             onPointerDown={preserveComposerFocusOnPointerDown ? preventPointerFocus : undefined}
             disabled={!canOperateThread || isStopDisabled}
             onClick={() => {
@@ -204,7 +204,7 @@ function StopGenerationSlot({
           />
         }
       >
-        <span aria-hidden className="size-2.5 rounded-xs bg-current" />
+        <span aria-hidden className="size-2.5 rounded-xs bg-error-foreground" />
       </TooltipTrigger>
       <TooltipPopup>
         {stopPhase === "pending"
@@ -306,7 +306,6 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
 }: ComposerPrimaryActionsProps) {
   const gt = useGT();
   const m = useMessages();
-  const isDuetShell = useDuetShell();
   const [stopPhase, setStopPhase] = useStopPhase({ runId, canInterrupt, canOperateThread });
   const pointerFocusProps = preserveComposerFocusOnPointerDown
     ? { onPointerDown: preventPointerFocus }
@@ -334,14 +333,14 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
       preserveComposerFocusOnPointerDown={preserveComposerFocusOnPointerDown}
       onStopRequested={() => setStopPhase("pending")}
       onInterrupt={onInterrupt}
-      leading={insidePendingAction || isDuetShell ? null : renderSpeechAction?.(true)}
+      leading={insidePendingAction ? null : renderSpeechAction?.(true)}
     />
   );
 
   if (pendingAction) {
     return (
       <div className={cn("flex items-center justify-end", compact ? "gap-1.5" : "gap-2")}>
-        {isDuetShell ? null : renderSpeechAction?.(false)}
+        {renderSpeechAction?.(false)}
         {pendingAction.questionIndex > 0 ? (
           compact ? (
             <Button
@@ -471,66 +470,42 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
         : submitLabel);
 
   const isBusyOrHeld = isSendBusy || isSendHeld;
-  const handleSendClick: MouseEventHandler<HTMLButtonElement> = (event) => {
-    if (stopPhase === "landed") {
-      event.preventDefault();
-      return;
-    }
-    if (showResume) onResume?.();
-    else onSubmitMessage?.(event);
-  };
-  const sendIcon = isBusyOrHeld ? (
-    <Spinner size="sm" aria-hidden="true" />
-  ) : showResume ? (
-    <PlayIcon className="size-4 fill-current" aria-hidden="true" />
-  ) : isEditingQueuedMessage ? (
-    <CheckIcon className="size-3.5" aria-hidden="true" />
-  ) : isQueuing ? (
-    <ListPlusIcon className="size-3.5" aria-hidden="true" />
-  ) : isRunning ? (
-    <CornerUpRightIcon className="size-3.5" aria-hidden="true" />
-  ) : isDuetShell ? (
-    <CornerDownLeftIcon className="size-4" aria-hidden="true" />
-  ) : (
-    <ArrowUpIcon className="size-4" strokeWidth={2.5} aria-hidden="true" />
-  );
-  const sendDisabled =
-    isBusyOrHeld ||
-    isSendDisabled ||
-    isEnvironmentUnavailable ||
-    (!hasSendableContent && !showResume);
-  const sendButton = isDuetShell ? (
+  const sendButton = (
     <ComposerPillButton
       type={showResume ? "button" : "submit"}
-      data-composer-send=""
+      className="w-8"
       {...pointerFocusProps}
-      onClick={handleSendClick}
-      disabled={sendDisabled}
+      onClick={(event) => {
+        if (stopPhase === "landed") {
+          event.preventDefault();
+          return;
+        }
+        if (showResume) onResume?.();
+        else onSubmitMessage?.(event);
+      }}
+      disabled={
+        isBusyOrHeld ||
+        isSendDisabled ||
+        isEnvironmentUnavailable ||
+        (!hasSendableContent && !showResume)
+      }
       aria-label={submitStatus ?? submitLabel}
       aria-busy={isBusyOrHeld || undefined}
-      className={cn(
-        "w-7 rounded-lg transition-none enabled:hover:bg-transparent",
-        hasSendableContent || showResume
-          ? "text-foreground"
-          : "text-placeholder disabled:opacity-100",
+    >
+      {isBusyOrHeld ? (
+        <Spinner size="sm" aria-hidden="true" />
+      ) : showResume ? (
+        <PlayIcon className="size-4 fill-current" aria-hidden="true" />
+      ) : isEditingQueuedMessage ? (
+        <CheckIcon className="size-3.5" aria-hidden="true" />
+      ) : isQueuing ? (
+        <ListPlusIcon className="size-3.5" aria-hidden="true" />
+      ) : isRunning ? (
+        <CornerUpRightIcon className="size-3.5" aria-hidden="true" />
+      ) : (
+        <ArrowUpIcon className="size-3.5" aria-hidden="true" />
       )}
-    >
-      {sendIcon}
     </ComposerPillButton>
-  ) : (
-    <Button
-      type={showResume ? "button" : "submit"}
-      variant="default"
-      size="icon-pill"
-      data-composer-send=""
-      {...pointerFocusProps}
-      onClick={handleSendClick}
-      disabled={sendDisabled}
-      aria-label={submitStatus ?? submitLabel}
-      aria-busy={isBusyOrHeld || undefined}
-    >
-      {sendIcon}
-    </Button>
   );
 
   const submit = (
@@ -540,7 +515,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
           <TooltipTrigger
             render={
               <ComposerPillButton
-                className="gap-1.5 px-2.5 text-label text-muted-foreground tabular-nums"
+                className="gap-1.5 px-2.5 text-label tabular-nums after:pointer-events-none after:absolute after:inset-y-2 after:right-0 after:w-px after:bg-current after:opacity-16"
                 {...pointerFocusProps}
                 aria-pressed={!keepFullHistory}
                 aria-label={gt("Compact {tokens} tokens of history before sending", {
@@ -567,7 +542,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
           </TooltipPopup>
         </Tooltip>
       ) : null}
-      {isDuetShell ? null : renderSpeechAction?.(true)}
+      {renderSpeechAction?.(true)}
       <Tooltip>
         {/* A span trigger keeps the tooltip reachable while send is disabled. */}
         <TooltipTrigger render={<span className="flex h-full" />}>{sendButton}</TooltipTrigger>
@@ -614,7 +589,7 @@ export function ComposerSendPill({
 
 // A 32px button slot of the send pill for the dictation mic and the collapsed row's send.
 export const COMPOSER_PILL_SLOT_BUTTON_CLASS_NAME =
-  "relative isolate flex h-full w-8 items-center justify-center overflow-hidden rounded-full text-muted-foreground outline-none transition-colors duration-150 enabled:cursor-pointer enabled:hover:bg-foreground/8 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-64 [&_svg]:pointer-events-none";
+  "relative isolate flex h-full w-8 items-center justify-center overflow-hidden rounded-md text-foreground outline-none transition-colors duration-150 enabled:cursor-pointer enabled:hover:bg-foreground/8 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-64 [&_svg]:pointer-events-none";
 export const COMPOSER_PILL_SLOT_BUTTON_UNAVAILABLE_CLASS_NAME = cn(
   COMPOSER_PILL_SLOT_BUTTON_CLASS_NAME,
   "opacity-64 enabled:cursor-default enabled:hover:bg-transparent",

@@ -15,7 +15,9 @@ import { T, useGT, useMessages } from "gt-react";
 import { CalendarClockIcon, XIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
+import { isElectron } from "../../env";
 import { useNowMinute } from "../../hooks/useNowMinute";
+import { useLayoutPane } from "../../layout/layoutPaneContext";
 import { cn } from "../../lib/utils";
 import { newMessageId } from "../../lib/utils";
 import { useRightPanelStore } from "../../rightPanelStore";
@@ -528,13 +530,20 @@ function DrawerHeader({
   readonly onClose: () => void;
 }) {
   const gt = useGT();
+  const { trailingEdge } = useLayoutPane();
   return (
-    <div className="flex h-13 shrink-0 items-center justify-between px-4">
+    <div
+      className={cn(
+        "flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center justify-between px-4",
+        isElectron && "drag-region",
+        isElectron && trailingEdge && "wco:pr-(--workspace-native-controls-inset)",
+      )}
+    >
       <h2 className="min-w-0 truncate text-[13px] font-medium text-foreground">{title}</h2>
       <Button
         variant="ghost"
         size="icon-xs"
-        className="size-7"
+        className="size-7 [-webkit-app-region:no-drag]"
         aria-label={gt("Close tasks")}
         onClick={onClose}
       >

@@ -86,15 +86,7 @@ export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind
       {taskHeaderId !== undefined && duetStream.captainRef !== null ? (
         <DuetTaskContextHeader captainRef={duetStream.captainRef} childThreadId={taskHeaderId} />
       ) : null}
-      <div
-        className={cn(
-          "relative min-w-0",
-          // oxlint-disable-next-line shadcn/no-arbitrary-values -- V3 Duet assistant bubbles use the spec's exact 14px/1.55 copy metrics.
-          duetChannel ? "max-w-[28rem] px-3 py-2 text-sm leading-[1.55]" : "px-1 py-0.5",
-        )}
-        data-assistant-bubble={duetChannel ? "" : undefined}
-        onClickCapture={openInlineThread}
-      >
+      <div className="relative min-w-0 px-1 py-0.5" onClickCapture={openInlineThread}>
         <MessageAuthorHeading>T3 Code</MessageAuthorHeading>
         <div ref={textRef} data-thread-find-text="true">
           <AssistantCitationSource
@@ -376,7 +368,6 @@ function AssistantReplyButton({ message, itemId }: { message: ChatMessage; itemI
 
 function AssistantStatusBadge({ status }: { status: string }) {
   return (
-    // oxlint-disable-next-line t3code/no-raw-type-classes -- Pre-existing compact interrupted-badge typography.
     <span className="rounded-badge border border-transparent bg-badge-neutral px-1.5 py-0.5 font-mono text-3xs text-muted-foreground">
       {status}
     </span>
