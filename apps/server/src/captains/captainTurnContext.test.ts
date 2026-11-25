@@ -1,6 +1,7 @@
 import { CaptainId, ThreadId, type Captain } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
+import { CAPTAIN_HANDOFF_MAX_LENGTH } from "./captainHandoff.ts";
 import {
   formatCaptainBriefing,
   formatCaptainContextPressure,
@@ -58,6 +59,25 @@ describe("formatCaptainBriefing", () => {
 
     expect(text).toContain("Conversation handoff:");
     expect(text).toContain(endOfPlan);
+  });
+
+  it("caps a handoff whose end marker was deleted", () => {
+    const notes = `## Handoff from the previous conversation (2026-11-24T12:00:00.000Z)\n\n${"h".repeat(10_000)}`;
+    const text = formatCaptainBriefing({
+      captain,
+      projects: [],
+      memories: [],
+      agents: "",
+      notes,
+    });
+    const handoffBlock = text
+      .split("Conversation handoff:\n", 2)[1]
+      ?.split("\n\nUse captain_document_read", 1)[0];
+
+    expect(handoffBlock).toBeDefined();
+    expect(handoffBlock!.length).toBeLessThanOrEqual(CAPTAIN_HANDOFF_MAX_LENGTH + 1);
+    expect(handoffBlock).toContain("…");
+    expect(handoffBlock).not.toContain("h".repeat(2_000));
   });
 
   it("tells the Captain how finished crew reaches it under each report policy", () => {

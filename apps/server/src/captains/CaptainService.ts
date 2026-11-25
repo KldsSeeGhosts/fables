@@ -8,6 +8,7 @@ import {
   type CaptainResetInput,
   type CaptainUpdateInput,
   type OrchestrationV2CreationSource,
+  type OrchestrationV2Run,
   type ProjectId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -18,6 +19,7 @@ import * as Option from "effect/Option";
 import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/sql/SqlClient";
 
+import * as ThreadCommandExecutor from "../orchestration-v2/ThreadCommandExecutor.ts";
 import * as ThreadLaunch from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
@@ -29,10 +31,22 @@ import * as CaptainStore from "./CaptainStore.ts";
 const invalid = (message: string) => new CaptainError({ code: "invalid_request", message });
 const timestamp = Effect.map(DateTime.now, DateTime.formatIso);
 
+const RESET_BLOCKING_RUN_STATUSES = [
+  "preparing",
+  "queued",
+  "starting",
+  "running",
+] as const satisfies ReadonlyArray<OrchestrationV2Run["status"]>;
+
+// Waiting means the provider turn already ended; unanswered input stays answerable after reset.
+const runBlocksReset = (run: Pick<OrchestrationV2Run, "status">) =>
+  (RESET_BLOCKING_RUN_STATUSES as ReadonlyArray<OrchestrationV2Run["status"]>).includes(run.status);
+
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const store = yield* CaptainStore.CaptainStore;
   const threads = yield* ThreadManagement.ThreadManagementService;
+  const threadCommands = yield* ThreadCommandExecutor.ThreadCommandExecutor;
   const launch = yield* ThreadLaunch.ThreadLaunchService;
   const folders = yield* ManagedProjectFolders.ManagedProjectFolders;
   const projects = yield* ProjectService.ProjectService;
@@ -168,23 +182,18 @@ const make = Effect.gen(function* () {
   const requireQuietConversation = Effect.fn("CaptainService.requireQuietConversation")(function* (
     threadId: ThreadId,
   ) {
-    const thread = yield* threads
+    const shell = yield* threads
       .getThreadShell(threadId)
       .pipe(Effect.catch(CaptainStore.captainUnavailable));
-    if (thread === null) return yield* invalid("The Captain's previous thread could not be found.");
-    if (thread.activeRunId != null || thread.activityRunStatus != null)
+    if (shell === null) return yield* invalid("The Captain's previous thread could not be found.");
+    const records = yield* threads
+      .getThreadRecords(threadId, ["runs"])
+      .pipe(Effect.catch(CaptainStore.captainUnavailable));
+    if (records.runs.some(runBlocksReset))
       return yield* invalid(
-        "The Captain is still working. Wait for the current turn to finish before resetting.",
+        "The Captain is still working. Stop or wait for the current turn before resetting.",
       );
-    if (
-      thread.pendingRuntimeRequest != null &&
-      thread.pendingRuntimeRequest.kind !== "dynamic_tool_call" &&
-      thread.pendingRuntimeRequest.kind !== "auth_refresh"
-    )
-      return yield* invalid(
-        "The Captain is waiting for approval or input. Answer or dismiss it before resetting.",
-      );
-    return thread;
+    return records.thread;
   });
 
   const resetConversation = Effect.fn("CaptainService.resetConversation")(
@@ -200,41 +209,47 @@ const make = Effect.gen(function* () {
       }
       if (current.archivedAt !== null)
         return yield* invalid("Restore the Captain before resetting it.");
-      const previous = yield* requireQuietConversation(previousId);
-      // Read before the reset moves scheduled tasks; NOTES.md changes only once the reset commits.
-      const handoff = yield* CaptainHandoff.prepare({
-        captain: current,
-        previousThreadId: previousId,
-      }).pipe(
-        Effect.provideService(SqlClient.SqlClient, sql),
-        Effect.asSome,
-        Effect.catch((cause) =>
-          Effect.logWarning("Could not read the Captain handoff before resetting.", {
-            cause,
-          }).pipe(Effect.as(Option.none<string>())),
-        ),
-      );
       const primaryThreadId = captainPrimaryThreadId(
         current.id,
         current.earlierThreadIds.length + 1,
       );
-      yield* createPrimaryThread(primaryThreadId, previous.projectId, current.name, previous);
+      const { captain, handoff } = yield* threadCommands.withLock(
+        previousId,
+        Effect.gen(function* () {
+          const previous = yield* requireQuietConversation(previousId);
+          // Read before the reset moves scheduled tasks; NOTES.md changes only once the reset commits.
+          const handoff = yield* CaptainHandoff.prepare({
+            captain: current,
+            previousThreadId: previousId,
+          }).pipe(
+            Effect.provideService(SqlClient.SqlClient, sql),
+            Effect.asSome,
+            Effect.catch((cause) =>
+              Effect.logWarning("Could not read the Captain handoff before resetting.", {
+                cause,
+              }).pipe(Effect.as(Option.none<string>())),
+            ),
+          );
+          yield* createPrimaryThread(primaryThreadId, previous.projectId, current.name, previous);
 
-      const captain = yield* sql
-        .withTransaction(
-          Effect.gen(function* () {
-            yield* schedules
-              .rebindThreadTasks(previousId, primaryThreadId)
-              .pipe(Effect.catch(CaptainStore.captainUnavailable));
-            return yield* store.save({
-              ...current,
-              primaryThreadId,
-              earlierThreadIds: [previousId, ...current.earlierThreadIds],
-              updatedAt: yield* timestamp,
-            });
-          }),
-        )
-        .pipe(Effect.catchTags({ SqlError: CaptainStore.captainUnavailable }));
+          const captain = yield* sql
+            .withTransaction(
+              Effect.gen(function* () {
+                yield* schedules
+                  .rebindThreadTasks(previousId, primaryThreadId)
+                  .pipe(Effect.catch(CaptainStore.captainUnavailable));
+                return yield* store.save({
+                  ...current,
+                  primaryThreadId,
+                  earlierThreadIds: [previousId, ...current.earlierThreadIds],
+                  updatedAt: yield* timestamp,
+                });
+              }),
+            )
+            .pipe(Effect.catchTags({ SqlError: CaptainStore.captainUnavailable }));
+          return { captain, handoff };
+        }),
+      );
       if (Option.isSome(handoff)) {
         yield* CaptainHandoff.save({ captain, section: handoff.value }).pipe(
           Effect.provideService(CaptainStore.CaptainStore, store),

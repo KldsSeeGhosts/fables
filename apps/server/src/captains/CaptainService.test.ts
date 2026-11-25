@@ -1,4 +1,4 @@
-import { assert, it } from "@effect/vitest";
+import { assert, it, vi } from "@effect/vitest";
 import {
   CaptainId,
   CaptainError,
@@ -9,6 +9,7 @@ import {
   ScheduledTaskError,
   ThreadId,
   type CaptainCreateInput,
+  type OrchestrationV2Run,
   type OrchestrationV2ThreadShell,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -18,6 +19,7 @@ import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
 
+import * as ThreadCommandExecutor from "../orchestration-v2/ThreadCommandExecutor.ts";
 import {
   type ThreadLaunchInput,
   ThreadLaunchService,
@@ -53,10 +55,15 @@ const input = {
 const fixture = ({ scratchUnavailable = false } = {}) => {
   const launches = new Map<ThreadId, ThreadLaunchInput>();
   const shellOverrides = new Map<ThreadId, Partial<OrchestrationV2ThreadShell>>();
+  const runOverrides = new Map<
+    ThreadId,
+    ReadonlyArray<Pick<OrchestrationV2Run, "id" | "status">>
+  >();
   let failRebind = false;
   let listInvalidations = 0;
   const dependencies = Layer.mergeAll(
     CaptainStore.layer,
+    ThreadCommandExecutor.layer,
     Layer.mock(ThreadLaunchService)({
       launch: (input) =>
         Effect.sync(() => {
@@ -74,6 +81,14 @@ const fixture = ({ scratchUnavailable = false } = {}) => {
               } as OrchestrationV2ThreadShell)
             : null,
         ),
+      getThreadRecords: ((id: ThreadId) =>
+        Effect.succeed({
+          thread: {
+            ...launches.get(id),
+            id,
+          },
+          runs: runOverrides.get(id) ?? [],
+        })) as never,
     }),
     Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
       namedProjectsRoot: "/unused",
@@ -124,6 +139,12 @@ const fixture = ({ scratchUnavailable = false } = {}) => {
     invalidations: () => listInvalidations,
     overrideShell: (threadId: ThreadId, shell: Partial<OrchestrationV2ThreadShell>) => {
       shellOverrides.set(threadId, shell);
+    },
+    setRunStatuses: (threadId: ThreadId, statuses: ReadonlyArray<OrchestrationV2Run["status"]>) => {
+      runOverrides.set(
+        threadId,
+        statuses.map((status, index) => ({ id: `run:${index}` as never, status })),
+      );
     },
   };
 };
@@ -281,43 +302,89 @@ it.effect(
     }),
 );
 
-it.effect("refuses reset while a turn runs or a request is pending", () =>
+it.effect("refuses reset while a run executes or waits in the queue", () =>
   Effect.gen(function* () {
     const f = fixture();
     yield* Effect.gen(function* () {
       const service = yield* CaptainService.CaptainService;
-      const runningCaptain = yield* service.create(input);
+      const captain = yield* service.create(input);
       const reset = {
-        captainId: runningCaptain.id,
-        expectedThreadId: runningCaptain.primaryThreadId,
+        captainId: captain.id,
+        expectedThreadId: captain.primaryThreadId,
       };
-      f.overrideShell(runningCaptain.primaryThreadId, {
-        activeRunId: "run:busy" as never,
-        activityRunStatus: "running",
-      });
-      const runningFailure = yield* Effect.flip(service.resetConversation(reset));
-      assert.equal(runningFailure.code, "invalid_request");
-      assert.include(runningFailure.message, "still working");
+      for (const status of ["running", "queued"] as const) {
+        f.setRunStatuses(captain.primaryThreadId, [status]);
+        const failure = yield* Effect.flip(service.resetConversation(reset));
+        assert.equal(failure.code, "invalid_request");
+        assert.include(failure.message, "Stop or wait for the current turn");
+      }
+    }).pipe(Effect.provide(f.layer));
+  }),
+);
 
-      const askingCaptain = yield* service.create({
-        ...input,
-        captainId: CaptainId.make("asking"),
+it.effect("resets with a stale waiting run that has no active run", () =>
+  Effect.gen(function* () {
+    const f = fixture();
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainService.CaptainService;
+      const captain = yield* service.create(input);
+      f.overrideShell(captain.primaryThreadId, {
+        activeRunId: null,
+        activityRunStatus: "waiting",
       });
-      f.overrideShell(askingCaptain.primaryThreadId, {
-        pendingRuntimeRequest: {
-          id: "request:approval" as never,
-          kind: "user_input",
-          createdAt: DateTime.makeUnsafe("2026-11-24T12:00:00.000Z"),
-        },
+      f.setRunStatuses(captain.primaryThreadId, ["waiting"]);
+
+      const next = yield* service.resetConversation({
+        captainId: captain.id,
+        expectedThreadId: captain.primaryThreadId,
       });
-      const requestFailure = yield* Effect.flip(
-        service.resetConversation({
-          captainId: askingCaptain.id,
-          expectedThreadId: askingCaptain.primaryThreadId,
+      assert.notEqual(next.primaryThreadId, captain.primaryThreadId);
+    }).pipe(Effect.provide(f.layer));
+  }),
+);
+
+it.effect("checks and commits reset under the primary thread command lock", () =>
+  Effect.gen(function* () {
+    const f = fixture();
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainService.CaptainService;
+      const store = yield* CaptainStore.CaptainStore;
+      const executor = yield* ThreadCommandExecutor.ThreadCommandExecutor;
+      const captain = yield* service.create(input);
+      const events: string[] = [];
+      const withLock = executor.withLock;
+      const observeLock: ThreadCommandExecutor.ThreadCommandExecutor["Service"]["withLock"] = (
+        key,
+        effect,
+      ) =>
+        key === captain.primaryThreadId
+          ? withLock(
+              key,
+              Effect.gen(function* () {
+                events.push("lock");
+                const result = yield* effect;
+                events.push("unlock");
+                return result;
+              }),
+            )
+          : withLock(key, effect);
+      vi.spyOn(executor, "withLock").mockImplementation(observeLock);
+      const save = store.save;
+      vi.spyOn(store, "save").mockImplementation((next) =>
+        Effect.gen(function* () {
+          if (next.id === captain.id && next.primaryThreadId !== captain.primaryThreadId) {
+            events.push("commit");
+          }
+          return yield* save(next);
         }),
       );
-      assert.equal(requestFailure.code, "invalid_request");
-      assert.include(requestFailure.message, "approval or input");
+
+      yield* service.resetConversation({
+        captainId: captain.id,
+        expectedThreadId: captain.primaryThreadId,
+      });
+
+      assert.deepEqual(events, ["lock", "commit", "unlock"]);
     }).pipe(Effect.provide(f.layer));
   }),
 );
@@ -353,6 +420,24 @@ it.effect("writes a reset handoff and still resets when the handoff write fails"
         ) VALUES ('item-1', ${childThreadId}, 1, 'approval_request', 'pending', ${at},
           ${JSON.stringify({ requestId: "request-1", prompt: "Run the migration test" })})
       `;
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_runtime_requests (
+          runtime_request_id, thread_id, node_id, kind, status, created_at, payload_json
+        ) VALUES ('request-primary', ${captain.primaryThreadId}, 'node', 'command', 'pending', ${at}, '{}')
+      `;
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_turn_items (
+          turn_item_id, thread_id, ordinal, type, status, updated_at, payload_json
+        ) VALUES ('item-primary', ${captain.primaryThreadId}, 2, 'approval_request', 'pending', ${at},
+          ${JSON.stringify({ requestId: "request-primary", prompt: "Approve the release migration" })})
+      `;
+      f.overrideShell(captain.primaryThreadId, {
+        pendingRuntimeRequest: {
+          id: "request-primary" as never,
+          kind: "command",
+          createdAt: DateTime.makeUnsafe(at),
+        },
+      });
       const message = (
         id: string,
         role: "user" | "assistant",
@@ -392,6 +477,10 @@ it.effect("writes a reset handoff and still resets when the handoff write fails"
       assert.include(
         notes.content,
         "- command approval on thread:child: Run the migration test [request: request-1]",
+      );
+      assert.include(
+        notes.content,
+        `- command approval on ${captain.primaryThreadId}: Approve the release migration [request: request-primary]`,
       );
       assert.include(notes.content, "> Please finish the migration");
       assert.include(notes.content, "> I am checking the projection rows");

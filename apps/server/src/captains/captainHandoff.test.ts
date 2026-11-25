@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   CAPTAIN_DOCUMENT_MAX_LENGTH,
   CAPTAIN_HANDOFF_MAX_LENGTH,
+  formatCaptainCompactionOpenLoops,
   formatCaptainHandoff,
   upsertCaptainHandoffSection,
 } from "./captainHandoff.ts";
@@ -43,11 +44,11 @@ describe("formatCaptainHandoff", () => {
 
     expect(section).toBe(
       `## Handoff from the previous conversation (${generatedAt})\n\n` +
-        "### Active delegated tasks\n" +
-        "- Review the migration [task-1] (running, follow: thread:child): Checking projection rows\n\n" +
         "### Waiting on the user\n" +
         "- user input on thread:child: Which migration should ship? [request: request-1]\n" +
         "- command approval on captain:maria:0: Run the test suite [request: request-2]\n\n" +
+        "### Active delegated tasks\n" +
+        "- Review the migration [task-1] (running, follow: thread:child): Checking projection rows\n\n" +
         "### Last user message\n" +
         "> Please finish the migration\n\n" +
         "### Captain's last reply\n" +
@@ -105,6 +106,34 @@ describe("formatCaptainHandoff", () => {
     expect(section.length).toBeLessThanOrEqual(CAPTAIN_HANDOFF_MAX_LENGTH);
     expect(section).toContain("Additional handoff details were omitted");
     expect(section).toContain("<!-- end captain handoff -->");
+  });
+
+  it("keeps pending approvals ahead of overflowing compaction task rows", () => {
+    const section = formatCaptainCompactionOpenLoops({
+      activeTasks: Array.from({ length: 8 }, (_, index) => ({
+        id: `task-${index}`,
+        title: `Task ${index} ${"title".repeat(30)}`,
+        status: "running",
+        progress: "progress".repeat(30),
+        followId: `thread:${index}`,
+      })),
+      pendingRequests: [
+        {
+          kind: "command",
+          threadId: "captain:maria:0",
+          requestId: "request-approval",
+          detail: "Approve the release migration",
+        },
+      ],
+    });
+
+    expect(section.length).toBeLessThanOrEqual(CAPTAIN_HANDOFF_MAX_LENGTH);
+    expect(section).toContain("### Waiting on the user");
+    expect(section).toContain(
+      "- command approval on captain:maria:0: Approve the release migration [request: request-approval]",
+    );
+    expect(section).toContain("Additional open loops were omitted");
+    expect(section).not.toContain("Additional handoff details were omitted");
   });
 });
 

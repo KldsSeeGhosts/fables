@@ -16,6 +16,7 @@ import {
 } from "./captainBriefingLedger.ts";
 import * as CaptainStore from "./CaptainStore.ts";
 import {
+  CAPTAIN_HANDOFF_MAX_LENGTH,
   formatCaptainCompactionOpenLoops,
   readOpenLoops,
   splitCaptainHandoffSection,
@@ -67,7 +68,8 @@ export const formatCaptainBriefing = (input: {
     memories.length > 0 &&
       `Essential memories:\n${memories.map(({ text }) => `- ${prefix(text, 500)}`).join("\n")}`,
     agents && `AGENTS.md:\n${prefix(agents, 2_000)}`,
-    handoffSplit.handoff && `Conversation handoff:\n${handoffSplit.handoff}`,
+    handoffSplit.handoff &&
+      `Conversation handoff:\n${prefix(handoffSplit.handoff, CAPTAIN_HANDOFF_MAX_LENGTH)}`,
     notesBody && `NOTES.md:\n${prefix(notesBody, 6_000)}`,
     "Use captain_document_read and captain_memory_search to look up more Captain context.",
   ]
