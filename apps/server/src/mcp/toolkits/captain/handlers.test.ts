@@ -29,6 +29,7 @@ const captain = {
   role: "Coordinator",
   instructions: "",
   reportPolicy: "context",
+  coordinatorOnly: false,
   avatar: { preset: "compass", color: "violet" },
   earlierThreadIds: [],
   scopedProjectIds: [ProjectId.make("workspace")],

@@ -143,6 +143,35 @@ it.effect("creates one primary thread, validates scope, and falls back to Scratc
   }),
 );
 
+it.effect("round-trips coordinatorOnly and decodes rows that omit it as false", () =>
+  Effect.gen(function* () {
+    const { layer } = fixture();
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainService.CaptainService;
+      const store = yield* CaptainStore.CaptainStore;
+      const captain = yield* service.create({ ...input, coordinatorOnly: true });
+      assert.isTrue(captain.coordinatorOnly);
+      assert.isFalse(
+        (yield* service.update({ captainId: captain.id, coordinatorOnly: false })).coordinatorOnly,
+      );
+      assert.isFalse(
+        (yield* service.update({ captainId: captain.id, role: "Updated" })).coordinatorOnly,
+      );
+
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`
+        INSERT INTO captains (
+          id, name, role, instructions, avatar, primary_thread_id, report_policy, created_at, updated_at
+        ) VALUES (
+          'legacy', 'Legacy', 'Coordinator', '', '{"preset":"compass","color":"violet"}',
+          'captain:legacy:0', 'context', '2026-11-24T12:00:00.000Z', '2026-11-24T12:00:00.000Z'
+        )
+      `;
+      assert.isFalse((yield* store.find(CaptainId.make("legacy")))?.coordinatorOnly);
+    }).pipe(Effect.provide(layer));
+  }),
+);
+
 it.effect("asks for a scoped project when the environment has no Scratch", () =>
   Effect.gen(function* () {
     const { layer, launches } = fixture({ scratchUnavailable: true });
@@ -344,7 +373,13 @@ it.effect(
         assert.include(context, "Notes are included");
         assert.notInclude(context, "Keep this optional");
         assert.notInclude(context, "Run the tests before reporting.");
+        assert.notInclude(context, "How you work:");
         assert.isBelow(context.length, 5_000);
+        yield* service.update({ captainId: captain.id, coordinatorOnly: true });
+        const coordinated = yield* read(captain.primaryThreadId);
+        assert.include(coordinated, "How you work:");
+        assert.include(coordinated, '`delegate_task` and `isolation: "worktree"`');
+        yield* service.update({ captainId: captain.id, coordinatorOnly: false });
 
         // A provider thread that took the briefing gets a pointer until something in it changes.
         const delivery = { providerThreadId: "provider-thread", usedTokens: 1_000 };
@@ -374,9 +409,34 @@ it.effect(
 
         assert.equal(yield* read(ThreadId.make("ordinary")), "");
         const crew = yield* read(ThreadId.make("child"), captain.primaryThreadId);
+        assert.include(crew, "keep a progress note in your worktree");
         assert.include(crew, "Run the tests before reporting.");
         assert.notInclude(crew, "Always mention this");
         assert.notInclude(crew, "Notes are included");
+
+        const crewThread = {
+          id: ThreadId.make("ledger-child"),
+          lineage: {
+            parentThreadId: captain.primaryThreadId,
+            relationshipToParent: "subagent" as const,
+          },
+        };
+        const crewDelivery = { providerThreadId: "crew-provider-thread", usedTokens: 1_000 };
+        const firstCrew = yield* readContext(crewThread, crewDelivery);
+        assert.include(firstCrew.text, "keep a progress note in your worktree");
+        yield* firstCrew.delivered;
+        const secondCrew = yield* readContext(crewThread, crewDelivery);
+        assert.notInclude(secondCrew.text, "keep a progress note in your worktree");
+        assert.include(secondCrew.text, "crew rules are unchanged");
+
+        const noCustomCrew = yield* service.create({
+          ...input,
+          captainId: CaptainId.make("plain"),
+        });
+        assert.include(
+          yield* read(ThreadId.make("plain-child"), noCustomCrew.primaryThreadId),
+          "done-check from your brief passes",
+        );
         assert.equal(yield* read(ThreadId.make("grandchild"), ThreadId.make("child")), "");
         const next = yield* service.resetConversation({
           captainId: captain.id,

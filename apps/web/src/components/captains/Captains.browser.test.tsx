@@ -41,6 +41,7 @@ const captain = {
   avatar: { preset: "compass", color: "violet" },
   scopedProjectIds: [],
   reportPolicy: "context",
+  coordinatorOnly: false,
   createdAt: DateTime.formatIso(DateTime.makeUnsafe("2026-11-24")),
   updatedAt: DateTime.formatIso(DateTime.makeUnsafe("2026-11-24")),
   archivedAt: null,
