@@ -1,12 +1,16 @@
 import {
   CaptainId,
   EnvironmentId,
+  NodeId,
   ProjectId,
+  ProviderDriverKind,
   ProviderInstanceId,
   ScheduledTaskId,
   ThreadId,
+  type AssetResource,
   type Captain,
   type CaptainSnapshot,
+  type OrchestrationV2Subagent,
   type ScheduledTask,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -22,6 +26,8 @@ const state = vi.hoisted(() => ({
   captains: null as CaptainSnapshot | null,
   children: [] as ReturnType<typeof makeThreadFixture>[],
   parent: null as ReturnType<typeof makeThreadFixture> | null,
+  subagents: [] as OrchestrationV2Subagent[],
+  assetResources: [] as AssetResource[],
   scheduledTasks: [] as ScheduledTask[],
   startTurn: vi.fn(),
   runNow: vi.fn(),
@@ -45,7 +51,7 @@ vi.mock(import("./useCaptain"), async (importOriginal) => ({
 vi.mock(import("../../state/entities"), async (importOriginal) => ({
   ...(await importOriginal()),
   useProjects: (() => []) as never,
-  useQuietThreadProjection: (() => null) as never,
+  useQuietThreadProjection: (() => ({ projection: { subagents: state.subagents } })) as never,
   useQuietThreadShells: (() => state.children) as never,
   useQuietThreadShell: ((ref: { threadId: ThreadId }) =>
     ref.threadId === state.parent?.id
@@ -89,6 +95,18 @@ vi.mock(import("../../state/use-orchestration-command"), async (importOriginal) 
   useOrchestrationCommand: () => state.startTurn,
 }));
 
+vi.mock(import("../../assets/assetUrls"), async (importOriginal) => ({
+  ...(await importOriginal()),
+  useAssetUrlState: ((_environmentId: unknown, resource: AssetResource | null) => {
+    if (resource) state.assetResources.push(resource);
+    return {
+      _tag: "Success",
+      url: "https://assets.test/preview.png",
+      expiresAt: Number.MAX_SAFE_INTEGER,
+    };
+  }) as never,
+}));
+
 import { PanelTabSlotsContext } from "../PanelTabBreadcrumb";
 import { CaptainTasksDrawer } from "./CaptainTasksDrawer";
 
@@ -110,6 +128,52 @@ const captain = {
 } satisfies Captain;
 const threadRef = { environmentId, threadId: captain.primaryThreadId };
 const childThreadId = ThreadId.make("thread:fix-checkout");
+
+function fixCheckoutThread({ needsInput = true }: { readonly needsInput?: boolean } = {}) {
+  return makeThreadFixture({
+    id: childThreadId,
+    environmentId,
+    projectId: ProjectId.make("project"),
+    title: "Fix checkout",
+    branch: "fix/checkout",
+    worktreePath: "/workspace/fix-checkout",
+    updatedAt: "2100-01-01T00:00:00.000Z",
+    hasPendingUserInput: needsInput,
+    lineage: {
+      rootThreadId: captain.primaryThreadId,
+      parentThreadId: captain.primaryThreadId,
+      relationshipToParent: "subagent",
+    },
+  });
+}
+
+function delegatedTask(
+  status: OrchestrationV2Subagent["status"],
+  result: string,
+): OrchestrationV2Subagent {
+  const now = DateTime.makeUnsafe("2100-01-01T00:00:00.000Z");
+  return {
+    id: NodeId.make(`agent-${status}`),
+    threadId: captain.primaryThreadId,
+    runId: null,
+    parentNodeId: NodeId.make("parent"),
+    origin: "app_owned",
+    createdBy: "agent",
+    driver: ProviderDriverKind.make("codex"),
+    providerInstanceId: ProviderInstanceId.make("codex"),
+    providerThreadId: null,
+    childThreadId,
+    nativeTaskRef: null,
+    prompt: "Fix checkout",
+    title: "Fix checkout",
+    model: null,
+    status,
+    result,
+    startedAt: now,
+    completedAt: status === "running" ? null : now,
+    updatedAt: now,
+  };
+}
 
 function routine(
   id: string,
@@ -149,22 +213,9 @@ function resetState() {
     projectId: ProjectId.make("project"),
     title: "Maria",
   });
-  state.children = [
-    makeThreadFixture({
-      id: childThreadId,
-      environmentId,
-      projectId: ProjectId.make("project"),
-      title: "Fix checkout",
-      branch: "fix/checkout",
-      updatedAt: "2100-01-01T00:00:00.000Z",
-      hasPendingUserInput: true,
-      lineage: {
-        rootThreadId: captain.primaryThreadId,
-        parentThreadId: captain.primaryThreadId,
-        relationshipToParent: "subagent",
-      },
-    }),
-  ];
+  state.children = [fixCheckoutThread()];
+  state.subagents = [];
+  state.assetResources = [];
   state.scheduledTasks = [];
   state.startTurn.mockReset();
   state.startTurn.mockResolvedValue({ _tag: "Success", value: {} });
@@ -188,6 +239,42 @@ it("shows Captain tasks with their status and workspace detail", async () => {
   await expect.element(screen.getByText("Fix checkout")).toBeVisible();
   await expect.element(screen.getByText("Needs input")).toBeVisible();
   await expect.element(screen.getByText("fix/checkout")).toBeVisible();
+});
+
+it("shows a finished local task's result image and never shows one while it is working", async () => {
+  resetState();
+  state.children = [fixCheckoutThread({ needsInput: false })];
+  const result = "Done.\n\n![result](screenshots/result.png)";
+  state.subagents = [delegatedTask("completed", result)];
+  {
+    await using screen = await render(
+      <CaptainTasksDrawer threadRef={threadRef} onClose={() => {}} />,
+    );
+    await expect.element(screen.getByText("Fix checkout")).toBeVisible();
+
+    const row = screen.getByRole("button", { name: /Fix checkout/ }).query();
+    expect(row?.querySelectorAll("img")).toHaveLength(1);
+    expect(row?.querySelector("img")?.getAttribute("src")).toBe("https://assets.test/preview.png");
+    expect(state.assetResources[0]).toEqual({
+      _tag: "media-file",
+      threadId: childThreadId,
+      path: "/workspace/fix-checkout/screenshots/result.png",
+      hostOnly: true,
+    });
+  }
+
+  state.subagents = [delegatedTask("running", result)];
+  state.assetResources = [];
+  {
+    await using screen = await render(
+      <CaptainTasksDrawer threadRef={threadRef} onClose={() => {}} />,
+    );
+    await expect.element(screen.getByText("Fix checkout")).toBeVisible();
+
+    const row = screen.getByRole("button", { name: /Fix checkout/ }).query();
+    expect(row?.querySelectorAll("img")).toHaveLength(0);
+    expect(state.assetResources).toEqual([]);
+  }
 });
 
 it("queues a quick task as a user turn on the Captain primary thread", async () => {
