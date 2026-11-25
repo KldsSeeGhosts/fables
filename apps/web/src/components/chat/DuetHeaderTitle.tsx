@@ -68,7 +68,7 @@ function TitleButton({
       onDoubleClick={onDoubleClick}
       onClick={onClick}
       data-duet-header-title
-      className="flex h-7 max-w-72 items-center gap-1.5 px-2 ps-5 text-start outline-none [-webkit-app-region:no-drag] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      className="flex h-7 max-w-72 min-w-0 items-center gap-1.5 px-2 ps-5 text-start outline-none [-webkit-app-region:no-drag] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
       {captain ? (
         <CaptainAvatar avatar={captain.avatar} size="row" />

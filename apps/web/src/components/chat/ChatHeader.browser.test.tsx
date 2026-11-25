@@ -1,3 +1,6 @@
+import "~/index.css";
+
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
@@ -7,6 +10,7 @@ const openMenu = vi.hoisted(() => vi.fn());
 const duetShell = vi.hoisted(() => ({ enabled: false }));
 const captainState = vi.hoisted(() => ({ enabled: false }));
 const workingThreads = vi.hoisted(() => new Set<string>());
+const reasoningThreads = vi.hoisted(() => new Set<string>());
 vi.mock(import("../../hooks/useDuetShell"), () => ({
   useDuetShell: () => duetShell.enabled,
 }));
@@ -31,19 +35,32 @@ vi.mock(import("../captains/useCaptain"), async (importOriginal) => ({
         }
       : null) as never,
 }));
-vi.mock(import("../../state/entities"), async (importOriginal) => ({
-  ...(await importOriginal()),
-  useQuietThreadShell: ((ref: { threadId: string } | null) =>
-    ref !== null && workingThreads.has(ref.threadId)
-      ? {
-          hasPendingApprovals: false,
-          hasPendingUserInput: false,
-          pendingSubagentRequest: null,
-          pendingBackgroundTasks: [{ kind: "command" }],
-          runtime: { status: "running" },
-        }
-      : null) as never,
-}));
+vi.mock(import("../../state/entities"), async (importOriginal) => {
+  const { makeStreamingWorkTimelineFixture, makeThreadProjectionFixture } =
+    await import("../../test-fixtures");
+  return {
+    ...(await importOriginal()),
+    useQuietThreadShell: ((ref: { threadId: string } | null) =>
+      ref !== null && workingThreads.has(ref.threadId)
+        ? {
+            hasPendingApprovals: false,
+            hasPendingUserInput: false,
+            pendingSubagentRequest: null,
+            pendingBackgroundTasks: [{ kind: "command" }],
+            runtime: { status: "running" },
+          }
+        : null) as never,
+    useQuietThreadProjection: ((ref: { threadId: string } | null) =>
+      ref !== null && reasoningThreads.has(ref.threadId)
+        ? {
+            projection: {
+              ...makeThreadProjectionFixture(),
+              visibleTurnItems: makeStreamingWorkTimelineFixture("reasoning").visibleTurnItems,
+            },
+          }
+        : null) as never,
+  };
+});
 vi.mock(import("../../state/session"), async (importOriginal) => ({
   ...(await importOriginal()),
   useEnvironmentScope: () => true,
@@ -61,13 +78,20 @@ vi.mock(import("~/hooks/useThreadActionMenu"), () => ({
   useThreadActionMenu: () => ({ openMenu, closeMenu: () => {} }),
 }));
 
-import { render, stubGlobal } from "../../../test/render";
+import { act, fakeTimers, render, stubGlobal } from "../../../test/render";
 import { showLayoutTabMenu } from "../../layout/PaneTabs";
 import { LayoutPaneContext, useLayoutPane } from "../../layout/layoutPaneContext";
-import { findLayoutTab } from "../../layout/layoutModel";
+import {
+  createLayoutState,
+  findLayoutTab,
+  type LayoutState,
+  type LayoutTab,
+} from "../../layout/layoutModel";
 import { useLayoutStore } from "../../layout/layoutStore";
 import { ensureLocalApi } from "../../localApi";
+import { ChatPaneHeader, ChatPaneHeaderControls, useHeaderControlsInset } from "./ChatPaneHeader";
 import { ChatHeader } from "./ChatHeader";
+import { PanelLayoutControls } from "./PanelLayoutControls";
 
 function header(title: string) {
   return (
@@ -84,6 +108,23 @@ function header(title: string) {
       />
       <div tabIndex={0}>Outside rename</div>
     </>
+  );
+}
+
+function duetHeader(threadId: string, title: string) {
+  return (
+    <div className="flex h-12 w-[900px]">
+      <ChatHeader
+        activeThreadEnvironmentId={EnvironmentId.make("environment")}
+        activeThreadId={ThreadId.make(threadId)}
+        activeThreadTitle={title}
+        isServerThread
+        activeProject={null}
+        parentThreadLink={null}
+        onOpenThread={() => {}}
+        rightPanelOpen={false}
+      />
+    </div>
   );
 }
 
@@ -276,23 +317,237 @@ it("keeps a Duet channel's title menu at the header start and centres only the a
   }
 });
 
+it("truncates a split Duet title before the compact controls", async () => {
+  duetShell.enabled = true;
+  captainState.enabled = false;
+  const longTitle =
+    "A very long split pane thread title that must truncate before the compact header controls";
+  function SplitHeader() {
+    const [controlsInset, measureControls] = useHeaderControlsInset();
+    return (
+      <LayoutPaneContext value={{ ...useLayoutPane(), split: true, tabId: "duet-tab" }}>
+        <div style={{ width: 360 }}>
+          <ChatPaneHeader reserveNativeControlsInset={false}>
+            <ChatPaneHeaderControls measureRef={measureControls}>
+              <PanelLayoutControls
+                threadPanelOpen={false}
+                threadPanelPresentation="inline"
+                threadPanelShortcutLabel={null}
+                onToggleThreadPanel={() => {}}
+                rightPanel={{ open: false, shortcutLabel: null, onToggle: () => {} }}
+              />
+            </ChatPaneHeaderControls>
+            <ChatHeader
+              activeThreadEnvironmentId={EnvironmentId.make("environment")}
+              activeThreadId={ThreadId.make("thread")}
+              activeThreadTitle={longTitle}
+              isServerThread
+              activeProject={null}
+              parentThreadLink={null}
+              onOpenThread={() => {}}
+              rightPanelOpen={false}
+              trailingInset={controlsInset}
+            />
+          </ChatPaneHeader>
+        </div>
+      </LayoutPaneContext>
+    );
+  }
+  try {
+    await using screen = await render(<SplitHeader />);
+    await vi.waitFor(() => {
+      const cluster = screen.container.querySelector<HTMLElement>("[data-panel-layout-controls]")!;
+      const title = screen.container.querySelector<HTMLElement>("[data-duet-header-title]")!;
+      expect(cluster).not.toBeNull();
+      expect(title).not.toBeNull();
+      expect(title.getBoundingClientRect().right).toBeLessThanOrEqual(
+        cluster.getBoundingClientRect().left,
+      );
+    });
+  } finally {
+    duetShell.enabled = false;
+  }
+});
+
+it("includes layout tab actions in a split Duet title menu", async () => {
+  duetShell.enabled = true;
+  captainState.enabled = true;
+  const originalLayout = useLayoutStore.getState().layout;
+  useLayoutStore.setState({ layout: createLayoutState() });
+  const environmentId = EnvironmentId.make("environment");
+  const threadRef = scopeThreadRef(environmentId, ThreadId.make("captain:maria:0"));
+  const content = { kind: "chat", target: { kind: "server", threadRef } } as const;
+  const neighborRef = scopeThreadRef(environmentId, ThreadId.make("thread:neighbor"));
+  useLayoutStore
+    .getState()
+    .openTab(
+      { kind: "chat", target: { kind: "server", threadRef: neighborRef } },
+      { placement: "active-pane", position: "end" },
+    );
+  useLayoutStore.getState().openTab(content, { placement: "active-pane", position: "end" });
+  const tabId = findLayoutTab(useLayoutStore.getState().layout, (tab) => tab.content === content)!
+    .tab.id;
+  function SplitDuetHeader() {
+    return (
+      <LayoutPaneContext value={{ ...useLayoutPane(), split: true, tabId }}>
+        <ChatHeader
+          activeThreadEnvironmentId={environmentId}
+          activeThreadId={threadRef.threadId}
+          activeThreadTitle="Maria"
+          isServerThread
+          activeProject={null}
+          parentThreadLink={null}
+          onOpenThread={() => {}}
+          rightPanelOpen={false}
+        />
+      </LayoutPaneContext>
+    );
+  }
+  try {
+    await using screen = await render(<SplitDuetHeader />);
+    await userEvent.click(screen.getByRole("button", { name: "Duet menu for Maria" }));
+
+    await vi.waitFor(() => {
+      const items = Array.from(
+        document.body.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+      ).map((element) => element.textContent);
+      for (const label of ["Split right", "Split down", "Close"]) {
+        expect(items.some((item) => item?.startsWith(label))).toBe(true);
+      }
+    });
+    await userEvent.keyboard("{Escape}");
+  } finally {
+    useLayoutStore.setState({ layout: originalLayout });
+    duetShell.enabled = false;
+    captainState.enabled = false;
+  }
+});
+
+it("leaves Close out of the title menu when the Duet's only neighbor is its own Tasks panel", async () => {
+  duetShell.enabled = true;
+  captainState.enabled = true;
+  const originalLayout = useLayoutStore.getState().layout;
+  const environmentId = EnvironmentId.make("environment");
+  const threadRef = scopeThreadRef(environmentId, ThreadId.make("captain:maria:0"));
+  const pane = (id: string, tab: LayoutTab) => ({ id, tabs: [tab], activeTabId: tab.id, size: 1 });
+  const layout: LayoutState = {
+    focusedWorkspaceId: "workspace",
+    workspaces: [
+      {
+        id: "workspace",
+        name: null,
+        focusedPaneId: "duet-pane",
+        cameraWidth: null,
+        columns: [
+          {
+            id: "left",
+            width: 0.5,
+            panes: [
+              pane("duet-pane", {
+                id: "duet-tab",
+                content: { kind: "chat", target: { kind: "server", threadRef } },
+              }),
+            ],
+          },
+          {
+            id: "right",
+            width: 0.5,
+            panes: [
+              pane("tasks-pane", {
+                id: "tasks-tab",
+                content: { kind: "surface", threadRef, surfaceId: "duet-tasks" },
+              }),
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  useLayoutStore.setState({ layout });
+  function DuetBesideTasksHeader() {
+    return (
+      <LayoutPaneContext value={{ ...useLayoutPane(), split: true, tabId: "duet-tab" }}>
+        <ChatHeader
+          activeThreadEnvironmentId={environmentId}
+          activeThreadId={threadRef.threadId}
+          activeThreadTitle="Maria"
+          isServerThread
+          activeProject={null}
+          parentThreadLink={null}
+          onOpenThread={() => {}}
+          rightPanelOpen={false}
+        />
+      </LayoutPaneContext>
+    );
+  }
+  try {
+    await using screen = await render(<DuetBesideTasksHeader />);
+    await userEvent.click(screen.getByRole("button", { name: "Duet menu for Maria" }));
+
+    await vi.waitFor(() => {
+      const items = Array.from(
+        document.body.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+      ).map((element) => element.textContent ?? "");
+      expect(items.some((item) => item.startsWith("Split right"))).toBe(true);
+      expect(items.some((item) => item.startsWith("Close"))).toBe(false);
+    });
+    await userEvent.keyboard("{Escape}");
+  } finally {
+    useLayoutStore.setState({ layout: originalLayout });
+    duetShell.enabled = false;
+    captainState.enabled = false;
+  }
+});
+
+it("cross-fades the outgoing and current live status pills at their own widths", async () => {
+  duetShell.enabled = true;
+  captainState.enabled = true;
+  workingThreads.clear();
+  workingThreads.add("captain:maria:0");
+  reasoningThreads.clear();
+  try {
+    using _timers = fakeTimers();
+    vi.setSystemTime(0);
+    await using screen = await render(duetHeader("captain:maria:0", "Maria"));
+    const hero = screen.container.querySelector<HTMLElement>("[data-captain-header-hero]")!;
+    const pill = (layer: "current" | "outgoing") =>
+      hero.querySelector<HTMLElement>(`[data-captain-hero-live-label="${layer}"]`);
+
+    expect(pill("outgoing")).toBeNull();
+    expect(pill("current")?.textContent).toBe("Running a command");
+    expect(hero.querySelector(".working-status-shine")).toBeNull();
+
+    reasoningThreads.add("captain:maria:0");
+    vi.setSystemTime(1_000);
+    await screen.rerender(duetHeader("captain:maria:0", "Maria"));
+
+    const outgoing = pill("outgoing");
+    const current = pill("current");
+    expect(hero.querySelectorAll("[data-captain-hero-live]")).toHaveLength(2);
+    expect(outgoing?.textContent).toBe("Running a command");
+    expect(current?.textContent).toBe("Thinking");
+    expect(outgoing?.getBoundingClientRect().width).toBeGreaterThan(
+      current?.getBoundingClientRect().width ?? 0,
+    );
+
+    await act(() => vi.advanceTimersByTimeAsync(220));
+
+    expect(hero.querySelectorAll("[data-captain-hero-live]")).toHaveLength(1);
+    expect(pill("outgoing")).toBeNull();
+    expect(pill("current")?.textContent).toBe("Thinking");
+  } finally {
+    duetShell.enabled = false;
+    captainState.enabled = false;
+    workingThreads.clear();
+    reasoningThreads.clear();
+  }
+});
+
 it("resets a Duet's live status when switching to another Duet", async () => {
   duetShell.enabled = true;
   captainState.enabled = true;
   workingThreads.clear();
   workingThreads.add("captain:maria:0");
-  const duetHeader = (threadId: string, title: string) => (
-    <ChatHeader
-      activeThreadEnvironmentId={EnvironmentId.make("environment")}
-      activeThreadId={ThreadId.make(threadId)}
-      activeThreadTitle={title}
-      isServerThread
-      activeProject={null}
-      parentThreadLink={null}
-      onOpenThread={() => {}}
-      rightPanelOpen={false}
-    />
-  );
   try {
     await using screen = await render(duetHeader("captain:maria:0", "Maria"));
     await vi.waitFor(() => {
@@ -300,6 +555,9 @@ it("resets a Duet's live status when switching to another Duet", async () => {
         "Running a command",
       );
     });
+    const current = screen.container.querySelector('[data-captain-hero-live-label="current"]');
+    expect(current?.textContent).toBe("Running a command");
+    expect(current?.querySelector(".working-status-shine")).toBeNull();
 
     await screen.rerender(duetHeader("captain:james:0", "James"));
 

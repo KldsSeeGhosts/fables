@@ -1267,9 +1267,9 @@ export default function ChatView(props: ChatViewProps) {
   const rightPanelPresent = rightPanelPresence.present;
 
   const rightPanelControlsInPanel =
-    shouldUsePlanSidebarSheet && rightPanelPresent && rightPanelOpen;
+    !duetShell && shouldUsePlanSidebarSheet && rightPanelPresent && rightPanelOpen;
   const rightPanelControlsAtRoot =
-    rightPanelPresent && !shouldUsePlanSidebarSheet && !companionPanes;
+    !duetShell && rightPanelPresent && !shouldUsePlanSidebarSheet && !companionPanes;
   const renderedRightPanelSurface = rightPanelPresence.value?.activeSurface ?? null;
   // In a layout pane every shown surface is a tab of its own, not only the active one.
   const previewMiniPlayerVisible = companionPanes
@@ -1281,7 +1281,7 @@ export default function ChatView(props: ChatViewProps) {
         renderedRightPanelSurface,
       );
   const inlineRightPanelOwnsTitleBar =
-    rightPanelOpen && !shouldUsePlanSidebarSheet && !companionPanes;
+    !duetShell && rightPanelOpen && !shouldUsePlanSidebarSheet && !companionPanes;
   const [threadPanelPopoverHandle] = useState(PopoverCreateHandle);
   const [chatCanvasStore] = useState(createChatCanvasStore);
 
@@ -3724,11 +3724,6 @@ export default function ChatView(props: ChatViewProps) {
     threadPanelPopoverHandle,
     threadPanelShortcutLabel: shortcutLabelForCommand(keybindings, "threadPanel.toggle"),
     onToggleThreadPanel: toggleThreadPanelStable,
-    branchLabel: activeThreadBranch,
-    contextPercent: activeContextWindow?.usedPercentage ?? null,
-    contextWindow: activeContextWindow,
-    project: activeProject ?? null,
-    threadRef: activeThreadRef,
     rightPanel: {
       open: rightPanelOpen,
       shortcutLabel: shortcutLabelForCommand(keybindings, "rightPanel.toggle"),
@@ -4058,7 +4053,7 @@ export default function ChatView(props: ChatViewProps) {
                     <ComposerSurface.Shell contextRow={showComposerContextStrip}>
                       <CaptainContextResetNotice
                         threadRef={isServerThread ? activeThreadRef : null}
-                        usedPercentage={activeContextWindow?.usedPercentage ?? null}
+                        contextWindow={activeContextWindow ?? null}
                         onOpenThread={onOpenRelatedThreadStable}
                       />
                       <div

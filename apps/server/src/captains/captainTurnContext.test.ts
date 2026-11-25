@@ -119,6 +119,7 @@ describe("formatCaptainCrewRules", () => {
     expect(formatted).toContain("keep a progress note in your worktree");
     expect(formatted).toContain("use the matching folder in yours");
     expect(formatted).toContain("done-check from your brief passes");
+    expect(formatted).toContain("as a markdown image with its absolute path");
     expect(formatted).not.toContain("CREW.md:");
   });
 

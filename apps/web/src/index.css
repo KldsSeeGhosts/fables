@@ -2050,6 +2050,29 @@ html[data-theme-id]:not([data-theme-id=""]):not(.black-chrome) {
   }
 }
 
+/* The label keeps its own `color` for currentColor; only the glyph fill is transparent
+   while the clipped gradient paints the base color and a lighter sweep. */
+@utility working-status-shine {
+  @media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+    -webkit-text-fill-color: transparent;
+    background-image:
+      linear-gradient(
+        to right,
+        transparent,
+        color-mix(in srgb, currentColor 62%, white),
+        transparent
+      ),
+      linear-gradient(currentColor, currentColor);
+    background-size:
+      4.5rem 100%,
+      100% 100%;
+    background-repeat: no-repeat;
+    background-clip: text;
+    animation: live-tool-shine 2.2s steps(30) infinite;
+    animation-play-state: var(--visible-animation-state, paused);
+  }
+}
+
 @utility visible-animate-spin {
   animation: var(--animate-spin);
   animation-play-state: var(--visible-animation-state, paused);

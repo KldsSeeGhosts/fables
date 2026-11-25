@@ -10,6 +10,7 @@ import {
   CHAT_MARKDOWN_REMARK_PLUGINS,
   CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS,
   CHAT_USER_MARKDOWN_REMARK_PLUGINS,
+  chatMarkdownImageSources,
   remarkAssistantInsights,
   remarkEnableOrderedListNumbers,
 } from "./markdownPipeline.ts";
@@ -875,6 +876,20 @@ it("adds only the typed indentation, and renders what follows it as without it",
       }
     }
   }
+});
+
+it("collects image data URLs only when requested", () => {
+  const markdown = [
+    "![inline](data:image/png;base64,AA)",
+    "![text](data:text/html;base64,AA)",
+    "![remote](https://example.com/remote.png)",
+  ].join("\n\n");
+
+  expect(chatMarkdownImageSources(markdown)).toEqual(["https://example.com/remote.png"]);
+  expect(chatMarkdownImageSources(markdown, { includeDataImageUrls: true })).toEqual([
+    "data:image/png;base64,AA",
+    "https://example.com/remote.png",
+  ]);
 });
 
 it("moves a <picture>'s color-scheme sources onto its <img>, which the renderer resolves", () => {

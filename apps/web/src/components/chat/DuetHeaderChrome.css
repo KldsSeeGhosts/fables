@@ -136,12 +136,15 @@
 }
 
 /* The hero floats over the chat lane rather than reacting to clicks. */
+/* Centred in a 52px row; a shorter row (Windows and Linux title bars) keeps 4px above the
+   orb and lets it hang below the header instead of past the window's top edge. */
 [data-captain-header-hero] {
   position: absolute;
   inset-block: 0;
   z-index: 20;
   display: none;
-  align-items: center;
+  align-items: flex-start;
+  padding-top: max(4px, calc((var(--workspace-topbar-height, 52px) - 2.75rem) / 2));
   left: calc(50% + var(--chat-header-lane-center-offset, 0px));
   pointer-events: none;
   transform: translateX(-50%);
@@ -153,36 +156,46 @@
   }
 }
 
-[data-captain-hero-live] {
+@keyframes captain-hero-live-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes captain-hero-live-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+[data-captain-hero-live-label="outgoing"] {
   z-index: 1;
 }
 
+[data-captain-hero-live-label="current"] {
+  z-index: 2;
+}
+
 @media (prefers-reduced-motion: no-preference) {
-  @keyframes captain-hero-live-in {
-    from {
-      opacity: 0;
-    }
-
-    to {
-      opacity: 1;
-    }
-  }
-
-  @keyframes captain-hero-live-out {
-    from {
-      opacity: 1;
-    }
-
-    to {
-      opacity: 0;
-    }
-  }
-
   [data-captain-hero-live-label="current"] {
-    animation: captain-hero-live-in 180ms ease-out both;
+    animation: captain-hero-live-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
   }
 
   [data-captain-hero-live-label="outgoing"] {
-    animation: captain-hero-live-out 180ms ease-out both;
+    animation: captain-hero-live-out 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-captain-hero-live-label="outgoing"] {
+    display: none;
   }
 }

@@ -1,84 +1,89 @@
-import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
+import "~/index.css";
+
 import { expect, it, vi } from "vite-plus/test";
-import { userEvent } from "vite-plus/test/browser";
+import { page, userEvent } from "vite-plus/test/browser";
+
+import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 
 import { render } from "../../../test/render";
+import type { LayoutState, LayoutTab } from "../../layout/layoutModel";
+import { LayoutPaneContext, type LayoutPaneState } from "../../layout/layoutPaneContext";
+import { useLayoutStore } from "../../layout/layoutStore";
+import { ChatPaneHeader, ChatPaneHeaderControls } from "./ChatPaneHeader";
 
-const captainState = vi.hoisted(() => ({ scopedProjectIds: [] as string[] }));
-const projectsState = vi.hoisted(() => ({ projects: [] as unknown[] }));
+const closeLayoutTabByUser = vi.hoisted(() => vi.fn());
+
+vi.mock(import("../../layout/layoutActions"), () => ({
+  closeLayoutTabByUser,
+}));
 
 vi.mock(import("../../hooks/useDuetShell"), () => ({
   useDuetShell: () => true,
 }));
 
-vi.mock(import("../captains/useCaptain"), async (importOriginal) => ({
-  ...(await importOriginal()),
-  useCaptain: ((ref: { threadId: string } | null) =>
-    ref?.threadId.startsWith("captain:")
-      ? {
-          id: "maria",
-          primaryThreadId: ref.threadId,
-          earlierThreadIds: [],
-          name: "Maria",
-          role: "Coordinator",
-          instructions: "",
-          avatar: { preset: "compass", color: "violet" },
-          scopedProjectIds: captainState.scopedProjectIds,
-          reportPolicy: "context",
-          coordinatorOnly: false,
-          createdAt: "2026-11-24T00:00:00.000Z",
-          updatedAt: "2026-11-24T00:00:00.000Z",
-          archivedAt: null,
-        }
-      : null) as never,
-}));
-
-vi.mock(import("../../state/entities"), async (importOriginal) => ({
-  ...(await importOriginal()),
-  useProjects: (() => projectsState.projects) as never,
-}));
-
 import { PanelLayoutControls } from "./PanelLayoutControls";
 
-const environmentId = EnvironmentId.make("environment");
+const duetRef = {
+  environmentId: EnvironmentId.make("env"),
+  threadId: ThreadId.make("captain:duet:0"),
+};
+const duetTab: LayoutTab = {
+  id: "duet-tab",
+  content: { kind: "chat", target: { kind: "server", threadRef: duetRef } },
+};
 
-function setup(input: { scopedProjectIds?: string[]; projects?: unknown[] } = {}) {
-  captainState.scopedProjectIds = input.scopedProjectIds ?? [];
-  projectsState.projects = input.projects ?? [];
+function layoutWith(neighbor: LayoutTab): LayoutState {
+  const pane = (id: string, tab: LayoutTab) => ({ id, tabs: [tab], activeTabId: tab.id, size: 1 });
+  return {
+    focusedWorkspaceId: "workspace",
+    workspaces: [
+      {
+        id: "workspace",
+        name: null,
+        focusedPaneId: "duet-pane",
+        cameraWidth: null,
+        columns: [
+          { id: "left", width: 0.5, panes: [pane("neighbor-pane", neighbor)] },
+          { id: "right", width: 0.5, panes: [pane("duet-pane", duetTab)] },
+        ],
+      },
+    ],
+  };
 }
 
-function project(id: string, title: string): EnvironmentProject {
+function withLayout(layout: LayoutState): Disposable {
+  const previous = useLayoutStore.getState().layout;
+  useLayoutStore.setState({ layout });
+  return { [Symbol.dispose]: () => useLayoutStore.setState({ layout: previous }) };
+}
+
+function paneState(input: Partial<LayoutPaneState> = {}): LayoutPaneState {
   return {
-    id: ProjectId.make(id),
-    environmentId,
-    title,
-    workspaceRoot: `/repo/${id}`,
-    isScratch: false,
-    faviconPath: null,
-    projectIcon: null,
-  } as unknown as EnvironmentProject;
+    tabId: null,
+    paneId: null,
+    split: false,
+    narrow: false,
+    leadingEdge: true,
+    trailingEdge: true,
+    focused: true,
+    related: false,
+    visible: true,
+    ...input,
+  };
 }
 
 function controls(props: {
-  threadId?: string;
   threadPanelOpen?: boolean;
   rightPanelOpen?: boolean;
-  project?: EnvironmentProject | null;
   onToggleThreadPanel?: () => void;
   onToggleRightPanel?: () => void;
 }) {
-  const threadId = props.threadId ?? "thread";
   return (
     <PanelLayoutControls
       threadPanelOpen={props.threadPanelOpen ?? false}
       threadPanelPresentation="inline"
       threadPanelShortcutLabel={null}
       onToggleThreadPanel={props.onToggleThreadPanel ?? (() => {})}
-      branchLabel="main"
-      contextPercent={42}
-      project={props.project ?? null}
-      threadRef={{ environmentId, threadId: ThreadId.make(threadId) }}
       rightPanel={{
         open: props.rightPanelOpen ?? false,
         shortcutLabel: null,
@@ -88,79 +93,148 @@ function controls(props: {
   );
 }
 
-it("keeps a coding thread's top right to the details pill and right panel toggle", async () => {
-  setup();
-  const onToggleRightPanel = vi.fn();
-  await using screen = await render(controls({ onToggleRightPanel }));
-
-  const buttons = Array.from(screen.container.querySelectorAll("button")).map((button) =>
-    button.getAttribute("aria-label"),
+function headerControls(
+  input: { split?: boolean; tabId?: string | null } & Parameters<typeof controls>[0],
+) {
+  const tabId = input.tabId ?? null;
+  return (
+    <LayoutPaneContext
+      value={paneState({
+        split: input.split ?? false,
+        tabId,
+        paneId: tabId === null ? null : "pane",
+      })}
+    >
+      <div style={{ width: "100%" }}>
+        <ChatPaneHeader reserveNativeControlsInset={false}>
+          <ChatPaneHeaderControls>{controls(input)}</ChatPaneHeaderControls>
+          <div className="min-w-0 flex-1 truncate px-4">
+            very-long-machine-name-for-a-remote-mac-studio /
+            very-long-project-name-that-used-to-widen-the-thread-details-pill
+          </div>
+        </ChatPaneHeader>
+      </div>
+    </LayoutPaneContext>
   );
-  expect(buttons).toEqual(["Toggle thread details panel", "Toggle right panel"]);
-  await expect
-    .element(screen.getByRole("button", { name: "Toggle thread details panel" }))
-    .toHaveTextContent("environment/main");
-  expect(screen.container.querySelector('[aria-label="More header actions"]')).toBeNull();
+}
 
-  const toggle = screen.getByRole("button", { name: "Toggle right panel" });
-  await expect.element(toggle).toHaveAttribute("aria-pressed", "false");
-  await userEvent.click(toggle);
+function duetTheme(): Disposable {
+  const previous = document.documentElement.getAttribute("data-theme-id");
+  document.documentElement.setAttribute("data-theme-id", "ksg-salon");
+  return {
+    [Symbol.dispose]: () => {
+      if (previous === null) document.documentElement.removeAttribute("data-theme-id");
+      else document.documentElement.setAttribute("data-theme-id", previous);
+    },
+  };
+}
+
+async function narrowViewport(width: number): Promise<AsyncDisposable> {
+  const previous = { width: window.innerWidth, height: window.innerHeight };
+  await page.viewport(width, 700);
+  return {
+    [Symbol.asyncDispose]: () => page.viewport(previous.width, previous.height),
+  };
+}
+
+it("keeps long environment and project names out of the compact controls inside a narrow viewport", async () => {
+  using _theme = duetTheme();
+  await using _viewport = await narrowViewport(390);
+  const onToggleRightPanel = vi.fn();
+  await using screen = await render(headerControls({ onToggleRightPanel }));
+
+  const cluster = screen.container.querySelector<HTMLElement>("[data-panel-layout-controls]")!;
+  expect(cluster.textContent).toBe("");
+  const buttons = Array.from(cluster.querySelectorAll("button"));
+  expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual([
+    "Toggle thread details panel",
+    "Toggle right panel",
+  ]);
+  for (const button of buttons) {
+    const rect = button.getBoundingClientRect();
+    expect(rect.left).toBeGreaterThanOrEqual(0);
+    expect(rect.right).toBeLessThanOrEqual(window.innerWidth);
+  }
+
+  await userEvent.click(screen.getByRole("button", { name: "Toggle right panel" }));
   expect(onToggleRightPanel).toHaveBeenCalledOnce();
 });
 
-it("shows All workspace for an unscoped Duet instead of its attached project", async () => {
-  setup();
-  const onToggleThreadPanel = vi.fn();
-  await using screen = await render(
-    controls({
-      threadId: "captain:maria:0",
-      rightPanelOpen: true,
-      project: project("attached", "Old project"),
-      onToggleThreadPanel,
+it("closes a split Duet pane from the last header icon", async () => {
+  using _theme = duetTheme();
+  using _layout = withLayout(
+    layoutWith({
+      id: "other-chat",
+      content: {
+        kind: "chat",
+        target: {
+          kind: "server",
+          threadRef: { environmentId: duetRef.environmentId, threadId: ThreadId.make("thread") },
+        },
+      },
     }),
   );
+  closeLayoutTabByUser.mockClear();
+  await using screen = await render(headerControls({ split: true, tabId: "duet-tab" }));
 
-  const pill = screen.getByRole("button", { name: "Toggle thread details panel" });
-  await expect.element(pill).toHaveTextContent("environment/All workspace");
-  await expect
-    .element(screen.getByRole("button", { name: "Toggle right panel" }))
-    .toHaveAttribute("aria-pressed", "true");
-  expect(screen.container.querySelector('[aria-label^="Status:"]')).toBeNull();
-  expect(screen.container.querySelector('[aria-label="More header actions"]')).toBeNull();
+  const cluster = screen.container.querySelector<HTMLElement>("[data-panel-layout-controls]")!;
+  expect(
+    Array.from(cluster.querySelectorAll("button")).map((button) =>
+      button.getAttribute("aria-label"),
+    ),
+  ).toEqual(["Toggle thread details panel", "Toggle right panel", "Close"]);
 
-  await userEvent.click(pill);
-  expect(onToggleThreadPanel).toHaveBeenCalledOnce();
+  await userEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(closeLayoutTabByUser).toHaveBeenCalledWith("duet-tab");
 });
 
-it("shows one scoped project's favicon and title instead of the attached project", async () => {
-  const scoped = project("scoped", "KSG Code");
-  const attached = project("attached", "Old project");
-  setup({ scopedProjectIds: [scoped.id], projects: [scoped, attached] });
-  await using screen = await render(controls({ threadId: "captain:maria:0", project: attached }));
+it("shows no close icon for a single-pane Duet", async () => {
+  using _theme = duetTheme();
+  await using screen = await render(headerControls({ tabId: "tab" }));
 
-  const pill = screen.getByRole("button", { name: "Toggle thread details panel" });
-  expect(pill.element().textContent).toContain("KSG Code");
-  expect(pill.element().textContent).not.toContain("Old project");
-  expect(pill.element().querySelector('[data-slot="project-monogram"]')).not.toBeNull();
+  expect(screen.container.querySelector('button[aria-label="Close"]')).toBeNull();
 });
 
-it("counts several scoped projects instead of the attached project", async () => {
-  const first = project("first", "KSG Code");
-  const second = project("second", "Website");
-  const attached = project("attached", "Old project");
-  setup({ scopedProjectIds: [first.id, second.id], projects: [first, second, attached] });
-  await using screen = await render(controls({ threadId: "captain:maria:0", project: attached }));
+it("shows no close icon when the only other tab in the Duet's pane is its own Tasks panel", async () => {
+  using _theme = duetTheme();
+  const tasksTab: LayoutTab = {
+    id: "tasks",
+    content: { kind: "surface", threadRef: duetRef, surfaceId: "duet-tasks" },
+  };
+  using _layout = withLayout({
+    focusedWorkspaceId: "workspace",
+    workspaces: [
+      {
+        id: "workspace",
+        name: null,
+        focusedPaneId: "duet-pane",
+        cameraWidth: null,
+        columns: [
+          {
+            id: "only",
+            width: 1,
+            panes: [
+              { id: "duet-pane", tabs: [duetTab, tasksTab], activeTabId: "duet-tab", size: 1 },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  await using screen = await render(headerControls({ split: true, tabId: "duet-tab" }));
 
-  const pill = screen.getByRole("button", { name: "Toggle thread details panel" });
-  await expect.element(pill).toHaveTextContent("environment/2 projects");
-  expect(pill.element().textContent).not.toContain("Old project");
+  expect(screen.container.querySelector('button[aria-label="Close"]')).toBeNull();
 });
 
-it("shows the context ring only while the details card is collapsed", async () => {
-  setup();
-  await using collapsed = await render(controls({ threadPanelOpen: false }));
-  expect(collapsed.container.querySelector("[data-context-ring]")).not.toBeNull();
+it("shows no close icon when the only other pane is the Duet's own Tasks panel", async () => {
+  using _theme = duetTheme();
+  using _layout = withLayout(
+    layoutWith({
+      id: "tasks",
+      content: { kind: "surface", threadRef: duetRef, surfaceId: "duet-tasks" },
+    }),
+  );
+  await using screen = await render(headerControls({ split: true, tabId: "duet-tab" }));
 
-  await using open = await render(controls({ threadPanelOpen: true }));
-  expect(open.container.querySelector("[data-context-ring]")).toBeNull();
+  expect(screen.container.querySelector('button[aria-label="Close"]')).toBeNull();
 });
