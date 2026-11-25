@@ -3,8 +3,12 @@ import "~/index.css";
 import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
+import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+
 import { render } from "../../../test/render";
+import type { LayoutState, LayoutTab } from "../../layout/layoutModel";
 import { LayoutPaneContext, type LayoutPaneState } from "../../layout/layoutPaneContext";
+import { useLayoutStore } from "../../layout/layoutStore";
 import { ChatPaneHeader, ChatPaneHeaderControls } from "./ChatPaneHeader";
 
 const closeLayoutTabByUser = vi.hoisted(() => vi.fn());
@@ -18,6 +22,40 @@ vi.mock(import("../../hooks/useDuetShell"), () => ({
 }));
 
 import { PanelLayoutControls } from "./PanelLayoutControls";
+
+const duetRef = {
+  environmentId: EnvironmentId.make("env"),
+  threadId: ThreadId.make("captain:duet:0"),
+};
+const duetTab: LayoutTab = {
+  id: "duet-tab",
+  content: { kind: "chat", target: { kind: "server", threadRef: duetRef } },
+};
+
+function layoutWith(neighbor: LayoutTab): LayoutState {
+  const pane = (id: string, tab: LayoutTab) => ({ id, tabs: [tab], activeTabId: tab.id, size: 1 });
+  return {
+    focusedWorkspaceId: "workspace",
+    workspaces: [
+      {
+        id: "workspace",
+        name: null,
+        focusedPaneId: "duet-pane",
+        cameraWidth: null,
+        columns: [
+          { id: "left", width: 0.5, panes: [pane("neighbor-pane", neighbor)] },
+          { id: "right", width: 0.5, panes: [pane("duet-pane", duetTab)] },
+        ],
+      },
+    ],
+  };
+}
+
+function withLayout(layout: LayoutState): Disposable {
+  const previous = useLayoutStore.getState().layout;
+  useLayoutStore.setState({ layout });
+  return { [Symbol.dispose]: () => useLayoutStore.setState({ layout: previous }) };
+}
 
 function paneState(input: Partial<LayoutPaneState> = {}): LayoutPaneState {
   return {
@@ -124,6 +162,18 @@ it("keeps long environment and project names out of the compact controls inside 
 
 it("closes a split Duet pane from the last header icon", async () => {
   using _theme = duetTheme();
+  using _layout = withLayout(
+    layoutWith({
+      id: "other-chat",
+      content: {
+        kind: "chat",
+        target: {
+          kind: "server",
+          threadRef: { environmentId: duetRef.environmentId, threadId: ThreadId.make("thread") },
+        },
+      },
+    }),
+  );
   closeLayoutTabByUser.mockClear();
   await using screen = await render(headerControls({ split: true, tabId: "duet-tab" }));
 
@@ -141,6 +191,19 @@ it("closes a split Duet pane from the last header icon", async () => {
 it("shows no close icon for a single-pane Duet", async () => {
   using _theme = duetTheme();
   await using screen = await render(headerControls({ tabId: "tab" }));
+
+  expect(screen.container.querySelector('button[aria-label="Close"]')).toBeNull();
+});
+
+it("shows no close icon when the only other pane is the Duet's own Tasks panel", async () => {
+  using _theme = duetTheme();
+  using _layout = withLayout(
+    layoutWith({
+      id: "tasks",
+      content: { kind: "surface", threadRef: duetRef, surfaceId: "duet-tasks" },
+    }),
+  );
+  await using screen = await render(headerControls({ split: true, tabId: "duet-tab" }));
 
   expect(screen.container.querySelector('button[aria-label="Close"]')).toBeNull();
 });
