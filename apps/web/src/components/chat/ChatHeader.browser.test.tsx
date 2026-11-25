@@ -193,7 +193,11 @@ it("keeps a Duet channel's title menu at the header start and centres only the a
   openMenu.mockClear();
   try {
     await using screen = await render(
-      <header data-chat-header className="relative flex h-12" style={{ width: 900 }}>
+      <header
+        data-chat-header
+        className="relative flex h-12"
+        style={{ width: 900, position: "relative" }}
+      >
         <ChatHeader
           activeThreadEnvironmentId={EnvironmentId.make("environment")}
           activeThreadId={ThreadId.make("captain:maria:0")}

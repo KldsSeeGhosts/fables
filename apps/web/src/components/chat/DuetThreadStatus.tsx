@@ -139,7 +139,8 @@ export function useDuetThreadStatus(threadRef: ScopedThreadRef) {
 
   return {
     state,
-    activity: desired.activity,
+    // The creature follows the held label so its motion never outpaces the words beside it.
+    activity: live.visible ? live.activity : desired.activity,
     liveLabel: live.label,
     liveVisible: live.visible,
     liveOutgoing: live.outgoing,

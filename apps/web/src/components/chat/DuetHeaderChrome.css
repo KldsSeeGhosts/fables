@@ -128,8 +128,9 @@
   }
 }
 
+/* Not a positioned box: the hero centres on the full-width header, which spans the chat canvas,
+   so the lane offset lines it up with the conversation. */
 [data-captain-header-root] {
-  position: relative;
   container-name: duet-header;
   container-type: inline-size;
 }

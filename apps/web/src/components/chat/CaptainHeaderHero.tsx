@@ -323,7 +323,7 @@ export function CaptainHeaderHero({
           <span
             aria-hidden
             data-captain-hero-live={status.state}
-            className="absolute top-[calc(100%-10px)] left-1/2 grid h-7 max-w-72 -translate-x-1/2 grid-cols-1 items-center justify-items-center overflow-hidden rounded-full border border-(--duet-panel-border,var(--border)) bg-(--duet-panel-fill,var(--background)) px-3 text-body whitespace-nowrap text-foreground shadow-(--duet-panel-shadow,var(--shadow-md))"
+            className="absolute top-[calc(100%-10px)] left-1/2 grid h-7 w-max max-w-72 -translate-x-1/2 grid-cols-1 items-center justify-items-center overflow-hidden rounded-full border border-(--duet-panel-border,var(--border)) bg-(--duet-panel-fill,var(--background)) px-3 text-body whitespace-nowrap text-foreground shadow-(--duet-panel-shadow,var(--shadow-md))"
           >
             {status.liveOutgoing ? (
               <span
