@@ -11,7 +11,7 @@ export function useCaptainTaskStatusLabel(status: CaptainTaskStatus): string {
     case "working":
       return gt("Working", { $context: "delegated task status" });
     case "ready":
-      return gt("Ready for review", { $context: "delegated task status" });
+      return gt("Ready for you", { $context: "delegated task status" });
     case "failed":
       return gt("Failed", { $context: "delegated task status" });
     case "stopped":
@@ -19,7 +19,7 @@ export function useCaptainTaskStatusLabel(status: CaptainTaskStatus): string {
     case "scheduled":
       return gt("Scheduled", { $context: "delegated task status" });
     case "done":
-      return gt("Done", { $context: "delegated task status" });
+      return gt("Resolved", { $context: "delegated task status" });
     case "unknown":
       return gt("Status unavailable", { $context: "delegated task status" });
   }
