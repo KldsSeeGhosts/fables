@@ -5,7 +5,9 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  type Announcements,
   type DragEndEvent,
+  type UniqueIdentifier,
 } from "@dnd-kit/core";
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
@@ -584,6 +586,24 @@ export function CaptainShelfList({
       ).map(({ row }) => row)
     : rows;
   const orderedKeys = orderedRows.map((row) => duetRowKey(row.environmentId, row.captain));
+  const duetName = (id: UniqueIdentifier | undefined) =>
+    orderedRows.find((row) => duetRowKey(row.environmentId, row.captain) === id)?.captain.name ??
+    "";
+  const duetDragAnnouncements: Announcements = {
+    onDragStart: ({ active }) => gt("Picked up {name}.", { name: duetName(active.id) }),
+    onDragOver: ({ active, over }) =>
+      over
+        ? gt("{name} is over {target}.", { name: duetName(active.id), target: duetName(over.id) })
+        : undefined,
+    onDragEnd: ({ active, over }) =>
+      over
+        ? gt("{name} was moved to {target}.", {
+            name: duetName(active.id),
+            target: duetName(over.id),
+          })
+        : gt("{name} was dropped.", { name: duetName(active.id) }),
+    onDragCancel: ({ active }) => gt("Moving {name} was cancelled.", { name: duetName(active.id) }),
+  };
   const handleDuetDragEnd = (event: DragEndEvent) => {
     if (event.over === null || event.active.id === event.over.id) return;
     const activeIndex = orderedKeys.indexOf(String(event.active.id));
@@ -662,6 +682,7 @@ export function CaptainShelfList({
           collisionDetection={closestCenter}
           modifiers={DUET_DRAG_MODIFIERS}
           onDragEnd={handleDuetDragEnd}
+          accessibility={{ announcements: duetDragAnnouncements }}
         >
           <SortableContext items={orderedKeys} strategy={verticalListSortingStrategy}>
             {rowsList}
