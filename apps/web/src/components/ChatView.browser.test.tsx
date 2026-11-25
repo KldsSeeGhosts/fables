@@ -27,7 +27,7 @@ import type * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 import * as Effect from "effect/Effect";
-import { expect, it, vi } from "vite-plus/test";
+import { expect, it, onTestFinished, vi } from "vite-plus/test";
 import { cdp, page, userEvent } from "vite-plus/test/browser";
 
 import { AppRoot } from "~/AppRoot";
@@ -37,6 +37,7 @@ import "~/components/ChatView";
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { selectThreadDiffPanelSelection, useDiffPanelStore } from "~/diffPanelStore";
 import { __setClientSettingsForTests } from "~/hooks/useSettings";
+import { setTheme } from "~/hooks/useTheme";
 import stylesheet from "~/index.css?inline";
 import { environmentContextRecord } from "~/lib/composerContextRecords";
 import { startWorkspaceFocus } from "~/lib/workspaceFocus";
@@ -508,6 +509,76 @@ it("imports Pi conversations through the environment RPC and can retry a changed
   await expect
     .element(page.getByRole("heading", { name: "Welcome to T3 Code" }))
     .not.toBeInTheDocument();
+});
+
+it("floats the docked composer over the conversation in the Duet shell", async () => {
+  await using _viewport = await appViewport();
+  const thread = threadWithHistory("floating-composer", 8);
+  using _environment = installFakeEnvironment([thread]);
+  __setClientSettingsForTests({
+    ...DEFAULT_CLIENT_SETTINGS,
+    onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
+  });
+  setTheme("ksg-salon");
+  onTestFinished(() => {
+    setTheme("system");
+  });
+  const router = getRouter(
+    createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${thread.id}`] }),
+  );
+  await router.load();
+  await using _app = await render(<AppRoot router={router} />, {
+    container: appContainer(),
+    router: false,
+  });
+  const editor = page.getByTestId("composer-editor");
+  await expect.element(editor).toBeVisible();
+
+  const overlay = document.querySelector<HTMLElement>("[data-chat-composer-overlay]")!;
+  expect(overlay.dataset.chatComposerLayout).toBe("docked");
+  const fade = getComputedStyle(overlay, "::before");
+  expect(fade.backgroundImage).toContain("linear-gradient");
+  expect(fade.pointerEvents).toBe("none");
+  expect(parseFloat(fade.height)).toBeGreaterThan(overlay.getBoundingClientRect().height);
+
+  const host = overlay.querySelector<HTMLElement>('[data-slot="composer-host"]')!;
+  const main = overlay.querySelector<HTMLElement>("[data-chat-composer-main-surface]")!;
+  const hostStyle = getComputedStyle(host);
+  const mainStyle = getComputedStyle(main);
+  expect(hostStyle.backgroundColor).toBe("rgba(0, 0, 0, 0)");
+  expect(hostStyle.boxShadow).toBe("none");
+  expect(parseFloat(mainStyle.borderRadius)).toBeGreaterThanOrEqual(12);
+  expect(mainStyle.borderTopWidth).toBe("1px");
+  expect(mainStyle.boxShadow).not.toBe("none");
+
+  const composerSpacer = () =>
+    [...document.querySelectorAll<HTMLElement>("div[aria-hidden='true']")].filter((element) =>
+      element.style.height.endsWith("px"),
+    );
+  let initialOverlayHeight = 0;
+  await vi.waitFor(() => {
+    const overlayHeight = overlay.getBoundingClientRect().height;
+    initialOverlayHeight = overlayHeight;
+    const initialInset = Math.min(
+      ...composerSpacer().map((element) =>
+        Math.abs(parseFloat(element.style.height) - overlayHeight),
+      ),
+    );
+    expect(initialInset).toBeLessThan(1.5);
+  });
+
+  await userEvent.click(editor);
+  await insertText("first line\nsecond line\nthird line");
+  await vi.waitFor(() => {
+    const overlayHeight = overlay.getBoundingClientRect().height;
+    const nextInset = Math.min(
+      ...composerSpacer().map((element) =>
+        Math.abs(parseFloat(element.style.height) - overlayHeight),
+      ),
+    );
+    expect(nextInset).toBeLessThan(1.5);
+    expect(overlayHeight).toBeGreaterThan(initialOverlayHeight);
+  });
 });
 
 it("a new draft does not load its reserved thread before the server lists it", async () => {

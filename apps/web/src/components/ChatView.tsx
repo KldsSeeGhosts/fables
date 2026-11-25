@@ -4048,6 +4048,7 @@ export default function ChatView(props: ChatViewProps) {
               }}
               inert={isRevertingCheckpoint}
               data-chat-composer-overlay="true"
+              data-chat-composer-layout={heroLayout ? "hero" : "docked"}
               className={
                 heroLayout
                   ? "pointer-events-none absolute inset-0 z-20 flex flex-col justify-center pt-1.5 [container:draft-hero/size] sm:pt-2"
