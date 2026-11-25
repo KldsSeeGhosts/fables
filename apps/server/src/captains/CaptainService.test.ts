@@ -585,6 +585,25 @@ it.effect(
           expectedRevision: 2,
         });
 
+        assert.notInclude(yield* read(captain.primaryThreadId), "Context check");
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`
+          INSERT INTO orchestration_v2_projection_provider_turns (
+            provider_turn_id, thread_id, provider_thread_id, node_id, ordinal, status, payload_json
+          ) VALUES ('turn-1', ${captain.primaryThreadId}, 'provider-thread', 'node', 1, 'completed',
+            ${JSON.stringify({
+              tokenUsage: {
+                usedTokens: 160_000,
+                maxTokens: 200_000,
+                updatedAt: "2026-11-24T10:00:00.000Z",
+              },
+            })})
+        `;
+        assert.include(
+          yield* read(captain.primaryThreadId),
+          "Context check: this conversation is 80% full.",
+        );
+
         assert.equal(yield* read(ThreadId.make("ordinary")), "");
         const crew = yield* read(ThreadId.make("child"), captain.primaryThreadId);
         assert.include(crew, "keep a progress note in your worktree");

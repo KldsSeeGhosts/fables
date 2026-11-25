@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   formatCaptainBriefing,
+  formatCaptainContextPressure,
   formatCaptainCrewRules,
   formatCaptainReports,
 } from "./captainTurnContext.ts";
@@ -122,5 +123,45 @@ describe("formatCaptainCrewRules", () => {
     const formatted = formatCaptainCrewRules(captain, "Run the tests before reporting.");
     expect(formatted).toContain("keep a progress note in your worktree");
     expect(formatted).toContain("CREW.md:\nRun the tests before reporting.");
+  });
+});
+
+describe("formatCaptainContextPressure", () => {
+  it("stays quiet below three quarters of the limit", () => {
+    expect(
+      formatCaptainContextPressure({
+        usedTokens: 70_000,
+        maxTokens: 100_000,
+        autoCompactThreshold: null,
+      }),
+    ).toBe("");
+    expect(
+      formatCaptainContextPressure({
+        usedTokens: null,
+        maxTokens: 100_000,
+        autoCompactThreshold: null,
+      }),
+    ).toBe("");
+  });
+
+  it("measures against automatic compaction when the provider reports it", () => {
+    const text = formatCaptainContextPressure({
+      usedTokens: 120_000,
+      maxTokens: 200_000,
+      autoCompactThreshold: 150_000,
+    });
+    expect(text).toContain("80% of the way to automatic compaction");
+    expect(text).toContain("`captain_document_write`");
+    expect(text).toContain("new conversation");
+  });
+
+  it("measures against the window otherwise", () => {
+    expect(
+      formatCaptainContextPressure({
+        usedTokens: 90_000,
+        maxTokens: 100_000,
+        autoCompactThreshold: null,
+      }),
+    ).toContain("90% full");
   });
 });

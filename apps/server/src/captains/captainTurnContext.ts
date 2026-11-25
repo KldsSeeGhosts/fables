@@ -115,6 +115,25 @@ export const formatCaptainCrewRules = (captain: Captain, crew: string) =>
     .filter((part) => part !== "")
     .join("\n\n");
 
+/** Share of the context limit at which a Captain is told to save its state and offer a reset. */
+const CAPTAIN_CONTEXT_PRESSURE_RATIO = 0.75;
+
+// A long-lived coordinator does better with a reset plus NOTES.md than with repeated compaction.
+export const formatCaptainContextPressure = (usage: {
+  readonly usedTokens: number | null;
+  readonly maxTokens: number | null;
+  readonly autoCompactThreshold: number | null;
+}) => {
+  const limit = usage.autoCompactThreshold ?? usage.maxTokens;
+  if (usage.usedTokens === null || limit === null || limit <= 0) return "";
+  const ratio = usage.usedTokens / limit;
+  if (ratio < CAPTAIN_CONTEXT_PRESSURE_RATIO) return "";
+  const percent = Math.min(100, Math.round(ratio * 100));
+  const measure =
+    usage.autoCompactThreshold === null ? "full" : "of the way to automatic compaction";
+  return `Context check: this conversation is ${percent}% ${measure}. Keep NOTES.md current now (plan, open loops, next step) with \`captain_document_write\`. Once the current work wraps up, suggest that the user start a new conversation with you; NOTES.md, memories and running tasks carry over.`;
+};
+
 const unchangedBriefing = (captain: Captain) =>
   `Captain ${captain.name}: your profile, instructions, scope, essential memories, AGENTS.md, NOTES.md and how you work are unchanged since they were last given in this conversation. Use captain_read, captain_document_read and captain_memory_search if you need them again.`;
 
@@ -224,6 +243,22 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
           ORDER BY completed_at DESC, subagent_id DESC LIMIT 6
         `
           : [];
+      const [usage] = Option.isSome(sql)
+        ? yield* sql.value<{
+            readonly usedTokens: number | null;
+            readonly maxTokens: number | null;
+            readonly autoCompactThreshold: number | null;
+          }>`
+          SELECT json_extract(payload_json, '$.tokenUsage.usedTokens') AS usedTokens,
+            json_extract(payload_json, '$.tokenUsage.maxTokens') AS maxTokens,
+            json_extract(payload_json, '$.tokenUsage.autoCompactThreshold') AS autoCompactThreshold
+          FROM orchestration_v2_projection_provider_turns
+          WHERE thread_id = ${threadId} AND json_extract(payload_json, '$.tokenUsage') IS NOT NULL
+          ORDER BY julianday(json_extract(payload_json, '$.tokenUsage.updatedAt')) DESC,
+            ordinal DESC
+          LIMIT 1
+        `
+        : [];
       const briefing = formatCaptainBriefing({
         captain,
         projects: scopedProjects,
@@ -236,6 +271,7 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
         text: [
           plan?.full === false ? unchangedBriefing(captain) : briefing,
           formatCaptainReports(reports, threadId),
+          usage === undefined ? "" : formatCaptainContextPressure(usage),
         ]
           .filter((part) => part !== "")
           .join("\n\n"),
