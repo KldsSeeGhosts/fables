@@ -24,9 +24,11 @@ import {
   captainThreadActivity,
 } from "@t3tools/client-runtime/state/captains";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
+import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import {
   resolveEnvironmentMachineKind,
   type Captain,
+  type ContextMenuSource,
   type EnvironmentId,
   type EnvironmentMachineKind,
   type ScopedThreadRef,
@@ -35,10 +37,12 @@ import { AsyncResult } from "effect/reactivity";
 import * as Schema from "effect/Schema";
 import { T, useGT, Var } from "gt-react";
 import { ClockIcon, EllipsisIcon, FoldersIcon, ListTodoIcon, PlusIcon } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 
+import { contextMenuSourceOf, openContextMenuFromKeyboard } from "../../contextMenuSource";
 import { useDuetShell } from "../../hooks/useDuetShell";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
+import { readLocalApi } from "../../localApi";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { cn } from "../../lib/utils";
 import { useProjects, useThreadShells } from "../../state/entities";
@@ -121,7 +125,7 @@ type CaptainActivity = {
 };
 
 /**
- * A Duet channel is a 48px two-line row: creature and name first, then its live work or scope.
+ * A Duet channel is a 48px two-line row: creature and name first, then its scope.
  */
 function DuetChannelRow({
   captain,
@@ -134,7 +138,7 @@ function DuetChannelRow({
   status,
   selected,
   activity,
-  menu,
+  onMenu,
   onOpen,
   children,
 }: {
@@ -148,7 +152,7 @@ function DuetChannelRow({
   status: string;
   selected: boolean;
   activity: CaptainActivity;
-  menu: ReactNode;
+  onMenu: (position: { x: number; y: number }, source: ContextMenuSource) => void;
   onOpen: () => void;
   children: ReactNode;
 }) {
@@ -163,6 +167,10 @@ function DuetChannelRow({
     id: rowKey,
     disabled: archived,
   });
+  const handleContextMenu = (event: ReactMouseEvent) => {
+    event.preventDefault();
+    onMenu({ x: event.clientX, y: event.clientY }, contextMenuSourceOf(event));
+  };
 
   const scoped = projects.filter(
     (project) =>
@@ -243,6 +251,8 @@ function DuetChannelRow({
               aria-current={selected ? "page" : undefined}
               aria-label={accessibleLabel}
               onClick={onOpen}
+              onContextMenu={handleContextMenu}
+              onKeyDown={openContextMenuFromKeyboard}
             />
           }
         >
@@ -261,11 +271,7 @@ function DuetChannelRow({
               >
                 {name}
               </span>
-              {trailing ? (
-                <span className="flex shrink-0 transition-opacity duration-120 group-focus-within/captain-row:opacity-0 group-hover/captain-row:opacity-0">
-                  {trailing}
-                </span>
-              ) : null}
+              {trailing ? <span className="flex shrink-0">{trailing}</span> : null}
             </span>
             <span className="flex h-4 min-w-0 items-center gap-1.5 text-meta leading-4 text-muted-foreground">
               {archived ? (
@@ -364,9 +370,6 @@ function DuetChannelRow({
           </ThreadHoverCard>
         </ThreadHoverCardPopup>
       </Tooltip>
-      <div className="absolute end-1.5 top-[15px] shrink-0 -translate-y-1/2 opacity-0 transition-opacity duration-120 group-focus-within/captain-row:opacity-100 group-hover/captain-row:opacity-100">
-        {menu}
-      </div>
       {children}
     </li>
   );
@@ -413,6 +416,65 @@ function CaptainShelfRow({
     onDelete: () => {},
   });
   const { current, archived, pending, canUpdate } = profile;
+  const openDuetMenu = (position: { x: number; y: number }, source: ContextMenuSource) => {
+    const api = readLocalApi();
+    if (!api) return;
+    void (async () => {
+      const clicked = await settlePromise(() =>
+        api.contextMenu.show(
+          [
+            { id: "open-tasks", label: gt("Open Tasks") },
+            { id: "memory", label: gt("Memory") },
+            {
+              id: "customize",
+              label: gt("Customize Duet"),
+              disabled: !canUpdate,
+              separatorBefore: true,
+            },
+            { id: "move-up", label: gt("Move up"), disabled: !canMoveUp },
+            { id: "move-down", label: gt("Move down"), disabled: !canMoveDown },
+            {
+              id: "archive",
+              label: archived ? gt("Restore") : gt("Archive"),
+              disabled: pending || !profile.canArchive,
+            },
+            {
+              id: "delete",
+              label: gt("Delete"),
+              destructive: true,
+              disabled: pending || !profile.canDelete,
+              separatorBefore: true,
+            },
+          ],
+          position,
+          source,
+        ),
+      );
+      if (clicked._tag === "Failure" || clicked.value === null) return;
+      switch (clicked.value) {
+        case "open-tasks":
+          openView("today");
+          return;
+        case "memory":
+          profile.edit("memory");
+          return;
+        case "customize":
+          profile.edit();
+          return;
+        case "move-up":
+          onMove?.("up");
+          return;
+        case "move-down":
+          onMove?.("down");
+          return;
+        case "archive":
+          void profile.changeArchive();
+          return;
+        case "delete":
+          profile.requestDelete();
+      }
+    })();
+  };
   const status = archived
     ? gt("Archived")
     : attention > 0
@@ -497,7 +559,7 @@ function CaptainShelfRow({
         status={status}
         selected={selected}
         activity={activity}
-        menu={menu}
+        onMenu={openDuetMenu}
         onOpen={() => onOpen(threadRef)}
       >
         <CaptainProfileDialogs profile={profile} />
