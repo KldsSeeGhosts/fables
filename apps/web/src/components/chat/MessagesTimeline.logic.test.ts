@@ -3459,13 +3459,12 @@ describe("v2 run and attempt history", () => {
       message("steer", "user", 4, "steer"),
       message("answer", "assistant", 7),
     ];
-    expect(rows([user, steer, answer, final], "zen")).toEqual(["user", "steer", "answer", "final"]);
+    expect(rows([user, steer, answer, final], "zen")).toEqual(["user", "steer", "final"]);
     expect(rows([user, steer, step, passed, final], "zen")).toEqual(["user", "steer", "final"]);
     expect(rows([user, steer, answer, step], "zen", running)).toEqual([
       "user",
       "working-indicator-row",
       "steer",
-      "answer",
       "live-activity-row",
     ]);
     expect(rows([user, step, passed], "zen", running)).toEqual([

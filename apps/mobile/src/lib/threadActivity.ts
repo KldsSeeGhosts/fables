@@ -154,6 +154,7 @@ export interface ThreadFeedMessage {
   readonly sourceThreadId: ThreadId;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly attemptSuperseded?: boolean;
   readonly projectedItem?: OrchestrationV2ProjectedTurnItem;
 }
 
@@ -357,6 +358,7 @@ const projectedEntriesCache = new WeakMap<
   OrchestrationV2ProjectedTurnItem,
   {
     readonly attemptId: RunAttemptId | null;
+    readonly attemptSuperseded: boolean;
     readonly locale: string | undefined;
     readonly entries: ReadonlyArray<RawThreadFeedEntry>;
   }
@@ -1630,56 +1632,49 @@ function startsResponse(entry: ThreadFeedEntry): boolean {
   );
 }
 
+function startsZenSegment(entry: ThreadFeedEntry): boolean {
+  return startsResponse(entry) || (entry.type === "message" && isSteerMessage(entry.message));
+}
+
+function zenReplyPhase(message: ThreadFeedMessage): boolean {
+  const item = message.projectedItem?.item;
+  return (
+    item?.type !== "assistant_message" || item.phase === undefined || item.phase === "final_answer"
+  );
+}
+
 function zenAnswerMessageIds(
   feed: ReadonlyArray<ThreadFeedEntry>,
   start: number,
   answering: boolean,
   answeringRunId: RunId | null,
 ): ReadonlySet<MessageId> {
-  const replies: Array<{ readonly message: ThreadFeedMessage; readonly index: number }> = [];
-  const lastReplyByResponse = new Map<string, MessageId>();
-  const keptAnswers = new Set(finalAnswerIds(feed));
-  let userMessages = 0;
-  let awaitingReply = false;
-  let candidate: MessageId | null = null;
-  let answeringFrom = answering ? start : feed.length;
+  const answerIds = new Set(finalAnswerIds(feed));
+  let candidate: { readonly id: MessageId; readonly runId: RunId | null } | null = null;
+  const closeSegment = () => {
+    if (candidate !== null) answerIds.add(candidate.id);
+    candidate = null;
+  };
   for (let index = start; index < feed.length; index += 1) {
     const entry = feed[index]!;
-    if (
-      entry.type === "activity-group" &&
-      entry.activities.every((activity) => activity.workEntry.itemType === "reasoning")
-    ) {
+    if (startsZenSegment(entry)) {
+      closeSegment();
       continue;
     }
-    const reply =
-      entry.type === "message" && entry.message.role === "assistant" ? entry.message : null;
-    if (candidate !== null && reply !== null) keptAnswers.add(candidate);
-    candidate = null;
-    if (answering && startsResponse(entry)) answeringFrom = index + 1;
-    if (entry.type === "message" && entry.message.role === "user") {
-      userMessages += 1;
-      awaitingReply = isSteerMessage(entry.message);
-    } else if (reply !== null) {
-      replies.push({ message: reply, index });
-      lastReplyByResponse.set(reply.runId ?? `runless:${userMessages}`, reply.id);
-      if (awaitingReply) {
-        candidate = reply.id;
-        awaitingReply = false;
-      }
-    }
+    if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+    if (entry.message.attemptSuperseded === true || !zenReplyPhase(entry.message)) continue;
+    candidate = { id: entry.message.id, runId: entry.message.runId };
   }
-  const terminal = new Set(lastReplyByResponse.values());
-  return new Set(
-    replies
-      .filter(
-        ({ message, index }) =>
-          keptAnswers.has(message.id) ||
-          (terminal.has(message.id) &&
-            index < answeringFrom &&
-            (answeringRunId === null || message.runId !== answeringRunId)),
-      )
-      .map(({ message }) => message.id),
-  );
+  if (
+    candidate !== null &&
+    !(
+      answering &&
+      (answeringRunId === null || candidate.runId === null || candidate.runId === answeringRunId)
+    )
+  ) {
+    answerIds.add(candidate.id);
+  }
+  return answerIds;
 }
 
 function liveAnswerPreview(feed: ReadonlyArray<ThreadFeedEntry>): string | null {
@@ -2509,6 +2504,7 @@ export function buildThreadFeed(
   const anchoredMessages = options?.anchoredMessages ?? [];
   const resolve = options?.resolve ?? m;
   const locale = options?.locale;
+  const attemptById = new Map((options?.attempts ?? []).map((attempt) => [attempt.id, attempt]));
   const attemptByRootNodeId = new Map(
     (options?.attempts ?? []).map((attempt) => [attempt.rootNodeId, attempt] as const),
   );
@@ -2607,8 +2603,14 @@ export function buildThreadFeed(
       continue;
     }
     const attemptId = resolveAttemptId(item);
+    const attemptSuperseded =
+      attemptId !== null && attemptById.get(attemptId)?.status === "superseded";
     const cached = projectedEntriesCache.get(row);
-    if (cached?.attemptId === attemptId && cached.locale === locale) {
+    if (
+      cached?.attemptId === attemptId &&
+      cached.attemptSuperseded === attemptSuperseded &&
+      cached.locale === locale
+    ) {
       for (const entry of cached.entries) {
         entries.push(entry);
         entryRows.push(index);
@@ -2628,7 +2630,7 @@ export function buildThreadFeed(
         runId: item.runId,
         render,
       };
-      projectedEntriesCache.set(row, { attemptId, locale, entries: [entry] });
+      projectedEntriesCache.set(row, { attemptId, attemptSuperseded, locale, entries: [entry] });
       entries.push(entry);
       entryRows.push(index);
       continue;
@@ -2645,7 +2647,7 @@ export function buildThreadFeed(
         runId: item.runId,
         text: sentMessage,
       };
-      projectedEntriesCache.set(row, { attemptId, locale, entries: [entry] });
+      projectedEntriesCache.set(row, { attemptId, attemptSuperseded, locale, entries: [entry] });
       entries.push(entry);
       entryRows.push(index);
       continue;
@@ -2679,10 +2681,11 @@ export function buildThreadFeed(
           sourceThreadId: row.sourceThreadId,
           createdAt,
           updatedAt,
+          ...(attemptSuperseded ? { attemptSuperseded } : {}),
           projectedItem: row,
         },
       };
-      projectedEntriesCache.set(row, { attemptId, locale, entries: [entry] });
+      projectedEntriesCache.set(row, { attemptId, attemptSuperseded, locale, entries: [entry] });
       entries.push(entry);
       entryRows.push(index);
       continue;
@@ -2705,7 +2708,7 @@ export function buildThreadFeed(
         app,
       });
     }
-    projectedEntriesCache.set(row, { attemptId, locale, entries: rowEntries });
+    projectedEntriesCache.set(row, { attemptId, attemptSuperseded, locale, entries: rowEntries });
     for (const entry of rowEntries) {
       entries.push(entry);
       entryRows.push(index);

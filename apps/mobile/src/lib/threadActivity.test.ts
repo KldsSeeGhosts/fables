@@ -1420,7 +1420,7 @@ describe("buildThreadFeed", () => {
     expect(rows(turn, "hideAll")).toEqual(["user", "fold", "step", "final"]);
     expect(rows(turn, "zen")).toEqual(["user", "final"]);
     const [steer, answer] = [say("steer", 2, true, true), say("answer", 3)];
-    expect(rows([user, steer, answer, final], "zen")).toEqual(["user", "steer", "answer", "final"]);
+    expect(rows([user, steer, answer, final], "zen")).toEqual(["user", "steer", "final"]);
     const commentary = { ...step, phase: "commentary" as const };
     expect(rows([user, commentary, steer, final], "zen")).toEqual(["user", "steer", "final"]);
     for (const phase of ["commentary", "partial_answer", "final_answer", undefined] as const) {
@@ -1434,7 +1434,7 @@ describe("buildThreadFeed", () => {
         ),
       ).toBe(phase === "final_answer");
       expect(rows([user, partial, steer, final], "zen").includes("answer")).toBe(
-        phase === "final_answer",
+        phase === "final_answer" || phase === undefined,
       );
     }
     const confirmed = { ...answer, phase: "final_answer" as const };
@@ -1451,7 +1451,6 @@ describe("buildThreadFeed", () => {
     expect(rows([user, steer, answer, step], "zen", running)).toEqual([
       "user",
       "steer",
-      "answer",
       "thinking:step",
     ]);
     expect(rows([user, step, passed], "zen", running)).toEqual(["user", "thinking:step"]);
