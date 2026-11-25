@@ -1,4 +1,4 @@
-import { assert, it } from "@effect/vitest";
+import { assert, it, vi } from "@effect/vitest";
 import {
   CaptainId,
   CaptainError,
@@ -339,6 +339,52 @@ it.effect("resets with a stale waiting run that has no active run", () =>
         expectedThreadId: captain.primaryThreadId,
       });
       assert.notEqual(next.primaryThreadId, captain.primaryThreadId);
+    }).pipe(Effect.provide(f.layer));
+  }),
+);
+
+it.effect("checks and commits reset under the primary thread command lock", () =>
+  Effect.gen(function* () {
+    const f = fixture();
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainService.CaptainService;
+      const store = yield* CaptainStore.CaptainStore;
+      const executor = yield* ThreadCommandExecutor.ThreadCommandExecutor;
+      const captain = yield* service.create(input);
+      const events: string[] = [];
+      const withLock = executor.withLock;
+      const observeLock: ThreadCommandExecutor.ThreadCommandExecutor["Service"]["withLock"] = (
+        key,
+        effect,
+      ) =>
+        key === captain.primaryThreadId
+          ? withLock(
+              key,
+              Effect.gen(function* () {
+                events.push("lock");
+                const result = yield* effect;
+                events.push("unlock");
+                return result;
+              }),
+            )
+          : withLock(key, effect);
+      vi.spyOn(executor, "withLock").mockImplementation(observeLock);
+      const save = store.save;
+      vi.spyOn(store, "save").mockImplementation((next) =>
+        Effect.gen(function* () {
+          if (next.id === captain.id && next.primaryThreadId !== captain.primaryThreadId) {
+            events.push("commit");
+          }
+          return yield* save(next);
+        }),
+      );
+
+      yield* service.resetConversation({
+        captainId: captain.id,
+        expectedThreadId: captain.primaryThreadId,
+      });
+
+      assert.deepEqual(events, ["lock", "commit", "unlock"]);
     }).pipe(Effect.provide(f.layer));
   }),
 );
