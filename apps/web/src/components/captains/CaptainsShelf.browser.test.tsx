@@ -198,11 +198,27 @@ it("shows an idle channel's scope and compact activity time, with its details on
   await expect.element(page.getByText("Ready", { exact: true })).toBeVisible();
 });
 
-it("shows a working status with one live task's title", async () => {
-  await using screen = await renderList({ working: true, children: [child] });
+it("shows a working status on the first line and the project with one live task on the second", async () => {
+  const project = {
+    id: ProjectId.make("project"),
+    environmentId,
+    title: "KSG Code",
+    workspaceRoot: "/repo/ksgcode",
+    faviconPath: null,
+    projectIcon: null,
+  } as ReturnType<typeof useProjects>[number];
+  const scopedCaptain = { ...captain, scopedProjectIds: [project.id] };
+  await using screen = await renderList(
+    { captain: scopedCaptain, working: true, children: [child] },
+    { projects: [project] },
+  );
   const row = screen.getByRole("button", { name: "Maria, Working, 1 running, Fix the login flow" });
   await expect.element(row).toBeVisible();
-  expect(row.element().textContent).toBe("MariaWorkingFix the login flow");
+  const lines = row.element().querySelector(":scope > span.grid")?.children;
+  expect(lines?.[0]?.textContent).toContain("Working");
+  expect(lines?.[1]?.textContent).toContain("Fix the login flow");
+  expect(lines?.[1]?.textContent).not.toContain("Working");
+  expect(lines?.[1]?.querySelector('[data-slot="project-monogram"]')).not.toBeNull();
   const avatar = row.element().querySelector("[data-captain-avatar]")!;
   expect(avatar.getAttribute("data-captain-state")).toBe("working");
   const motion = (selector: string) =>
@@ -217,12 +233,12 @@ it("shows a working status with one live task's title", async () => {
   await expect.element(page.getByText("Fix the login flow", { exact: true })).toBeVisible();
 });
 
-it("gives needs input precedence over working with an amber status and count", async () => {
+it("gives needs input precedence over working with an amber count", async () => {
   const waiting = { ...child, hasPendingUserInput: true };
   await using screen = await renderList({ attention: 1, working: true, children: [waiting] });
   const row = screen.getByRole("button", { name: "Maria, Needs input, Fix the login flow" });
   await expect.element(row).toBeVisible();
-  expect(row.element().textContent).toBe("Maria1Needs inputFix the login flow");
+  expect(row.element().textContent).toBe("Maria1Fix the login flow");
   expect(screen.container.querySelector('[data-captain-state="waiting"]')).not.toBeNull();
   expect(
     row.element().querySelector('[data-duet-live="needs-input"]')?.getAttribute("aria-label"),
@@ -252,13 +268,21 @@ it("shows the scoped project's favicon and name when quiet", async () => {
   expect(row.element().textContent).toContain("KSG Code");
 });
 
-it("adds the environment label when Duets span machines", async () => {
-  await using screen = await renderList({ label: "Mac Studio" });
+it("shows the machine as an icon tooltip when Duets span machines", async () => {
+  await using screen = await renderList({ label: "Mac Studio", machineKind: "mac-studio" });
   const row = screen.getByRole("button", {
     name: "Maria, Ready, Mac Studio, All workspace, Coordinator",
   });
   await expect.element(row).toBeVisible();
-  expect(row.element().textContent).toBe("Maria10mAll workspaceMac Studio");
+  expect(row.element().textContent).toBe("Maria10mAll workspace");
+  const machine = screen.getByRole("img", { name: "Mac Studio" });
+  await expect.element(machine).toBeVisible();
+  await userEvent.hover(machine);
+  await vi.waitFor(() => {
+    expect(
+      document.querySelector('[data-slot="tooltip-popup"][data-variant="default"]')?.textContent,
+    ).toBe("Mac Studio");
+  });
 });
 
 it("recedes an archived channel without live status", async () => {
