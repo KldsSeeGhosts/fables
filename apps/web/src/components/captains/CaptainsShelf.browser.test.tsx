@@ -133,6 +133,37 @@ function rowOrder(container: HTMLElement) {
   );
 }
 
+const pointerEvent = (type: string, x: number, y: number) =>
+  new PointerEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    pointerId: 1,
+    isPrimary: true,
+    button: 0,
+    buttons: type === "pointerup" ? 0 : 1,
+    clientX: x,
+    clientY: y,
+  });
+
+async function pointerDrag(start: HTMLElement, distance?: number) {
+  const bounds = start.getBoundingClientRect();
+  const rowHeight = start.closest("[data-duet-channel-card]")?.getBoundingClientRect().height;
+  const dragDistance = distance ?? rowHeight ?? bounds.height;
+  const x = bounds.x + 24;
+  const y = bounds.y + 24;
+  await act(() => {
+    start.dispatchEvent(pointerEvent("pointerdown", x, y));
+  });
+  for (const offset of [dragDistance, dragDistance + 2]) {
+    await act(() => {
+      document.dispatchEvent(pointerEvent("pointermove", x, y + offset));
+    });
+  }
+  await act(() => {
+    document.dispatchEvent(pointerEvent("pointerup", x, y + dragDistance + 2));
+  });
+}
+
 it("lists Duets as prominent two-line rows under one Duets section, without tree chrome", async () => {
   await using screen = await renderList({});
   const header = screen.container.querySelector('[data-sidebar-row="shelf:captains"]');
@@ -272,32 +303,8 @@ it("drags Duets into a device order that later renders use", async () => {
   ];
   await using screen = await renderList({}, { rows });
   expect(rowOrder(screen.container).map((text) => text.startsWith("Ada"))).toEqual([true, false]);
-  const first = screen.getByRole("button", { name: /Ada,/ }).element();
-  const bounds = first.getBoundingClientRect();
-  const pointer = (type: string, x: number, y: number) =>
-    new PointerEvent(type, {
-      bubbles: true,
-      cancelable: true,
-      pointerId: 1,
-      isPrimary: true,
-      button: 0,
-      buttons: type === "pointerup" ? 0 : 1,
-      clientX: x,
-      clientY: y,
-    });
-
-  await act(() => {
-    first.dispatchEvent(pointer("pointerdown", bounds.x + 24, bounds.y + 24));
-  });
-  await act(() => {
-    document.dispatchEvent(pointer("pointermove", bounds.x + 24, bounds.y + bounds.height + 24));
-  });
-  await act(() => {
-    document.dispatchEvent(pointer("pointermove", bounds.x + 24, bounds.y + bounds.height + 26));
-  });
-  await act(() => {
-    document.dispatchEvent(pointer("pointerup", bounds.x + 24, bounds.y + bounds.height + 26));
-  });
+  const first = screen.getByRole("button", { name: /Ada,/ }).element() as HTMLElement;
+  await pointerDrag(first);
 
   await vi.waitFor(() => {
     expect(window.localStorage.getItem(duetOrderStorageKey)).toBe(
@@ -310,4 +317,69 @@ it("drags Duets into a device order that later renders use", async () => {
       false,
     ]);
   });
+});
+
+it("does not start a drag when the pointer starts on a row action", async () => {
+  const ada = captainNamed("ada", "Ada");
+  const rows = [
+    { environmentId, captain: ada, attention: 0, working: false },
+    { environmentId, captain, attention: 0, working: false },
+  ];
+  await using screen = await renderList({}, { rows });
+  const action = screen.getByRole("button", { name: "Actions for Ada" }).element() as HTMLElement;
+
+  const rowHeight = action.closest("[data-duet-channel-card]")!.getBoundingClientRect().height;
+  await pointerDrag(action, rowHeight);
+
+  expect(window.localStorage.getItem(duetOrderStorageKey)).toBeNull();
+  expect(rowOrder(screen.container).map((text) => text.startsWith("Ada"))).toEqual([true, false]);
+});
+
+it("moves Duets from the row menu and persists the order", async () => {
+  const ada = captainNamed("ada", "Ada");
+  const archived = {
+    ...captainNamed("renata", "Renata"),
+    archivedAt: DateTime.formatIso(now),
+  };
+  const rows = [
+    { environmentId, captain: ada, attention: 0, working: false },
+    { environmentId, captain, attention: 0, working: false },
+    { environmentId, captain: archived, attention: 0, working: false },
+  ];
+  await using screen = await renderList({}, { rows });
+  const openActions = async (name: string) => {
+    await userEvent.click(screen.getByRole("button", { name: `Actions for ${name}` }));
+  };
+  const moveUp = () => page.getByRole("menuitem", { name: "Move up", exact: true });
+  const moveDown = () => page.getByRole("menuitem", { name: "Move down", exact: true });
+
+  await openActions("Ada");
+  await expect.element(moveUp()).toHaveAttribute("aria-disabled", "true");
+  await expect.element(moveDown()).not.toHaveAttribute("aria-disabled", "true");
+  await userEvent.click(moveDown());
+
+  const expectedOrder = [
+    `${environmentId}:maria`,
+    `${environmentId}:ada`,
+    `${environmentId}:renata`,
+  ];
+  await vi.waitFor(() => {
+    expect(window.localStorage.getItem(duetOrderStorageKey)).toBe(JSON.stringify(expectedOrder));
+  });
+  await vi.waitFor(() => {
+    expect(rowOrder(screen.container).map((text) => text.startsWith("Maria"))).toEqual([
+      true,
+      false,
+      false,
+    ]);
+  });
+
+  await openActions("Ada");
+  await expect.element(moveUp()).not.toHaveAttribute("aria-disabled", "true");
+  await expect.element(moveDown()).toHaveAttribute("aria-disabled", "true");
+  await userEvent.keyboard("{Escape}");
+
+  await openActions("Renata");
+  await expect.element(moveUp()).toHaveAttribute("aria-disabled", "true");
+  await expect.element(moveDown()).toHaveAttribute("aria-disabled", "true");
 });

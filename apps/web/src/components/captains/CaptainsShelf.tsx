@@ -56,7 +56,7 @@ import { captainBriefTabAtom, openCaptainTasks, type CaptainDrawerTab } from "./
 import { CaptainProfileDialogs, useCaptainProfile } from "./CaptainBriefPanel";
 import { CaptainEditorDialog } from "./CaptainEditorDialog";
 import { useCaptainDestinations, useCaptainEnvironments } from "./captainsDirectory";
-import { orderDuets } from "./duetOrder.logic";
+import { moveDuet, orderDuets, type DuetMoveDirection } from "./duetOrder.logic";
 
 /** Thread keys of Captain conversations, which the shelf lists instead of their project. */
 export function useCaptainConversationKeys(): ReadonlySet<string> {
@@ -227,13 +227,13 @@ function DuetChannelRow({
         isDragging && "z-20 rounded-lg bg-sidebar shadow-lg",
       )}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      {...listeners}
     >
       <Tooltip>
         <TooltipTrigger
           render={
             <ContentButton
               variant="duet-channel"
+              {...listeners}
               aria-current={selected ? "page" : undefined}
               aria-label={accessibleLabel}
               onClick={onOpen}
@@ -387,6 +387,9 @@ function CaptainShelfRow({
   working,
   activity,
   selected,
+  canMoveUp = false,
+  canMoveDown = false,
+  onMove,
   onOpen,
 }: {
   captain: Captain;
@@ -396,6 +399,9 @@ function CaptainShelfRow({
   working: boolean;
   activity: CaptainActivity;
   selected: boolean;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onMove?: ((direction: DuetMoveDirection) => void) | undefined;
   onOpen: (threadRef: ScopedThreadRef) => void;
 }) {
   const gt = useGT();
@@ -445,6 +451,16 @@ function CaptainShelfRow({
         <MenuItem disabled={!canUpdate} onClick={() => profile.edit()}>
           <T>Edit Captain</T>
         </MenuItem>
+        {isDuet && onMove ? (
+          <>
+            <MenuItem disabled={!canMoveUp} onClick={() => onMove("up")}>
+              <T>Move up</T>
+            </MenuItem>
+            <MenuItem disabled={!canMoveDown} onClick={() => onMove("down")}>
+              <T>Move down</T>
+            </MenuItem>
+          </>
+        ) : null}
         <MenuItem
           disabled={pending || !profile.canArchive}
           onClick={() => void profile.changeArchive()}
@@ -575,17 +591,21 @@ export function CaptainShelfList({
     DUET_ORDER_SCHEMA,
   );
   const sensors = useSensors(useSensor(PointerSensor, DUET_POINTER_ACTIVATION));
-  const orderedRows = isDuet
-    ? orderDuets(
-        rows.map((row) => ({
-          key: duetRowKey(row.environmentId, row.captain),
-          archived: row.captain.archivedAt !== null,
-          row,
-        })),
-        savedDuetOrder,
-      ).map(({ row }) => row)
-    : rows;
+  const rowEntries = rows.map((row) => ({
+    key: duetRowKey(row.environmentId, row.captain),
+    archived: row.captain.archivedAt !== null,
+    row,
+  }));
+  const orderedRowEntries = isDuet ? orderDuets(rowEntries, savedDuetOrder) : rowEntries;
+  const orderedRows = orderedRowEntries.map(({ row }) => row);
   const orderedKeys = orderedRows.map((row) => duetRowKey(row.environmentId, row.captain));
+  const activeRowEntries = orderedRowEntries.filter((entry) => !entry.archived);
+  const activeCount = activeRowEntries.length;
+  const activeIndexByKey = new Map(activeRowEntries.map((entry, index) => [entry.key, index]));
+  const handleMoveDuet = (key: string, direction: DuetMoveDirection) => {
+    const nextOrder = moveDuet(rowEntries, savedDuetOrder, key, direction);
+    if (nextOrder !== null) setSavedDuetOrder(nextOrder);
+  };
   const duetName = (id: UniqueIdentifier | undefined) =>
     orderedRows.find((row) => duetRowKey(row.environmentId, row.captain) === id)?.captain.name ??
     "";
@@ -624,22 +644,29 @@ export function CaptainShelfList({
   const rowsList =
     orderedRows.length > 0 ? (
       <ul className="space-y-px">
-        {orderedRows.map(({ captain, environmentId, label, attention, working, ...activity }) => (
-          <CaptainShelfRow
-            key={duetRowKey(environmentId, captain)}
-            captain={captain}
-            environmentId={environmentId}
-            {...(label !== undefined ? { label } : {})}
-            attention={attention}
-            working={working}
-            activity={activity}
-            selected={
-              activeThread?.environmentId === environmentId &&
-              activeThread.threadId === captain.primaryThreadId
-            }
-            onOpen={onOpen}
-          />
-        ))}
+        {orderedRows.map(({ captain, environmentId, label, attention, working, ...activity }) => {
+          const key = duetRowKey(environmentId, captain);
+          const activeIndex = activeIndexByKey.get(key);
+          return (
+            <CaptainShelfRow
+              key={key}
+              captain={captain}
+              environmentId={environmentId}
+              {...(label !== undefined ? { label } : {})}
+              attention={attention}
+              working={working}
+              activity={activity}
+              selected={
+                activeThread?.environmentId === environmentId &&
+                activeThread.threadId === captain.primaryThreadId
+              }
+              canMoveUp={activeIndex !== undefined && activeIndex > 0}
+              canMoveDown={activeIndex !== undefined && activeIndex < activeCount - 1}
+              onMove={(direction) => handleMoveDuet(key, direction)}
+              onOpen={onOpen}
+            />
+          );
+        })}
       </ul>
     ) : null;
 
