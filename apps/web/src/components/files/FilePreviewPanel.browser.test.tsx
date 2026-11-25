@@ -1,6 +1,6 @@
 import { DEFAULT_THEMES, preloadHighlighter } from "@pierre/diffs";
 import { EnvironmentId, ThreadId, type ProjectReadFileResult } from "@t3tools/contracts";
-import { AsyncResult } from "effect/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { StrictMode, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { cdp, page, userEvent } from "vite-plus/test/browser";
@@ -22,6 +22,7 @@ const state = vi.hoisted(() => ({
   mintUrl: vi.fn<() => Promise<string | null>>(),
   browserAssetMints: 0,
   openedBrowserUrls: [] as string[],
+  serverConfig: null as unknown,
 }));
 
 vi.mock(import("@t3tools/client-runtime/state/runtime"), async (original) => ({
@@ -44,11 +45,12 @@ vi.mock(import("~/state/use-atom-command"), async (original) => ({
 }));
 vi.mock(import("~/state/server"), async (original) => {
   const actual = await original();
-  const { Atom } = await import("effect/reactivity");
-  const noConfig = Atom.make(null);
   return {
     ...actual,
-    serverEnvironment: { ...actual.serverEnvironment, configValueAtom: (() => noConfig) as never },
+    serverEnvironment: {
+      ...actual.serverEnvironment,
+      configValueAtom: (() => state.serverConfig) as never,
+    },
   };
 });
 vi.mock(import("~/remoteOpen"), async (original) => ({
@@ -180,6 +182,7 @@ function setup() {
   localStorage.setItem(keys[1]!, "true");
   state.file = null;
   state.optimistic = null;
+  state.serverConfig = Atom.make(null);
   state.assetUrl = { _tag: "Loading" };
   state.assetResources = [];
   state.openedBrowserUrls = [];
@@ -711,6 +714,93 @@ describe("workspace document previews", () => {
     await screen.rerender(documentPreview("mutation-2", "revision-2"));
 
     await expect.element(preview).toHaveTextContent("/assets/report.docx?mint=2");
+  });
+});
+
+describe("open file in browser", () => {
+  it("opens an HTML file through the local file-manager path", async () => {
+    using _settings = setup();
+    state.file = {
+      relativePath: "page.html",
+      contents: "<h1>page</h1>",
+      byteLength: 13,
+      truncated: false,
+    };
+    state.serverConfig = Atom.make({
+      environment: { platform: { os: "darwin" }, capabilities: {} },
+      availableEditors: ["file-manager"],
+      settings: { providerInstances: {} },
+      providers: [],
+    });
+    await using screen = await render(filePreview("page.html"));
+
+    await userEvent.click(screen.getByRole("button", { name: "More file actions" }));
+    await userEvent.click(page.getByRole("menuitem", { name: "Open in browser", exact: true }));
+
+    await vi.waitFor(() =>
+      expect(state.writeFile).toHaveBeenCalledWith({
+        environmentId,
+        input: { cwd: "/workspace/page.html", editor: "file-manager" },
+      }),
+    );
+  });
+});
+
+describe("rendered file full screen", () => {
+  it("shows the action for a rendered HTML preview and requests fullscreen", async () => {
+    using _settings = setup();
+    state.file = {
+      relativePath: "page.html",
+      contents: "<h1>page</h1>",
+      byteLength: 13,
+      truncated: false,
+    };
+    state.assetUrl = {
+      _tag: "Success",
+      url: "/assets/page.html",
+      expiresAt: Number.MAX_SAFE_INTEGER,
+    };
+    await using screen = await render(<div style={{ width: 900 }}>{filePreview("page.html")}</div>);
+    const requestFullscreen = vi
+      .spyOn(HTMLElement.prototype, "requestFullscreen")
+      .mockResolvedValue(undefined);
+
+    try {
+      await userEvent.click(screen.getByRole("button", { name: "Full screen" }));
+      expect(requestFullscreen).toHaveBeenCalledOnce();
+    } finally {
+      requestFullscreen.mockRestore();
+    }
+  });
+
+  it("folds the action into More file actions on a narrow surface", async () => {
+    using _settings = setup();
+    state.file = {
+      relativePath: "page.html",
+      contents: "<h1>page</h1>",
+      byteLength: 13,
+      truncated: false,
+    };
+    state.assetUrl = {
+      _tag: "Success",
+      url: "/assets/page.html",
+      expiresAt: Number.MAX_SAFE_INTEGER,
+    };
+    await using screen = await render(<div style={{ width: 500 }}>{filePreview("page.html")}</div>);
+    const requestFullscreen = vi
+      .spyOn(HTMLElement.prototype, "requestFullscreen")
+      .mockResolvedValue(undefined);
+
+    try {
+      await vi.waitFor(() =>
+        expect(screen.container.querySelector('[aria-label="Full screen"]')).toBeNull(),
+      );
+      await userEvent.click(screen.getByRole("button", { name: "More file actions" }));
+      await userEvent.click(page.getByRole("menuitem", { name: "Full screen", exact: true }));
+      expect(requestFullscreen).toHaveBeenCalledOnce();
+    } finally {
+      requestFullscreen.mockRestore();
+    }
   });
 });
 

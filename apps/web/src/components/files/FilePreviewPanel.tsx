@@ -55,6 +55,7 @@ import {
   FolderTree,
   Globe2,
   MessageSquarePlusIcon,
+  Maximize2Icon,
 } from "lucide-react";
 import * as Schema from "effect/Schema";
 import {
@@ -81,7 +82,7 @@ import {
   mediaMetadataParts,
   useMediaByteSize,
 } from "~/components/media/mediaFileInfo";
-import { useRemoteOpenState } from "~/remoteOpen";
+import { useRemoteOpenResolution } from "~/remoteOpen";
 import { useClientSettings } from "~/hooks/useSettings";
 import { useTheme } from "~/hooks/useTheme";
 import { useStableCallback } from "~/hooks/useStableCallback";
@@ -111,6 +112,7 @@ import { useEnvironmentScope } from "~/state/session";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
 
+import { canOpenFileInBrowserLocally, useOpenFileInBrowser } from "./openFileInBrowser";
 import { addFileMentionToChat } from "./addFileToChat";
 import { AttachmentFilePreview } from "./AttachmentFilePreview";
 import { AudioPreview } from "./AudioPreview";
@@ -1350,7 +1352,9 @@ export default function FilePreviewPanel({
   const canOperatePreview = useEnvironmentScope(environmentId, AuthPreviewOperateScope);
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const hostEnvironmentId = useAtomValue(hostEnvironmentIdAtom);
-  const remoteOpenState = useRemoteOpenState(environmentId);
+  const remoteOpenResolution = useRemoteOpenResolution(environmentId);
+  const remoteOpenState = remoteOpenResolution.state;
+  const openFileInBrowser = useOpenFileInBrowser(environmentId);
   const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
   const environmentHttpBaseUrl = useEnvironmentHttpBaseUrl(environmentId);
   const previewAvailable = usePreviewAvailable(environmentId);
@@ -1540,6 +1544,7 @@ export default function FilePreviewPanel({
       }),
   });
   const contentFocusRef = useRef<HTMLDivElement>(null);
+  const previewContentRef = useRef<HTMLDivElement>(null);
   const fileEditorRef = useRef<FileEditor | null>(null);
   const focusEditorFromContent = () => {
     const editor = fileEditorRef.current;
@@ -1597,6 +1602,13 @@ export default function FilePreviewPanel({
     !isVideo &&
     previewAvailable &&
     isBrowserPreviewFile(previewPath);
+  const canOpenInDefaultBrowser =
+    attachment === undefined &&
+    canOpenFileInBrowserLocally({
+      filePath: previewPath,
+      remoteOpen: remoteOpenResolution,
+      availableEditors: serverConfig?.availableEditors ?? [],
+    });
   // Navigating up preserves the file tab; retain the trail's path spelling to find its folder tab.
   const navigateToFolder = (crumbPath: string) => {
     setBrowsingRevealKey(null);
@@ -1612,6 +1624,14 @@ export default function FilePreviewPanel({
       : relativePath && attachment === undefined
         ? resolvePathLinkTarget(relativePath, cwd)
         : null;
+  const renderedPreviewVisible =
+    showPreview &&
+    ((renderBrowserFile && absolutePath !== null) ||
+      (file.data !== null &&
+        (renderMermaid ||
+          (isMarkdown && renderMarkdown) ||
+          (tableDelimiter !== null && renderTable))));
+  const canFullscreenRendered = renderedPreviewVisible && document.fullscreenEnabled;
   // Mentions resolve against the workspace, so only workspace files can be added.
   const canAddToChat =
     previewPath !== null && relativePath !== null && !isHostFile && composerRef !== null;
@@ -1663,6 +1683,17 @@ export default function FilePreviewPanel({
       }
       return next;
     });
+  };
+
+  const handleOpenInDefaultBrowser = () => {
+    if (!canReadFiles || !canOpenInDefaultBrowser || !absolutePath) return;
+    void openFileInBrowser(absolutePath);
+  };
+
+  const openRenderedFullscreen = () => {
+    const element = previewContentRef.current;
+    if (!canFullscreenRendered || element === null) return;
+    void element.requestFullscreen().catch(() => undefined);
   };
 
   const handleOpenInBrowser = () => {
@@ -1773,6 +1804,14 @@ export default function FilePreviewPanel({
                   <CodeXmlIcon className="size-3.5" />
                 </FileSurfaceAction>
               ) : null}
+              {canFullscreenRendered && !foldActions ? (
+                <FileSurfaceAction
+                  label={gt("Full screen", { $context: "verb, expands the rendered file" })}
+                  onPress={openRenderedFullscreen}
+                >
+                  <Maximize2Icon className="size-3.5" />
+                </FileSurfaceAction>
+              ) : null}
               {canAddToChat && !foldActions ? (
                 <FileSurfaceAction label={gt("Add to chat")} onPress={addToChat}>
                   <MessageSquarePlusIcon className="size-3.5" />
@@ -1815,7 +1854,10 @@ export default function FilePreviewPanel({
                   compact
                 />
               ) : null}
-              {showsRawText || canOpenInBrowser || (foldActions && canAddToChat) ? (
+              {showsRawText ||
+              canOpenInBrowser ||
+              canOpenInDefaultBrowser ||
+              (foldActions && (canAddToChat || canFullscreenRendered)) ? (
                 <Menu>
                   <Tooltip>
                     <TooltipTrigger
@@ -1852,10 +1894,22 @@ export default function FilePreviewPanel({
                         {isCopied ? <T>Copied</T> : <T>Copy contents</T>}
                       </MenuItem>
                     ) : null}
+                    {foldActions && canFullscreenRendered ? (
+                      <MenuItem onClick={openRenderedFullscreen}>
+                        <Maximize2Icon aria-hidden />
+                        <T context="verb, expands the rendered file">Full screen</T>
+                      </MenuItem>
+                    ) : null}
                     {showsRawText ? (
                       <MenuCheckboxItem checked={wordWrap} onCheckedChange={setWordWrapOverride}>
                         <T>Word wrap</T>
                       </MenuCheckboxItem>
+                    ) : null}
+                    {canOpenInDefaultBrowser ? (
+                      <MenuItem onClick={handleOpenInDefaultBrowser}>
+                        <Globe2 aria-hidden />
+                        <T context="verb, opens a file in the default browser">Open in browser</T>
+                      </MenuItem>
                     ) : null}
                     {canOpenInBrowser ? (
                       <MenuItem onClick={handleOpenInBrowser}>
@@ -1906,7 +1960,11 @@ export default function FilePreviewPanel({
       ) : null}
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div
-          className={cn("min-w-0 flex-1 flex-col overflow-hidden", showPreview ? "flex" : "hidden")}
+          ref={previewContentRef}
+          className={cn(
+            "min-w-0 flex-1 flex-col overflow-hidden bg-background",
+            showPreview ? "flex" : "hidden",
+          )}
         >
           {mayOpenEditor ? (
             // Panel focus lands here and passes to the editor once it attaches. sr-only keeps the
