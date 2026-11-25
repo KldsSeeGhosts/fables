@@ -80,6 +80,23 @@ export type CaptainAvatar = typeof CaptainAvatar.Type;
 export const CaptainReportPolicy = Schema.Literals(["react", "context", "ignore"]);
 export type CaptainReportPolicy = typeof CaptainReportPolicy.Type;
 
+export const CaptainConversationEndReason = Schema.Literals([
+  "manual",
+  "context_overflow",
+  "compaction_failed",
+  "threshold",
+]);
+export type CaptainConversationEndReason = typeof CaptainConversationEndReason.Type;
+
+/** Reasons align by index with `earlierThreadIds`; absent entries predate reasons and are manual. */
+export const captainEarlierConversations = (
+  captain: Pick<Captain, "earlierThreadIds" | "earlierThreadEndReasons">,
+) =>
+  captain.earlierThreadIds.map((threadId, index) => ({
+    threadId,
+    endReason: captain.earlierThreadEndReasons[index] ?? ("manual" as const),
+  }));
+
 const CaptainProfile = Schema.Struct({
   name: TrimmedNonEmptyString.check(Schema.isMaxLength(80)),
   role: Schema.String.check(Schema.isMaxLength(120)),
@@ -96,6 +113,9 @@ export const Captain = Schema.Struct({
   id: CaptainId,
   primaryThreadId: ThreadId,
   earlierThreadIds: Schema.Array(ThreadId),
+  earlierThreadEndReasons: Schema.Array(CaptainConversationEndReason).pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed([])),
+  ),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   archivedAt: Schema.NullOr(IsoDateTime),
@@ -173,6 +193,7 @@ export type CaptainUpdateInput = typeof CaptainUpdateInput.Type;
 export const CaptainResetInput = Schema.Struct({
   ...CaptainKey.fields,
   expectedThreadId: ThreadId,
+  reason: Schema.optionalKey(CaptainConversationEndReason),
 });
 export type CaptainResetInput = typeof CaptainResetInput.Type;
 

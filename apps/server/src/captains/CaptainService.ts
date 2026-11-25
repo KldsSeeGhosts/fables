@@ -126,6 +126,7 @@ const make = Effect.gen(function* () {
         scopedProjectIds,
         primaryThreadId,
         earlierThreadIds: [],
+        earlierThreadEndReasons: [],
         createdAt: now,
         updatedAt: now,
         archivedAt: null,
@@ -221,6 +222,7 @@ const make = Effect.gen(function* () {
           const handoff = yield* CaptainHandoff.prepare({
             captain: current,
             previousThreadId: previousId,
+            resetReason: input.reason ?? "manual",
           }).pipe(
             Effect.provideService(SqlClient.SqlClient, sql),
             Effect.asSome,
@@ -242,6 +244,10 @@ const make = Effect.gen(function* () {
                   ...current,
                   primaryThreadId,
                   earlierThreadIds: [previousId, ...current.earlierThreadIds],
+                  earlierThreadEndReasons: [
+                    input.reason ?? "manual",
+                    ...current.earlierThreadEndReasons,
+                  ],
                   updatedAt: yield* timestamp,
                 });
               }),
