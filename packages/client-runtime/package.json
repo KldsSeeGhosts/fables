@@ -383,6 +383,10 @@
       "types": "./src/state/captainPalette.ts",
       "default": "./src/state/captainPalette.ts"
     },
+    "./state/captain-creatures": {
+      "types": "./src/state/captainCreatures.ts",
+      "default": "./src/state/captainCreatures.ts"
+    },
     "./state/duet-order": {
       "types": "./src/state/duetOrder.ts",
       "default": "./src/state/duetOrder.ts"
