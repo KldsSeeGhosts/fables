@@ -90,8 +90,9 @@ export function ThreadDetailsCard({
         mode === "popover" &&
           "max-h-[min(calc(100dvh-6.5rem),calc(var(--available-height,100dvh)-1rem))]",
       )}
-      // A floating popover sizes to its content up to the max height.
-      style={mode === "inline" ? { height } : undefined}
+      // A floating popover sizes to its content up to the max height. Duet docks the same
+      // card, so it hugs its content too instead of filling the column.
+      style={mode === "inline" ? (duet ? { maxHeight: height } : { height }) : undefined}
       onContextMenu={onContextMenu}
       data-thread-details-frame
     >
