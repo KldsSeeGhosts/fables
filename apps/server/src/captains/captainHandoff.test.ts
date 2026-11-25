@@ -1,0 +1,147 @@
+import { describe, expect, it } from "vite-plus/test";
+
+import {
+  CAPTAIN_DOCUMENT_MAX_LENGTH,
+  CAPTAIN_HANDOFF_MAX_LENGTH,
+  formatCaptainHandoff,
+  upsertCaptainHandoffSection,
+} from "./captainHandoff.ts";
+
+const generatedAt = "2026-11-25T10:00:00.000Z";
+
+describe("formatCaptainHandoff", () => {
+  it("formats every populated section", () => {
+    const section = formatCaptainHandoff({
+      generatedAt,
+      activeTasks: [
+        {
+          title: "Review the migration",
+          status: "running",
+          progress: "Checking projection rows\nimplementation detail",
+          followId: "thread:child",
+        },
+      ],
+      pendingRequests: [
+        {
+          kind: "user_input",
+          threadId: "thread:child",
+          requestId: "request-1",
+          detail: "Which migration should ship?",
+        },
+        {
+          kind: "command",
+          threadId: "captain:maria:0",
+          requestId: "request-2",
+          detail: "Run the test suite",
+        },
+      ],
+      lastUserMessage: "Please finish the migration",
+      lastAssistantMessage: "I am checking the projection rows",
+      scheduledTaskCount: 2,
+    });
+
+    expect(section).toBe(
+      `## Handoff from the previous conversation (${generatedAt})\n\n` +
+        "### Active delegated tasks\n" +
+        "- Review the migration (running, follow: thread:child): Checking projection rows\n\n" +
+        "### Waiting on the user\n" +
+        "- user input on thread:child: Which migration should ship? [request: request-1]\n" +
+        "- command approval on captain:maria:0: Run the test suite [request: request-2]\n\n" +
+        "### Last user message\n" +
+        "> Please finish the migration\n\n" +
+        "### Captain's last reply\n" +
+        "> I am checking the projection rows\n\n" +
+        "### Scheduled tasks\n" +
+        "- 2 scheduled tasks moved to the new conversation.\n\n" +
+        "<!-- end captain handoff -->",
+    );
+  });
+
+  it("quotes multiline messages without creating markdown headings", () => {
+    const section = formatCaptainHandoff({
+      generatedAt,
+      activeTasks: [],
+      pendingRequests: [],
+      lastUserMessage: "First line\n## not a notes heading",
+    });
+
+    expect(section).toContain("### Last user message\n> First line\n> ## not a notes heading");
+  });
+
+  it("omits sections without facts", () => {
+    expect(
+      formatCaptainHandoff({
+        generatedAt,
+        activeTasks: [],
+        pendingRequests: [],
+      }),
+    ).toBe(
+      `## Handoff from the previous conversation (${generatedAt})\n\n<!-- end captain handoff -->`,
+    );
+  });
+
+  it("keeps a long handoff within the section cap", () => {
+    const section = formatCaptainHandoff({
+      generatedAt,
+      activeTasks: Array.from({ length: 12 }, (_, index) => ({
+        title: `Task ${index} ${"title".repeat(30)}`,
+        status: "running",
+        progress: "progress".repeat(30),
+        followId: `thread:${index}`,
+      })),
+      pendingRequests: Array.from({ length: 8 }, (_, index) => ({
+        kind: "command",
+        threadId: `thread:${index}`,
+        requestId: `request-${index}`,
+        detail: "detail".repeat(40),
+      })),
+      lastUserMessage: "user".repeat(200),
+      lastAssistantMessage: "assistant".repeat(200),
+      scheduledTaskCount: 12,
+    });
+
+    expect(section.length).toBeLessThanOrEqual(CAPTAIN_HANDOFF_MAX_LENGTH);
+    expect(section).toContain("Additional handoff details were omitted");
+    expect(section).toContain("<!-- end captain handoff -->");
+  });
+});
+
+describe("upsertCaptainHandoffSection", () => {
+  it("replaces an earlier handoff and preserves the rest of NOTES.md", () => {
+    const content =
+      "Own notes.\n\n" +
+      "## Handoff from the previous conversation (2026-11-24T09:00:00.000Z)\n\n" +
+      "### Active delegated tasks\n" +
+      "- Old task\n\n" +
+      "## Stable notes\n" +
+      "Keep this exactly.\n";
+    const nextSection = `## Handoff from the previous conversation (${generatedAt})\n\n### Last user message\n> Continue`;
+
+    expect(upsertCaptainHandoffSection(content, nextSection)).toBe(
+      `${nextSection}\n\nOwn notes.\n\n## Stable notes\nKeep this exactly.\n`,
+    );
+  });
+
+  it("preserves unheaded notes when replacing a generated handoff", () => {
+    const first = formatCaptainHandoff({
+      generatedAt: "2026-11-24T09:00:00.000Z",
+      activeTasks: [],
+      pendingRequests: [],
+    });
+    const second = `## Handoff from the previous conversation (${generatedAt})`;
+    const once = upsertCaptainHandoffSection("Plain notes without a heading.", first);
+
+    expect(upsertCaptainHandoffSection(once, second)).toBe(
+      `${second}\n\nPlain notes without a heading.`,
+    );
+  });
+
+  it("trims the old body when the document reaches the size limit", () => {
+    const section = `## Handoff from the previous conversation (${generatedAt})`;
+    const merged = upsertCaptainHandoffSection("x".repeat(CAPTAIN_DOCUMENT_MAX_LENGTH), section);
+
+    expect(merged.length).toBe(CAPTAIN_DOCUMENT_MAX_LENGTH);
+    expect(merged.startsWith(section)).toBe(true);
+    expect(merged.endsWith("x")).toBe(true);
+  });
+});

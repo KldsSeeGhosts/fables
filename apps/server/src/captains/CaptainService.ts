@@ -23,6 +23,7 @@ import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.t
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
+import * as CaptainHandoff from "./captainHandoff.ts";
 import * as CaptainStore from "./CaptainStore.ts";
 
 const invalid = (message: string) => new CaptainError({ code: "invalid_request", message });
@@ -179,6 +180,13 @@ const make = Effect.gen(function* () {
         .pipe(Effect.catch(CaptainStore.captainUnavailable));
       if (previous === null)
         return yield* invalid("The Captain's previous thread could not be found.");
+      yield* CaptainHandoff.write({ captain: current, previousThreadId: previousId }).pipe(
+        Effect.provideService(SqlClient.SqlClient, sql),
+        Effect.provideService(CaptainStore.CaptainStore, store),
+        Effect.catch((cause) =>
+          Effect.logWarning("Could not write the Captain handoff before resetting.", { cause }),
+        ),
+      );
       const primaryThreadId = captainPrimaryThreadId(
         current.id,
         current.earlierThreadIds.length + 1,
