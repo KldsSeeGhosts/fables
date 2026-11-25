@@ -250,22 +250,6 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
           ORDER BY completed_at DESC, subagent_id DESC LIMIT 6
         `
           : [];
-      const [usage] = Option.isSome(sql)
-        ? yield* sql.value<{
-            readonly usedTokens: number | null;
-            readonly maxTokens: number | null;
-            readonly autoCompactThreshold: number | null;
-          }>`
-          SELECT json_extract(payload_json, '$.tokenUsage.usedTokens') AS usedTokens,
-            json_extract(payload_json, '$.tokenUsage.maxTokens') AS maxTokens,
-            json_extract(payload_json, '$.tokenUsage.autoCompactThreshold') AS autoCompactThreshold
-          FROM orchestration_v2_projection_provider_turns
-          WHERE thread_id = ${threadId} AND json_extract(payload_json, '$.tokenUsage') IS NOT NULL
-          ORDER BY julianday(json_extract(payload_json, '$.tokenUsage.updatedAt')) DESC,
-            ordinal DESC
-          LIMIT 1
-        `
-        : [];
       const briefing = formatCaptainBriefing({
         captain,
         projects: scopedProjects,
@@ -278,7 +262,13 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
         text: [
           plan?.full === false ? unchangedBriefing(captain) : briefing,
           formatCaptainReports(reports, threadId),
-          usage === undefined ? "" : formatCaptainContextPressure(usage),
+          delivery === undefined
+            ? ""
+            : formatCaptainContextPressure({
+                usedTokens: delivery.usedTokens,
+                maxTokens: delivery.maxTokens ?? null,
+                autoCompactThreshold: delivery.autoCompactThreshold ?? null,
+              }),
         ]
           .filter((part) => part !== "")
           .join("\n\n"),

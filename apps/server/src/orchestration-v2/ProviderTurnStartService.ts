@@ -2147,6 +2147,9 @@ export const layer: Layer.Layer<
                   // A new native session under the same provider thread starts without the briefing.
                   providerThreadId: `${runningProviderThread.id}:${runningProviderThread.nativeThreadRef?.nativeId ?? ""}`,
                   usedTokens: runningProviderThread.contextUsage?.usedTokens ?? null,
+                  maxTokens: runningProviderThread.contextUsage?.maxTokens ?? null,
+                  autoCompactThreshold:
+                    runningProviderThread.contextUsage?.autoCompactThreshold ?? null,
                 });
           const context = [delivery.context, sideChatContext, restartNote, captain?.text ?? ""]
             .filter((part) => part !== "")
