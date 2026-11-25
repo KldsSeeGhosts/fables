@@ -150,6 +150,10 @@ import * as RemoteDelegation from "../peer/RemoteDelegation.ts";
 // Return recoverable handles before common MCP client timeouts expire.
 const DEFAULT_WAIT_TIMEOUT_MS = 30_000;
 const withoutTrailingSeparators = (path: string) => path.replace(/(?<=.)[\\/]+$/, "");
+const repositoryChoices = (paths: ReadonlyArray<string>) =>
+  paths.length === 0
+    ? "This project has no tracked Git folders available for worktrees."
+    : `Pass one or more of these tracked Git folder paths: ${paths.map((path) => `"${path}"`).join(", ")}.`;
 const MAX_WAIT_TIMEOUT_MS = 45_000;
 const DEFAULT_SECRET_REQUEST_TIMEOUT_MS = 10 * 60 * 1_000;
 const MAX_SECRET_REQUEST_TIMEOUT_MS = 60 * 60 * 1_000;
@@ -1374,15 +1378,10 @@ const make = Effect.gen(function* () {
               return yield* cannotReadPlan();
             }
             const plan = yield* taskFolders.plan(input).pipe(Effect.mapError(cannotReadPlan));
-            const validPaths = [
+            const hint = repositoryChoices([
               ...(plan?.projectIsRepository === true ? [project.workspaceRoot] : []),
               ...(plan?.trackedRepositories ?? []),
-            ]
-              .map((path) => `"${path}"`)
-              .join(", ");
-            const hint = validPaths
-              ? `Pass one or more of these tracked Git folder paths: ${validPaths}.`
-              : "This project has no tracked Git folders available for worktrees.";
+            ]);
             return yield* failure(
               "invalid_request",
               `${error.detail} ${hint} No child was created.`,
@@ -1393,7 +1392,7 @@ const make = Effect.gen(function* () {
       if (namedProjectRoot && taskPlan?.projectIsRepository === false) {
         return yield* failure(
           "invalid_request",
-          `"${project.workspaceRoot}" is not a Git repository, so it cannot get a worktree. Pass one or more of these tracked Git folder paths: ${taskPlan.trackedRepositories.map((path) => `"${path}"`).join(", ")}. No child was created.`,
+          `"${project.workspaceRoot}" is not a Git repository, so it cannot get a worktree. ${repositoryChoices(taskPlan.trackedRepositories)} No child was created.`,
         );
       }
       const strategy = {
