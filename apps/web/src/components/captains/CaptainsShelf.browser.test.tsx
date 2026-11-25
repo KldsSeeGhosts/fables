@@ -200,7 +200,7 @@ it("shows an idle channel's scope and compact activity time, with its details on
   await expect.element(page.getByText("Ready", { exact: true })).toBeVisible();
 });
 
-it("shows a working status on the first line and the project with one live task on the second", async () => {
+it("shows a working status on the first line and the scoped project on the second", async () => {
   const project = {
     id: ProjectId.make("project"),
     environmentId,
@@ -218,7 +218,8 @@ it("shows a working status on the first line and the project with one live task 
   await expect.element(row).toBeVisible();
   const lines = row.element().querySelector(":scope > span.grid")?.children;
   expect(lines?.[0]?.textContent).toContain("Working");
-  expect(lines?.[1]?.textContent).toContain("Fix the login flow");
+  expect(lines?.[1]?.textContent).toContain("KSG Code");
+  expect(lines?.[1]?.textContent).not.toContain("Fix the login flow");
   expect(lines?.[1]?.textContent).not.toContain("Working");
   expect(lines?.[1]?.querySelector('[data-slot="project-monogram"]')).not.toBeNull();
   const avatar = row.element().querySelector("[data-captain-avatar]")!;
@@ -251,7 +252,7 @@ it("gives needs input precedence over working with an amber count", async () => 
   await using screen = await renderList({ attention: 1, working: true, children: [waiting] });
   const row = screen.getByRole("button", { name: "Maria, Needs input, Fix the login flow" });
   await expect.element(row).toBeVisible();
-  expect(row.element().textContent).toBe("Maria1Fix the login flow");
+  expect(row.element().textContent).toBe("Maria1All workspace");
   expect(screen.container.querySelector('[data-captain-state="waiting"]')).not.toBeNull();
   expect(
     row.element().querySelector('[data-duet-live="needs-input"]')?.getAttribute("aria-label"),
@@ -263,14 +264,14 @@ it("gives needs input precedence over working with an amber count", async () => 
   ).toBe("1 Duet needs input");
 });
 
-it("keeps line two filled when the Duet itself works or waits without its crew", async () => {
-  const secondLine = (row: Element) =>
-    row.querySelector(":scope > span.grid")?.children[1]?.textContent;
+it("line two shows the scope in every state", async () => {
+  const secondLine = (row: Element) => row.querySelector(":scope > span.grid")?.children[1];
   {
     await using screen = await renderList({ working: true });
     const row = screen.getByRole("button", { name: /^Maria, Working/ });
     await expect.element(row).toBeVisible();
-    expect(secondLine(row.element())).toBe("All workspace");
+    expect(secondLine(row.element())?.textContent).toBe("All workspace");
+    expect(secondLine(row.element())?.className).toContain("text-muted-foreground");
   }
   {
     await using screen = await renderList({
@@ -279,7 +280,8 @@ it("keeps line two filled when the Duet itself works or waits without its crew",
     });
     const row = screen.getByRole("button", { name: /^Maria, Needs input/ });
     await expect.element(row).toBeVisible();
-    expect(secondLine(row.element())).toBe("Needs input");
+    expect(secondLine(row.element())?.textContent).toBe("All workspace");
+    expect(secondLine(row.element())?.className).toContain("text-muted-foreground");
   }
 });
 

@@ -185,16 +185,6 @@ function DuetChannelRow({
     : undefined;
   const liveThread = attentionThread ?? (busy ? running[0] : undefined);
   const lead = busy && running.length > 0 ? gt("{count} running", { count: running.length }) : null;
-  const workingDetail =
-    running.length === 1
-      ? running[0]!.title
-      : running.length > 1
-        ? gt("{count} running", { count: running.length })
-        : null;
-  const waitingDetail =
-    attentionThread !== undefined && attentionThread.id !== captain.primaryThreadId
-      ? attentionThread.title
-      : null;
   const role = captain.role.trim();
   const details = (
     archived
@@ -210,13 +200,7 @@ function DuetChannelRow({
     details.length === 0
       ? gt("{name}, {status}", { name, status })
       : gt("{name}, {status}, {detail}", { name, status, detail: details.join(", ") });
-  const detailText = archived
-    ? null
-    : waiting
-      ? (waitingDetail ?? status)
-      : busy
-        ? (workingDetail ?? scope)
-        : scope;
+  const detailText = archived ? null : scope;
   const trailing = busy ? (
     <SidebarStatusLabel
       environmentId={environmentId}
@@ -283,16 +267,7 @@ function DuetChannelRow({
                 </span>
               ) : null}
             </span>
-            <span
-              className={cn(
-                "flex h-4 min-w-0 items-center gap-1.5 text-meta leading-4",
-                waiting
-                  ? "text-(--duet-needs-input-text)"
-                  : busy
-                    ? "text-(--duet-working-text)"
-                    : "text-muted-foreground",
-              )}
-            >
+            <span className="flex h-4 min-w-0 items-center gap-1.5 text-meta leading-4 text-muted-foreground">
               {archived ? (
                 <span className="shrink-0 text-muted-foreground">{status}</span>
               ) : scoped.length === 1 ? (
