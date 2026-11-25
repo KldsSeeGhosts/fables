@@ -372,6 +372,7 @@ export function CaptainTasksDrawer({
     reportFailure: false,
   });
   const [taskText, setTaskText] = useState("");
+  const [addingTask, setAddingTask] = useState(false);
   const [groupExpansion, setGroupExpansion] = useState<Readonly<Record<string, boolean>>>({});
   if (captain === undefined) {
     return (
@@ -415,9 +416,11 @@ export function CaptainTasksDrawer({
   const scheduled = captainScheduledTasks(tasksQuery.data?.tasks ?? [], captain).filter(
     (task) => task.id !== morningBrief?.id,
   );
+  const canAddTask = parentShell !== null && captain.archivedAt === null && !addingTask;
   const addTask = async () => {
     const text = taskText.trim();
-    if (text === "" || parentShell === null) return;
+    if (text === "" || parentShell === null || !canAddTask) return;
+    setAddingTask(true);
     const result = await startThreadTurn({
       environmentId: threadRef.environmentId,
       input: {
@@ -429,6 +432,7 @@ export function CaptainTasksDrawer({
         createdAt: new Date().toISOString(),
       },
     });
+    setAddingTask(false);
     if (result._tag === "Success") setTaskText("");
     else toastManager.add({ type: "error", title: gt("Could not add the task.") });
   };
@@ -590,6 +594,7 @@ export function CaptainTasksDrawer({
         {tab === "scheduled" ? (
           <div className="flex flex-col gap-3">
             <CaptainMorningBriefControl
+              key={captain.id}
               captain={captain}
               environmentId={threadRef.environmentId}
               thread={parentShell ?? undefined}
@@ -629,6 +634,8 @@ export function CaptainTasksDrawer({
       <div className="shrink-0 p-3">
         <input
           value={taskText}
+          disabled={parentShell === null || captain.archivedAt !== null}
+          readOnly={addingTask}
           aria-label={gt("Add a task...")}
           placeholder={gt("Add a task...")}
           className="h-9 w-full rounded-full border border-transparent bg-[#f9f9f9] px-3 text-[13px] outline-none placeholder:text-muted-foreground focus:border-[#e0e0e0] dark:bg-[#262626] duet:rounded-[10px] duet:bg-black/[0.035] duet:focus:border-transparent duet:focus:ring-1 duet:focus:ring-(--duet-hairline) dark:duet:bg-white/[0.045]"

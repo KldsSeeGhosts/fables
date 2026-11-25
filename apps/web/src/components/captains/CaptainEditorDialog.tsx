@@ -81,7 +81,9 @@ export function CaptainEditorDialog({
   const [avatar, setAvatar] = useState<Avatar>(() =>
     normalizeCaptainAvatar(captain?.avatar ?? randomCaptainAvatar()),
   );
-  const [reportPolicy, setReportPolicy] = useState<CaptainReportPolicy>("react");
+  const [reportPolicy, setReportPolicy] = useState<CaptainReportPolicy>(
+    captain?.reportPolicy ?? "react",
+  );
   const [coordinatorOnly, setCoordinatorOnly] = useState(captain?.coordinatorOnly ?? true);
   const [scopedProjectIds, setScope] = useState<ReadonlyArray<ProjectId>>(
     captain?.scopedProjectIds ?? [],
@@ -107,6 +109,7 @@ export function CaptainEditorDialog({
       avatar,
       scopedProjectIds,
       coordinatorOnly,
+      reportPolicy,
     };
     setError(null);
     setSaving(true);
@@ -130,7 +133,6 @@ export function CaptainEditorDialog({
         input: {
           ...profile,
           captainId,
-          reportPolicy,
           modelSelection,
           runtimeMode:
             clampManagedRuntimeMode(config?.managedPolicy, defaults.defaultRuntimeMode) ??
@@ -412,19 +414,17 @@ export function CaptainEditorDialog({
                 disabled={saving}
                 onChange={setScope}
               />
-              {captain === undefined ? (
-                <div className="grid gap-2">
-                  <span id={`${fieldId}-report-policy`} className="text-label">
-                    <T>When a delegated task finishes</T>
-                  </span>
-                  <CaptainReportPolicyPicker
-                    labelledBy={`${fieldId}-report-policy`}
-                    value={reportPolicy}
-                    disabled={saving}
-                    onChange={setReportPolicy}
-                  />
-                </div>
-              ) : null}
+              <div className="grid gap-2">
+                <span id={`${fieldId}-report-policy`} className="text-label">
+                  <T>When a delegated task finishes</T>
+                </span>
+                <CaptainReportPolicyPicker
+                  labelledBy={`${fieldId}-report-policy`}
+                  value={reportPolicy}
+                  disabled={saving}
+                  onChange={setReportPolicy}
+                />
+              </div>
               {error !== null ? (
                 <p role="alert" className="text-body text-destructive-foreground">
                   {error}
