@@ -148,6 +148,21 @@ export interface CaptainTurnContext {
 
 const NO_CONTEXT: CaptainTurnContext = { text: "", delivered: Effect.void };
 
+type CaptainContextThread = {
+  readonly id: ThreadId;
+  readonly lineage: Pick<
+    OrchestrationV2AppThreadLineage,
+    "parentThreadId" | "relationshipToParent"
+  >;
+};
+
+/** Whether a turn on this thread may carry a Captain briefing or crew rules. Reads no state. */
+export const mayCarryCaptainContext = ({ id, lineage }: CaptainContextThread) =>
+  isCaptainThreadId(id) ||
+  (lineage.relationshipToParent === "subagent" &&
+    lineage.parentThreadId !== null &&
+    isCaptainThreadId(lineage.parentThreadId));
+
 export const makeReadCaptainTurnContext = Effect.gen(function* () {
   const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
   const sql = yield* Effect.serviceOption(SqlClient.SqlClient);
@@ -173,16 +188,7 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
   });
 
   return Effect.fn("CaptainService.turnContext")(
-    function* (
-      thread: {
-        readonly id: ThreadId;
-        readonly lineage: Pick<
-          OrchestrationV2AppThreadLineage,
-          "parentThreadId" | "relationshipToParent"
-        >;
-      },
-      delivery?: CaptainBriefingDelivery,
-    ) {
+    function* (thread: CaptainContextThread, delivery?: CaptainBriefingDelivery) {
       const threadId = thread.id;
       if (Option.isNone(store)) return NO_CONTEXT;
       if (!isCaptainThreadId(threadId)) {
