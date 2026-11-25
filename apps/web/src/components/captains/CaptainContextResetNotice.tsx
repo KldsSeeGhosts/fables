@@ -13,6 +13,9 @@ import { ComposerBannerStack, type ComposerBannerStackItem } from "../chat/Compo
 import { CaptainResetDialog } from "./CaptainResetButton";
 import { useCaptain } from "./useCaptain";
 
+const CONTEXT_NOTICE_MARKS = [75, 90, 97] as const;
+type ContextNoticeMark = (typeof CONTEXT_NOTICE_MARKS)[number];
+
 /** Offers a fresh Duet conversation when the active one is nearing automatic compaction. */
 export function CaptainContextResetNotice({
   threadRef,
@@ -35,9 +38,9 @@ export function CaptainContextResetNotice({
     readonly captain: Captain;
     readonly threadRef: ScopedThreadRef;
   } | null>(null);
-  const [dismissedThreadKeys, setDismissedThreadKeys] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
+  const [dismissedMarkByThreadKey, setDismissedMarkByThreadKey] = useState<
+    Readonly<Record<string, ContextNoticeMark>>
+  >(() => ({}));
   const threadKey = threadRef === null ? null : scopedThreadKey(threadRef);
   // No threshold means the provider does not report one or compaction is off; measure the window.
   const compacts = contextWindow?.autoCompactThreshold != null;
@@ -50,6 +53,14 @@ export function CaptainContextResetNotice({
     compactionPercentage !== null && Number.isFinite(compactionPercentage)
       ? Math.round(Math.max(0, Math.min(100, compactionPercentage)))
       : null;
+  const noticeMark =
+    compactionPercentage === null || compactionPercentage < CONTEXT_NOTICE_MARKS[0]
+      ? null
+      : compactionPercentage >= CONTEXT_NOTICE_MARKS[2]
+        ? CONTEXT_NOTICE_MARKS[2]
+        : compactionPercentage >= CONTEXT_NOTICE_MARKS[1]
+          ? CONTEXT_NOTICE_MARKS[1]
+          : CONTEXT_NOTICE_MARKS[0];
   const resetDialog = resetTarget ? (
     <CaptainResetDialog
       captain={resetTarget.captain}
@@ -73,20 +84,21 @@ export function CaptainContextResetNotice({
     return resetDialog;
   }
 
-  const locked = compactionPercentage >= 90;
-  if (!locked && dismissedThreadKeys.has(threadKey)) return resetDialog;
+  const warning = compactionPercentage >= 90;
+  const dismissedMark = dismissedMarkByThreadKey[threadKey];
+  if (noticeMark === null || (dismissedMark !== undefined && noticeMark <= dismissedMark)) {
+    return resetDialog;
+  }
 
   const dismiss = () => {
-    setDismissedThreadKeys((current) => {
-      if (current.has(threadKey)) return current;
-      const next = new Set(current);
-      next.add(threadKey);
-      return next;
+    setDismissedMarkByThreadKey((current) => {
+      if (current[threadKey] === noticeMark) return current;
+      return { ...current, [threadKey]: noticeMark };
     });
   };
   const item: ComposerBannerStackItem = {
     id: `captain-context-reset:${threadKey}`,
-    variant: locked ? "warning" : "info",
+    variant: warning ? "warning" : "info",
     icon: <MessageSquarePlusIcon />,
     title: compacts
       ? gt("This conversation is {percent}% of the way to automatic compaction.", { percent })
@@ -97,14 +109,8 @@ export function CaptainContextResetNotice({
         <T>New conversation</T>
       </Button>
     ),
-    ...(locked
-      ? {}
-      : {
-          dismissLabel: compacts
-            ? gt("Dismiss compaction notice")
-            : gt("Dismiss context usage notice"),
-          onDismiss: dismiss,
-        }),
+    dismissLabel: compacts ? gt("Dismiss compaction notice") : gt("Dismiss context usage notice"),
+    onDismiss: dismiss,
   };
 
   return (

@@ -77,7 +77,7 @@ function notice(percent: number | null, ref: ScopedThreadRef | null = threadRef)
   );
 }
 
-it("shows at 80%, stays dismissed at 85%, and returns without a dismiss action at 92%", async () => {
+it("shows at 80%, stays dismissed at 85%, and can be dismissed again at 92% and 97%", async () => {
   setup();
   await using screen = await render(notice(80));
 
@@ -106,9 +106,27 @@ it("shows at 80%, stays dismissed at 85%, and returns without a dismiss action a
   await expect
     .element(screen.getByText("This conversation is 92% of the way to automatic compaction."))
     .toBeVisible();
+  expect(screen.container.querySelector('[data-variant="warning"]')).not.toBeNull();
+  const warningDismiss = screen.getByRole("button", { name: "Dismiss compaction notice" });
+  await expect.element(warningDismiss).toBeVisible();
+
+  await userEvent.click(warningDismiss);
+  await expect
+    .element(screen.getByText("This conversation is 92% of the way to automatic compaction."))
+    .not.toBeInTheDocument();
+
+  await screen.rerender(notice(94));
+  await expect
+    .element(screen.getByText("This conversation is 94% of the way to automatic compaction."))
+    .not.toBeInTheDocument();
+
+  await screen.rerender(notice(97));
+  await expect
+    .element(screen.getByText("This conversation is 97% of the way to automatic compaction."))
+    .toBeVisible();
   await expect
     .element(screen.getByRole("button", { name: "Dismiss compaction notice" }))
-    .not.toBeInTheDocument();
+    .toBeVisible();
 });
 
 it("measures the notice against the automatic compaction threshold", async () => {
