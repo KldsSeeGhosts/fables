@@ -22,10 +22,8 @@ export function CaptainsWorkspace() {
   const { destinations, destination } = useCaptainDestinations(usePrimaryEnvironmentId());
   const [creating, setCreating] = useState(false);
   const openThread = useOpenCaptainThread();
-  const openCaptain = (environmentId: EnvironmentId, captain: Captain, _view: "chat" | "make") => {
-    const threadRef = scopeThreadRef(environmentId, captain.primaryThreadId);
-    openThread(threadRef);
-  };
+  const openCaptain = (environmentId: EnvironmentId, captain: Captain) =>
+    openThread(scopeThreadRef(environmentId, captain.primaryThreadId));
 
   return (
     <SidebarInset
@@ -47,7 +45,7 @@ export function CaptainsWorkspace() {
             environments={environments}
             shells={shells}
             onOpenThread={openThread}
-            onOpenCaptain={(environmentId, captain) => openCaptain(environmentId, captain, "make")}
+            onOpenCaptain={openCaptain}
             onCreate={destination ? () => setCreating(true) : undefined}
           />
         </div>
@@ -59,7 +57,7 @@ export function CaptainsWorkspace() {
           onClose={() => setCreating(false)}
           onSave={(environmentId, captain) => {
             setCreating(false);
-            openCaptain(environmentId, captain, "chat");
+            openCaptain(environmentId, captain);
           }}
         />
       ) : null}

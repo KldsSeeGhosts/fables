@@ -6,7 +6,6 @@ import {
   type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
-import * as DateTime from "effect/DateTime";
 import { useGT, useMessages } from "gt-react";
 import type { ReactNode } from "react";
 
@@ -18,17 +17,14 @@ import { ContentButton } from "../ui/button";
 import { CaptainTaskRing, useCaptainTaskStatusLabel } from "./CaptainTaskRing";
 import {
   captainSubagentTaskStatus,
+  captainTaskActivityMs,
+  captainTaskDetail,
   captainThreadTaskStatus,
   type CaptainTaskStatus,
 } from "./captainTaskStatus.logic";
 
 const elapsedAt = (epochMs: number, nowMs: number, resolve: ReturnType<typeof useMessages>) =>
   formatRelativeElapsed(Math.max(0, nowMs - epochMs), resolve).value;
-
-const firstLine = (text: string | null | undefined) => {
-  const line = text?.trim().split("\n", 1)[0]?.trim();
-  return line ? line : null;
-};
 
 function OverviewTaskRow({
   status,
@@ -67,8 +63,10 @@ function OverviewTaskRow({
             </Badge>
             <span className="shrink-0 text-meta tabular-nums text-muted-foreground">{elapsed}</span>
           </span>
-          <span className="mt-0.5 flex min-w-0 gap-2 line-clamp-2 text-meta text-muted-foreground">
-            <span data-duet-task-status={status}>{statusLabel}</span>
+          <span className="mt-0.5 flex min-w-0 gap-2 text-meta text-muted-foreground">
+            <span data-duet-task-status={status} className="shrink-0 whitespace-nowrap">
+              {statusLabel}
+            </span>
             {detail ? <span className="min-w-0 truncate">{detail}</span> : null}
           </span>
         </span>
@@ -89,13 +87,14 @@ function OverviewLocalTaskRow({
   readonly onOpen: (threadId: ThreadId) => void;
 }) {
   const messages = useMessages();
+  const status = captainThreadTaskStatus(thread);
   return (
     <OverviewTaskRow
-      status={captainThreadTaskStatus(thread)}
+      status={status}
       title={thread.title}
       captainName={captainName}
-      elapsed={elapsedAt(Date.parse(thread.updatedAt), nowMs, messages)}
-      detail={thread.runtime?.lastError ?? null}
+      elapsed={elapsedAt(captainTaskActivityMs({ status, thread }), nowMs, messages)}
+      detail={captainTaskDetail({ status, thread })}
       onOpen={() => onOpen(thread.id)}
     />
   );
@@ -128,13 +127,11 @@ function OverviewRemoteSubagentRow({
   task,
   captainName,
   nowMs,
-  finished = false,
 }: {
   readonly parent: ScopedThreadRef;
   readonly task: OrchestrationV2Subagent;
   readonly captainName: string;
   readonly nowMs: number;
-  readonly finished?: boolean;
 }) {
   const gt = useGT();
   const messages = useMessages();
@@ -142,16 +139,14 @@ function OverviewRemoteSubagentRow({
   const title = task.title ?? child?.title ?? child?.label ?? gt("Subagent");
   const opener = useLinkedThreadOpener(parent, child, title);
   if (!child) return null;
-  const at = DateTime.toEpochMillis(
-    finished && task.completedAt !== null ? task.completedAt : task.updatedAt,
-  );
+  const status = captainSubagentTaskStatus(task);
   return (
     <OverviewTaskRow
-      status={captainSubagentTaskStatus(task)}
+      status={status}
       title={title}
       captainName={captainName}
-      elapsed={elapsedAt(at, nowMs, messages)}
-      detail={task.progress ?? firstLine(task.result)}
+      elapsed={elapsedAt(captainTaskActivityMs({ status, subagent: task }), nowMs, messages)}
+      detail={captainTaskDetail({ status, subagent: task }) ?? child.label ?? null}
       disabled={opener === null}
       onOpen={() => opener?.open("primary")}
     />
@@ -172,14 +167,14 @@ function OverviewFinishedLocalRow({
   const gt = useGT();
   const messages = useMessages();
   const childThreadId = task.childThreadId;
-  const at = DateTime.toEpochMillis(task.completedAt !== null ? task.completedAt : task.updatedAt);
+  const status = captainSubagentTaskStatus(task);
   return (
     <OverviewTaskRow
-      status={captainSubagentTaskStatus(task)}
+      status={status}
       title={task.title ?? gt("Subagent")}
       captainName={captainName}
-      elapsed={elapsedAt(at, nowMs, messages)}
-      detail={firstLine(task.result)}
+      elapsed={elapsedAt(captainTaskActivityMs({ status, subagent: task }), nowMs, messages)}
+      detail={captainTaskDetail({ status, subagent: task })}
       disabled={childThreadId === null}
       onOpen={() => {
         if (childThreadId !== null) onOpen(childThreadId);
@@ -253,7 +248,6 @@ export function OverviewFinishedTaskRows({
         task={task}
         captainName={captainName}
         nowMs={nowMs}
-        finished
       />
     ) : (
       <OverviewFinishedLocalRow

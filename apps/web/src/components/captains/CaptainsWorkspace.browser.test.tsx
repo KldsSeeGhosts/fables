@@ -180,5 +180,5 @@ it("lays out Duets, active work and a markdown brief, and opens cards in the con
   openThread.mockClear();
   await activate(screen.getByRole("button", { name: "Open Maria's brief" }));
   expect(openThread).toHaveBeenCalledWith(threadRef);
-  expect(appAtomRegistry.get(captainDrawerTabAtom(threadRef))).toBe("docs");
+  expect(appAtomRegistry.get(captainDrawerTabAtom(threadRef))).toBe("today");
 });

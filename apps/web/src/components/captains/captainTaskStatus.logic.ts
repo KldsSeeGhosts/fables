@@ -80,11 +80,20 @@ export function captainLocalTaskStatus(
   return live;
 }
 
+/** Task results are markdown, but a one-line detail renders as plain text. */
+const plainLine = (line: string) =>
+  line
+    .replace(/^\s{0,3}(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)/, "")
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/(\*\*|__|`+)(.+?)\1/g, "$2")
+    .replace(/(^|[^\w*])[*_]([^*_\s][^*_]*?)[*_](?=[^\w*]|$)/g, "$1$2")
+    .trim();
+
 const firstLine = (text: string | null | undefined) =>
   text
     ?.split("\n")
-    .map((line) => line.trim())
-    .find((line) => line !== "") ?? null;
+    .map(plainLine)
+    .find((line) => line !== "" && !/^(?:[-*_=]{3,}|`{3,}.*)$/.test(line)) ?? null;
 
 /** The muted detail after the status word: progress while working, a result when finished, else the branch. */
 export function captainTaskDetail(input: {

@@ -183,18 +183,20 @@ function DuetOverviewCard({
             <Text variant="body" tone="muted" truncate>
               {status}
             </Text>
-            <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-meta text-muted-foreground">
-              <span className="tabular-nums">
-                {gt("{count, plural, one {{count} task running} other {{count} tasks running}}", {
-                  count: runningCount,
-                })}
+            {runningCount > 0 || waitingCount > 0 ? (
+              <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-meta">
+                {runningCount > 0 ? (
+                  <span className="text-(--duet-working-text) tabular-nums">
+                    {gt("{count} running", { count: runningCount })}
+                  </span>
+                ) : null}
+                {waitingCount > 0 ? (
+                  <span className="text-(--duet-needs-input-text) tabular-nums">
+                    {gt("{count} waiting", { count: waitingCount })}
+                  </span>
+                ) : null}
               </span>
-              <span className="tabular-nums">
-                {gt("{count, plural, one {{count} task waiting} other {{count} tasks waiting}}", {
-                  count: waitingCount,
-                })}
-              </span>
-            </span>
+            ) : null}
           </span>
         </span>
       </ContentButton>
@@ -239,7 +241,7 @@ function DigestCard({
           variant="card-row"
           aria-label={gt("Open {name}'s brief", { name: captain.name })}
           onClick={onOpen}
-          className="w-full"
+          className="w-full text-left"
         >
           <CaptainAvatar
             avatar={captain.avatar}
@@ -262,7 +264,7 @@ function DigestCard({
             </Text>
           ) : null}
         </ContentButton>
-        <div className="min-h-28 px-4 pb-4">
+        <div className={excerpt === "" ? "px-4 pb-4" : "min-h-28 px-4 pb-4"}>
           {excerpt !== "" ? (
             <div data-duet-digest-preview="" className="min-h-0 overflow-hidden">
               <ChatMarkdown text={excerpt} cwd={undefined} environmentId={environmentId} />
@@ -331,7 +333,7 @@ export function CaptainsInbox({
     onOpenThread(scopeThreadRef(environmentId, threadId));
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-9 px-6 pt-12 pb-20">
+    <div className="@container mx-auto flex w-full max-w-4xl flex-col gap-9 px-6 pt-12 pb-20">
       <header className="flex flex-wrap items-end gap-4">
         <div className="min-w-0 flex-1 space-y-2.5">
           <Text variant="meta" tone="muted" render={<p />}>
@@ -370,7 +372,7 @@ export function CaptainsInbox({
       </header>
 
       {active.length > 0 ? (
-        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-3 @lg:grid-cols-2 @3xl:grid-cols-3">
           {active.map(({ environmentId, captain, children, attention, working }, index) => (
             <DuetOverviewCard
               key={`${environmentId}:${captain.id}`}
@@ -452,7 +454,7 @@ export function CaptainsInbox({
 
       <DuetSection title={<T>Morning briefs</T>}>
         {active.length > 0 ? (
-          <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <ul className="grid grid-cols-1 gap-3 @2xl:grid-cols-2">
             {active.map(({ environmentId, captain, working }) => (
               <DigestCard
                 key={`${environmentId}:${captain.id}`}

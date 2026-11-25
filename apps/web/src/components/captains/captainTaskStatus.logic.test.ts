@@ -4,6 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   captainLocalTaskStatus,
   captainSubagentTaskStatus,
+  captainTaskDetail,
   captainTaskIsRecent,
   captainThreadTaskStatus,
   compareCaptainTasks,
@@ -110,5 +111,26 @@ describe("captainTaskIsRecent and compareCaptainTasks", () => {
       "ready-old",
       "done",
     ]);
+  });
+});
+
+describe("captainTaskDetail", () => {
+  it("shows the first line of a markdown result as plain text", () => {
+    expect(
+      captainTaskDetail({
+        status: "ready",
+        subagent: {
+          result: "\n# Fixed the **probe**\nMore",
+        },
+      }),
+    ).toBe("Fixed the probe");
+    expect(
+      captainTaskDetail({
+        status: "ready",
+        subagent: {
+          result: "---\nCommitted `47ad049` on [t3/tasks](https://example.com) for _review_.",
+        },
+      }),
+    ).toBe("Committed 47ad049 on t3/tasks for review.");
   });
 });
