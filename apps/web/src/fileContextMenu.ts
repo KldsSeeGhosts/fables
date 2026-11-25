@@ -13,10 +13,13 @@ import {
   revealInFileExplorerLabelForOs,
 } from "~/components/preview/fileExplorerLabel";
 import { readLocalApi } from "./localApi";
+import { useRemoteOpenResolution } from "./remoteOpen";
 import { serverEnvironment } from "./state/server";
 import { shellEnvironment } from "./state/shell";
 import { useAtomCommand } from "./state/use-atom-command";
 import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
+import { isBrowserPreviewFile } from "~/browser/openFileInPreview";
+import { useOpenFileInBrowser } from "~/components/files/openFileInBrowser";
 import { toastManager } from "./components/ui/toast";
 import { useAtomValue } from "@effect/atom-react";
 import { msg, useMessages } from "gt-react";
@@ -26,6 +29,7 @@ import type { MessageResolver } from "./i18n/messages";
 export type FileContextMenuAction =
   | "reveal-in-folder"
   | "open"
+  | "open-in-browser"
   /** Submenu parent; never the activated id. */
   | "open-with"
   | `editor:${EditorId}`;
@@ -58,16 +62,27 @@ const EDITOR_LABEL_BY_ID = new Map(EDITORS.map((editor) => [editor.id, editor.la
 export interface FileContextMenuCapabilities {
   readonly revealLabel: string | undefined;
   readonly canOpenDefault: boolean;
+  readonly canOpenInBrowserLocally: boolean;
   readonly editorIds: ReadonlyArray<EditorId>;
 }
 
 function buildFileContextMenuItems(input: {
+  readonly filePath: string;
   readonly hasAbsolutePath: boolean;
   readonly capabilities: FileContextMenuCapabilities;
   readonly resolve: MessageResolver;
 }): readonly ContextMenuItem<FileContextMenuAction>[] {
   if (!input.hasAbsolutePath) return [];
   const items: ContextMenuItem<FileContextMenuAction>[] = [];
+  if (input.capabilities.canOpenInBrowserLocally && isBrowserPreviewFile(input.filePath)) {
+    items.push({
+      id: "open-in-browser",
+      label: input.resolve(
+        msg("Open in default browser", { $context: "verb, opens a file in the default browser" }),
+      ),
+      icon: "globe",
+    });
+  }
   if (input.capabilities.canOpenDefault) {
     items.push({
       id: "open",
@@ -98,6 +113,8 @@ function buildFileContextMenuItems(input: {
 
 export function useFileContextMenu(environmentId: EnvironmentId | null) {
   const openInEditor = useAtomCommand(shellEnvironment.openInEditor, { reportFailure: false });
+  const openInBrowser = useOpenFileInBrowser(environmentId);
+  const remoteOpen = useRemoteOpenResolution(environmentId);
   const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
   const resolve = useMessages();
 
@@ -113,6 +130,10 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
           : revealInFileExplorerLabelForKind(serverConfig.shellRevealInFileManagerKind, resolve)
         : undefined,
     canOpenDefault: availableEditors.includes("file-manager"),
+    canOpenInBrowserLocally:
+      remoteOpen.isResolved &&
+      remoteOpen.state.mode === "local-exec" &&
+      availableEditors.includes("file-manager"),
     editorIds: availableEditors,
   };
 
@@ -122,6 +143,12 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
   ): Promise<void> => {
     const absolutePath = resolveFileContextMenuAbsolutePath(target);
     if (absolutePath === null || environmentId === null) return;
+
+    if (action === "open-in-browser") {
+      if (!capabilities.canOpenInBrowserLocally || !isBrowserPreviewFile(target.filePath)) return;
+      await openInBrowser(absolutePath);
+      return;
+    }
 
     const reveal = action === "reveal-in-folder";
     const editor =
@@ -158,6 +185,7 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
   ): Promise<void> => {
     const api = readLocalApi();
     const items = buildFileContextMenuItems({
+      filePath: target.filePath,
       hasAbsolutePath: resolveFileContextMenuAbsolutePath(target) !== null,
       capabilities,
       resolve,
@@ -171,6 +199,7 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
   return {
     buildItems: (target: FileContextMenuTarget) =>
       buildFileContextMenuItems({
+        filePath: target.filePath,
         hasAbsolutePath: resolveFileContextMenuAbsolutePath(target) !== null,
         capabilities,
         resolve,
