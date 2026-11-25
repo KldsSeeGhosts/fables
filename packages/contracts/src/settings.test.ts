@@ -47,6 +47,17 @@ const encodeServerSettingsPatch = Schema.encodeSync(ServerSettingsPatch);
 const decodeProjectSettingsOverrides = Schema.decodeUnknownSync(ProjectSettingsOverrides);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
+describe("client tool-call visibility settings", () => {
+  it("keeps the Duet setting inheriting the main setting when older settings are decoded", () => {
+    const settings = decodeClientSettings({});
+    expect(settings.toolCallVisibility).toBe("showAll");
+    expect(settings.duetToolCallVisibility).toBe("inherit");
+    expect(decodeClientSettingsPatch({ duetToolCallVisibility: "zen" })).toEqual({
+      duetToolCallVisibility: "zen",
+    });
+  });
+});
+
 describe("client layout settings", () => {
   it("preserves absence so old clients can migrate their primary environment's layout", () => {
     expect(decodeClientSettings({}).layout).toBeUndefined();

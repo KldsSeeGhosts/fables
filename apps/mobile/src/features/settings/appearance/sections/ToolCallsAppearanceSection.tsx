@@ -1,6 +1,6 @@
 import { msg, T, useGT, useMessages } from "gt-react-native";
 import { useAtomValue } from "@effect/atom-react";
-import type { ToolCallVisibility } from "@t3tools/contracts/settings";
+import type { DuetToolCallVisibility, ToolCallVisibility } from "@t3tools/contracts/settings";
 import { AsyncResult } from "effect/reactivity";
 import { View } from "react-native";
 
@@ -9,6 +9,7 @@ import { ListChoiceRow } from "../../../../components/ui/ListChoiceRow";
 import { mobilePreferencesAtom, saveMobilePreferences } from "../../../../state/preferences";
 import { useAtomCommand } from "../../../../state/use-atom-command";
 import { SettingsSection } from "../../components/SettingsSection";
+import { useAppearancePreferences } from "../AppearancePreferencesProvider";
 
 const TOOL_CALL_VISIBILITY_OPTIONS: ReadonlyArray<{
   readonly value: ToolCallVisibility;
@@ -20,14 +21,40 @@ const TOOL_CALL_VISIBILITY_OPTIONS: ReadonlyArray<{
   { value: "zen", label: msg("Zen", { $context: "tool call visibility: only final answers" }) },
 ];
 
+const DUET_TOOL_CALL_VISIBILITY_OPTIONS: ReadonlyArray<{
+  readonly value: DuetToolCallVisibility;
+  readonly label: string;
+}> = [
+  {
+    value: "inherit",
+    label: msg("Same as other threads", { $context: "tool call visibility setting" }),
+  },
+  ...TOOL_CALL_VISIBILITY_OPTIONS,
+];
+
 export function ToolCallsAppearanceSection() {
   const gt = useGT();
   const m = useMessages();
   const savePreferences = useAtomCommand(saveMobilePreferences);
   const preferences = useAtomValue(mobilePreferencesAtom);
+  const { themeId } = useAppearancePreferences();
   const selected = AsyncResult.isSuccess(preferences)
     ? (preferences.value.toolCallVisibility ?? "showAll")
     : null;
+  const duetSelected = AsyncResult.isSuccess(preferences)
+    ? (preferences.value.duetToolCallVisibility ?? "inherit")
+    : null;
+  const duetShell = themeId.startsWith("ksg-salon");
+  const duetTitle = duetShell
+    ? gt("In Duets", { $context: "tool call visibility setting" })
+    : gt("In Captains", { $context: "tool call visibility setting" });
+  const duetDescription = duetShell
+    ? gt(
+        "Choose a different tool-call view for a Duet's current and earlier conversations. Crew and subagent threads keep the main setting.",
+      )
+    : gt(
+        "Choose a different tool-call view for a Captain's current and earlier conversations. Crew and subagent threads keep the main setting.",
+      );
 
   return (
     <View className="gap-3">
@@ -51,6 +78,21 @@ export function ToolCallsAppearanceSection() {
           shows only final answers. Approvals, questions, and errors always show.
         </T>
       </Text>
+      <SettingsSection title={duetTitle}>
+        {DUET_TOOL_CALL_VISIBILITY_OPTIONS.map((option, index) => (
+          <ListChoiceRow
+            key={option.value}
+            label={m(option.label)}
+            selected={duetSelected === option.value}
+            separated={index > 0}
+            disabled={duetSelected === null}
+            onPress={() => {
+              void savePreferences({ duetToolCallVisibility: option.value });
+            }}
+          />
+        ))}
+      </SettingsSection>
+      <Text className="px-2 text-sm text-foreground-muted">{duetDescription}</Text>
     </View>
   );
 }
