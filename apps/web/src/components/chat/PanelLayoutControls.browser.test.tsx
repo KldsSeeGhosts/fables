@@ -195,6 +195,37 @@ it("shows no close icon for a single-pane Duet", async () => {
   expect(screen.container.querySelector('button[aria-label="Close"]')).toBeNull();
 });
 
+it("shows no close icon when the only other tab in the Duet's pane is its own Tasks panel", async () => {
+  using _theme = duetTheme();
+  const tasksTab: LayoutTab = {
+    id: "tasks",
+    content: { kind: "surface", threadRef: duetRef, surfaceId: "duet-tasks" },
+  };
+  using _layout = withLayout({
+    focusedWorkspaceId: "workspace",
+    workspaces: [
+      {
+        id: "workspace",
+        name: null,
+        focusedPaneId: "duet-pane",
+        cameraWidth: null,
+        columns: [
+          {
+            id: "only",
+            width: 1,
+            panes: [
+              { id: "duet-pane", tabs: [duetTab, tasksTab], activeTabId: "duet-tab", size: 1 },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  await using screen = await render(headerControls({ split: true, tabId: "duet-tab" }));
+
+  expect(screen.container.querySelector('button[aria-label="Close"]')).toBeNull();
+});
+
 it("shows no close icon when the only other pane is the Duet's own Tasks panel", async () => {
   using _theme = duetTheme();
   using _layout = withLayout(

@@ -263,6 +263,26 @@ it("gives needs input precedence over working with an amber count", async () => 
   ).toBe("1 Duet needs input");
 });
 
+it("keeps line two filled when the Duet itself works or waits without its crew", async () => {
+  const secondLine = (row: HTMLElement) =>
+    row.querySelector(":scope > span.grid")?.children[1]?.textContent;
+  {
+    await using screen = await renderList({ working: true });
+    const row = screen.getByRole("button", { name: /^Maria, Working/ });
+    await expect.element(row).toBeVisible();
+    expect(secondLine(row.element())).toBe("All workspace");
+  }
+  {
+    await using screen = await renderList({
+      attention: 1,
+      primary: { ...primary, hasPendingApprovals: true },
+    });
+    const row = screen.getByRole("button", { name: /^Maria, Needs input/ });
+    await expect.element(row).toBeVisible();
+    expect(secondLine(row.element())).toBe("Needs input");
+  }
+});
+
 it("shows the scoped project's favicon and name when quiet", async () => {
   const project = {
     id: ProjectId.make("project"),
@@ -281,7 +301,7 @@ it("shows the scoped project's favicon and name when quiet", async () => {
   expect(row.element().textContent).toContain("KSG Code");
 });
 
-it("shows the machine as an icon tooltip when Duets span machines", async () => {
+it("shows the machine as an icon, named in the row's hover card, when Duets span machines", async () => {
   await using screen = await renderList({ label: "Mac Studio", machineKind: "mac-studio" });
   const row = screen.getByRole("button", {
     name: "Maria, Ready, Mac Studio, All workspace, Coordinator",
@@ -292,9 +312,9 @@ it("shows the machine as an icon tooltip when Duets span machines", async () => 
   await expect.element(machine).toBeVisible();
   await userEvent.hover(machine);
   await vi.waitFor(() => {
-    expect(
-      document.querySelector('[data-slot="tooltip-popup"][data-variant="default"]')?.textContent,
-    ).toBe("Mac Studio");
+    const popups = Array.from(document.querySelectorAll('[data-slot="tooltip-popup"]'));
+    expect(popups).toHaveLength(1);
+    expect(popups[0]?.textContent).toContain("Mac Studio");
   });
 });
 

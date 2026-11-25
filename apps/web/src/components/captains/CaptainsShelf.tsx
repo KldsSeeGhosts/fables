@@ -53,7 +53,7 @@ import {
   RelativeTimeLabel as SidebarRelativeTimeLabel,
   SidebarStatusLabel,
 } from "../sidebar/SidebarThreadRow";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { Tooltip, TooltipTrigger } from "../ui/tooltip";
 import { CaptainAvatar } from "./CaptainAvatar";
 import { captainPaletteOf } from "./captainPalette";
 import { CaptainTaskRing } from "./CaptainTaskRing";
@@ -210,7 +210,13 @@ function DuetChannelRow({
     details.length === 0
       ? gt("{name}, {status}", { name, status })
       : gt("{name}, {status}, {detail}", { name, status, detail: details.join(", ") });
-  const detailText = archived ? null : waiting ? waitingDetail : busy ? workingDetail : scope;
+  const detailText = archived
+    ? null
+    : waiting
+      ? (waitingDetail ?? status)
+      : busy
+        ? (workingDetail ?? scope)
+        : scope;
   const trailing = busy ? (
     <SidebarStatusLabel
       environmentId={environmentId}
@@ -296,24 +302,13 @@ function DuetChannelRow({
               )}
               <span className="min-w-0 flex-1 truncate">{detailText}</span>
               {label !== undefined ? (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <span
-                        role="img"
-                        aria-label={label}
-                        className="flex shrink-0 pl-1 text-placeholder"
-                      />
-                    }
-                  >
-                    <EnvironmentMachineIcon
-                      aria-hidden
-                      kind={machineKind}
-                      className="size-3 shrink-0"
-                    />
-                  </TooltipTrigger>
-                  <TooltipPopup side="top">{label}</TooltipPopup>
-                </Tooltip>
+                <span role="img" aria-label={label} className="flex shrink-0 pl-1 text-placeholder">
+                  <EnvironmentMachineIcon
+                    aria-hidden
+                    kind={machineKind}
+                    className="size-3 shrink-0"
+                  />
+                </span>
               ) : null}
             </span>
           </span>

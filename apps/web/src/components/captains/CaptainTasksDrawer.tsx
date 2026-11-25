@@ -285,7 +285,7 @@ function LocalTaskCard({
           ? {
               environmentId: thread?.environmentId ?? parent.environmentId,
               threadId: childThreadId,
-              workspaceRoot: thread?.worktreePath,
+              workspaceRoot: thread?.worktreePath ?? project?.workspaceRoot,
               result: resultPreview,
             }
           : undefined

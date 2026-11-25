@@ -34,7 +34,10 @@ const state = vi.hoisted(() => ({
   runNow: vi.fn(),
   setEnabled: vi.fn(),
   deleteTask: vi.fn(),
+  duetShell: false,
 }));
+
+vi.mock(import("../../hooks/useDuetShell"), () => ({ useDuetShell: () => state.duetShell }));
 
 vi.mock(import("./useCaptain"), async (importOriginal) => ({
   ...(await importOriginal()),
@@ -207,6 +210,7 @@ function routine(
 }
 
 function resetState() {
+  state.duetShell = false;
   state.captains = { captains: [captain], documents: [], memories: [] };
   state.parent = makeThreadFixture({
     id: captain.primaryThreadId,
@@ -242,8 +246,9 @@ it("shows Captain tasks with their status and workspace detail", async () => {
   await expect.element(screen.getByText("fix/checkout")).toBeVisible();
 });
 
-it("wraps a working task's status text in the shine element", async () => {
+it("wraps a working task's status text in the shine element under the Duet theme", async () => {
   resetState();
+  state.duetShell = true;
   state.children = [
     makeThreadFixture({
       id: childThreadId,
@@ -260,12 +265,22 @@ it("wraps a working task's status text in the shine element", async () => {
       },
     }),
   ];
-  await using screen = await render(
-    <CaptainTasksDrawer threadRef={threadRef} onClose={() => {}} />,
-  );
+  {
+    await using screen = await render(
+      <CaptainTasksDrawer threadRef={threadRef} onClose={() => {}} />,
+    );
+    await expect.element(screen.getByText("Working")).toBeVisible();
+    expect(screen.container.querySelector(".working-status-shine")?.textContent).toBe("Working");
+  }
 
-  await expect.element(screen.getByText("Working")).toBeVisible();
-  expect(screen.container.querySelector(".working-status-shine")?.textContent).toBe("Working");
+  state.duetShell = false;
+  {
+    await using screen = await render(
+      <CaptainTasksDrawer threadRef={threadRef} onClose={() => {}} />,
+    );
+    await expect.element(screen.getByText("Working")).toBeVisible();
+    expect(screen.container.querySelector(".working-status-shine")).toBeNull();
+  }
 });
 
 it("shows a finished local task's result image and never shows one while it is working", async () => {

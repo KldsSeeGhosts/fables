@@ -9,7 +9,7 @@ import { memo } from "react";
 import { useDuetShell } from "../../hooks/useDuetShell";
 import { shortcutLabelForCommand } from "../../keybindings";
 import { closeLayoutTabByUser } from "../../layout/layoutActions";
-import { findLayoutTab, type LayoutState } from "../../layout/layoutModel";
+import { findLayoutTab, type LayoutState, type LayoutTab } from "../../layout/layoutModel";
 import { useLayoutPane } from "../../layout/layoutPaneContext";
 import { useLayoutStore } from "../../layout/layoutStore";
 import type { ThreadPanelPresentation } from "../../rightPanelLayout";
@@ -95,27 +95,26 @@ function DuetClosePaneControl({ tabId }: { tabId: string }) {
 
 /**
  * A Duet's header offers to close its tab only when something else stays on screen: another
- * tab in its pane, or another pane that is not one of this Duet's own panels (Tasks, diffs).
+ * tab in its pane, or another pane, that is not one of this Duet's own panels (Tasks, diffs).
  */
 export function duetTabHasNeighbor(layout: LayoutState, tabId: string): boolean {
   const location = findLayoutTab(layout, (tab) => tab.id === tabId);
   if (location === null) return false;
-  if (location.pane.tabs.length > 1) return true;
   const { content } = location.tab;
   const ownThread =
     content.kind === "chat" && content.target.kind === "server"
       ? scopedThreadKey(content.target.threadRef)
       : null;
+  const isOwnPanel = (tab: LayoutTab) =>
+    tab.content.kind === "surface" &&
+    ownThread !== null &&
+    scopedThreadKey(tab.content.threadRef) === ownThread;
+  if (location.pane.tabs.some((tab) => tab.id !== tabId && !isOwnPanel(tab))) return true;
   return location.workspace.columns.some((column) =>
     column.panes.some((pane) => {
       if (pane.id === location.pane.id) return false;
       const active = pane.tabs.find((tab) => tab.id === pane.activeTabId) ?? pane.tabs[0];
-      if (active === undefined) return false;
-      return !(
-        active.content.kind === "surface" &&
-        ownThread !== null &&
-        scopedThreadKey(active.content.threadRef) === ownThread
-      );
+      return active !== undefined && !isOwnPanel(active);
     }),
   );
 }

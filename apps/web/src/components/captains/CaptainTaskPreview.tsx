@@ -22,10 +22,10 @@ function TaskPreviewImage({ src }: { readonly src: string }) {
   const markLoadedIfComplete = (image: HTMLImageElement | null) => {
     if (!image) return;
     // Cached images are complete before `onLoad` can fire.
-    if (image.complete && image.naturalWidth > 0) setLoadedSrc(image.currentSrc || image.src);
+    if (image.complete && image.naturalWidth > 0) setLoadedSrc(src);
   };
   return (
-    <span className={cn("block pl-5.5 duet:pl-[26px]", loaded && "mt-2")}>
+    <span className={cn("relative block pl-5.5 duet:pl-[26px]", loaded && "mt-2")}>
       <img
         ref={markLoadedIfComplete}
         src={src}
