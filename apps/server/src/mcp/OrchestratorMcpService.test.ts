@@ -3231,6 +3231,11 @@ describe("OrchestratorMcpService provider resolution", () => {
           assert.include(error.message, "unknown");
           for (const folder of trackedFolders) assert.include(error.message, folder.path);
           assert.isNull(yield* Ref.get(request));
+          const shared = yield* service
+            .delegateTask(scope, { task: "Review the change.", repositories: [selectedPath] })
+            .pipe(Effect.flip);
+          assert.include(shared.message, 'isolation "worktree"');
+          assert.isNull(yield* Ref.get(request));
           if (!input.projectIsRepository) {
             const plainRoot = yield* service
               .delegateTask(scope, { ...options, repositories: [workspaceRoot] })

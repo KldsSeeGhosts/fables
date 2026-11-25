@@ -2938,6 +2938,12 @@ const make = Effect.gen(function* () {
       };
     }),
     delegateTask: Effect.fn("OrchestratorMcpService.delegateTask")(function* (callerScope, input) {
+      if (input.repositories !== undefined && input.isolation !== "worktree") {
+        return yield* failure(
+          "invalid_request",
+          'Repositories apply only with isolation "worktree". A shared child works in the parent\'s checkout. No child was created.',
+        );
+      }
       const environmentId =
         input.target === undefined
           ? undefined
