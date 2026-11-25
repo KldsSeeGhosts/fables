@@ -12,6 +12,7 @@ import { ScrollArea } from "../ui/scroll-area";
 import { cn } from "../../lib/utils";
 import { Popover, PopoverPopup, PopoverCreateHandle } from "../ui/popover";
 import { selectThreadPanelOpen, useRightPanelStore } from "../../rightPanelStore";
+import { useDuetShell } from "../../hooks/useDuetShell";
 import { useChatCanvas } from "./ChatCanvasContext";
 import { THREAD_DETAILS_CARD_GAP } from "./threadDetailsCardLayout";
 import { observeResize } from "../../lib/observeResize";
@@ -34,6 +35,7 @@ export function ThreadDetailsCard({
 }) {
   const gt = useGT();
   const detailsArea = workspaceAreaProps("details", 3, gt("Thread details"));
+  const duet = useDuetShell();
   const canvas = useChatCanvas();
   const preferredPlacement = canvas?.preferredDetailsCard ?? null;
   const placement = canvas?.detailsCardPlacement ?? null;
@@ -155,8 +157,9 @@ export function ThreadDetailsCard({
         finalFocus={(closeType) => closeType === "keyboard"}
         anchor={anchor}
         align="end"
-        // Account for the find panel's 8px card padding.
-        alignOffset={THREAD_DETAILS_CARD_GAP - 8}
+        // Account for the find panel's 8px card padding. Duet's header controls sit 8px
+        // from the edge, so its popover needs no further offset.
+        alignOffset={duet ? 0 : THREAD_DETAILS_CARD_GAP - 8}
         collisionAvoidance={{ side: "shift", align: "shift", fallbackAxisSide: "none" }}
         side="bottom"
         sideOffset={topInset}

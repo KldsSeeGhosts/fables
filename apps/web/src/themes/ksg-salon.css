@@ -37,6 +37,8 @@ html:root[data-theme-id="ksg-salon"] {
   --duet-panel-fill: #f9f9f9;
   --duet-panel-border: #e6e6e6;
   --duet-panel-shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 10px 28px -14px rgb(0 0 0 / 14%);
+  --duet-details-popover-fill: #f4f4f4;
+  --duet-details-popover-muted: #6f6f6f;
   --duet-composer-fill: #ffffff;
   --duet-overview-fill: #fafafa;
 
@@ -56,6 +58,8 @@ html:root[data-theme-id="ksg-salon"] {
     --duet-panel-fill: #262626;
     --duet-panel-border: #333333;
     --duet-panel-shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 12px 32px -14px rgb(0 0 0 / 55%);
+    --duet-details-popover-fill: #2d2d2d;
+    --duet-details-popover-muted: #959595;
     --duet-composer-fill: #282828;
     --duet-overview-fill: #242424;
   }
@@ -124,9 +128,25 @@ html:root[data-theme-id="ksg-salon"] {
     height: 12px;
   }
 
-  /* Thread details read as one flat docked column: no outer card box, sections split by a hairline. */
+  /* The popover is one floating card; the inline presentation keeps the flat column below without this chrome. */
   [data-thread-details-panel="popover"] {
-    background: var(--duet-panel-fill);
+    --muted-foreground: var(--duet-details-popover-muted);
+    --dim-foreground: var(--duet-details-popover-muted);
+    --contrast-muted-foreground: color-mix(
+      in oklab,
+      color-mix(
+        in oklab,
+        var(--muted-foreground) var(--appearance-contrast-base),
+        var(--duet-details-popover-fill)
+      ),
+      var(--appearance-contrast-target) var(--appearance-contrast-boost)
+    );
+    --contrast-dim-foreground: var(--contrast-muted-foreground);
+    overflow: clip;
+    border: 1px solid var(--duet-panel-border);
+    border-radius: 1rem;
+    background: var(--duet-details-popover-fill);
+    box-shadow: var(--duet-panel-shadow);
   }
 
   .thread-details-stack {
