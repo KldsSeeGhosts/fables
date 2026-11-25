@@ -128,7 +128,8 @@ html:root[data-theme-id="ksg-salon"] {
     height: 12px;
   }
 
-  /* The popover is one floating card; the inline presentation keeps the flat column below without this chrome. */
+  /* Docked or floating, the details panel is one card so it stands apart from the conversation. */
+  [data-thread-details-panel="inline"],
   [data-thread-details-panel="popover"] {
     --muted-foreground: var(--duet-details-popover-muted);
     --dim-foreground: var(--duet-details-popover-muted);
