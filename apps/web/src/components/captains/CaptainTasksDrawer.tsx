@@ -1,5 +1,5 @@
 /* oxlint-disable t3code/no-styled-raw-controls, shadcn/no-arbitrary-values, t3code/no-raw-type-classes, t3code/no-dot-separated-text, t3code/no-outset-state-indicators -- Duet drawer tabs and task rows are semantic custom rows with exact channel geometry, not shared button controls. */
-import { useAtom } from "@effect/atom-react";
+import { useAtom, useAtomValue } from "@effect/atom-react";
 import {
   captainDelegatedLocalTasks,
   captainForThread,
@@ -7,12 +7,34 @@ import {
   type CaptainDelegatedLocalTask,
 } from "@t3tools/client-runtime/state/captains";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
-import { type OrchestrationV2Subagent, type ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+import {
+  type EnvironmentId,
+  type OrchestrationV2Subagent,
+  type ScheduledTask,
+  type ScopedThreadRef,
+  ThreadId,
+} from "@t3tools/contracts";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
+import { useNavigate } from "@tanstack/react-router";
 import { T, useGT, useMessages } from "gt-react";
-import { CalendarClockIcon, ChevronDownIcon, XIcon } from "lucide-react";
+import {
+  CalendarClockIcon,
+  ChevronDownIcon,
+  MoreHorizontalIcon,
+  PauseIcon,
+  PencilIcon,
+  PlayIcon,
+  PlusIcon,
+  Trash2Icon,
+  XIcon,
+} from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { isElectron } from "../../env";
+import { requestConfirmDialog } from "../../confirmDialog";
 import { useDuetShell } from "../../hooks/useDuetShell";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { useLayoutPane } from "../../layout/layoutPaneContext";
@@ -29,12 +51,14 @@ import {
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { threadEnvironment, threadFamilies } from "../../state/threads";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { formatRelativeElapsed } from "../../timestampFormat";
 import { scheduleLabel } from "../settings/scheduledTasksSettings.logic";
 import { usePanelTabSlots } from "../PanelTabBreadcrumb";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { Button } from "../ui/button";
+import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
 import { toastManager } from "../ui/toast";
 import { CaptainMorningBriefControl, captainMorningBriefTask } from "./CaptainDigest";
 import { CaptainTaskRing, useCaptainTaskStatusLabel } from "./CaptainTaskRing";
@@ -299,6 +323,128 @@ function DrawerEmpty({ children }: { readonly children: ReactNode }) {
   return <p className="py-2 text-left text-[13px] text-muted-foreground">{children}</p>;
 }
 
+function ScheduledRoutineRow({
+  environmentId,
+  task,
+  timestampFormat,
+  archived,
+}: {
+  readonly environmentId: EnvironmentId;
+  readonly task: ScheduledTask;
+  readonly timestampFormat: Parameters<typeof scheduleLabel>[1];
+  readonly archived: boolean;
+}) {
+  const gt = useGT();
+  const messages = useMessages();
+  const navigate = useNavigate();
+  const canRun = useAtomValue(serverEnvironment.runScheduledTaskNow.permissionAtom(environmentId));
+  const canSetEnabled = useAtomValue(
+    serverEnvironment.setScheduledTaskEnabled.permissionAtom(environmentId),
+  );
+  const canEdit = useAtomValue(serverEnvironment.upsertScheduledTask.permissionAtom(environmentId));
+  const canDelete = useAtomValue(
+    serverEnvironment.deleteScheduledTask.permissionAtom(environmentId),
+  );
+  const runNow = useAtomCommand(serverEnvironment.runScheduledTaskNow, { reportFailure: false });
+  const setEnabled = useAtomCommand(serverEnvironment.setScheduledTaskEnabled, {
+    reportFailure: false,
+  });
+  const deleteTask = useAtomCommand(serverEnvironment.deleteScheduledTask, {
+    reportFailure: false,
+  });
+  const [pendingAction, setPendingAction] = useState<"run" | "toggle" | "delete" | null>(null);
+
+  const act = async (action: "run" | "toggle" | "delete") => {
+    if (pendingAction !== null) return;
+    if (action === "delete") {
+      const message = `${gt('Delete "{title}"?', { title: task.title })}\n${gt("This cannot be undone.")}`;
+      const confirmed =
+        (await requestConfirmDialog(message, { variant: "destructive" })) ??
+        window.confirm(message);
+      if (!confirmed) return;
+    }
+    setPendingAction(action);
+    const result =
+      action === "run"
+        ? await runNow({ environmentId, input: { id: task.id } })
+        : action === "toggle"
+          ? await setEnabled({ environmentId, input: { id: task.id, enabled: !task.enabled } })
+          : await deleteTask({ environmentId, input: { id: task.id } });
+    setPendingAction(null);
+    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      toastManager.add({
+        type: "error",
+        title:
+          action === "run"
+            ? gt("Could not run the routine.")
+            : action === "toggle"
+              ? gt("Could not update the routine.")
+              : gt("Could not delete the routine."),
+        description: String(squashAtomCommandFailure(result)),
+      });
+    }
+  };
+
+  const pending = pendingAction !== null;
+  return (
+    <li className="flex min-w-0 items-center gap-2 px-1 py-1">
+      <CaptainTaskRing status="scheduled" />
+      <span className="min-w-0 flex-1 truncate text-[14px] font-medium">{task.title}</span>
+      <CalendarClockIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+      <span className="shrink-0 text-[12px] text-muted-foreground">
+        {task.enabled
+          ? scheduleLabel(task.schedule, timestampFormat, undefined, task.nextRunAt, messages)
+          : gt("Paused")}
+      </span>
+      <Menu>
+        <MenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              disabled={pending}
+              aria-label={gt("Actions for {title}", { title: task.title })}
+            />
+          }
+        >
+          <MoreHorizontalIcon aria-hidden />
+        </MenuTrigger>
+        <MenuPopup align="end">
+          <MenuItem disabled={!canRun || archived || pending} onClick={() => void act("run")}>
+            <PlayIcon aria-hidden />
+            <T>Run now</T>
+          </MenuItem>
+          <MenuItem disabled={!canSetEnabled || pending} onClick={() => void act("toggle")}>
+            {task.enabled ? <PauseIcon aria-hidden /> : <PlayIcon aria-hidden />}
+            {task.enabled ? <T>Pause</T> : <T>Resume</T>}
+          </MenuItem>
+          <MenuItem
+            disabled={!canEdit || pending}
+            onClick={() =>
+              void navigate({
+                to: "/settings/scheduled-tasks",
+                search: { environmentId, taskId: task.id },
+              })
+            }
+          >
+            <PencilIcon aria-hidden />
+            <T>Edit</T>
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem
+            variant="destructive"
+            disabled={!canDelete || pending}
+            onClick={() => void act("delete")}
+          >
+            <Trash2Icon aria-hidden />
+            <T>Delete</T>
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
+    </li>
+  );
+}
+
 function TaskRowCard({
   parent,
   row,
@@ -328,10 +474,14 @@ export function CaptainTasksDrawer({
   const gt = useGT();
   const isDuet = useDuetShell();
   const messages = useMessages();
+  const navigate = useNavigate();
   const panelTabSlots = usePanelTabSlots();
   const hideDrawerHeader = panelTabSlots?.showPanelTabs === true;
   const addSurfaceButton = hideDrawerHeader ? null : (panelTabSlots?.addSurfaceButton ?? null);
   const timestampFormat = useClientSettings((settings) => settings.timestampFormat);
+  const canCreateRoutine = useAtomValue(
+    serverEnvironment.upsertScheduledTask.permissionAtom(threadRef.environmentId),
+  );
   const [tab, setTab] = useAtom(captainDrawerTabAtom(threadRef));
   const captains = useCaptains(threadRef.environmentId);
   const captain = captainForThread(captains.data, threadRef.threadId);
@@ -593,6 +743,15 @@ export function CaptainTasksDrawer({
         ) : null}
         {tab === "scheduled" ? (
           <div className="flex flex-col gap-3">
+            {captain.archivedAt !== null ? (
+              <DrawerEmpty>
+                {isDuet ? (
+                  <T>Routines don't run while this Duet is archived.</T>
+                ) : (
+                  <T>Routines don't run while this Captain is archived.</T>
+                )}
+              </DrawerEmpty>
+            ) : null}
             <CaptainMorningBriefControl
               key={captain.id}
               captain={captain}
@@ -607,27 +766,35 @@ export function CaptainTasksDrawer({
             ) : (
               <ul className="flex flex-col gap-3">
                 {scheduled.map((task) => (
-                  <li key={task.id} className="flex min-w-0 items-center gap-2 px-1 py-1">
-                    <CaptainTaskRing status="scheduled" />
-                    <span className="min-w-0 flex-1 truncate text-[14px] font-medium">
-                      {task.title}
-                    </span>
-                    <CalendarClockIcon aria-hidden className="size-3.5 text-muted-foreground" />
-                    <span className="text-[12px] text-muted-foreground">
-                      {task.enabled
-                        ? scheduleLabel(
-                            task.schedule,
-                            timestampFormat,
-                            undefined,
-                            task.nextRunAt,
-                            messages,
-                          )
-                        : gt("Paused")}
-                    </span>
-                  </li>
+                  <ScheduledRoutineRow
+                    key={task.id}
+                    environmentId={threadRef.environmentId}
+                    task={task}
+                    timestampFormat={timestampFormat}
+                    archived={captain.archivedAt !== null}
+                  />
                 ))}
               </ul>
             )}
+            <div className="flex justify-end pt-1">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!canCreateRoutine}
+                onClick={() =>
+                  void navigate({
+                    to: "/settings/scheduled-tasks",
+                    search: {
+                      environmentId: threadRef.environmentId,
+                      templateThreadId: captain.primaryThreadId,
+                    },
+                  })
+                }
+              >
+                <PlusIcon aria-hidden />
+                <T>New routine</T>
+              </Button>
+            </div>
           </div>
         ) : null}
       </div>

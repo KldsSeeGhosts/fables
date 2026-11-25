@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import type { Captain, CaptainDocument, EnvironmentId, ScheduledTask } from "@t3tools/contracts";
 import { T, useGT } from "gt-react";
@@ -5,6 +6,8 @@ import { SunriseIcon } from "lucide-react";
 import { useId, useState } from "react";
 
 import { useDuetShell } from "../../hooks/useDuetShell";
+import { serverEnvironment } from "../../state/server";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
@@ -44,6 +47,8 @@ export function CaptainMorningBriefControl({
   const isDuet = useDuetShell();
   const timeId = useId();
   const morningBrief = useCaptainMorningBrief(environmentId);
+  const canRun = useAtomValue(serverEnvironment.runScheduledTaskNow.permissionAtom(environmentId));
+  const runNow = useAtomCommand(serverEnvironment.runScheduledTaskNow, { reportFailure: false });
   const scheduledTime = task?.schedule.type === "fixed_time" ? task.schedule.timeOfDay : null;
   const [time, setTime] = useState<string | null>(null);
   const [enabled, setEnabled] = useState<boolean | null>(null);
@@ -70,6 +75,16 @@ export function CaptainMorningBriefControl({
       setTime(null);
       setEnabled(null);
     }
+  };
+
+  const run = async () => {
+    if (task === undefined || pending) return;
+    setPending(true);
+    setError(null);
+    const result = await runNow({ environmentId, input: { id: task.id } });
+    setPending(false);
+    if (result._tag === "Failure")
+      setError(captainCommandError(result, gt("Could not run the morning brief.")));
   };
 
   const dirty = time !== null || enabled !== null;
@@ -111,11 +126,23 @@ export function CaptainMorningBriefControl({
           </Text>
         </div>
       </div>
-      {dirty ? (
-        <div className="mt-2 flex justify-end">
-          <Button size="xs" disabled={!canSave || pending} onClick={() => void save()}>
-            <T>Save</T>
-          </Button>
+      {task !== undefined || dirty ? (
+        <div className="mt-2 flex justify-end gap-1.5">
+          {task !== undefined ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              disabled={!canRun || pending || captain.archivedAt !== null}
+              onClick={() => void run()}
+            >
+              <T>Run now</T>
+            </Button>
+          ) : null}
+          {dirty ? (
+            <Button size="xs" disabled={!canSave || pending} onClick={() => void save()}>
+              <T>Save</T>
+            </Button>
+          ) : null}
         </div>
       ) : null}
       {error !== null ? (
