@@ -24,7 +24,7 @@ import { Button } from "../ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { StatusDot, type StatusDotTone } from "../ui/status-dot";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { resolveDuetOrbState, type DuetOrbState } from "./duetStatus.logic";
+import { resolveDuetOrbState, type DuetActivity, type DuetOrbState } from "./duetStatus.logic";
 
 function activeWorkStatus(status: OrchestrationV2Subagent["status"]): StatusDotTone {
   if (status === "waiting") return "warning";
@@ -163,8 +163,18 @@ export function useDuetThreadStatus(threadRef: ScopedThreadRef) {
   const liveLabel =
     state === "working" && activeChildren.length === 0 ? (activitySummary ?? stateText) : stateText;
 
+  const activity: DuetActivity =
+    state === "working"
+      ? "thinking"
+      : state === "waiting"
+        ? "waiting"
+        : state === "offline"
+          ? "offline"
+          : "idle";
+
   return {
     state,
+    activity,
     stateText,
     liveLabel,
     activitySummary,

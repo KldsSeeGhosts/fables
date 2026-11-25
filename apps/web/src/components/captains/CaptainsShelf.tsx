@@ -347,7 +347,7 @@ function CaptainShelfRow({
           <T>Open Docs</T>
         </MenuItem>
         <MenuSeparator />
-        <MenuItem disabled={!canUpdate} onClick={profile.edit}>
+        <MenuItem disabled={!canUpdate} onClick={() => profile.edit()}>
           <T>Edit Captain</T>
         </MenuItem>
         <MenuItem

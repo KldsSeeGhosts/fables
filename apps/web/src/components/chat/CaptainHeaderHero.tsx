@@ -176,7 +176,7 @@ export function CaptainHeaderTitleMenu({
             <ChevronDownIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
           </MenuTrigger>
           <MenuPopup align="start" width="wide">
-            <MenuItem disabled={!canUpdate} onClick={profile.edit}>
+            <MenuItem disabled={!canUpdate} onClick={() => profile.edit()}>
               <Settings2Icon aria-hidden />
               <T>Customize Duet</T>
             </MenuItem>

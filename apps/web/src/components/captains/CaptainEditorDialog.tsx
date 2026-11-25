@@ -43,6 +43,7 @@ import {
 } from "./captainPalette";
 import { CaptainReportPolicyPicker } from "./CaptainReportPolicyPicker";
 import { CaptainScope } from "./CaptainScope";
+import type { CaptainProfileSection } from "./CaptainBriefPanel";
 import { captainCommandError } from "./useCaptain";
 
 type Destination = { readonly id: EnvironmentId; readonly label: string };
@@ -51,12 +52,15 @@ export function CaptainEditorDialog({
   destination,
   destinations,
   captain,
+  initialSection: _initialSection = "profile",
   onClose,
   onSave,
 }: {
   destination: Destination;
   destinations?: ReadonlyArray<Destination>;
   captain?: Captain;
+  /** Which section an existing Duet's dialog opens on. */
+  initialSection?: CaptainProfileSection;
   onClose: () => void;
   onSave: (environmentId: EnvironmentId, captain: Captain) => void;
 }) {

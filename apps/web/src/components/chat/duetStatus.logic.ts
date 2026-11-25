@@ -1,5 +1,19 @@
 export type DuetOrbState = "idle" | "working" | "waiting" | "offline";
 
+/** What a Duet is doing right now, finer than its orb state; the creature and live pill follow it. */
+export type DuetActivity =
+  | "idle"
+  | "thinking"
+  | "reading"
+  | "editing"
+  | "command"
+  | "searching"
+  | "browsing"
+  | "writing"
+  | "delegating"
+  | "waiting"
+  | "offline";
+
 /** The header orb's precedence: connection first, then user attention, then active work. */
 export function resolveDuetOrbState(input: {
   connected: boolean;
