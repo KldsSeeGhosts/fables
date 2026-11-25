@@ -293,6 +293,35 @@ describe("handoff budget", () => {
     }
   });
 
+  it("caps history at the reported default compaction point", () => {
+    const input = {
+      tokenCap: 16_000,
+      userText: "Continue",
+      attachments: [],
+      providerThread: {
+        ...providerThread,
+        contextUsage: { usedTokens: 120_000, maxTokens: 200_000 },
+      },
+      nativeContextEstimate: 120_000,
+      modelContextWindow: 200_000,
+    };
+    assert.equal(handoffBudget(input), 16_000);
+    assert.equal(
+      handoffBudget({
+        ...input,
+        providerThread: {
+          ...providerThread,
+          contextUsage: {
+            usedTokens: 120_000,
+            maxTokens: 200_000,
+            autoCompactThreshold: 167_000,
+          },
+        },
+      }),
+      5_240,
+    );
+  });
+
   it("keeps measured occupancy across a model change", () => {
     const previous = {
       usedTokens: 37_321,

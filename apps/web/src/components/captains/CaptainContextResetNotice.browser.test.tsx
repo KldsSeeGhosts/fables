@@ -67,7 +67,15 @@ function setup(value: Captain | null = captain, canReset = true) {
 
 function notice(percent: number | null, ref: ScopedThreadRef | null = threadRef) {
   return (
-    <CaptainContextResetNotice threadRef={ref} usedPercentage={percent} onOpenThread={() => {}} />
+    <CaptainContextResetNotice
+      threadRef={ref}
+      contextWindow={
+        percent === null
+          ? null
+          : { usedTokens: percent, maxTokens: 100, autoCompactThreshold: null }
+      }
+      onOpenThread={() => {}}
+    />
   );
 }
 
@@ -75,52 +83,103 @@ it("shows at 80%, stays dismissed at 85%, and returns without a dismiss action a
   setup();
   await using screen = await render(notice(80));
 
-  await expect.element(screen.getByText("This conversation is 80% full.")).toBeVisible();
+  await expect
+    .element(screen.getByText("This conversation is 80% of the way to automatic compaction."))
+    .toBeVisible();
   await expect
     .element(
       screen.getByText("Start a new one and NOTES.md, memories and running tasks carry over."),
     )
     .toBeVisible();
-  const dismiss = screen.getByRole("button", { name: "Dismiss context usage notice" });
+  const dismiss = screen.getByRole("button", { name: "Dismiss compaction notice" });
   await expect.element(dismiss).toBeVisible();
 
   await userEvent.click(dismiss);
-  await expect.element(screen.getByText("This conversation is 80% full.")).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByText("This conversation is 80% of the way to automatic compaction."))
+    .not.toBeInTheDocument();
 
   await screen.rerender(notice(85));
-  await expect.element(screen.getByText("This conversation is 85% full.")).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByText("This conversation is 85% of the way to automatic compaction."))
+    .not.toBeInTheDocument();
 
   await screen.rerender(notice(92));
-  await expect.element(screen.getByText("This conversation is 92% full.")).toBeVisible();
   await expect
-    .element(screen.getByRole("button", { name: "Dismiss context usage notice" }))
+    .element(screen.getByText("This conversation is 92% of the way to automatic compaction."))
+    .toBeVisible();
+  await expect
+    .element(screen.getByRole("button", { name: "Dismiss compaction notice" }))
+    .not.toBeInTheDocument();
+});
+
+it("measures the notice against the automatic compaction threshold", async () => {
+  setup();
+  const contextWindow = {
+    usedTokens: 75_000,
+    maxTokens: 200_000,
+    autoCompactThreshold: 100_000,
+  };
+  await using screen = await render(
+    <CaptainContextResetNotice
+      threadRef={threadRef}
+      contextWindow={contextWindow}
+      onOpenThread={() => {}}
+    />,
+  );
+
+  await expect
+    .element(screen.getByText("This conversation is 75% of the way to automatic compaction."))
+    .toBeVisible();
+
+  await screen.rerender(
+    <CaptainContextResetNotice
+      threadRef={threadRef}
+      contextWindow={{ ...contextWindow, usedTokens: 74_999 }}
+      onOpenThread={() => {}}
+    />,
+  );
+  await expect
+    .element(screen.getByText(/This conversation is .* automatic compaction\./))
     .not.toBeInTheDocument();
 });
 
 it("stays hidden below 75%, for non-Duet threads, archived Duets, and earlier conversations", async () => {
   setup();
   await using screen = await render(notice(null));
-  await expect.element(screen.getByText(/This conversation is .* full\./)).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByText(/This conversation is .* automatic compaction\./))
+    .not.toBeInTheDocument();
 
   await screen.rerender(notice(60));
-  await expect.element(screen.getByText(/This conversation is .* full\./)).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByText(/This conversation is .* automatic compaction\./))
+    .not.toBeInTheDocument();
 
   await screen.rerender(notice(80, { environmentId, threadId: ThreadId.make("thread:regular") }));
-  await expect.element(screen.getByText(/This conversation is .* full\./)).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByText(/This conversation is .* automatic compaction\./))
+    .not.toBeInTheDocument();
 
   setup({ ...captain, archivedAt: captain.updatedAt });
   await screen.rerender(notice(80));
-  await expect.element(screen.getByText(/This conversation is .* full\./)).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByText(/This conversation is .* automatic compaction\./))
+    .not.toBeInTheDocument();
 
   setup();
   await screen.rerender(notice(80, { environmentId, threadId: ThreadId.make("captain:maria:1") }));
-  await expect.element(screen.getByText(/This conversation is .* full\./)).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByText(/This conversation is .* automatic compaction\./))
+    .not.toBeInTheDocument();
 });
 
 it("stays hidden for a viewer who cannot reset the Duet", async () => {
   setup(captain, false);
   await using screen = await render(notice(95));
-  await expect.element(screen.getByText(/This conversation is .* full\./)).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByText(/This conversation is .* automatic compaction\./))
+    .not.toBeInTheDocument();
 });
 
 it("opens the reset dialog from the new conversation action", async () => {
@@ -141,7 +200,9 @@ it("keeps the reset dialog open when the notice disappears underneath it", async
   await userEvent.click(screen.getByRole("button", { name: "New conversation" }));
   await screen.rerender(notice(60));
 
-  await expect.element(screen.getByText(/This conversation is .* full\./)).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByText(/This conversation is .* automatic compaction\./))
+    .not.toBeInTheDocument();
   await expect
     .element(page.getByRole("alertdialog", { name: "Reset conversation?" }))
     .toBeVisible();
