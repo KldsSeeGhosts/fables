@@ -143,13 +143,18 @@ function TaskCardLayout({
       >
         <span className="flex min-w-0 items-center gap-2">
           <CaptainTaskRing status={status} />
-          <span className="min-w-0 flex-1 truncate text-[14px] font-semibold leading-5 text-foreground">
+          <span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-[18px] text-foreground">
             {title}
           </span>
           <span className="shrink-0 text-[12px] leading-4 text-(--duet-meta)">{elapsed}</span>
         </span>
-        <span className="mt-0.5 block pl-5.5 text-[13px] leading-4.5">
-          <span style={{ color: statusColor[status] }}>{statusLabel}</span>
+        <span className="mt-0.5 block pl-5.5 text-[12.5px] leading-4.5">
+          <span
+            className={status === "needs-input" ? "text-(--duet-needs-input)" : undefined}
+            style={status === "needs-input" ? undefined : { color: statusColor[status] }}
+          >
+            {statusLabel}
+          </span>
           {detail ? <span className="text-muted-foreground"> · {detail}</span> : null}
         </span>
         {meta ? (
@@ -267,7 +272,7 @@ function RemoteTaskCard({
 }
 
 function DrawerEmpty({ children }: { readonly children: ReactNode }) {
-  return <p className="px-1 py-8 text-center text-[13px] text-muted-foreground">{children}</p>;
+  return <p className="py-2 text-left text-[13px] text-muted-foreground">{children}</p>;
 }
 
 /** The right-side Duet task drawer for one Captain channel. */
@@ -375,7 +380,7 @@ export function CaptainTasksDrawer({
       <div
         role="tablist"
         aria-label={gt("Captain task views")}
-        className="flex h-11 shrink-0 items-center gap-1 border-b border-(--duet-hairline) px-4"
+        className="mt-1 flex h-[26px] shrink-0 items-center gap-0.5 px-4"
       >
         {(["today", "all", "scheduled", "docs"] as const).map((entry) => (
           <button
@@ -384,10 +389,10 @@ export function CaptainTasksDrawer({
             role="tab"
             aria-selected={tab === entry}
             className={cn(
-              "h-6.5 cursor-pointer rounded-md px-2 text-[14px] leading-none outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "h-[26px] cursor-pointer rounded-[6px] px-2 text-[13px] leading-none outline-none focus-visible:ring-2 focus-visible:ring-ring",
               tab === entry
-                ? "bg-(--duet-row-active) font-medium text-foreground"
-                : "text-muted-foreground hover:text-foreground",
+                ? "bg-[#e5e5e5] font-medium text-foreground dark:bg-[#333333]"
+                : "text-[#555555] hover:text-foreground dark:text-[#a3a3a3]",
             )}
             onClick={() => setTab(entry)}
           >
@@ -401,14 +406,14 @@ export function CaptainTasksDrawer({
           </button>
         ))}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-3 pb-4">
         {tab === "today" || tab === "all" ? (
           visibleChildren.length + visibleRemote.length === 0 ? (
             <DrawerEmpty>
               {tab === "today" ? <T>No tasks need you today.</T> : <T>No delegated tasks yet.</T>}
             </DrawerEmpty>
           ) : (
-            <ul className="flex flex-col gap-6">
+            <ul className="flex flex-col gap-[18px]">
               {visibleChildren.map((thread) => (
                 <LocalTaskCard
                   key={thread.id}
@@ -496,12 +501,12 @@ export function CaptainTasksDrawer({
           )
         ) : null}
       </div>
-      <div className="shrink-0 border-t border-(--duet-hairline) p-3">
+      <div className="shrink-0 p-3">
         <input
           value={taskText}
           aria-label={gt("Add a task...")}
           placeholder={gt("Add a task...")}
-          className="h-9 w-full rounded-[10px] border border-(--duet-hairline) bg-[#f5f5f5] px-3 text-[13.5px] outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring dark:bg-[#252525]"
+          className="h-9 w-full rounded-full border border-transparent bg-[#f9f9f9] px-3 text-[13px] outline-none placeholder:text-muted-foreground focus:border-[#e0e0e0] dark:bg-[#262626]"
           onChange={(event) => setTaskText(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.nativeEvent.isComposing) {
@@ -524,9 +529,15 @@ function DrawerHeader({
 }) {
   const gt = useGT();
   return (
-    <div className="flex h-13 shrink-0 items-center justify-between border-b border-(--duet-hairline) px-4">
-      <h2 className="min-w-0 truncate text-[14px] font-medium text-foreground">{title}</h2>
-      <Button variant="ghost" size="icon-xs" aria-label={gt("Close tasks")} onClick={onClose}>
+    <div className="flex h-13 shrink-0 items-center justify-between px-4">
+      <h2 className="min-w-0 truncate text-[13px] font-medium text-foreground">{title}</h2>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        className="size-7"
+        aria-label={gt("Close tasks")}
+        onClick={onClose}
+      >
         <XIcon />
       </Button>
     </div>

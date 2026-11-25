@@ -13,6 +13,9 @@ import type { LayoutNewTabPosition, LayoutWhenNoRoom } from "./layoutBehavior";
  */
 export type LayoutCompanionKind = "panel" | "terminal";
 
+/** A remembered companion width: the two placement kinds, plus the Captain tasks drawer's narrower Duet width. */
+export type LayoutCompanionSizeKey = LayoutCompanionKind | "duet-tasks-drawer";
+
 /**
  * The surface id of a thread's terminal (cmd+J): its sessions and groups live
  * in `terminalUiStateStore`. Every other surface id names a `rightPanelStore`
@@ -1524,6 +1527,39 @@ export function showLayoutContent(state: LayoutState, content: LayoutTabContent)
 }
 
 /**
+ * Duet's single-focus navigation: an ordinary sidebar route takes over the focused pane's
+ * active tab instead of leaving the previous chat or page behind as a ghost sibling.
+ * Explicit tab creation still goes through openLayoutTab placements.
+ */
+export function replaceFocusedLayoutContent(
+  state: LayoutState,
+  content: LayoutTabContent,
+): LayoutState {
+  const existing = findLayoutTabByContent(state, content);
+  if (existing) return focusLayoutTab(state, existing.tab.id);
+  const anchor = selectLayoutOpenAnchor(state);
+  if (!anchor) {
+    const workspace = selectFocusedWorkspace(state);
+    return insertColumn(
+      state,
+      workspace.id,
+      workspace.columns.length,
+      createColumn(createPane(createLayoutTab(content))),
+    );
+  }
+  const replaced = replaceLayoutTabContent(state, anchor.tab.id, content);
+  const unghosted = mapPanes(replaced, (pane) => ({
+    ...pane,
+    tabs: pane.tabs.map((tab) => {
+      if (tab.id !== anchor.tab.id || tab.ghostOf === undefined) return tab;
+      const { ghostOf: _ghostOf, ...kept } = tab;
+      return kept;
+    }),
+  }));
+  return focusLayoutTab(unghosted, anchor.tab.id);
+}
+
+/**
  * The chats an open swapped on screen: in a pane of the focused workspace that showed `from` and
  * now shows `to`. A chat still showing in another pane, or moving there, is no swap. `focusOnly`
  * marks a swap that only focused a tab the pane already held, as a tab click does.
@@ -1847,9 +1883,10 @@ export function placeLayoutContent(
  * Default sizes for a thread's surfaces opened beside or below its chat: the
  * side pane takes 45% of the chat's column, the terminal a third of its pane.
  */
-export const DEFAULT_LAYOUT_COMPANION_SIZES: Record<LayoutCompanionKind, number> = {
+export const DEFAULT_LAYOUT_COMPANION_SIZES: Record<LayoutCompanionSizeKey, number> = {
   panel: 0.45,
   terminal: 1 / 3,
+  "duet-tasks-drawer": 0.31,
 };
 
 export type LayoutTabPlacement = LayoutTabDestination | { kind: "after"; tabId: string };

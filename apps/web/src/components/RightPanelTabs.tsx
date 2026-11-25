@@ -801,6 +801,8 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
   // A layout pane's tabs sit in its notch (pen JiaZk), like a chat's.
   const notched = props.mode === "embedded" || props.pane === true;
   const showPanelTabs = !isDuetShell || shouldShowDuetRightPanelTabs(props.surfaces);
+  const duetTasksDrawer =
+    isDuetShell && props.surfaces.length === 1 && props.surfaces[0]?.kind === "captain-brief";
   const tabSlots = {
     breadcrumb: mobileDiff ? mobileBreadcrumbSlot : null,
     actions: actionsSlot,
@@ -1177,8 +1179,13 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       mode={props.mode}
       {...(props.maximized !== undefined ? { maximized: props.maximized } : {})}
       {...(props.open !== undefined ? { open: props.open } : {})}
-      {...(props.widthStorageKey !== undefined ? { widthStorageKey: props.widthStorageKey } : {})}
-      {...(props.defaultWidth !== undefined ? { defaultWidth: props.defaultWidth } : {})}
+      {...(props.widthStorageKey !== undefined || duetTasksDrawer
+        ? { widthStorageKey: props.widthStorageKey ?? "duet-tasks-drawer" }
+        : {})}
+      {...(props.defaultWidth !== undefined || duetTasksDrawer
+        ? { defaultWidth: props.defaultWidth ?? 360 }
+        : {})}
+      {...(duetTasksDrawer ? { minWidth: 320, maxWidth: 480 } : {})}
       {...(props.pane ? { pane: true } : {})}
       {...(props.inlineSize ? { inlineSize: props.inlineSize } : {})}
       onMouseDown={preventThumbButtonFocus}
@@ -1189,189 +1196,192 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
         )
       }
     >
-      <div
-        className={cn(
-          // diff-toolbar: the active surface's actions sit in this row and fold
-          // into a menu when the pane is narrow (DiffViewControls).
-          "@container/diff-toolbar flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center gap-1 duet:border-b duet:border-(--duet-hairline)",
-          // A layout pane's row lines up with its chat's header and starts at
-          // the pane's edge, under its notch.
-          notched
-            ? cn(
-                "relative z-10 ps-1.5 pe-2 md:ps-0",
-                COLLAPSED_SIDEBAR_INSET_EASE_CLASS,
-                (focusedSurface && PANE_BODY_SURFACE_CLASS[focusedSurface.kind]) ?? "bg-background",
-              )
-            : "pl-2",
-          !notched && (props.mode === "inline" && !props.layoutControls ? "pr-28" : "pr-3"),
-          ownsDesktopTitleBar && "drag-region",
-          ownsDesktopTitleBar && "wco:pr-(--workspace-native-controls-inset)",
-          props.mode === "inline" && props.maximized && COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
-          // The leading embedded pane shares the mobile row with the shell toggle.
-          notched && leadingEdge && COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
-        )}
-        data-right-panel-tabbar
-        data-pane-header={notched ? "" : undefined}
-      >
-        {showPanelTabs ? (
-          <PanelTabsNotch
-            notched={notched}
-            secondStrip={paneTabsId === null}
-            addButton={addSurfaceMenu}
-            pinnedTab={
-              pinnedChatTab ? (
-                <span className="flex max-w-24 min-w-0 shrink-0">
-                  <LayoutPaneTab tab={pinnedChatTab} />
-                </span>
-              ) : null
-            }
-          >
-            {paneTabsId !== null
-              ? [...siblingTabs.before, ...(pageTab ? [pageTab] : [])]
-                  .filter((tab) => tab.id !== pinnedChatTab?.id)
-                  .map((tab) => <LayoutPaneTab key={tab.id} tab={tab} />)
-              : null}
-            <PanelTabStrip
-              notched={notched}
-              // A scrolling strip in the title bar leaves the drag region, so trackpad scrolls reach it.
-              noDrag={ownsDesktopTitleBar && tabScrollState.hasOverflow}
-              ref={attachTabList}
-            >
-              <SortableTabList surfaces={props.surfaces} onMove={props.onMoveSurface}>
-                {props.surfaces.map((surface) => {
-                  const previewTabId = previewTabIdOf(surface, props.previewSessions);
-                  const favicon = previewFaviconOf(
-                    surface,
-                    props.previewSessions,
-                    props.desktopByTabId,
-                  );
-                  return (
-                    <RightPanelTab
-                      key={surface.id}
-                      surface={surface}
-                      // A layout tab's strip drags the whole tab instead.
-                      dragDisabled={
-                        !props.onMoveSurface ||
-                        renamingDeviceId === surface.id ||
-                        layoutTabId !== null
-                      }
-                      active={surface.id === props.activeSurfaceId}
-                      pending={props.pendingSurfaceIds.has(surface.id)}
-                      title={surfaceTitle(
-                        surface,
-                        props.previewSessions,
-                        props.terminalLabelsById,
-                        messages,
-                      )}
-                      audio={tabAudioState(
-                        previewTabId ? (props.desktopByTabId[previewTabId] ?? null) : null,
-                      )}
-                      audioRuntimeTabId={
-                        previewTabId ? (props.previewRuntimeTabId?.(previewTabId) ?? null) : null
-                      }
-                      previewUrl={favicon.url}
-                      previewCapturedUrl={favicon.capturedUrl}
-                      theme={resolvedTheme}
-                      environmentId={props.environmentId}
-                      pullRequestStatusSeed={props.pullRequestStatusSeeds?.[surface.id]}
-                      renaming={renamingDeviceId === surface.id}
-                      canRename={props.onRenameDevice !== undefined}
-                      ownsDesktopTitleBar={ownsDesktopTitleBar}
-                      notched={notched}
-                      layoutTabId={layoutTabId}
-                      threadTitle={props.threadTitle ?? null}
-                      onActivate={onActivateTab}
-                      onClose={onCloseTab}
-                      onAuxClick={onTabAuxClick}
-                      onContextMenu={onTabContextMenu}
-                      onStartRename={onStartRenameTab}
-                      onFinishRename={onFinishRenameTab}
-                    />
-                  );
-                })}
-              </SortableTabList>
-              {notched ? null : addSurfaceMenu}
-            </PanelTabStrip>
-            {paneTabsId !== null
-              ? siblingTabs.after
-                  .filter((tab) => tab.id !== pinnedChatTab?.id)
-                  .map((tab) => <LayoutPaneTab key={tab.id} tab={tab} />)
-              : null}
-          </PanelTabsNotch>
-        ) : null}
-        {/* In the notch the tabs scroll by wheel and ctrl+Tab; the actions need the room. */}
-        {!notched && tabScrollState.hasOverflow ? (
-          <div
-            className="flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag]"
-            role="group"
-            aria-label={gt("Scroll panel tabs")}
-          >
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <span className="inline-flex">
-                    <Button
-                      aria-label={gt("Scroll tabs left")}
-                      disabled={!tabScrollState.canScrollLeft}
-                      onClick={() => scrollTabs(-1)}
-                      size="icon-xs"
-                      variant="ghost"
-                    >
-                      <ChevronLeft />
-                    </Button>
-                  </span>
-                }
-              />
-              <TooltipPopup>
-                <T>Scroll tabs left</T>
-              </TooltipPopup>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <span className="inline-flex">
-                    <Button
-                      aria-label={gt("Scroll tabs right")}
-                      disabled={!tabScrollState.canScrollRight}
-                      onClick={() => scrollTabs(1)}
-                      size="icon-xs"
-                      variant="ghost"
-                    >
-                      <ChevronRight />
-                    </Button>
-                  </span>
-                }
-              />
-              <TooltipPopup>
-                <T>Scroll tabs right</T>
-              </TooltipPopup>
-            </Tooltip>
-          </div>
-        ) : null}
-        <PanelActionsNotch
-          notched={notched && props.activeSurfaceId !== null}
-          hasActions={hasActions || props.layoutControls !== undefined}
+      {showPanelTabs || hasActions || props.layoutControls !== undefined ? (
+        <div
+          className={cn(
+            // diff-toolbar: the active surface's actions sit in this row and fold
+            // into a menu when the pane is narrow (DiffViewControls).
+            "@container/diff-toolbar flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center gap-1 duet:border-b duet:border-(--duet-hairline)",
+            // A layout pane's row lines up with its chat's header and starts at
+            // the pane's edge, under its notch.
+            notched
+              ? cn(
+                  "relative z-10 ps-1.5 pe-2 md:ps-0",
+                  COLLAPSED_SIDEBAR_INSET_EASE_CLASS,
+                  (focusedSurface && PANE_BODY_SURFACE_CLASS[focusedSurface.kind]) ??
+                    "bg-background",
+                )
+              : "pl-2",
+            !notched && (props.mode === "inline" && !props.layoutControls ? "pr-28" : "pr-3"),
+            ownsDesktopTitleBar && "drag-region",
+            ownsDesktopTitleBar && "wco:pr-(--workspace-native-controls-inset)",
+            props.mode === "inline" && props.maximized && COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
+            // The leading embedded pane shares the mobile row with the shell toggle.
+            notched && leadingEdge && COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
+          )}
+          data-right-panel-tabbar
+          data-pane-header={notched ? "" : undefined}
         >
-          {mobileDiff ? (
-            <span ref={setMobileBreadcrumbSlot} className="flex min-w-0 items-center gap-1" />
+          {showPanelTabs ? (
+            <PanelTabsNotch
+              notched={notched}
+              secondStrip={paneTabsId === null}
+              addButton={addSurfaceMenu}
+              pinnedTab={
+                pinnedChatTab ? (
+                  <span className="flex max-w-24 min-w-0 shrink-0">
+                    <LayoutPaneTab tab={pinnedChatTab} />
+                  </span>
+                ) : null
+              }
+            >
+              {paneTabsId !== null
+                ? [...siblingTabs.before, ...(pageTab ? [pageTab] : [])]
+                    .filter((tab) => tab.id !== pinnedChatTab?.id)
+                    .map((tab) => <LayoutPaneTab key={tab.id} tab={tab} />)
+                : null}
+              <PanelTabStrip
+                notched={notched}
+                // A scrolling strip in the title bar leaves the drag region, so trackpad scrolls reach it.
+                noDrag={ownsDesktopTitleBar && tabScrollState.hasOverflow}
+                ref={attachTabList}
+              >
+                <SortableTabList surfaces={props.surfaces} onMove={props.onMoveSurface}>
+                  {props.surfaces.map((surface) => {
+                    const previewTabId = previewTabIdOf(surface, props.previewSessions);
+                    const favicon = previewFaviconOf(
+                      surface,
+                      props.previewSessions,
+                      props.desktopByTabId,
+                    );
+                    return (
+                      <RightPanelTab
+                        key={surface.id}
+                        surface={surface}
+                        // A layout tab's strip drags the whole tab instead.
+                        dragDisabled={
+                          !props.onMoveSurface ||
+                          renamingDeviceId === surface.id ||
+                          layoutTabId !== null
+                        }
+                        active={surface.id === props.activeSurfaceId}
+                        pending={props.pendingSurfaceIds.has(surface.id)}
+                        title={surfaceTitle(
+                          surface,
+                          props.previewSessions,
+                          props.terminalLabelsById,
+                          messages,
+                        )}
+                        audio={tabAudioState(
+                          previewTabId ? (props.desktopByTabId[previewTabId] ?? null) : null,
+                        )}
+                        audioRuntimeTabId={
+                          previewTabId ? (props.previewRuntimeTabId?.(previewTabId) ?? null) : null
+                        }
+                        previewUrl={favicon.url}
+                        previewCapturedUrl={favicon.capturedUrl}
+                        theme={resolvedTheme}
+                        environmentId={props.environmentId}
+                        pullRequestStatusSeed={props.pullRequestStatusSeeds?.[surface.id]}
+                        renaming={renamingDeviceId === surface.id}
+                        canRename={props.onRenameDevice !== undefined}
+                        ownsDesktopTitleBar={ownsDesktopTitleBar}
+                        notched={notched}
+                        layoutTabId={layoutTabId}
+                        threadTitle={props.threadTitle ?? null}
+                        onActivate={onActivateTab}
+                        onClose={onCloseTab}
+                        onAuxClick={onTabAuxClick}
+                        onContextMenu={onTabContextMenu}
+                        onStartRename={onStartRenameTab}
+                        onFinishRename={onFinishRenameTab}
+                      />
+                    );
+                  })}
+                </SortableTabList>
+                {notched ? null : addSurfaceMenu}
+              </PanelTabStrip>
+              {paneTabsId !== null
+                ? siblingTabs.after
+                    .filter((tab) => tab.id !== pinnedChatTab?.id)
+                    .map((tab) => <LayoutPaneTab key={tab.id} tab={tab} />)
+                : null}
+            </PanelTabsNotch>
           ) : null}
-          <div
-            ref={setActionsSlot}
-            className="ms-auto flex shrink-0 items-center gap-0.5 empty:hidden [-webkit-app-region:no-drag]"
-            data-right-panel-tab-actions
-          />
-          {props.layoutControls}
-        </PanelActionsNotch>
-        {ownsDesktopTitleBar && !props.layoutControls ? (
-          <span aria-hidden className="hidden w-24 shrink-0 wco:block" />
-        ) : null}
-        {ownsDesktopTitleBar ? (
-          <span
-            aria-hidden
-            className="pointer-events-none fixed top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] h-[var(--workspace-topbar-height)] w-28 [-webkit-app-region:no-drag]"
-          />
-        ) : null}
-      </div>
+          {/* In the notch the tabs scroll by wheel and ctrl+Tab; the actions need the room. */}
+          {!notched && tabScrollState.hasOverflow ? (
+            <div
+              className="flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag]"
+              role="group"
+              aria-label={gt("Scroll panel tabs")}
+            >
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className="inline-flex">
+                      <Button
+                        aria-label={gt("Scroll tabs left")}
+                        disabled={!tabScrollState.canScrollLeft}
+                        onClick={() => scrollTabs(-1)}
+                        size="icon-xs"
+                        variant="ghost"
+                      >
+                        <ChevronLeft />
+                      </Button>
+                    </span>
+                  }
+                />
+                <TooltipPopup>
+                  <T>Scroll tabs left</T>
+                </TooltipPopup>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className="inline-flex">
+                      <Button
+                        aria-label={gt("Scroll tabs right")}
+                        disabled={!tabScrollState.canScrollRight}
+                        onClick={() => scrollTabs(1)}
+                        size="icon-xs"
+                        variant="ghost"
+                      >
+                        <ChevronRight />
+                      </Button>
+                    </span>
+                  }
+                />
+                <TooltipPopup>
+                  <T>Scroll tabs right</T>
+                </TooltipPopup>
+              </Tooltip>
+            </div>
+          ) : null}
+          <PanelActionsNotch
+            notched={notched && props.activeSurfaceId !== null}
+            hasActions={hasActions || props.layoutControls !== undefined}
+          >
+            {mobileDiff ? (
+              <span ref={setMobileBreadcrumbSlot} className="flex min-w-0 items-center gap-1" />
+            ) : null}
+            <div
+              ref={setActionsSlot}
+              className="ms-auto flex shrink-0 items-center gap-0.5 empty:hidden [-webkit-app-region:no-drag]"
+              data-right-panel-tab-actions
+            />
+            {props.layoutControls}
+          </PanelActionsNotch>
+          {ownsDesktopTitleBar && !props.layoutControls ? (
+            <span aria-hidden className="hidden w-24 shrink-0 wco:block" />
+          ) : null}
+          {ownsDesktopTitleBar ? (
+            <span
+              aria-hidden
+              className="pointer-events-none fixed top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] h-[var(--workspace-topbar-height)] w-28 [-webkit-app-region:no-drag]"
+            />
+          ) : null}
+        </div>
+      ) : null}
       <div
         className={cn("flex min-h-0 flex-1 flex-col", notched && PANE_BODY_UNDER_HEADER_CLASS)}
         data-right-panel-surface-content

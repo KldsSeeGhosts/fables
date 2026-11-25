@@ -29,6 +29,7 @@ import {
   shareLayoutBeside,
   THREAD_TERMINAL_SURFACE_ID,
   type LayoutCompanionKind,
+  type LayoutCompanionSizeKey,
   type LayoutState,
   type LayoutTab,
   type LayoutTabDestination,
@@ -141,7 +142,7 @@ function layoutUpdate(update: () => void) {
 }
 
 /** The remembered or template share for a beside or below placement. */
-function besideShare(kind: LayoutCompanionKind): number {
+function besideShare(kind: LayoutCompanionSizeKey): number {
   return (
     useLayoutStore.getState().companionShares[kind] ??
     getLayoutBehavior().companionShares[kind] ??
@@ -150,14 +151,19 @@ function besideShare(kind: LayoutCompanionKind): number {
 }
 
 /** Size the pane just placed beside or below its chat. */
-export function shareWithChat(tabId: string, chatTabId: string, kind: LayoutCompanionKind) {
+export function shareWithChat(
+  tabId: string,
+  chatTabId: string,
+  kind: LayoutCompanionKind,
+  sizeKey: LayoutCompanionSizeKey = kind,
+) {
   useLayoutStore.setState((state) => ({
     layout: shareLayoutBeside(
       state.layout,
       tabId,
       chatTabId,
       kind,
-      besideShare(kind),
+      besideShare(sizeKey),
       getLayoutBehavior().whenNoRoom,
       getLayoutBehavior().whenNoRoom === "shrink-then-scroll" ? readableLayoutColumnShare() : 0,
     ),
@@ -181,8 +187,10 @@ function rememberShare(threadRef: ScopedThreadRef, kind: LayoutCompanionKind) {
     getLayoutBehavior().whenNoRoom,
   );
   if (share === null) return;
+  const sizeKey: LayoutCompanionSizeKey =
+    kind === "panel" && surfaceIdOf(tab.tab) === "captain-brief" ? "duet-tasks-drawer" : kind;
   useLayoutStore.setState((state) => ({
-    companionShares: { ...state.companionShares, [kind]: share },
+    companionShares: { ...state.companionShares, [sizeKey]: share },
   }));
 }
 
@@ -301,7 +309,13 @@ function placeSurfaceTabs(
       focus: options.focus,
     });
     if (replaceTabId !== null) store.closeTab(replaceTabId);
-    if (sizeAs && chat) shareWithChat(tabs[0]!.id, chat.tab.id, sizeAs);
+    if (sizeAs && chat) {
+      const sizeKey: LayoutCompanionSizeKey =
+        sizeAs === "panel" && tabs.some((tab) => surfaceIdOf(tab) === "captain-brief")
+          ? "duet-tasks-drawer"
+          : sizeAs;
+      shareWithChat(tabs[0]!.id, chat.tab.id, sizeAs, sizeKey);
+    }
     if (!options.focus) {
       for (const tab of tabs) store.markTabUnseen(tab.id);
     }
