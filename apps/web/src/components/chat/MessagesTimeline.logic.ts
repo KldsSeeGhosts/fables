@@ -2108,25 +2108,46 @@ function workShownAsFinalAnswerOnly(
   );
 }
 
-function deriveInFlightSteerAnswerIds(entries: ReadonlyArray<TimelineEntry>): ReadonlySet<string> {
-  const ids = new Set<string>();
-  let awaitingReply = false;
-  let candidate: string | null = null;
-  for (const entry of entries) {
-    if (entry.kind === "work" && entry.entry.itemType === "reasoning") continue;
-    const reply = entry.kind === "message" && entry.message.role === "assistant" ? entry : null;
-    if (candidate !== null && reply !== null) ids.add(candidate);
+function timelineEntryIsZenPrompt(entry: TimelineEntry) {
+  return timelineEntryIsSteer(entry) || timelineEntryStartsResponse(entry);
+}
+
+function deriveZenAnswerMessageIds(
+  entries: ReadonlyArray<TimelineEntry>,
+  answering: boolean,
+  answeringRunId: RunId | null,
+) {
+  const answerIds = new Set<MessageId>();
+  let candidate: { readonly id: MessageId; readonly runId: RunId | null } | null = null;
+  const closeSegment = () => {
+    if (candidate !== null) answerIds.add(candidate.id);
     candidate = null;
-    if (timelineEntryIsSteer(entry)) {
-      awaitingReply = true;
-    } else if (entry.kind === "message" && entry.message.role === "user") {
-      awaitingReply = false;
-    } else if (reply !== null && awaitingReply) {
-      candidate = reply.message.id;
-      awaitingReply = false;
+  };
+  for (const entry of entries) {
+    if (timelineEntryIsZenPrompt(entry)) {
+      closeSegment();
+      continue;
     }
+    if (
+      entry.kind !== "message" ||
+      entry.message.role !== "assistant" ||
+      entry.attempt?.status === "superseded" ||
+      !steerReplyPhase(entry)
+    ) {
+      continue;
+    }
+    candidate = { id: entry.message.id, runId: entry.message.runId };
   }
-  return ids;
+  if (
+    candidate !== null &&
+    !(
+      answering &&
+      (answeringRunId === null || candidate.runId === null || candidate.runId === answeringRunId)
+    )
+  ) {
+    answerIds.add(candidate.id);
+  }
+  return answerIds;
 }
 
 export function liveAnswerPreview(entries: ReadonlyArray<TimelineEntry>): string | null {
@@ -2204,11 +2225,9 @@ function filterRowEntries(input: RowEntriesInput) {
     const answeringRunId = answering
       ? deriveUnsettledRunId(input.latestRun ?? null, input.runningRunId ?? null)
       : null;
-    const answeringFrom = answering ? lastResponseBoundaryIndex(entries) + 1 : entries.length;
-    const terminalIds = deriveTerminalAssistantMessageIds(entries);
-    const steerAnswerIds = deriveInFlightSteerAnswerIds(entries);
+    const zenAnswerIds = deriveZenAnswerMessageIds(entries, answering, answeringRunId);
     const retainedReplyIds = retainedAssistantReplyEntryIds(entries);
-    shown = entries.filter((entry, index) => {
+    shown = entries.filter((entry) => {
       if (entry.kind !== "message") {
         return workShownAsFinalAnswerOnly(
           entry,
@@ -2220,11 +2239,8 @@ function filterRowEntries(input: RowEntriesInput) {
       return (
         message.role !== "assistant" ||
         message.id === input.revealedMessageId ||
-        steerAnswerIds.has(message.id) ||
-        retainedReplyIds.has(entry.id) ||
-        (terminalIds.has(message.id) &&
-          index < answeringFrom &&
-          (answeringRunId === null || message.runId !== answeringRunId))
+        zenAnswerIds.has(message.id) ||
+        retainedReplyIds.has(entry.id)
       );
     });
   } else if (visibility !== "showAll") {

@@ -1376,6 +1376,13 @@ describe("buildThreadFeed", () => {
       id: TurnItemId.make(name),
       status,
     });
+    const notify = (name: string, second: number): OrchestrationV2TurnItem => ({
+      ...base(name, at(second), second),
+      type: "notification",
+      source: { kind: "background_task" },
+      outcome: "completed",
+      summary: "Task finished",
+    });
     const [user, step, passed, failed, final] = [
       say("user", 1, true),
       say("step", 2),
@@ -1413,7 +1420,7 @@ describe("buildThreadFeed", () => {
     expect(rows(turn, "hideAll")).toEqual(["user", "fold", "step", "final"]);
     expect(rows(turn, "zen")).toEqual(["user", "final"]);
     const [steer, answer] = [say("steer", 2, true, true), say("answer", 3)];
-    expect(rows([user, steer, answer, final], "zen")).toEqual(["user", "steer", "answer", "final"]);
+    expect(rows([user, steer, answer, final], "zen")).toEqual(["user", "steer", "final"]);
     const commentary = { ...step, phase: "commentary" as const };
     expect(rows([user, commentary, steer, final], "zen")).toEqual(["user", "steer", "final"]);
     for (const phase of ["commentary", "partial_answer", "final_answer", undefined] as const) {
@@ -1427,7 +1434,7 @@ describe("buildThreadFeed", () => {
         ),
       ).toBe(phase === "final_answer");
       expect(rows([user, partial, steer, final], "zen").includes("answer")).toBe(
-        phase === "final_answer",
+        phase === "final_answer" || phase === undefined,
       );
     }
     const confirmed = { ...answer, phase: "final_answer" as const };
@@ -1444,7 +1451,6 @@ describe("buildThreadFeed", () => {
     expect(rows([user, steer, answer, step], "zen", running)).toEqual([
       "user",
       "steer",
-      "answer",
       "thinking:step",
     ]);
     expect(rows([user, step, passed], "zen", running)).toEqual(["user", "thinking:step"]);
@@ -1470,6 +1476,23 @@ describe("buildThreadFeed", () => {
       "final",
       "wake",
       "thinking:",
+    ]);
+
+    const segmented = [
+      user,
+      say("a", 2),
+      ran("tool-a", 3, "completed"),
+      say("b", 4),
+      notify("mid-turn", 5),
+      ran("tool-b", 6, "completed"),
+      say("c", 7),
+    ];
+    expect(rows(segmented, "zen", running)).toEqual(["user", "b", "mid-turn", "thinking:c"]);
+    expect(rows(segmented, "zen", { ...running, turnEnded: true })).toEqual([
+      "user",
+      "b",
+      "mid-turn",
+      "c",
     ]);
   });
 });

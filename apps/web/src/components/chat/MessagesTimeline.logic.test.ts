@@ -3408,6 +3408,19 @@ describe("v2 run and attempt history", () => {
         toolLifecycleStatus: status,
       },
     });
+    const notification = (id: string, second: number): TimelineEntry => ({
+      id,
+      kind: "work",
+      createdAt: at(second),
+      entry: {
+        id,
+        createdAt: at(second),
+        runId,
+        label: "Task finished",
+        tone: "info",
+        itemType: "notification",
+      },
+    });
     const [user, step, passed, failed, final] = [
       message("user", "user", 0),
       message("step", "assistant", 5),
@@ -3446,13 +3459,12 @@ describe("v2 run and attempt history", () => {
       message("steer", "user", 4, "steer"),
       message("answer", "assistant", 7),
     ];
-    expect(rows([user, steer, answer, final], "zen")).toEqual(["user", "steer", "answer", "final"]);
+    expect(rows([user, steer, answer, final], "zen")).toEqual(["user", "steer", "final"]);
     expect(rows([user, steer, step, passed, final], "zen")).toEqual(["user", "steer", "final"]);
     expect(rows([user, steer, answer, step], "zen", running)).toEqual([
       "user",
       "working-indicator-row",
       "steer",
-      "answer",
       "live-activity-row",
     ]);
     expect(rows([user, step, passed], "zen", running)).toEqual([
@@ -3486,6 +3498,42 @@ describe("v2 run and attempt history", () => {
       "user",
       "final",
       "wake",
+      "working-indicator-row",
+      "live-activity-row",
+    ]);
+
+    const segmented = [
+      user,
+      message("a", "assistant", 1),
+      command("tool-a", "completed", 2),
+      message("b", "assistant", 3),
+      notification("mid-turn", 4),
+      command("tool-b", "completed", 5),
+      message("c", "assistant", 6),
+    ];
+    expect(rows(segmented, "zen", running)).toEqual([
+      "user",
+      "b",
+      "mid-turn",
+      "working-indicator-row",
+      "live-activity-row",
+    ]);
+    expect(rows(segmented, "zen", ended)).toEqual(["user", "b", "mid-turn", "c"]);
+
+    const steered = [
+      user,
+      steer,
+      command("steer-tool", "completed", 5),
+      message("steer-reply", "assistant", 7),
+      notification("steer-notification", 8),
+      command("notification-tool", "completed", 9),
+      message("after-notification", "assistant", 10),
+    ];
+    expect(rows(steered, "zen", running)).toEqual([
+      "user",
+      "steer",
+      "steer-reply",
+      "steer-notification",
       "working-indicator-row",
       "live-activity-row",
     ]);
