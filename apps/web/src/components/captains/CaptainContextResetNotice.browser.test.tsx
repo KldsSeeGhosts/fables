@@ -70,9 +70,7 @@ function notice(percent: number | null, ref: ScopedThreadRef | null = threadRef)
     <CaptainContextResetNotice
       threadRef={ref}
       contextWindow={
-        percent === null
-          ? null
-          : { usedTokens: percent, maxTokens: 100, autoCompactThreshold: null }
+        percent === null ? null : { usedTokens: percent, maxTokens: 120, autoCompactThreshold: 100 }
       }
       onOpenThread={() => {}}
     />
@@ -142,6 +140,23 @@ it("measures the notice against the automatic compaction threshold", async () =>
   await expect
     .element(screen.getByText(/This conversation is .* automatic compaction\./))
     .not.toBeInTheDocument();
+});
+
+it("measures the full window without promising compaction when there is no threshold", async () => {
+  setup();
+  await using screen = await render(
+    <CaptainContextResetNotice
+      threadRef={threadRef}
+      contextWindow={{ usedTokens: 160_000, maxTokens: 200_000, autoCompactThreshold: null }}
+      onOpenThread={() => {}}
+    />,
+  );
+
+  await expect.element(screen.getByText("This conversation is 80% full.")).toBeVisible();
+  await expect
+    .element(screen.getByRole("button", { name: "Dismiss context usage notice" }))
+    .toBeVisible();
+  await expect.element(screen.getByText(/automatic compaction/)).not.toBeInTheDocument();
 });
 
 it("stays hidden below 75%, for non-Duet threads, archived Duets, and earlier conversations", async () => {

@@ -39,6 +39,8 @@ export function CaptainContextResetNotice({
     () => new Set(),
   );
   const threadKey = threadRef === null ? null : scopedThreadKey(threadRef);
+  // No threshold means the provider does not report one or compaction is off; measure the window.
+  const compacts = contextWindow?.autoCompactThreshold != null;
   const compactionLimit = contextWindow?.autoCompactThreshold ?? contextWindow?.maxTokens ?? null;
   const compactionPercentage =
     contextWindow !== null && compactionLimit !== null && compactionLimit > 0
@@ -86,7 +88,9 @@ export function CaptainContextResetNotice({
     id: `captain-context-reset:${threadKey}`,
     variant: locked ? "warning" : "info",
     icon: <MessageSquarePlusIcon />,
-    title: gt("This conversation is {percent}% of the way to automatic compaction.", { percent }),
+    title: compacts
+      ? gt("This conversation is {percent}% of the way to automatic compaction.", { percent })
+      : gt("This conversation is {percent}% full.", { percent }),
     description: gt("Start a new one and NOTES.md, memories and running tasks carry over."),
     actions: (
       <Button size="xs" variant="secondary" onClick={() => setResetTarget({ captain, threadRef })}>
@@ -96,7 +100,9 @@ export function CaptainContextResetNotice({
     ...(locked
       ? {}
       : {
-          dismissLabel: gt("Dismiss compaction notice"),
+          dismissLabel: compacts
+            ? gt("Dismiss compaction notice")
+            : gt("Dismiss context usage notice"),
           onDismiss: dismiss,
         }),
   };

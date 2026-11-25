@@ -81,7 +81,12 @@ vi.mock(import("~/hooks/useThreadActionMenu"), () => ({
 import { act, fakeTimers, render, stubGlobal } from "../../../test/render";
 import { showLayoutTabMenu } from "../../layout/PaneTabs";
 import { LayoutPaneContext, useLayoutPane } from "../../layout/layoutPaneContext";
-import { createLayoutState, findLayoutTab } from "../../layout/layoutModel";
+import {
+  createLayoutState,
+  findLayoutTab,
+  type LayoutState,
+  type LayoutTab,
+} from "../../layout/layoutModel";
 import { useLayoutStore } from "../../layout/layoutStore";
 import { ensureLocalApi } from "../../localApi";
 import { ChatPaneHeader, ChatPaneHeaderControls, useHeaderControlsInset } from "./ChatPaneHeader";
@@ -372,6 +377,13 @@ it("includes layout tab actions in a split Duet title menu", async () => {
   const environmentId = EnvironmentId.make("environment");
   const threadRef = scopeThreadRef(environmentId, ThreadId.make("captain:maria:0"));
   const content = { kind: "chat", target: { kind: "server", threadRef } } as const;
+  const neighborRef = scopeThreadRef(environmentId, ThreadId.make("thread:neighbor"));
+  useLayoutStore
+    .getState()
+    .openTab(
+      { kind: "chat", target: { kind: "server", threadRef: neighborRef } },
+      { placement: "active-pane", position: "end" },
+    );
   useLayoutStore.getState().openTab(content, { placement: "active-pane", position: "end" });
   const tabId = findLayoutTab(useLayoutStore.getState().layout, (tab) => tab.content === content)!
     .tab.id;
@@ -402,6 +414,82 @@ it("includes layout tab actions in a split Duet title menu", async () => {
       for (const label of ["Split right", "Split down", "Close"]) {
         expect(items.some((item) => item?.startsWith(label))).toBe(true);
       }
+    });
+    await userEvent.keyboard("{Escape}");
+  } finally {
+    useLayoutStore.setState({ layout: originalLayout });
+    duetShell.enabled = false;
+    captainState.enabled = false;
+  }
+});
+
+it("leaves Close out of the title menu when the Duet's only neighbor is its own Tasks panel", async () => {
+  duetShell.enabled = true;
+  captainState.enabled = true;
+  const originalLayout = useLayoutStore.getState().layout;
+  const environmentId = EnvironmentId.make("environment");
+  const threadRef = scopeThreadRef(environmentId, ThreadId.make("captain:maria:0"));
+  const pane = (id: string, tab: LayoutTab) => ({ id, tabs: [tab], activeTabId: tab.id, size: 1 });
+  const layout: LayoutState = {
+    focusedWorkspaceId: "workspace",
+    workspaces: [
+      {
+        id: "workspace",
+        name: null,
+        focusedPaneId: "duet-pane",
+        cameraWidth: null,
+        columns: [
+          {
+            id: "left",
+            width: 0.5,
+            panes: [
+              pane("duet-pane", {
+                id: "duet-tab",
+                content: { kind: "chat", target: { kind: "server", threadRef } },
+              }),
+            ],
+          },
+          {
+            id: "right",
+            width: 0.5,
+            panes: [
+              pane("tasks-pane", {
+                id: "tasks-tab",
+                content: { kind: "surface", threadRef, surfaceId: "duet-tasks" },
+              }),
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  useLayoutStore.setState({ layout });
+  function DuetBesideTasksHeader() {
+    return (
+      <LayoutPaneContext value={{ ...useLayoutPane(), split: true, tabId: "duet-tab" }}>
+        <ChatHeader
+          activeThreadEnvironmentId={environmentId}
+          activeThreadId={threadRef.threadId}
+          activeThreadTitle="Maria"
+          isServerThread
+          activeProject={null}
+          parentThreadLink={null}
+          onOpenThread={() => {}}
+          rightPanelOpen={false}
+        />
+      </LayoutPaneContext>
+    );
+  }
+  try {
+    await using screen = await render(<DuetBesideTasksHeader />);
+    await userEvent.click(screen.getByRole("button", { name: "Duet menu for Maria" }));
+
+    await vi.waitFor(() => {
+      const items = Array.from(
+        document.body.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+      ).map((element) => element.textContent ?? "");
+      expect(items.some((item) => item.startsWith("Split right"))).toBe(true);
+      expect(items.some((item) => item.startsWith("Close"))).toBe(false);
     });
     await userEvent.keyboard("{Escape}");
   } finally {

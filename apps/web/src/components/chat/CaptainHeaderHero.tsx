@@ -42,6 +42,7 @@ import {
 } from "../../layout/PaneTabs";
 import { useLayoutStore } from "../../layout/layoutStore";
 import { primaryServerKeybindingsAtom } from "../../state/server";
+import { duetTabHasNeighbor } from "./PanelLayoutControls";
 import { textDirection } from "~/textDirection";
 
 import { CaptainAvatar, type CaptainAvatarState } from "../captains/CaptainAvatar";
@@ -152,7 +153,11 @@ export function CaptainHeaderTitleMenu({
   const { current, archived, pending, canUpdate } = profile;
   const avatarState = avatarStateFor(archived, status.state);
   const layoutItems =
-    layoutTabId == null ? [] : buildLayoutTabMenuItems(layout, layoutTabId, keybindings);
+    layoutTabId == null
+      ? []
+      : buildLayoutTabMenuItems(layout, layoutTabId, keybindings).filter(
+          (item) => item.id !== "layout:close-tab" || duetTabHasNeighbor(layout, layoutTabId),
+        );
   const runLayoutAction = (id: string) => {
     if (layoutTabId != null && isLayoutTabMenuId(id)) runLayoutTabMenuAction(id, layoutTabId);
   };

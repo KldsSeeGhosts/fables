@@ -97,7 +97,7 @@ function DuetClosePaneControl({ tabId }: { tabId: string }) {
  * A Duet's header offers to close its tab only when something else stays on screen: another
  * tab in its pane, or another pane that is not one of this Duet's own panels (Tasks, diffs).
  */
-function duetTabHasNeighbor(layout: LayoutState, tabId: string): boolean {
+export function duetTabHasNeighbor(layout: LayoutState, tabId: string): boolean {
   const location = findLayoutTab(layout, (tab) => tab.id === tabId);
   if (location === null) return false;
   if (location.pane.tabs.length > 1) return true;
