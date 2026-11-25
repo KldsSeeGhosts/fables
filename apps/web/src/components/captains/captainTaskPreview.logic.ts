@@ -19,6 +19,7 @@ export function taskPreviewImageSource(
   markdown: string,
   workspaceRoot?: string | null | undefined,
 ): string | null {
+  if (!markdown.includes("![") && !/<img/i.test(markdown)) return null;
   const sources = chatMarkdownImageSources(markdown);
   for (let index = sources.length - 1; index >= 0; index -= 1) {
     const source = sources[index];
