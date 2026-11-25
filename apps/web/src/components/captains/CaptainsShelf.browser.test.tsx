@@ -37,6 +37,7 @@ vi.mock(import("../../state/entities"), async (original) => ({
 }));
 
 import { CaptainShelfList, CaptainsHubRow } from "./CaptainsShelf";
+import { SidebarProvider } from "../ui/sidebar";
 
 const environmentId = EnvironmentId.make("environment");
 const now = DateTime.makeUnsafe("2026-11-24T10:00:00.000Z");
@@ -116,13 +117,31 @@ function renderList(row: Partial<Parameters<typeof CaptainShelfList>[0]["rows"][
   );
 }
 
-it("shows only an idle channel's tile and name, with its details on hover", async () => {
+it("lists channels as plain rows under a collapsible section, without tree chrome", async () => {
+  await using screen = await renderList({});
+  const header = screen.container.querySelector('[data-sidebar-row="shelf:captains"]');
+  expect(header?.textContent).toContain("Channels");
+  const row = screen.getByRole("button", { name: "Maria, Ready, All workspace, Coordinator" });
+  await expect.element(row).toBeVisible();
+  const item = row.element().closest("li")!;
+  expect(getComputedStyle(item, "::before").content).toBe("none");
+  expect(screen.container.querySelector("[data-captain-tile]")).not.toBeNull();
+
+  (header as HTMLElement).click();
+  await vi.waitFor(() => expect(screen.container.querySelector("[data-captain-tile]")).toBeNull());
+  (header as HTMLElement).click();
+  await expect.element(row).toBeVisible();
+});
+
+it("shows an idle channel's mascot and name, with its details on hover", async () => {
   await using screen = await renderList({});
   const row = screen.getByRole("button", { name: "Maria, Ready, All workspace, Coordinator" });
   await expect.element(row).toBeVisible();
   expect(row.element().textContent).toBe("Maria");
-  expect(row.element().querySelector("[data-captain-tile]")).not.toBeNull();
-  expect(screen.container.querySelector("[data-captain-avatar-orbit]")).toBeNull();
+  const avatar = row.element().querySelector("[data-captain-avatar]");
+  expect(avatar?.getAttribute("data-captain-state")).toBe("idle");
+  expect(avatar?.querySelector("[data-captain-mascot-eyes]")).not.toBeNull();
+  expect(screen.container.querySelector("[data-captain-avatar-ring]")).toBeNull();
   expect(screen.container.querySelector("[data-duet-live]")).toBeNull();
 
   await userEvent.hover(row);
@@ -132,28 +151,31 @@ it("shows only an idle channel's tile and name, with its details on hover", asyn
   await expect.element(page.getByText("Ready", { exact: true })).toBeVisible();
 });
 
-it("turns the working orbit and counts running tasks without naming them in the row", async () => {
+it("animates a working mascot and counts running tasks without naming them in the row", async () => {
   await using screen = await renderList({ working: true, children: [child] });
   const row = screen.getByRole("button", { name: "Maria, Working, 1 running, Fix the login flow" });
   await expect.element(row).toBeVisible();
   expect(row.element().textContent).toBe("Maria1");
-  expect(screen.container.querySelector('[data-captain-avatar-orbit="working"]')).not.toBeNull();
-  expect(screen.container.querySelector("[data-captain-avatar-ping]")).toBeNull();
+  const avatar = row.element().querySelector("[data-captain-avatar]")!;
+  expect(avatar.getAttribute("data-captain-state")).toBe("working");
+  const motion = (selector: string) =>
+    getComputedStyle(avatar.querySelector(selector)!).animationName;
+  expect(motion("[data-captain-mascot-body]")).toBe("captain-mascot-work");
+  expect(motion("[data-captain-mascot-eyes]")).toBe("captain-mascot-scan");
+  expect(screen.container.querySelector("[data-captain-avatar-ring]")).toBeNull();
 
   await userEvent.hover(row);
   await expect.element(page.getByText("Fix the login flow", { exact: true })).toBeVisible();
 });
 
-it("gives needs input precedence over working with a halo and a warm dot", async () => {
+it("gives needs input precedence over working with a ring and a warm dot", async () => {
   const waiting = { ...child, hasPendingUserInput: true };
   await using screen = await renderList({ attention: 1, working: true, children: [waiting] });
   const row = screen.getByRole("button", { name: "Maria, Needs input, Fix the login flow" });
   await expect.element(row).toBeVisible();
   expect(row.element().textContent).toBe("Maria");
-  expect(
-    screen.container.querySelector('[data-captain-avatar-orbit="needs-input"]'),
-  ).not.toBeNull();
-  expect(screen.container.querySelector('[data-captain-avatar-orbit="working"]')).toBeNull();
+  expect(screen.container.querySelector('[data-captain-state="waiting"]')).not.toBeNull();
+  expect(screen.container.querySelector("[data-captain-avatar-ring]")).not.toBeNull();
   expect(screen.container.querySelector("[data-captain-avatar-ping]")).not.toBeNull();
   expect(
     screen.container.querySelector('[data-duet-live="needs-input"]')?.getAttribute("aria-label"),
@@ -170,11 +192,11 @@ it("recedes an archived channel without live status", async () => {
   await expect.element(row).toBeVisible();
   expect(row.element().textContent).toBe("Maria");
   expect(screen.container.querySelector('[data-captain-state="archived"]')).not.toBeNull();
-  expect(screen.container.querySelector("[data-captain-avatar-orbit]")).toBeNull();
+  expect(screen.container.querySelector("[data-captain-avatar-ring]")).toBeNull();
   expect(screen.container.querySelector("[data-duet-live]")).toBeNull();
 });
 
-it("keeps Everything quiet until a channel is working or waiting", async () => {
+it("opens the Captains page from a plain row with a needs-input badge", async () => {
   const ada = {
     ...captain,
     id: CaptainId.make("ada"),
@@ -182,26 +204,16 @@ it("keeps Everything quiet until a channel is working or waiting", async () => {
     primaryThreadId: ThreadId.make("captain:ada:0"),
   };
   directory.captains = [captain, ada];
-  directory.shells = [
-    {
-      ...primary,
-      runtime: {
-        status: "running",
-        activeRunId: null,
-        providerInstanceId,
-        providerName: null,
-        lastError: null,
-        updatedAt: DateTime.formatIso(now),
-      },
-    },
-    { ...primary, id: ada.primaryThreadId, hasPendingApprovals: true },
-  ];
-  await using screen = await render(<CaptainsHubRow active={false} onOpen={() => {}} />);
-  await expect.element(screen.getByLabelText("1 channel working")).toHaveTextContent("1");
+  directory.shells = [{ ...primary, id: ada.primaryThreadId, hasPendingApprovals: true }];
+  const onOpen = vi.fn();
+  await using screen = await render(
+    <SidebarProvider>
+      <CaptainsHubRow active={false} onOpen={onOpen} />
+    </SidebarProvider>,
+  );
   await expect.element(screen.getByLabelText("1 Captain needs input")).toHaveTextContent("1");
-
-  directory.shells = [];
-  await screen.rerender(<CaptainsHubRow active={false} onOpen={() => {}} />);
-  await vi.waitFor(() => expect(screen.container.querySelector("[data-duet-live]")).toBeNull());
-  expect(screen.getByRole("button").element().textContent).toBe("Everything");
+  const row = screen.getByRole("button");
+  expect(row.element().textContent).toBe("Captains1");
+  await userEvent.click(row);
+  expect(onOpen).toHaveBeenCalledOnce();
 });

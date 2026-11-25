@@ -281,11 +281,10 @@ it("opens a linked Linear issue from an inactive thread's sidebar badge", async 
   expect(router.history.location.pathname).toBe(`/${ENVIRONMENT_ID}/${linked.id}`);
   await expect.element(page.getByRole("heading", { name: liveTitle })).toBeVisible();
   await act(() => useRightPanelStore.getState().close(scopeThreadRef(ENVIRONMENT_ID, linked.id)));
-  // Thread details float in a popover from the header pill.
-  await userEvent.click(page.getByRole("button", { name: "Toggle thread details panel" }));
+  // A wide pane keeps the thread details docked beside the conversation.
   await expect
     .element(
-      page.getByRole("dialog", { name: "Thread details" }).getByRole("link", {
+      page.getByRole("region", { name: "Thread details" }).getByRole("link", {
         name: issueName,
         exact: true,
       }),

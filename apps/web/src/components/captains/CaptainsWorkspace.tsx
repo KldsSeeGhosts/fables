@@ -14,7 +14,7 @@ import { CaptainsInbox } from "./CaptainsInbox";
 import { useCaptainDestinations, useCaptainsDirectory } from "./captainsDirectory";
 import { useOpenCaptainThread } from "./captainNavigation";
 
-/** The Duet home: everything every Captain has waiting, running and finished, in one column. */
+/** The Captains home: what every Captain has waiting, running and finished, in one column. */
 export function CaptainsWorkspace() {
   const gt = useGT();
   const { environments, shells } = useCaptainsDirectory();
@@ -36,11 +36,11 @@ export function CaptainsWorkspace() {
       <div className="pane-mobile-chrome flex min-h-0 min-w-0 flex-1 flex-col">
         <SettingsPaneHeader transparent>
           <SettingsTabNotch
-            title={gt("Everything", { $context: "the Captains home page" })}
+            title={gt("Captains")}
             icon={<CompassIcon aria-hidden className="size-3.5 shrink-0 text-foreground" />}
           >
             <h1 className="truncate">
-              <T context="the Captains home page">Everything</T>
+              <T>Captains</T>
             </h1>
           </SettingsTabNotch>
         </SettingsPaneHeader>

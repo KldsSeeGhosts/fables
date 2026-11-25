@@ -14,7 +14,6 @@ import {
   CompassIcon,
   EllipsisIcon,
   FoldersIcon,
-  LayersIcon,
   ListTodoIcon,
   PlusIcon,
 } from "lucide-react";
@@ -62,52 +61,16 @@ const NO_CAPTAIN_CONVERSATIONS: ReadonlySet<string> = new Set();
 /** The sidebar's entry to the Captains page, with the number of Captains waiting on the user. */
 export function CaptainsHubRow({ active, onOpen }: { active: boolean; onOpen: () => void }) {
   const gt = useGT();
-  const isDuet = useDuetShell();
   const { supporting, results } = useCaptainEnvironments();
   const shells = useThreadShells(supporting.length > 0);
   if (supporting.length === 0) return null;
-  const environments = supporting.map(({ environmentId }, index) => ({
-    environmentId,
-    captains: AsyncResult.getOrElse(results[index]!, () => null)?.captains ?? [],
-  }));
-  const attention = captainAttentionTotal(environments, shells);
-  const badge =
-    attention > 0 ? (
-      <Badge
-        variant="warning"
-        size="sm"
-        aria-label={gt(
-          "{count, plural, one {{count} Captain needs input} other {{count} Captains need input}}",
-          { count: attention },
-        )}
-      >
-        {attention}
-      </Badge>
-    ) : null;
-  if (isDuet) {
-    return (
-      // The header group's 8px bottom padding shrinks to the tree's 2px row gap.
-      <div className="relative -mb-1.5">
-        <ContentButton
-          variant="duet-row"
-          data-sidebar-row="nav:captains"
-          aria-current={active ? "page" : undefined}
-          onClick={onOpen}
-        >
-          <LayersIcon aria-hidden className="size-4 shrink-0 text-(--duet-working)" />
-          <span className="min-w-0 flex-1 truncate">
-            <T context="the Captains home page">Everything</T>
-          </span>
-          <DuetHubSummary environments={environments} shells={shells} attention={attention} />
-        </ContentButton>
-        {/* The channel tree's trunk starts here and crosses the header group's bottom padding. */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute top-full left-4 h-0.5 w-px bg-(--duet-tree-line)"
-        />
-      </div>
-    );
-  }
+  const attention = captainAttentionTotal(
+    supporting.map(({ environmentId }, index) => ({
+      environmentId,
+      captains: AsyncResult.getOrElse(results[index]!, () => null)?.captains ?? [],
+    })),
+    shells,
+  );
   return (
     <SidebarMenuButton
       data-sidebar-row="nav:captains"
@@ -118,55 +81,21 @@ export function CaptainsHubRow({ active, onOpen }: { active: boolean; onOpen: ()
     >
       <CompassIcon />
       <span className="min-w-0 flex-1 truncate">
-        <T context="the Captains home page">Everything</T>
+        <T>Captains</T>
       </span>
-      {badge}
-    </SidebarMenuButton>
-  );
-}
-
-/** A quiet live count beside Everything; silent while every channel is idle. */
-function DuetHubSummary({
-  environments,
-  shells,
-  attention,
-}: {
-  environments: ReadonlyArray<{ environmentId: EnvironmentId; captains: ReadonlyArray<Captain> }>;
-  shells: ReadonlyArray<EnvironmentThreadShell>;
-  attention: number;
-}) {
-  const gt = useGT();
-  const working = environments
-    .flatMap(({ environmentId, captains }) =>
-      captains
-        .filter((captain) => captain.archivedAt === null)
-        .map((captain) => captainThreadActivity(environmentId, captain, shells)),
-    )
-    .filter((row) => row.working && row.attention === 0).length;
-  if (working === 0 && attention === 0) return null;
-  return (
-    <span className="ms-auto flex shrink-0 items-center gap-2">
-      {working > 0 ? (
-        <DuetLiveCount
-          tone="working"
-          count={working}
-          label={gt(
-            "{count, plural, one {{count} channel working} other {{count} channels working}}",
-            { count: working },
-          )}
-        />
-      ) : null}
       {attention > 0 ? (
-        <DuetLiveCount
-          tone="needs-input"
-          count={attention}
-          label={gt(
+        <Badge
+          variant="warning"
+          size="sm"
+          aria-label={gt(
             "{count, plural, one {{count} Captain needs input} other {{count} Captains need input}}",
             { count: attention },
           )}
-        />
+        >
+          {attention}
+        </Badge>
       ) : null}
-    </span>
+    </SidebarMenuButton>
   );
 }
 
@@ -201,22 +130,13 @@ function DuetLiveCount({
   );
 }
 
-/**
- * Each tree row draws its own branch from the trunk, so a row's fill never paints over it. The
- * branch lands on the row's midpoint, which `--duet-tree-row` sets.
- */
-const DUET_TREE_BRANCH_CLASS_NAME =
-  "relative flex h-(--duet-tree-row) items-center ps-6 before:pointer-events-none before:absolute before:top-0 before:left-4 before:h-[calc(var(--duet-tree-row)/2+1px)] before:w-2 before:rounded-bl-md before:border-b before:border-l before:border-(--duet-tree-line)";
-const DUET_TREE_ROW_CLASS_NAME = "[--duet-tree-row:--spacing(8)]";
-const DUET_TREE_CHANNEL_CLASS_NAME = "[--duet-tree-row:--spacing(9)]";
-
 type CaptainActivity = {
   primary?: EnvironmentThreadShell | undefined;
   children?: ReadonlyArray<EnvironmentThreadShell> | undefined;
 };
 
 /**
- * A Duet channel is one line: its tinted tile and name. Live state is drawn on the tile and in a
+ * A Duet channel is one line: its mascot tile and name. Live state is drawn on the tile and in a
  * dot at the end; everything else waits in the hover card.
  */
 function DuetChannelRow({
@@ -289,12 +209,7 @@ function DuetChannelRow({
     <li
       data-duet-channel-card=""
       data-duet-palette={captainPaletteOf(captain.avatar)}
-      className={cn(
-        "group/captain-row",
-        DUET_TREE_BRANCH_CLASS_NAME,
-        DUET_TREE_CHANNEL_CLASS_NAME,
-        (selected || waiting || busy) && "before:border-(--duet-channel-branch-active)",
-      )}
+      className="group/captain-row relative flex items-center"
     >
       <Tooltip>
         <TooltipTrigger
@@ -311,7 +226,7 @@ function DuetChannelRow({
             avatar={captain.avatar}
             size="channel"
             state={archived ? "archived" : waiting ? "waiting" : busy ? "working" : "idle"}
-            halo={waiting ? "needs-input" : busy ? "working" : undefined}
+            attention={waiting}
           />
           <span className={cn("min-w-0 flex-1 truncate", archived && "text-muted-foreground")}>
             {name}
@@ -588,7 +503,6 @@ export function CaptainShelfList({
   onReveal?: ((header: HTMLElement) => void) | undefined;
 }) {
   const gt = useGT();
-  const isDuet = useDuetShell();
   const [expanded, setExpanded] = useLocalStorage(
     "t3code:sidebar:captains-expanded",
     true,
@@ -615,47 +529,6 @@ export function CaptainShelfList({
       onOpen={onOpen}
     />
   ));
-
-  if (isDuet) {
-    return (
-      <li className="list-none">
-        {rowList.length > 0 || onCreate ? (
-          <div className="relative">
-            {/* The trunk stops one row short; the last row's branch curves it into its midpoint. */}
-            <span
-              aria-hidden
-              className={cn(
-                "pointer-events-none absolute top-0 left-4 w-px bg-(--duet-tree-line)",
-                onCreate ? "bottom-8" : "bottom-9",
-              )}
-            />
-            <ul className="flex flex-col gap-0.5">{rowList}</ul>
-            {onCreate ? (
-              <div
-                className={cn(
-                  DUET_TREE_BRANCH_CLASS_NAME,
-                  DUET_TREE_ROW_CLASS_NAME,
-                  rowList.length > 0 && "mt-0.5",
-                )}
-              >
-                <ContentButton
-                  variant="duet-row-quiet"
-                  onClick={onCreate}
-                  aria-label={gt("New channel")}
-                >
-                  <span className="flex size-4 shrink-0 items-center justify-center">
-                    <PlusIcon aria-hidden className="size-3.5" />
-                  </span>
-                  <T>New channel</T>
-                </ContentButton>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-        <div aria-hidden className="mx-1 my-2 h-px bg-(--duet-hairline)" />
-      </li>
-    );
-  }
 
   return (
     <li className="mx-0.5 mb-1 list-none">

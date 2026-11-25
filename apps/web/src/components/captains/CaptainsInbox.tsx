@@ -168,7 +168,7 @@ function DigestCard({
   );
 }
 
-/** Everything every Captain has waiting, running and recently done, in one editorial column. */
+/** What every Captain has waiting, running and recently done, in one editorial column. */
 export function CaptainsInbox({
   environments,
   shells,
