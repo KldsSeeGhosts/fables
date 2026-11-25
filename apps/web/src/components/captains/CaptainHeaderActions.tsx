@@ -141,18 +141,21 @@ export function CaptainHeaderActions({
           padding="compact"
         >
           <div className="flex min-w-52 flex-col">
-            <CaptainMenuRow
-              icon={<ListChecksIcon className="size-4" />}
-              pressed={briefOpen}
-              onClick={() => {
-                setOpen(false);
-                toggleThreadSurfaceTab(threadRef, "captain-brief", () =>
-                  useRightPanelStore.getState().toggle(threadRef, "captain-brief"),
-                );
-              }}
-            >
-              {briefOpen ? <T>Hide tasks</T> : <T>Show tasks</T>}
-            </CaptainMenuRow>
+            {/* The Duet header already has its own Tasks button. */}
+            {trigger ? null : (
+              <CaptainMenuRow
+                icon={<ListChecksIcon className="size-4" />}
+                pressed={briefOpen}
+                onClick={() => {
+                  setOpen(false);
+                  toggleThreadSurfaceTab(threadRef, "captain-brief", () =>
+                    useRightPanelStore.getState().toggle(threadRef, "captain-brief"),
+                  );
+                }}
+              >
+                {briefOpen ? <T>Hide tasks</T> : <T>Show tasks</T>}
+              </CaptainMenuRow>
+            )}
             <CaptainMenuRow
               icon={<FileTextIcon className="size-4" />}
               onClick={() => {

@@ -135,10 +135,17 @@ function ActiveChildRow({ task, onOpen }: { task: OrchestrationV2Subagent; onOpe
   );
 }
 
-/** Floating center status orb for the Duet shell. */
-export function DuetStatusOrb({ threadRef }: { threadRef: ScopedThreadRef }) {
+/** The Captain's status orb; `header` is the compact size that sits in the header's action row. */
+export function DuetStatusOrb({
+  threadRef,
+  size = "hero",
+}: {
+  threadRef: ScopedThreadRef;
+  size?: "hero" | "header";
+}) {
   const gt = useGT();
   const messages = useMessages();
+  const compact = size === "header";
   const [popoverOpen, setPopoverOpen] = useState(false);
   const shell = useQuietThreadShell(threadRef);
   const detail = useQuietThreadProjection(threadRef);
@@ -217,9 +224,12 @@ export function DuetStatusOrb({ threadRef }: { threadRef: ScopedThreadRef }) {
     <button
       type="button"
       aria-label={gt("Status: {status}", { status: stateText })}
-      className="relative flex size-10 items-center justify-center rounded-full outline-none [-webkit-app-region:no-drag] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      className={cn(
+        "relative flex items-center justify-center rounded-full outline-none [-webkit-app-region:no-drag] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+        compact ? "size-7" : "size-10",
+      )}
     >
-      <DuetOrbMark state={state} />
+      <DuetOrbMark state={state} size={compact ? 22 : 40} />
       <span aria-live="polite" className="sr-only">
         {stateText}
       </span>
@@ -230,12 +240,18 @@ export function DuetStatusOrb({ threadRef }: { threadRef: ScopedThreadRef }) {
     <>
       <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
         <Tooltip>
-          <TooltipTrigger render={<span className="flex size-10" />}>
+          <TooltipTrigger render={<span className={cn("flex", compact ? "size-7" : "size-10")} />}>
             <PopoverTrigger render={orbButton} />
           </TooltipTrigger>
           <TooltipPopup>{tooltipText}</TooltipPopup>
         </Tooltip>
-        <PopoverPopup width="md" side="bottom" align="center" sideOffset={8} className="w-80">
+        <PopoverPopup
+          width="md"
+          side="bottom"
+          align={compact ? "end" : "center"}
+          sideOffset={8}
+          className="w-80"
+        >
           <div className="flex flex-col gap-3 p-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">

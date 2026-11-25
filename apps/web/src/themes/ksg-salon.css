@@ -3,7 +3,7 @@
    geometry stays in index.css. */
 html:root[data-theme-id="ksg-salon"] {
   --duet-hairline: #ebebeb;
-  --duet-row-active: #dddddd;
+  --duet-row-active: #ededed;
   --duet-sidebar-border: #f1f1f1;
   --duet-chrome-icon: #8a8a8a;
   --duet-assistant-bubble: #f2f2f2;
@@ -32,7 +32,7 @@ html:root[data-theme-id="ksg-salon"] {
 
   @variant dark {
     --duet-hairline: #262626;
-    --duet-row-active: #404040;
+    --duet-row-active: #2b2b2b;
     --duet-assistant-bubble: #252525;
     --duet-needs-input: #e3b866;
     --duet-needs-input-ring: #d6a34a;
@@ -109,6 +109,26 @@ html:root[data-theme-id="ksg-salon"] {
     height: 12px;
   }
 
+  /* Thread details read as one flat column: no trays or wells, sections split by a hairline. */
+  .thread-details-stack {
+    --tray-fill: transparent;
+    --tray-stroke: transparent;
+    --tray-shadow: none;
+    --composer-fill: transparent;
+    --composer-shadow: none;
+    gap: 0;
+  }
+
+  .thread-details-stack > [data-thread-details-card] {
+    border-radius: 0;
+  }
+
+  .thread-details-stack > [data-thread-details-card] ~ [data-thread-details-card] {
+    border-block-start: 1px solid var(--duet-hairline);
+    padding-block-start: 0.375rem;
+    margin-block-start: 0.375rem;
+  }
+
   [data-preview-panel-mode] {
     border-color: var(--duet-hairline);
     background-color: var(--background);
@@ -156,16 +176,8 @@ html:root[data-theme-id="ksg-salon"] {
       }
 
       [data-pane-notch=""] [data-layout-tab-strip] [data-active-tab="true"] {
-        background: #f2f2f2;
+        background: var(--duet-row-active);
         color: var(--foreground);
-      }
-    }
-  }
-
-  @variant dark {
-    [data-slot="sidebar"][data-variant="inset"] ~ [data-slot="sidebar-inset"] {
-      [data-pane-notch=""] [data-layout-tab-strip] [data-active-tab="true"] {
-        background: #252525;
       }
     }
   }
@@ -178,33 +190,16 @@ html:root[data-theme-id="ksg-salon"] {
     border: 1px solid var(--duet-hairline);
     border-radius: 999px;
     background: transparent;
-    color: #555555;
+    color: var(--duet-quiet-pill-foreground);
     font-size: 12.5px;
     box-shadow: none;
   }
 
   [data-thread-details-pill][data-popup-open],
   [data-thread-details-pill][aria-expanded="true"] {
-    border-color: #e3e3e3;
-    background: #f0f0f0;
-  }
-
-  @variant dark {
-    [data-thread-details-pill] {
-      color: #c4c4c4;
-    }
-
-    [data-thread-details-pill][data-popup-open],
-    [data-thread-details-pill][aria-expanded="true"] {
-      border-color: #343434;
-      background: #2c2c2c;
-    }
-  }
-
-  [data-duet-palette] {
-    --duet-channel-selected: color-mix(in srgb, var(--duet-ink-base) 8%, #ffffff);
-    --duet-channel-tile-ring: color-mix(in srgb, var(--duet-ink-base) 14%, transparent);
-    --duet-tile-sheen: rgb(255 255 255 / 0.55);
+    border-color: transparent;
+    background: var(--duet-row-active);
+    color: var(--duet-quiet-pill-hover-foreground);
   }
 
   [data-duet-palette="terracotta"] {
@@ -268,21 +263,14 @@ html:root[data-theme-id="ksg-salon"] {
       --duet-ink: color-mix(in srgb, var(--duet-ink-base) 70%, white);
       --duet-tint: color-mix(in srgb, var(--duet-ink-base) 22%, #1f1f1f);
       --duet-bubble: color-mix(in srgb, var(--duet-ink-base) 26%, #252525);
-      --duet-channel-selected: color-mix(in srgb, var(--duet-ink-base) 22%, #303030);
-      --duet-channel-tile-ring: color-mix(in srgb, var(--duet-ink) 22%, transparent);
-      --duet-tile-sheen: rgb(255 255 255 / 0.09);
       /* Dark inks are light, so the mascot's eyes go dark. */
       --duet-mascot-eye: #1f1f1f;
     }
   }
 
-  /* Channel tiles catch light along their top edge, and step from tint to bubble while the row
-     is pointed at or focused. */
+  /* Channel tiles are flat tint with no rim, and step from tint to bubble while the row is
+     pointed at or focused. */
   [data-duet-channel-card] [data-captain-tile] {
-    background-image: linear-gradient(to bottom, var(--duet-tile-sheen), transparent 60%);
-    box-shadow:
-      inset 0 0 0 1px var(--duet-channel-tile-ring),
-      inset 0 1px 0 var(--duet-tile-sheen);
     transition: background-color 120ms ease-out;
   }
 

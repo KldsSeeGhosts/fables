@@ -9,7 +9,6 @@ import {
   type OrchestrationV2ThreadShell,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
-import { AsyncResult } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 import { render } from "../../../test/render";
@@ -19,25 +18,7 @@ vi.mock(import("../../hooks/useTheme"), async (original) => {
   return { ...actual, useTheme: () => ({ ...actual.useTheme(), theme: "ksg-salon" }) };
 });
 
-const directory = vi.hoisted(() => ({ captains: [] as Captain[], shells: [] as unknown[] }));
-vi.mock(import("./captainsDirectory"), async (original) => {
-  const actual = await original();
-  // Only the fields the shelf reads; the real list carries full environment records.
-  const useCaptainEnvironments = () =>
-    ({
-      supporting: [{ environmentId: EnvironmentId.make("environment"), label: "Studio" }],
-      key: "environment",
-      results: [AsyncResult.success({ captains: directory.captains, documents: [], memories: [] })],
-    }) as unknown as ReturnType<typeof actual.useCaptainEnvironments>;
-  return { ...actual, useCaptainEnvironments };
-});
-vi.mock(import("../../state/entities"), async (original) => ({
-  ...(await original()),
-  useThreadShells: () => directory.shells as never,
-}));
-
-import { CaptainShelfList, CaptainsHubRow } from "./CaptainsShelf";
-import { SidebarProvider } from "../ui/sidebar";
+import { CaptainShelfList } from "./CaptainsShelf";
 
 const environmentId = EnvironmentId.make("environment");
 const now = DateTime.makeUnsafe("2026-11-24T10:00:00.000Z");
@@ -117,20 +98,15 @@ function renderList(row: Partial<Parameters<typeof CaptainShelfList>[0]["rows"][
   );
 }
 
-it("lists channels as plain rows under a collapsible section, without tree chrome", async () => {
+it("lists Captains as plain rows under one Captains section, without tree chrome", async () => {
   await using screen = await renderList({});
   const header = screen.container.querySelector('[data-sidebar-row="shelf:captains"]');
-  expect(header?.textContent).toContain("Channels");
+  expect(header?.textContent).toBe("Captains");
   const row = screen.getByRole("button", { name: "Maria, Ready, All workspace, Coordinator" });
   await expect.element(row).toBeVisible();
   const item = row.element().closest("li")!;
   expect(getComputedStyle(item, "::before").content).toBe("none");
   expect(screen.container.querySelector("[data-captain-tile]")).not.toBeNull();
-
-  (header as HTMLElement).click();
-  await vi.waitFor(() => expect(screen.container.querySelector("[data-captain-tile]")).toBeNull());
-  (header as HTMLElement).click();
-  await expect.element(row).toBeVisible();
 });
 
 it("shows an idle channel's mascot and name, with its details on hover", async () => {
@@ -196,24 +172,21 @@ it("recedes an archived channel without live status", async () => {
   expect(screen.container.querySelector("[data-duet-live]")).toBeNull();
 });
 
-it("opens the Captains page from a plain row with a needs-input badge", async () => {
-  const ada = {
-    ...captain,
-    id: CaptainId.make("ada"),
-    name: "Ada",
-    primaryThreadId: ThreadId.make("captain:ada:0"),
-  };
-  directory.captains = [captain, ada];
-  directory.shells = [{ ...primary, id: ada.primaryThreadId, hasPendingApprovals: true }];
-  const onOpen = vi.fn();
+it("opens the Captains page from the section label, which counts Captains needing input", async () => {
+  const onOpenOverview = vi.fn();
   await using screen = await render(
-    <SidebarProvider>
-      <CaptainsHubRow active={false} onOpen={onOpen} />
-    </SidebarProvider>,
+    <ul>
+      <CaptainShelfList
+        rows={[{ environmentId, captain, attention: 1, working: false, primary }]}
+        activeThread={null}
+        onOpen={() => {}}
+        onOpenOverview={onOpenOverview}
+      />
+    </ul>,
   );
   await expect.element(screen.getByLabelText("1 Captain needs input")).toHaveTextContent("1");
-  const row = screen.getByRole("button");
-  expect(row.element().textContent).toBe("Captains1");
-  await userEvent.click(row);
-  expect(onOpen).toHaveBeenCalledOnce();
+  const link = screen.container.querySelector<HTMLElement>("[data-captains-overview-link]")!;
+  expect(link.textContent).toBe("Captains1");
+  await userEvent.click(link);
+  expect(onOpenOverview).toHaveBeenCalledOnce();
 });

@@ -75,7 +75,6 @@ import { useLayoutStore } from "../../layout/layoutStore";
 import { useDuetShell } from "../../hooks/useDuetShell";
 import { DuetHeaderTitle, type HiddenTerminalChip } from "./DuetHeaderTitle";
 export type { HiddenTerminalChip } from "./DuetHeaderTitle";
-import { DuetStatusOrb } from "./DuetStatusOrb";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -359,15 +358,9 @@ export const ChatHeader = memo(function ChatHeader({
         tab.content.target.threadRef.threadId === parentThreadLink.threadId,
     );
   const tabless = duet;
-  const showCenteredOrb = duet && isServerThread && captain != null;
   const openCaptainThread = (threadId: ThreadId) => onOpenThread(threadId);
   return (
     <div className="flex min-w-0 flex-1 self-stretch">
-      {showCenteredOrb ? (
-        <div className="absolute left-1/2 top-[11px] z-20 -translate-x-1/2 [-webkit-app-region:no-drag]">
-          <DuetStatusOrb threadRef={activeThreadRef} />
-        </div>
-      ) : null}
       <div
         className={cn(
           "relative flex min-w-0 flex-1 items-center self-stretch",
