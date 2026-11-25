@@ -9,7 +9,6 @@ import { workspaceAreaProps } from "../../lib/workspaceFocus";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { SettingsPaneHeader, SettingsTabNotch } from "../settings/SettingsTabNotch";
 import { SidebarInset } from "../ui/sidebar";
-import { openCaptainTasks } from "./captainBriefTab";
 import { CaptainEditorDialog } from "./CaptainEditorDialog";
 import { CaptainsInbox } from "./CaptainsInbox";
 import { useCaptainDestinations, useCaptainsDirectory } from "./captainsDirectory";
@@ -23,11 +22,8 @@ export function CaptainsWorkspace() {
   const { destinations, destination } = useCaptainDestinations(usePrimaryEnvironmentId());
   const [creating, setCreating] = useState(false);
   const openThread = useOpenCaptainThread();
-  const openCaptain = (environmentId: EnvironmentId, captain: Captain, view: "chat" | "make") => {
-    const threadRef = scopeThreadRef(environmentId, captain.primaryThreadId);
-    if (view === "make") openCaptainTasks(threadRef, "docs");
-    openThread(threadRef);
-  };
+  const openCaptain = (environmentId: EnvironmentId, captain: Captain) =>
+    openThread(scopeThreadRef(environmentId, captain.primaryThreadId));
 
   return (
     <SidebarInset
@@ -49,7 +45,7 @@ export function CaptainsWorkspace() {
             environments={environments}
             shells={shells}
             onOpenThread={openThread}
-            onOpenCaptain={(environmentId, captain) => openCaptain(environmentId, captain, "make")}
+            onOpenCaptain={openCaptain}
             onCreate={destination ? () => setCreating(true) : undefined}
           />
         </div>
@@ -61,7 +57,7 @@ export function CaptainsWorkspace() {
           onClose={() => setCreating(false)}
           onSave={(environmentId, captain) => {
             setCreating(false);
-            openCaptain(environmentId, captain, "chat");
+            openCaptain(environmentId, captain);
           }}
         />
       ) : null}

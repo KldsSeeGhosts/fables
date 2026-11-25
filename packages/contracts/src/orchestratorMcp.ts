@@ -3,6 +3,7 @@ import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 
 import { AuthMcpClientAccess } from "./auth.ts";
+import { PROJECT_TRACKED_FOLDERS_MAX } from "./project.ts";
 import {
   ContextTransferId,
   EnvironmentId,
@@ -179,8 +180,16 @@ export const OrchestratorMcpDelegateTaskInput = Schema.Struct({
   isolation: Schema.optional(
     Schema.Literals(["shared", "worktree"]).annotate({
       description:
-        "'shared' (default): parent checkout. 'worktree': new prepared checkout from the parent commit, for a separate checkout or PR per child. Uncommitted edits stay out.",
+        "'shared' (default): parent checkout. 'worktree': prepared checkouts for a separate checkout or PR per child. The project repository starts from the parent commit. Added repositories use their own default branches. Uncommitted edits stay out.",
     }),
+  ),
+  repositories: Schema.optional(
+    Schema.Array(TrimmedNonEmptyString)
+      .check(Schema.isMaxLength(PROJECT_TRACKED_FOLDERS_MAX))
+      .annotate({
+        description:
+          "Worktree isolation only. Absolute paths of tracked Git folders to check out. Defaults to all up to 8, or none above 8.",
+      }),
   ),
   mode: Schema.optional(
     Schema.Literals(["async", "wait"]).annotate({

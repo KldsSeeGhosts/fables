@@ -61,6 +61,7 @@ import {
 } from "../workspace/restoreMissingWorktree.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import { layerNoTaskFolders, layerRealGit } from "./ProviderTurnStartService.testkit.ts";
+import * as CaptainStore from "../captains/CaptainStore.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -484,6 +485,8 @@ function makeLocalCommandHarness(input: {
   readonly failReadsAfterRunning?: boolean;
   readonly missingProviderSession?: boolean;
   readonly recoveryReadFailure?: string;
+  /** Runs the turn in a Duet's primary conversation. */
+  readonly captain?: boolean;
   readonly previousTurn?: {
     readonly runStatus: "failed" | "completed" | "interrupted";
     readonly turnStatus: "running" | "completed" | "interrupted";
@@ -514,7 +517,9 @@ function makeLocalCommandHarness(input: {
 }) {
   const settledRuns: Array<string> = [];
   const now = DateTime.makeUnsafe("2026-09-04T12:00:00Z");
-  const threadId = ThreadId.make("thread-native-account-command");
+  const threadId = ThreadId.make(
+    input.captain === true ? "captain:harness-duet:0" : "thread-native-account-command",
+  );
   const runId = RunId.make("run-native-account-command");
   const rootNodeId = NodeId.make("root-native-account-command");
   const attemptId = RunAttemptId.make("attempt-native-account-command");
@@ -1408,6 +1413,23 @@ function makeLocalCommandHarness(input: {
         Layer.mock(RuntimePolicy.RuntimePolicyV2)({
           resolve: resolveRuntimePolicy,
         }),
+        input.captain === true
+          ? Layer.mock(CaptainStore.CaptainStore)({
+              byThread: () =>
+                Effect.succeed({
+                  id: "harness-duet",
+                  name: "Harness lead",
+                  role: "",
+                  instructions: "",
+                  coordinatorOnly: true,
+                  reportPolicy: "react",
+                  scopedProjectIds: [],
+                  earlierThreadIds: [],
+                } as never),
+              document: () => Effect.succeed({ content: "" } as never),
+              listMemories: () => Effect.succeed([]),
+            })
+          : Layer.empty,
       ),
     ),
   );
@@ -2260,6 +2282,21 @@ effectIt.effect("sends new steering text when restarting a manual continuation",
     yield* harness.start;
     expect(harness.startTurn.mock.calls[0]?.[0].message.text).toBe("New steering instruction");
     expect(harness.startRootRun.mock.calls[0]?.[0].resume).toBe(false);
+  }),
+);
+
+effectIt.effect("briefs a Duet on a turn that carries no other pending context", () =>
+  Effect.gen(function* () {
+    const harness = makeLocalCommandHarness({
+      text: "Fix the typo",
+      captain: true,
+      sideChat: { contextRun: "delivered" },
+    });
+    yield* harness.start;
+    const text = harness.startTurn.mock.calls[0]?.[0].message.text ?? "";
+    expect(text).toContain("Captain profile: Harness lead");
+    expect(text).toContain("How you work:");
+    expect(text.endsWith("Fix the typo")).toBe(true);
   }),
 );
 

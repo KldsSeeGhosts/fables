@@ -362,18 +362,22 @@ export const ChatHeader = memo(function ChatHeader({
   const openCaptainThread = (threadId: ThreadId) => onOpenThread(threadId);
   // Duet keeps the animated orb centred while placing the Duet title menu at the header start.
   const captainHero = duet && isServerThread && captain != null;
+  const captainComponentKey = `${activeThreadEnvironmentId}:${activeThreadId}`;
   return (
-    <div className="flex min-w-0 flex-1 self-stretch">
+    <div
+      className="flex min-w-0 flex-1 self-stretch"
+      data-captain-header-root={captainHero ? "" : undefined}
+    >
       {captainHero ? (
         <CaptainHeaderHero
+          key={captainComponentKey}
           captain={captain}
           threadRef={activeThreadRef}
-          onContextMenu={handleHeaderContextMenu}
         />
       ) : null}
       <div
         className={cn(
-          "relative flex min-w-0 flex-1 items-center self-stretch",
+          "flex min-w-0 flex-1 items-center self-stretch",
           trailingInset == null && (rightPanelOpen ? "pr-10" : "pr-24"),
         )}
         style={trailingInset == null ? undefined : { paddingInlineEnd: trailingInset }}
@@ -386,6 +390,7 @@ export const ChatHeader = memo(function ChatHeader({
               customTitle={
                 captainHero ? (
                   <CaptainHeaderTitleMenu
+                    key={captainComponentKey}
                     captain={captain}
                     threadRef={activeThreadRef}
                     layoutTabId={layoutTabId}

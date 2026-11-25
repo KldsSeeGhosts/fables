@@ -309,7 +309,7 @@ export function useCaptainProfile({
   const archive = useAtomCommand(serverEnvironment.archiveCaptain, { reportFailure: false });
   const restore = useAtomCommand(serverEnvironment.unarchiveCaptain, { reportFailure: false });
   const deleteCaptain = useAtomCommand(serverEnvironment.deleteCaptain, { reportFailure: false });
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState<CaptainProfileSection | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -390,11 +390,11 @@ export function useCaptainProfile({
     save,
     changeArchive,
     remove,
-    edit: () => setEditing(true),
-    stopEditing: () => setEditing(false),
+    edit: (section: CaptainProfileSection = "profile") => setEditing(section),
+    stopEditing: () => setEditing(null),
     apply: (profile: Captain) => {
       setApplied(profile);
-      setEditing(false);
+      setEditing(null);
     },
     requestDelete: () => {
       setError(null);
@@ -409,6 +409,9 @@ export function useCaptainProfile({
 
 export type CaptainProfile = ReturnType<typeof useCaptainProfile>;
 
+/** The Customize dialog's sections: who the Duet is, and what it keeps between conversations. */
+export type CaptainProfileSection = "profile" | "memory";
+
 /** The edit and delete dialogs that `useCaptainProfile` opens. */
 export function CaptainProfileDialogs({ profile }: { profile: CaptainProfile }) {
   const isDuet = useDuetShell();
@@ -416,9 +419,10 @@ export function CaptainProfileDialogs({ profile }: { profile: CaptainProfile }) 
   const { captain, environmentId, error, pending } = profile;
   return (
     <>
-      {profile.editing ? (
+      {profile.editing !== null ? (
         <CaptainEditorDialog
           captain={captain}
+          initialSection={profile.editing}
           destination={{ id: environmentId, label: environment?.label ?? environmentId }}
           onClose={profile.stopEditing}
           onSave={(_environmentId, saved) => profile.apply(saved)}

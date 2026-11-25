@@ -19,7 +19,30 @@ import * as CaptainStore from "./CaptainStore.ts";
 const prefix = (text: string, length: number) =>
   text.length <= length ? text : `${text.slice(0, length)}…`;
 
-const formatCaptainBriefing = (input: {
+// The report policy decides whether finished crew wakes the Captain, so the waiting rule follows it.
+const crewWaitRule: Record<Captain["reportPolicy"], string> = {
+  react: "While crew works, end your turn and let completion wake you. Do not poll.",
+  context:
+    "While crew works, end your turn. Finished reports arrive with the user's next message, not as a wake-up. Do not poll.",
+  ignore:
+    "While crew works, end your turn. You are not told when crew finishes; check a task with `task_status` only when the user asks about it. Do not poll.",
+};
+
+const coordinatorBriefing = (captain: Captain) => `How you work:
+- Answer quick questions and lookups yourself.
+- Delegate anything that edits code with \`delegate_task\` and \`isolation: "worktree"\`. In a project that tracks several repositories, pass \`repositories\` with the ones the child edits.
+- A worktree child gets its own copy of each repository. In the brief, name a repository by its folder name and files by their path inside it, never by your checkout's absolute paths.
+- Scale crew to the task: one child for one change, two to four for independent parallel work, none for a lookup.
+- Every brief states the objective, the expected output, boundaries (files or areas it owns and must not touch), and a done-check (the command or observation that proves it is done).
+- ${crewWaitRule[captain.reportPolicy]}
+- Relay each result to the user as one line plus the task link. Do not paste crew output.
+- Questions a child asks the user stay in that child's thread.
+- When crew opens a PR you are responsible for, watch it with \`watch_pull_request\`.
+- Settle or archive finished task threads with \`t3_thread_organize\` once relayed.
+- At the end of a substantial turn, keep NOTES.md current (plan, open loops, next step) with \`captain_document_write\`.
+- After reacting to crew results, rewrite the \`## New\` section of DIGEST.md with one line per result that needs the user.`;
+
+export const formatCaptainBriefing = (input: {
   readonly captain: Captain;
   readonly projects: ReadonlyArray<{ readonly id: string; readonly title: string }>;
   readonly memories: ReadonlyArray<CaptainMemory>;
@@ -30,6 +53,7 @@ const formatCaptainBriefing = (input: {
   return [
     `Captain profile: ${captain.name}${captain.role ? ` (${captain.role})` : ""}`,
     captain.instructions && `Instructions:\n${prefix(captain.instructions, 4_000)}`,
+    captain.coordinatorOnly && coordinatorBriefing(captain),
     projects.length > 0
       ? `Scoped local projects:\n${projects.map(({ id, title }) => `- ${prefix(title, 100)} [${prefix(id, 100)}]`).join("\n")}${captain.scopedProjectIds.length > projects.length ? "\n- Additional projects are listed in captain_read." : ""}`
       : "Workspace scope: No projects selected.",
@@ -43,19 +67,79 @@ const formatCaptainBriefing = (input: {
     .join("\n\n");
 };
 
-const formatCaptainReports = (
+const firstParagraph = (result: string) => {
+  const [paragraph = ""] = result.trim().split(/\r?\n\s*\r?\n/, 1);
+  return prefix(paragraph.replace(/\s+/g, " ").trim(), 280);
+};
+
+// task_status only finds tasks of the calling conversation, so earlier ones point at their thread.
+const fullReportPointer = (
+  report: {
+    readonly id: string;
+    readonly threadId?: string;
+    readonly childThreadId?: string | null;
+  },
+  currentThreadId: string | undefined,
+) =>
+  report.threadId === undefined || report.threadId === currentThreadId
+    ? ` Read the full report with task_status(taskId: "${report.id}").`
+    : report.childThreadId
+      ? ` It ran from an earlier conversation; read the full report with t3_thread_read(threadId: "${report.childThreadId}").`
+      : "";
+
+export const formatCaptainReports = (
   reports: ReadonlyArray<{
     readonly id: string;
     readonly title: string | null;
     readonly result: string;
+    readonly threadId?: string;
+    readonly childThreadId?: string | null;
   }>,
+  currentThreadId?: string,
 ) =>
   reports.length === 0
     ? ""
-    : `Recent delegated task reports:\n${reports.map(({ id, title, result }) => `- ${prefix(title ?? id, 140)} [${id}]: ${prefix(result, 700)}`).join("\n")}`;
+    : `Recent delegated task reports:\n${reports
+        .slice(0, 6)
+        .map((report) => {
+          const summary = firstParagraph(report.result);
+          const label = `${prefix(report.title ?? report.id, 140)} [${report.id}]`;
+          return `- ${summary === "" ? label : `${label}: ${summary}`}${fullReportPointer(report, currentThreadId)}`;
+        })
+        .join("\n")}`;
+
+export const formatCaptainCrewRules = (captain: Captain, crew: string) =>
+  [
+    `Crew rules from Captain ${captain.name}:\n- Work only in your own working directory and the folders listed with it. If the brief gives a path in another checkout, use the matching folder in yours.\n- For multi-step work, keep a progress note in your worktree and commit after each step.\n- Run the focused tests or checks that prove the change, and report the evidence.\n- Do not report done until the done-check from your brief passes.\n- End your final message with a 2 to 4 sentence summary first, then details.`,
+    crew.trim() === "" ? "" : `CREW.md:\n${prefix(crew, 2_000)}`,
+  ]
+    .filter((part) => part !== "")
+    .join("\n\n");
+
+/** Share of the context limit at which a Captain is told to save its state and offer a reset. */
+const CAPTAIN_CONTEXT_PRESSURE_RATIO = 0.75;
+
+// A long-lived coordinator does better with a reset plus NOTES.md than with repeated compaction.
+export const formatCaptainContextPressure = (usage: {
+  readonly usedTokens: number | null;
+  readonly maxTokens: number | null;
+  readonly autoCompactThreshold: number | null;
+}) => {
+  const limit = usage.autoCompactThreshold ?? usage.maxTokens;
+  if (usage.usedTokens === null || limit === null || limit <= 0) return "";
+  const ratio = usage.usedTokens / limit;
+  if (ratio < CAPTAIN_CONTEXT_PRESSURE_RATIO) return "";
+  const percent = Math.min(100, Math.round(ratio * 100));
+  const measure =
+    usage.autoCompactThreshold === null ? "full" : "of the way to automatic compaction";
+  return `Context check: this conversation is ${percent}% ${measure}. Keep NOTES.md current now (plan, open loops, next step) with \`captain_document_write\`. Once the current work wraps up, suggest that the user start a new conversation with you; NOTES.md, memories and running tasks carry over.`;
+};
 
 const unchangedBriefing = (captain: Captain) =>
-  `Captain ${captain.name}: your profile, instructions, scope, essential memories, AGENTS.md and NOTES.md are unchanged since they were last given in this conversation. Use captain_read, captain_document_read and captain_memory_search if you need them again.`;
+  `Captain ${captain.name}: your profile, instructions, scope, essential memories, AGENTS.md, NOTES.md and how you work are unchanged since they were last given in this conversation. Use captain_read, captain_document_read and captain_memory_search if you need them again.`;
+
+const unchangedCrewRules = (captain: Captain) =>
+  `Captain ${captain.name}'s crew rules are unchanged since they were last given in this conversation.`;
 
 export interface CaptainTurnContext {
   readonly text: string;
@@ -64,49 +148,57 @@ export interface CaptainTurnContext {
 }
 
 const NO_CONTEXT: CaptainTurnContext = { text: "", delivered: Effect.void };
-const withoutBriefing = (text: string): CaptainTurnContext => ({ text, delivered: Effect.void });
+
+type CaptainContextThread = {
+  readonly id: ThreadId;
+  readonly lineage: Pick<
+    OrchestrationV2AppThreadLineage,
+    "parentThreadId" | "relationshipToParent"
+  >;
+};
+
+/** Whether a turn on this thread may carry a Captain briefing or crew rules. Reads no state. */
+export const mayCarryCaptainContext = ({ id, lineage }: CaptainContextThread) =>
+  isCaptainThreadId(id) ||
+  (lineage.relationshipToParent === "subagent" &&
+    lineage.parentThreadId !== null &&
+    isCaptainThreadId(lineage.parentThreadId));
 
 export const makeReadCaptainTurnContext = Effect.gen(function* () {
   const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
   const sql = yield* Effect.serviceOption(SqlClient.SqlClient);
   const projects = yield* ProjectService.ProjectService;
   const briefings = makeCaptainBriefingLedger();
+  const crewBriefings = makeCaptainBriefingLedger();
 
   // A delegated child gets the Captain's crew rules only, never its private profile or memories.
   const readCrewContext = Effect.fn("CaptainService.crewContext")(function* (
     parentThreadId: ThreadId,
+    delivery?: CaptainBriefingDelivery,
   ) {
-    if (Option.isNone(store)) return "";
+    if (Option.isNone(store)) return NO_CONTEXT;
     const captain = yield* store.value.findByConversation(parentThreadId);
-    if (captain === undefined || captain.archivedAt !== null) return "";
+    if (captain === undefined || captain.archivedAt !== null) return NO_CONTEXT;
     const crew = yield* store.value.document(captain, "CREW.md");
-    return crew.content.trim() === ""
-      ? ""
-      : `Crew rules from Captain ${captain.name} (CREW.md):\n${prefix(crew.content, 2_000)}`;
+    const rules = formatCaptainCrewRules(captain, crew.content);
+    const plan = delivery === undefined ? undefined : crewBriefings.plan(delivery, rules);
+    return {
+      text: plan?.full === false ? unchangedCrewRules(captain) : rules,
+      delivered: plan === undefined ? Effect.void : Effect.sync(plan.commit),
+    };
   });
 
   return Effect.fn("CaptainService.turnContext")(
-    function* (
-      thread: {
-        readonly id: ThreadId;
-        readonly lineage: Pick<
-          OrchestrationV2AppThreadLineage,
-          "parentThreadId" | "relationshipToParent"
-        >;
-      },
-      delivery?: CaptainBriefingDelivery,
-    ) {
+    function* (thread: CaptainContextThread, delivery?: CaptainBriefingDelivery) {
       const threadId = thread.id;
       if (Option.isNone(store)) return NO_CONTEXT;
       if (!isCaptainThreadId(threadId)) {
         const { parentThreadId, relationshipToParent } = thread.lineage;
-        return withoutBriefing(
-          relationshipToParent === "subagent" &&
-            parentThreadId !== null &&
-            isCaptainThreadId(parentThreadId)
-            ? yield* readCrewContext(parentThreadId)
-            : "",
-        );
+        return relationshipToParent === "subagent" &&
+          parentThreadId !== null &&
+          isCaptainThreadId(parentThreadId)
+          ? yield* readCrewContext(parentThreadId, delivery)
+          : NO_CONTEXT;
       }
       const captain = yield* store.value.byThread(threadId);
       if (captain === undefined) return NO_CONTEXT;
@@ -138,9 +230,12 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
               readonly id: string;
               readonly title: string | null;
               readonly result: string;
+              readonly threadId: string;
+              readonly childThreadId: string | null;
             }>`
           SELECT subagent_id AS id, json_extract(payload_json, '$.title') AS title,
-            substr(json_extract(payload_json, '$.result'), 1, 701) AS result
+            substr(json_extract(payload_json, '$.result'), 1, 281) AS result,
+            thread_id AS threadId, child_thread_id AS childThreadId
           FROM orchestration_v2_projection_subagents
           WHERE ${sql.value.in("thread_id", reportThreadIds)}
             AND origin = 'app_owned'
@@ -152,7 +247,7 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
               (SELECT created_at FROM orchestration_v2_projection_threads
                 WHERE thread_id = ${threadId}),
               ''))
-          ORDER BY completed_at DESC, subagent_id DESC LIMIT 4
+          ORDER BY completed_at DESC, subagent_id DESC LIMIT 6
         `
           : [];
       const briefing = formatCaptainBriefing({
@@ -166,7 +261,14 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
       return {
         text: [
           plan?.full === false ? unchangedBriefing(captain) : briefing,
-          formatCaptainReports(reports),
+          formatCaptainReports(reports, threadId),
+          delivery === undefined
+            ? ""
+            : formatCaptainContextPressure({
+                usedTokens: delivery.usedTokens,
+                maxTokens: delivery.maxTokens ?? null,
+                autoCompactThreshold: delivery.autoCompactThreshold ?? null,
+              }),
         ]
           .filter((part) => part !== "")
           .join("\n\n"),

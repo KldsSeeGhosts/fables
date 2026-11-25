@@ -25,6 +25,7 @@ import {
   scheduleLabel,
   taskToDraft,
   unbindDraftFromThread,
+  validateScheduledTasksSearch,
 } from "./scheduledTasksSettings.logic";
 
 const laptopId = EnvironmentId.make("laptop");
@@ -86,6 +87,25 @@ const tasks = [first, second, third, other, sameIdElsewhere].map((project, index
   environmentId: project.environmentId,
   projectId: project.id,
 }));
+
+describe("scheduled task settings search", () => {
+  it("parses the linked task and routine template thread", () => {
+    expect(
+      validateScheduledTasksSearch({
+        environmentId: "laptop",
+        taskId: "routine",
+        templateThreadId: "captain:maria:0",
+      }),
+    ).toEqual({
+      environmentId: laptopId,
+      taskId: ScheduledTaskId.make("routine"),
+      templateThreadId: ThreadId.make("captain:maria:0"),
+    });
+    expect(
+      validateScheduledTasksSearch({ templateThreadId: "   ", taskId: 42, environmentId: null }),
+    ).toEqual({});
+  });
+});
 
 describe("scheduled task settings scope", () => {
   it.each<{ search: SettingsScopeSearch; expected: string[] }>([

@@ -166,6 +166,60 @@ export function captainAttentionTotal(
   return captains.size;
 }
 
+export interface CaptainDelegatedLocalTask {
+  readonly thread: EnvironmentThreadShell | null;
+  readonly subagent: OrchestrationV2Subagent | null;
+}
+
+/**
+ * Every local task a Captain delegated, across its current and earlier conversations. Shell rows
+ * carry finished tasks the parent projection pages away; projection rows enrich the shells they
+ * match and cover children whose family rows have not loaded yet.
+ */
+export function captainDelegatedLocalTasks(input: {
+  readonly environmentId: EnvironmentId;
+  readonly captain: Pick<Captain, "primaryThreadId" | "earlierThreadIds">;
+  readonly shells: ReadonlyArray<EnvironmentThreadShell>;
+  readonly subagents: ReadonlyArray<OrchestrationV2Subagent>;
+}): CaptainDelegatedLocalTask[] {
+  const conversations = new Set<ThreadId>([
+    input.captain.primaryThreadId,
+    ...input.captain.earlierThreadIds,
+  ]);
+  const subagents = new Map<ThreadId, OrchestrationV2Subagent>();
+  for (const subagent of input.subagents) {
+    if (
+      subagent.origin === "app_owned" &&
+      subagent.childThreadId !== null &&
+      conversations.has(subagent.threadId)
+    ) {
+      subagents.set(subagent.childThreadId, subagent);
+    }
+  }
+
+  const rows: CaptainDelegatedLocalTask[] = [];
+  const seen = new Set<ThreadId>();
+  for (const thread of input.shells) {
+    const parentThreadId = thread.lineage.parentThreadId;
+    if (
+      thread.environmentId !== input.environmentId ||
+      thread.deletedAt !== null ||
+      thread.archivedAt !== null ||
+      thread.lineage.relationshipToParent !== "subagent" ||
+      parentThreadId === null ||
+      !conversations.has(parentThreadId)
+    ) {
+      continue;
+    }
+    seen.add(thread.id);
+    rows.push({ thread, subagent: subagents.get(thread.id) ?? null });
+  }
+  for (const [childThreadId, subagent] of subagents) {
+    if (!seen.has(childThreadId)) rows.push({ thread: null, subagent });
+  }
+  return rows;
+}
+
 export function captainScheduledTasks(
   tasks: ReadonlyArray<ScheduledTask>,
   captain: Pick<Captain, "primaryThreadId" | "earlierThreadIds">,

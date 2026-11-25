@@ -1,3 +1,4 @@
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import { IsoDateTime, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
@@ -90,6 +91,8 @@ const CaptainProfile = Schema.Struct({
 
 export const Captain = Schema.Struct({
   ...CaptainProfile.fields,
+  // Absent from servers older than the coordinator setting.
+  coordinatorOnly: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
   id: CaptainId,
   primaryThreadId: ThreadId,
   earlierThreadIds: Schema.Array(ThreadId),
@@ -146,6 +149,7 @@ export const CaptainKey = Schema.Struct({ captainId: CaptainId });
 
 export const CaptainCreateInput = Schema.Struct({
   ...CaptainProfile.fields,
+  coordinatorOnly: Schema.optional(Schema.Boolean),
   captainId: CaptainId,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
@@ -162,6 +166,7 @@ export const CaptainUpdateInput = Schema.Struct({
   avatar: Schema.optional(CaptainAvatar),
   scopedProjectIds: Schema.optional(CaptainProfile.fields.scopedProjectIds),
   reportPolicy: Schema.optional(CaptainReportPolicy),
+  coordinatorOnly: Schema.optional(Schema.Boolean),
 });
 export type CaptainUpdateInput = typeof CaptainUpdateInput.Type;
 

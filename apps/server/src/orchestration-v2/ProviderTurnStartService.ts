@@ -45,7 +45,10 @@ import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { makeRestoreMissingWorktree } from "../workspace/restoreMissingWorktree.ts";
-import { makeReadCaptainTurnContext } from "../captains/captainTurnContext.ts";
+import {
+  makeReadCaptainTurnContext,
+  mayCarryCaptainContext,
+} from "../captains/captainTurnContext.ts";
 import type * as TaskFolders from "../workspace/TaskFolders.ts";
 import * as EventSink from "./EventSink.ts";
 import * as ProviderUsageAnalytics from "../telemetry/ProviderUsageAnalytics.ts";
@@ -2144,6 +2147,9 @@ export const layer: Layer.Layer<
                   // A new native session under the same provider thread starts without the briefing.
                   providerThreadId: `${runningProviderThread.id}:${runningProviderThread.nativeThreadRef?.nativeId ?? ""}`,
                   usedTokens: runningProviderThread.contextUsage?.usedTokens ?? null,
+                  maxTokens: runningProviderThread.contextUsage?.maxTokens ?? null,
+                  autoCompactThreshold:
+                    runningProviderThread.contextUsage?.autoCompactThreshold ?? null,
                 });
           const context = [delivery.context, sideChatContext, restartNote, captain?.text ?? ""]
             .filter((part) => part !== "")
@@ -2249,9 +2255,11 @@ export const layer: Layer.Layer<
               }),
         ),
       );
-      const deliverySession = carriesPendingContext
-        ? makeDeliverySession(session, startWithHandoffs)
-        : session;
+      // A Duet briefing is added in startWithHandoffs, so Duet turns take that path too.
+      const deliverySession =
+        carriesPendingContext || mayCarryCaptainContext(projection.thread)
+          ? makeDeliverySession(session, startWithHandoffs)
+          : session;
       return runExecution.startRootRun({
         commandId: CommandId.make(`command:effect:provider-turn.start:${run.id}`),
         appThread: projection.thread,

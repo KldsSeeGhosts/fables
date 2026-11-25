@@ -94,7 +94,6 @@ import {
   type ThreadId,
   isCaptainThreadId,
   ProviderInteractionMode,
-  resolveEnvironmentMachineKind,
   resolveIdleCompaction,
   RuntimeMode,
 } from "@t3tools/contracts";
@@ -188,6 +187,7 @@ import { useWorkspaceRevision } from "../hooks/useWorkspaceRevision";
 import { DEFAULT_INTERACTION_MODE, type ChatMessage } from "../types";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { useTheme } from "../hooks/useTheme";
+import { useDuetShell } from "../hooks/useDuetShell";
 import { copyThreadReference } from "../lib/copyThreadReference";
 import { subscribeSnapShotComposerFocus } from "../lib/desktopSnapShot";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -207,8 +207,8 @@ import {
   useThreadPreviewCanvasSource,
 } from "./preview/ThreadPreviewMiniPlayer";
 import { createChatCanvasStore, resolveChatCanvasModel } from "./chat/canvasStore";
+import { DUET_THREAD_DETAILS_CARD_MARGINS } from "./chat/threadDetailsCardLayout";
 import { usePreviewSession } from "./preview/usePreviewSession";
-import { dispatchPreviewAction } from "./preview/previewActionBus";
 
 import {
   previewMiniPlayerSourceKey,
@@ -381,6 +381,7 @@ import { useProactivePanels } from "../hooks/useProactivePanels";
 import { useIncrementalTimelineEntries } from "../hooks/useIncrementalTimelineEntries";
 import type { ComposerBannerStackItem } from "./chat/ComposerBannerStack";
 import { modelFallbackBannerItem } from "./chat/ComposerUsageLimits";
+import { CaptainContextResetNotice } from "./captains/CaptainContextResetNotice";
 import { ComposerSurface } from "./chat/ComposerSurface";
 import { resolveThreadSyncPhase } from "../threadSync";
 import { hasAvailableCompactionProvider } from "./chat/compaction.logic";
@@ -696,6 +697,8 @@ export default function ChatView(props: ChatViewProps) {
   );
   const citationHistory = useCitedHistory(citationRequest);
   const { resolvedTheme } = useTheme();
+  const duetShell = useDuetShell();
+  const detailsCardMargins = duetShell ? DUET_THREAD_DETAILS_CARD_MARGINS : undefined;
   const composerRuntimeMode = useComposerDraftStore(
     (store) => store.getComposerDraft(composerDraftTarget)?.runtimeMode ?? null,
   );
@@ -2188,19 +2191,24 @@ export default function ChatView(props: ChatViewProps) {
   const threadPanelInlineOpen = useRightPanelStore((state) =>
     selectThreadPanelOpen(state.threadPanelVisibilityByThreadKey, activeThreadRef, "inline"),
   );
-  // Selects only the mode, so canvas resizes rerender the chat view only when the
-  // card switches presentation.
-  const threadPanelPresentation = useStore(
-    chatCanvasStore,
-    (state) =>
-      resolveChatCanvasModel({
-        measurements: state.measurements,
-        detailsCardMeasurement: state.detailsCardMeasurement,
-        threadRef: activeThreadRef,
-        preview: canvasPreview,
-        detailsCardInlineOpen: threadPanelInlineOpen,
-      }).detailsCardMode,
-  );
+  // Selects one stable string, so canvas resizes rerender the chat view only when the
+  // card presentation or the hero's lane center changes.
+  const canvasHeaderLayout = useStore(chatCanvasStore, (state) => {
+    const model = resolveChatCanvasModel({
+      measurements: state.measurements,
+      detailsCardMeasurement: state.detailsCardMeasurement,
+      threadRef: activeThreadRef,
+      preview: canvasPreview,
+      detailsCardInlineOpen: threadPanelInlineOpen,
+      detailsCardMargins,
+    });
+    const lane = model.layout.chat;
+    return `${model.detailsCardMode}:${(lane.insetStart - lane.insetEnd) / 2}`;
+  });
+  const canvasHeaderSeparator = canvasHeaderLayout.indexOf(":");
+  const threadPanelPresentation =
+    canvasHeaderLayout.slice(0, canvasHeaderSeparator) === "inline" ? "inline" : "popover";
+  const chatLaneCenterOffset = Number(canvasHeaderLayout.slice(canvasHeaderSeparator + 1));
   const workspaceInDetails = !shouldShowComposerWorkspace({
     isServerThread,
     embedded,
@@ -3710,57 +3718,6 @@ export default function ChatView(props: ChatViewProps) {
       ? null
       : timelineFooterContent;
 
-  const duetHeaderMachineControl =
-    activeThreadRef !== null && activeEnvironment !== null
-      ? {
-          label: activeEnvironment.label,
-          machine:
-            activeEnvironmentOption?.machine ??
-            resolveEnvironmentMachineKind(activeEnvironment.serverConfig),
-          environmentId: activeThread.environmentId,
-          unavailable: activeEnvironmentUnavailableState !== null,
-          environments: logicalProjectEnvironments,
-          locked: envLocked,
-          ...(canChangeEnvironment ? { onChange: onEnvironmentChangeStable } : {}),
-          autoLabel: autoEnvironmentLabel,
-          ...(draftId &&
-          !envLocked &&
-          canAutoBalanceEnvironments &&
-          loadBalancingSettings.loadBalancingEnabled
-            ? { onAuto: onAutoEnvironmentStable }
-            : {}),
-        }
-      : null;
-  const duetHeaderControls =
-    activeThreadRef === null
-      ? null
-      : {
-          ...(sideChat.available ? { onNew: openNewSideChatStable } : {}),
-          machine: duetHeaderMachineControl,
-          terminal: {
-            label: gt("Terminal"),
-            onClick: hiddenTerminalChip?.onShow ?? toggleTerminalVisibilityStable,
-            active:
-              terminalUiState.terminalOpen ||
-              rightPanelState.surfaces.some((surface) => surface.kind === "terminal"),
-          },
-          browser: browserAvailable
-            ? {
-                label: gt("Browser"),
-                onClick: () => dispatchPreviewAction("toggle-panel"),
-                active: previewPanelOpen,
-                disabled: !canOperatePreview && !previewPanelOpen,
-              }
-            : null,
-          diff:
-            isServerThread && diffAvailable
-              ? {
-                  label: gt("Diff"),
-                  onClick: openChangesFromThreadPanelStable,
-                  active: diffOpen,
-                }
-              : null,
-        };
   const panelToggleControlProps = {
     threadPanelOpen,
     threadPanelPresentation,
@@ -3769,13 +3726,14 @@ export default function ChatView(props: ChatViewProps) {
     onToggleThreadPanel: toggleThreadPanelStable,
     branchLabel: activeThreadBranch,
     contextPercent: activeContextWindow?.usedPercentage ?? null,
+    contextWindow: activeContextWindow,
+    project: activeProject ?? null,
     threadRef: activeThreadRef,
     rightPanel: {
       open: rightPanelOpen,
       shortcutLabel: shortcutLabelForCommand(keybindings, "rightPanel.toggle"),
       onToggle: toggleSidePaneStable,
     },
-    duetControls: duetHeaderControls,
   } satisfies PanelLayoutControlsProps;
   const panelToggleControls = (
     <PanelLayoutControls
@@ -3818,6 +3776,11 @@ export default function ChatView(props: ChatViewProps) {
           !embedded && "pane-mobile-chrome",
         )}
         data-chat-column
+        style={
+          {
+            "--chat-header-lane-center-offset": `${chatLaneCenterOffset}px`,
+          } as CSSProperties
+        }
         onMouseUp={preventMiddleClickPasteOutsideEditable}
       >
         {embedded ? null : (
@@ -4048,6 +4011,7 @@ export default function ChatView(props: ChatViewProps) {
               }}
               inert={isRevertingCheckpoint}
               data-chat-composer-overlay="true"
+              data-chat-composer-layout={heroLayout ? "hero" : "docked"}
               className={
                 heroLayout
                   ? "pointer-events-none absolute inset-0 z-20 flex flex-col justify-center pt-1.5 [container:draft-hero/size] sm:pt-2"
@@ -4092,6 +4056,11 @@ export default function ChatView(props: ChatViewProps) {
                     }
                   >
                     <ComposerSurface.Shell contextRow={showComposerContextStrip}>
+                      <CaptainContextResetNotice
+                        threadRef={isServerThread ? activeThreadRef : null}
+                        usedPercentage={activeContextWindow?.usedPercentage ?? null}
+                        onOpenThread={onOpenRelatedThreadStable}
+                      />
                       <div
                         ref={setComposerRequestCardHost}
                         data-chat-composer-request-host="true"

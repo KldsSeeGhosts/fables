@@ -23,6 +23,7 @@ import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.t
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
+import * as CaptainHandoff from "./captainHandoff.ts";
 import * as CaptainStore from "./CaptainStore.ts";
 
 const invalid = (message: string) => new CaptainError({ code: "invalid_request", message });
@@ -93,6 +94,7 @@ const make = Effect.gen(function* () {
           ),
         )).projectId;
       const { name, role, instructions, avatar, reportPolicy } = input;
+      const coordinatorOnly = input.coordinatorOnly ?? false;
       const now = yield* timestamp;
       const primaryThreadId = captainPrimaryThreadId(input.captainId, 0);
       yield* createPrimaryThread(primaryThreadId, projectId, name, {
@@ -106,6 +108,7 @@ const make = Effect.gen(function* () {
         instructions,
         avatar,
         reportPolicy,
+        coordinatorOnly,
         scopedProjectIds,
         primaryThreadId,
         earlierThreadIds: [],
@@ -131,6 +134,7 @@ const make = Effect.gen(function* () {
         instructions: input.instructions ?? current.instructions,
         avatar: input.avatar ?? current.avatar,
         reportPolicy: input.reportPolicy ?? current.reportPolicy,
+        coordinatorOnly: input.coordinatorOnly ?? current.coordinatorOnly,
         scopedProjectIds:
           scopedProjectIds === undefined
             ? current.scopedProjectIds
@@ -179,6 +183,19 @@ const make = Effect.gen(function* () {
         .pipe(Effect.catch(CaptainStore.captainUnavailable));
       if (previous === null)
         return yield* invalid("The Captain's previous thread could not be found.");
+      // Read before the reset moves scheduled tasks; NOTES.md changes only once the reset commits.
+      const handoff = yield* CaptainHandoff.prepare({
+        captain: current,
+        previousThreadId: previousId,
+      }).pipe(
+        Effect.provideService(SqlClient.SqlClient, sql),
+        Effect.asSome,
+        Effect.catch((cause) =>
+          Effect.logWarning("Could not read the Captain handoff before resetting.", {
+            cause,
+          }).pipe(Effect.as(Option.none<string>())),
+        ),
+      );
       const primaryThreadId = captainPrimaryThreadId(
         current.id,
         current.earlierThreadIds.length + 1,
@@ -200,6 +217,14 @@ const make = Effect.gen(function* () {
           }),
         )
         .pipe(Effect.catchTags({ SqlError: CaptainStore.captainUnavailable }));
+      if (Option.isSome(handoff)) {
+        yield* CaptainHandoff.save({ captain, section: handoff.value }).pipe(
+          Effect.provideService(CaptainStore.CaptainStore, store),
+          Effect.catch((cause) =>
+            Effect.logWarning("Could not write the Captain handoff after resetting.", { cause }),
+          ),
+        );
+      }
       yield* schedules.invalidateList;
       yield* store.notify(captain.id);
       return captain;

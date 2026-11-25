@@ -112,6 +112,7 @@ import {
   scheduleFromDraft,
   scheduleLabel,
   scheduledTaskDefaultModel,
+  scheduledTaskThreadTemplate,
   weekdayShortLabel,
   taskToDraft,
   unbindDraftFromThread,
@@ -431,6 +432,7 @@ function statusVariant(status: ScheduledTask["lastRunStatus"]) {
 export function ScheduledTasksSettings(target: {
   readonly environmentId?: EnvironmentId;
   readonly taskId?: ScheduledTaskId | undefined;
+  readonly templateThreadId?: ThreadId | undefined;
 }) {
   const gt = useGT();
   const { scope, environments, connectedEnvironments, environment } = useSettingsScope();
@@ -475,13 +477,35 @@ export function ScheduledTasksSettings(target: {
     setOpenedLinkTaskId(target.taskId);
     if (editor === null) setEditor({ environmentId: linkedEnvironmentId, task: linkedTask });
   }
+  const templateThread = useScheduledTaskThread(
+    target.templateThreadId === undefined ? null : (linkedEnvironmentId ?? null),
+    target.templateThreadId ?? null,
+  );
+  const [openedTemplateThreadId, setOpenedTemplateThreadId] = useState<ThreadId | undefined>();
+  if (target.templateThreadId === undefined && openedTemplateThreadId !== undefined) {
+    setOpenedTemplateThreadId(undefined);
+  }
+  if (
+    templateThread !== null &&
+    linkedEnvironmentId !== undefined &&
+    openedTemplateThreadId !== target.templateThreadId
+  ) {
+    setOpenedTemplateThreadId(target.templateThreadId);
+    if (editor === null) {
+      setEditor({
+        environmentId: linkedEnvironmentId,
+        task: null,
+        template: scheduledTaskThreadTemplate(templateThread),
+      });
+    }
+  }
   const navigate = useNavigate({ from: "/settings/scheduled-tasks" });
   const closeEditor = () => {
     setEditor(null);
-    if (target.taskId === undefined) return;
+    if (target.taskId === undefined && target.templateThreadId === undefined) return;
     void navigate({
       to: "/settings/scheduled-tasks",
-      search: ({ taskId: _closed, ...rest }) => rest,
+      search: ({ taskId: _closedTask, templateThreadId: _closedTemplate, ...rest }) => rest,
       replace: true,
     });
   };
@@ -1427,12 +1451,15 @@ const THREAD_MODE_LABELS: Record<ScheduledTaskThreadMode, string> = {
   fresh_session: msg("One thread, fresh session each run"),
 };
 
-function useScheduledTaskThread(environmentId: EnvironmentId, threadId: ThreadId | null) {
-  const ref = threadId === null ? null : scopeThreadRef(environmentId, threadId);
+function useScheduledTaskThread(environmentId: EnvironmentId | null, threadId: ThreadId | null) {
+  const ref =
+    environmentId === null || threadId === null ? null : scopeThreadRef(environmentId, threadId);
   const shell = useThreadShell(ref);
   // The shell can omit older settled threads; their family read still carries the row.
   const family = useEnvironmentQuery(
-    ref !== null && shell === null ? threadFamilies.familyAtom(environmentId, ref.threadId) : null,
+    ref !== null && shell === null
+      ? threadFamilies.familyAtom(ref.environmentId, ref.threadId)
+      : null,
   );
   return shell ?? family.data?.threads.find((row) => row.id === threadId) ?? null;
 }
@@ -1654,7 +1681,7 @@ function ScheduledTaskEditorForm({
       : {
           ...EMPTY_DRAFT,
           ...template,
-          projectId: defaultScheduledTaskProjectId(scopedProjects, scope),
+          projectId: template?.projectId ?? defaultScheduledTaskProjectId(scopedProjects, scope),
         },
   );
   // Pinned first. The chosen project stays listed after it is archived.

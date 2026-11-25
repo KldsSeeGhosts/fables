@@ -34,6 +34,7 @@ import { OrchestratorDispatchError } from "../orchestration-v2/Orchestrator.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
+import * as CaptainStore from "../captains/CaptainStore.ts";
 import * as ScheduledTaskService from "./ScheduledTaskService.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 
@@ -997,6 +998,95 @@ it.effect.each(["recreated under the same id", "moved to another project"] as co
         assert.equal(replacement?.threadId, null);
       }).pipe(Effect.provide(layer));
     }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+);
+
+it.effect("skips an archived Duet's routines and runs them again after restore", () =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const now = "2026-11-01T07:00:00.000Z";
+    yield* TestClock.setTime(Date.parse(now));
+    const threadId = ThreadId.make("captain:maria:0");
+    yield* sql`
+      INSERT INTO captains (
+        id, name, role, instructions, avatar, primary_thread_id, report_policy, created_at, updated_at, archived_at
+      ) VALUES (
+        'maria', 'Maria', 'Coordinator', '', '{"preset":"compass","color":"violet"}',
+        ${threadId}, 'context', ${now}, ${now}, ${now}
+      )
+    `;
+    const sends = yield* Ref.make(0);
+    const layer = ScheduledTaskService.layer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          CaptainStore.layer,
+          ManagedPolicy.layerTest(),
+          Layer.mock(ThreadLaunchService.ThreadLaunchService)({}),
+          Layer.mock(ThreadManagementService.ThreadManagementService)({
+            getThreadShell: () => Effect.succeed(threadShell(ProjectId.make("project:test"))),
+            getThreadRecords: () => Effect.succeed({ runs: [], messages: [] } as never),
+            getProjectThreadRecords: () =>
+              Effect.succeed({ runs: [], messages: [], turnItems: [] } as never),
+            waitForThread: (input) =>
+              Effect.succeed({ threadId: input.threadId, run: null, timedOut: true } as never),
+            sendToThread: () =>
+              Ref.update(sends, (count) => count + 1).pipe(Effect.as({} as never)),
+          }),
+          Layer.mock(SecretRequests.SecretRequests)({}),
+          Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
+            namedProjectsRoot: "/projects",
+            isScratchProject: () => Effect.succeed(false),
+          }),
+          NodeCrypto.layer,
+          Scheduler.layer,
+        ),
+      ),
+    );
+    yield* Effect.gen(function* () {
+      const service = yield* ScheduledTaskService.ScheduledTaskService;
+      const { task } = yield* service.upsert({
+        id: ScheduledTaskId.make("task:archived-duet"),
+        title: "Morning routine",
+        prompt: "Check progress",
+        enabled: true,
+        schedule: { type: "interval", everyMs: 60_000 },
+        projectId: ProjectId.make("project:test"),
+        threadId,
+        workspaceStrategy: { type: "root" },
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+      });
+      yield* sql`UPDATE scheduled_tasks SET next_run_at = ${now} WHERE task_id = ${task.id}`;
+      const skippedRead = yield* service.subscribeList().pipe(
+        Stream.map(({ tasks }) => tasks.find((candidate) => candidate.id === task.id)),
+        Stream.filter(
+          (current) =>
+            current?.lastRunError === "The Duet is archived." && current.nextRunAt !== null,
+        ),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+      yield* TestClock.adjust("6 seconds");
+      const skipped = Option.getOrUndefined(yield* Fiber.join(skippedRead));
+      assert.equal(skipped?.lastRunStatus, "failed");
+      assert.equal(skipped?.lastRunError, "The Duet is archived.");
+      assert.isNotNull(skipped?.nextRunAt);
+      assert.equal(yield* Ref.get(sends), 0);
+
+      yield* sql`UPDATE captains SET archived_at = NULL WHERE id = 'maria'`;
+      const succeededRead = yield* service.subscribeList().pipe(
+        Stream.map(({ tasks }) => tasks.find((candidate) => candidate.id === task.id)),
+        Stream.filter((current) => current?.lastRunStatus === "succeeded"),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+      yield* Effect.forEach(Array.from({ length: 13 }), () => TestClock.adjust("5 seconds"), {
+        discard: true,
+      });
+      yield* Fiber.join(succeededRead);
+      assert.equal(yield* Ref.get(sends), 1);
+    }).pipe(Effect.provide(layer));
+  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
 );
 
 it.effect("refuses saving an enabled task above the policy ceiling", () =>

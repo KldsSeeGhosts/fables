@@ -6,6 +6,9 @@ export interface CaptainBriefingDelivery {
   readonly providerThreadId: string;
   /** The provider thread's last reported context size; a drop means it was compacted. */
   readonly usedTokens: number | null;
+  /** The same session's context limits, for the context pressure note. */
+  readonly maxTokens?: number | null;
+  readonly autoCompactThreshold?: number | null;
 }
 
 // FNV-1a; only compares one briefing with the last one sent, so collisions just skip one refresh.

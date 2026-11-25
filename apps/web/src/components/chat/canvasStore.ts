@@ -3,7 +3,11 @@ import { createStore } from "zustand";
 import type { ThreadPanelPresentation } from "../../rightPanelLayout";
 import type { DetailsCardMeasurement } from "./ChatCanvasContext";
 import { resolveChatCanvasLayout, type ChatCanvasPreview } from "./chatCanvasLayout";
-import { resolveThreadDetailsCardLayout } from "./threadDetailsCardLayout";
+import {
+  CLASSIC_THREAD_DETAILS_CARD_MARGINS,
+  resolveThreadDetailsCardLayout,
+  type ThreadDetailsCardMargins,
+} from "./threadDetailsCardLayout";
 
 interface CanvasEdges {
   readonly left: number;
@@ -87,6 +91,7 @@ export function resolveChatCanvasModel({
   threadRef,
   preview,
   detailsCardInlineOpen,
+  detailsCardMargins = CLASSIC_THREAD_DETAILS_CARD_MARGINS,
 }: {
   measurements: ChatCanvasMeasurements;
   detailsCardMeasurement: DetailsCardMeasurement | null;
@@ -94,6 +99,7 @@ export function resolveChatCanvasModel({
   threadRef: ScopedThreadRef | null;
   preview: ChatCanvasPreview | null;
   detailsCardInlineOpen: boolean;
+  detailsCardMargins?: ThreadDetailsCardMargins | undefined;
 }) {
   const container = { width: measurements.width, height: measurements.height };
   const { findBar } = measurements;
@@ -107,6 +113,7 @@ export function resolveChatCanvasModel({
     lane,
     frame: null,
     topInset: detailsCardTopInset,
+    margins: detailsCardMargins,
   });
   // The canvas outlives thread switches, so a measurement only counts for the
   // thread whose card is shown now.
@@ -147,6 +154,7 @@ export function resolveChatCanvasModel({
     frame: layout.frame,
     overlapsDetailsCard: layout.overlapsDetailsCard,
     topInset: detailsCardTopInset,
+    margins: detailsCardMargins,
   });
   const detailsCardMode: ThreadPanelPresentation = detailsCardPlacement ? "inline" : "popover";
   return {

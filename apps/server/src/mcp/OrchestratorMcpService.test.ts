@@ -37,8 +37,10 @@ import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
@@ -65,6 +67,7 @@ import {
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
+import { layerNoTaskFolders } from "../orchestration-v2/ProviderTurnStartService.testkit.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import { buildUnavailableProviderSnapshot } from "../provider/unavailableProviderSnapshot.ts";
@@ -73,6 +76,11 @@ import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts
 import * as ServerSettings from "../serverSettings.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as RemoteDelegation from "../peer/RemoteDelegation.ts";
+import * as ServerConfig from "../config.ts";
+import {
+  layerTaskFoldersWithGit,
+  type TaskFoldersTestState,
+} from "../workspace/TaskFolders.testkit.ts";
 import type { McpInvocationScope } from "./McpInvocationContext.ts";
 import { idleThreadProjection, liveThreadShell } from "./McpToolAccess.testkit.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
@@ -84,6 +92,7 @@ const decodeTarget = Schema.decodeUnknownEffect(OrchestratorMcpTarget);
 
 const layerOrchestratorService = OrchestratorMcpService.layer.pipe(
   Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
+  Layer.provide(layerNoTaskFolders),
   Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
 );
 
@@ -3065,6 +3074,243 @@ describe("OrchestratorMcpService provider resolution", () => {
     }),
   );
 
+  describe("worktree delegation", () => {
+    const layerGit = GitVcsDriver.layer.pipe(
+      Layer.provideMerge(
+        ServerConfig.layerTest(process.cwd(), { prefix: "t3-delegate-worktree-" }),
+      ),
+      Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+    );
+
+    const delegateFrom = Effect.fn("test.delegateFrom")(function* (input: {
+      readonly projectIsRepository: boolean;
+      readonly trackedCount: number;
+      readonly parentInWorktree?: boolean;
+      readonly select?: boolean;
+      /** Also names the project's own repository, which a Git project always checks out. */
+      readonly nameProjectRoot?: boolean;
+    }) {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const git = yield* GitVcsDriver.GitVcsDriver;
+      const run = (cwd: string, ...args: ReadonlyArray<string>) =>
+        git
+          .execute({ operation: "delegate-test", cwd, args })
+          .pipe(Effect.map((result) => result.stdout.trim()));
+      const root = yield* fileSystem.realPath(yield* fileSystem.makeTempDirectoryScoped());
+      const workspaceRoot = path.join(root, "project");
+      const parentWorktree = input.parentInWorktree ? path.join(root, "parent") : null;
+      yield* fileSystem.makeDirectory(workspaceRoot);
+      const repository = Effect.fn("test.delegateRepository")(function* (cwd: string) {
+        yield* run(cwd, "init", "-b", "main");
+        yield* run(
+          cwd,
+          "-c",
+          "user.name=Test",
+          "-c",
+          "user.email=test@example.test",
+          "commit",
+          "--allow-empty",
+          "-m",
+          path.basename(cwd),
+        );
+      });
+      if (input.projectIsRepository) yield* repository(workspaceRoot);
+      if (input.projectIsRepository && parentWorktree !== null) {
+        yield* run(workspaceRoot, "worktree", "add", "-b", "parent", parentWorktree);
+        yield* run(
+          parentWorktree,
+          "-c",
+          "user.name=Test",
+          "-c",
+          "user.email=test@example.test",
+          "commit",
+          "--allow-empty",
+          "-m",
+          "parent's work",
+        );
+      } else if (parentWorktree !== null) {
+        yield* fileSystem.makeDirectory(parentWorktree);
+      }
+      const trackedFolders = yield* Effect.forEach(
+        Array.from({ length: input.trackedCount }, (_, index) => `repo-${index}`),
+        (name) =>
+          Effect.gen(function* () {
+            const folder = path.join(input.projectIsRepository ? root : workspaceRoot, name);
+            yield* fileSystem.makeDirectory(folder);
+            yield* repository(folder);
+            return { name, path: folder };
+          }),
+      );
+      const state: TaskFoldersTestState = { workspaceRoot, trackedFolders, thread: null };
+      const request = yield* Ref.make<Extract<
+        OrchestrationV2ServerCommand,
+        {
+          type: "delegated_task.request";
+        }
+      > | null>(null);
+      const task = {
+        id: taskId,
+        threadId: parentThreadId,
+        runId: parentRunId,
+        parentNodeId,
+        childThreadId,
+        origin: "app_owned",
+        driver: "codex",
+        providerInstanceId: codexInstanceId,
+        status: "running",
+        result: null,
+        model: "gpt-5.4",
+      };
+      const dependencies = Layer.mergeAll(
+        layerTaskFoldersWithGit(state).pipe(Layer.orDie),
+        Layer.mock(ThreadLaunchService.ThreadLaunchService)({}),
+        Layer.mock(ThreadManagementService.ThreadManagementService)({
+          hasReceipt: () => Effect.succeed(false),
+          isProviderInstanceEnabledForProject: () => Effect.succeed(true),
+          getThreadRecords: (threadId) =>
+            Effect.sync(() => {
+              if (threadId !== parentThreadId) return childProjection;
+              const projection = parentProjection([task]);
+              return {
+                ...projection,
+                thread: { ...projection.thread, worktreePath: parentWorktree },
+              };
+            }),
+          dispatch: (command) =>
+            command.type === "delegated_task.request"
+              ? Ref.set(request, command).pipe(
+                  Effect.as({
+                    sequence: 1,
+                    storedEvents: [{ event: { type: "subagent.updated", payload: task } }],
+                  } as never),
+                )
+              : Effect.die(`Unexpected command ${command.type}`),
+        }),
+        providerRegistryLayer([
+          providerSnapshot({
+            instanceId: codexInstanceId,
+            driver: ProviderDriverKind.make("codex"),
+            model: "gpt-5.4",
+          }),
+        ]),
+        adapterRegistryLayer([codexInstanceId]),
+        Layer.mock(ProjectService.ProjectService)({
+          getById: () =>
+            Effect.succeedSome({
+              id: projectId,
+              title: "Project",
+              workspaceRoot,
+              scripts: [],
+              defaultModelSelection: null,
+              deletedAt: null,
+              createdAt: "2026-10-03T00:00:00.000Z",
+              updatedAt: "2026-10-03T00:00:00.000Z",
+            }),
+        }),
+        Layer.mock(SecretRequests.SecretRequests)({}),
+        Layer.mock(RemoteDelegation.RemoteDelegation)({}),
+        Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
+        ServerSettings.layerTest(),
+      );
+      const baseRef = input.projectIsRepository
+        ? yield* run(parentWorktree ?? workspaceRoot, "rev-parse", "HEAD")
+        : "HEAD";
+      const selectedPath = input.select ? trackedFolders.at(-1)!.path : undefined;
+      yield* Effect.gen(function* () {
+        const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+        const options = { task: "Review the change.", isolation: "worktree" as const };
+        if (selectedPath !== undefined) {
+          const error = yield* service
+            .delegateTask(scope, {
+              ...options,
+              repositories: [path.join(root, "unknown")],
+            })
+            .pipe(Effect.flip);
+          assert.equal(error.code, "invalid_request");
+          assert.include(error.message, "unknown");
+          for (const folder of trackedFolders) assert.include(error.message, folder.path);
+          assert.isNull(yield* Ref.get(request));
+          const shared = yield* service
+            .delegateTask(scope, { task: "Review the change.", repositories: [selectedPath] })
+            .pipe(Effect.flip);
+          assert.include(shared.message, 'isolation "worktree"');
+          assert.isNull(yield* Ref.get(request));
+          if (!input.projectIsRepository) {
+            const plainRoot = yield* service
+              .delegateTask(scope, { ...options, repositories: [workspaceRoot] })
+              .pipe(Effect.flip);
+            assert.include(plainRoot.message, "is not a Git repository");
+            assert.isNull(yield* Ref.get(request));
+          }
+        }
+        const named = [
+          ...(input.nameProjectRoot ? [`${workspaceRoot}/`] : []),
+          ...(selectedPath === undefined ? [] : [selectedPath]),
+        ];
+        yield* service.delegateTask(scope, {
+          ...options,
+          ...(named.length === 0 ? {} : { repositories: named }),
+        });
+        assert.deepEqual((yield* Ref.get(request))?.workspaceStrategy, {
+          type: "worktree",
+          baseRef,
+          startFromOrigin: false,
+          ...(named.length === 0
+            ? {}
+            : { repositories: selectedPath === undefined ? [] : [{ path: selectedPath }] }),
+        });
+      }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(dependencies))));
+    });
+
+    it.live.each([
+      {
+        name: "a plain project with two repositories",
+        projectIsRepository: false,
+        trackedCount: 2,
+      },
+      {
+        name: "a plain project's task folder",
+        projectIsRepository: false,
+        trackedCount: 2,
+        parentInWorktree: true,
+      },
+      {
+        name: "a Git project with an added repository",
+        projectIsRepository: true,
+        trackedCount: 1,
+        parentInWorktree: true,
+      },
+      {
+        name: "a single-repository project",
+        projectIsRepository: true,
+        trackedCount: 0,
+        parentInWorktree: true,
+      },
+      {
+        name: "a Git project named as its own repository",
+        projectIsRepository: true,
+        trackedCount: 1,
+        nameProjectRoot: true,
+      },
+      {
+        name: "a Git project named with an added repository",
+        projectIsRepository: true,
+        trackedCount: 2,
+        nameProjectRoot: true,
+        select: true,
+      },
+      {
+        name: "a selected repository in a large project",
+        projectIsRepository: false,
+        trackedCount: 9,
+        select: true,
+      },
+    ])("prepares $name", (input) =>
+      delegateFrom(input).pipe(Effect.provide(layerGit), Effect.scoped),
+    );
+  });
+
   it.effect.each(["async", "wait"] as const)(
     "prepares a delegated child whose %s caller goes away after its run commits",
     (mode) =>
@@ -3153,6 +3399,7 @@ describe("OrchestratorMcpService provider resolution", () => {
                 input.runId === childRunId ? Deferred.succeed(prepared, undefined) : Effect.void,
             }),
           ),
+          Layer.provide(layerNoTaskFolders),
           Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
         );
 
@@ -3953,6 +4200,7 @@ describe("OrchestratorMcpService provider resolution", () => {
     ) =>
       OrchestratorMcpService.layer.pipe(
         Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
+        Layer.provide(layerNoTaskFolders),
         Layer.provide(
           Layer.mock(GitVcsDriver.GitVcsDriver)({
             resolvePrimaryRemoteName: () => Effect.succeed("origin"),
@@ -4188,6 +4436,7 @@ describe("OrchestratorMcpService provider resolution", () => {
     ) =>
       OrchestratorMcpService.layer.pipe(
         Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
+        Layer.provide(layerNoTaskFolders),
         Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)(git)),
         Layer.provide(
           Layer.mergeAll(

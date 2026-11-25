@@ -2,7 +2,9 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/model
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  captainLocalTaskStatus,
   captainSubagentTaskStatus,
+  captainTaskDetail,
   captainTaskIsRecent,
   captainThreadTaskStatus,
   compareCaptainTasks,
@@ -56,6 +58,34 @@ describe("captainSubagentTaskStatus", () => {
   });
 });
 
+describe("captainLocalTaskStatus", () => {
+  it("lets the child's live request or run win over the parent's record", () => {
+    expect(
+      captainLocalTaskStatus(
+        { ...withRun("completed"), hasPendingApprovals: true },
+        {
+          status: "completed",
+        },
+      ),
+    ).toBe("needs-input");
+    expect(
+      captainLocalTaskStatus(
+        { ...idle, runtime: { status: "running" } as EnvironmentThreadShell["runtime"] },
+        { status: "completed" },
+      ),
+    ).toBe("working");
+  });
+
+  it("treats a settled child as done and otherwise follows the parent's record", () => {
+    expect(
+      captainLocalTaskStatus({ ...idle, settledAt: "2026-11-25" }, { status: "completed" }),
+    ).toBe("done");
+    expect(captainLocalTaskStatus(idle, { status: "failed" })).toBe("failed");
+    expect(captainLocalTaskStatus(null, { status: "running" })).toBe("working");
+    expect(captainLocalTaskStatus(withRun("completed"), null)).toBe("ready");
+  });
+});
+
 describe("captainTaskIsRecent and compareCaptainTasks", () => {
   it("keeps open work whatever its age and drops old outcomes", () => {
     expect(captainTaskIsRecent("needs-input", 0, 100)).toBe(true);
@@ -81,5 +111,26 @@ describe("captainTaskIsRecent and compareCaptainTasks", () => {
       "ready-old",
       "done",
     ]);
+  });
+});
+
+describe("captainTaskDetail", () => {
+  it("shows the first line of a markdown result as plain text", () => {
+    expect(
+      captainTaskDetail({
+        status: "ready",
+        subagent: {
+          result: "\n# Fixed the **probe**\nMore",
+        },
+      }),
+    ).toBe("Fixed the probe");
+    expect(
+      captainTaskDetail({
+        status: "ready",
+        subagent: {
+          result: "---\nCommitted `47ad049` on [t3/tasks](https://example.com) for _review_.",
+        },
+      }),
+    ).toBe("Committed 47ad049 on t3/tasks for review.");
   });
 });

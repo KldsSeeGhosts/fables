@@ -6,6 +6,7 @@ const persisted = vi.hoisted(() => ({ title: "" }));
 const openMenu = vi.hoisted(() => vi.fn());
 const duetShell = vi.hoisted(() => ({ enabled: false }));
 const captainState = vi.hoisted(() => ({ enabled: false }));
+const workingThreads = vi.hoisted(() => new Set<string>());
 vi.mock(import("../../hooks/useDuetShell"), () => ({
   useDuetShell: () => duetShell.enabled,
 }));
@@ -23,9 +24,23 @@ vi.mock(import("../captains/useCaptain"), async (importOriginal) => ({
           avatar: { preset: "compass", color: "violet" },
           scopedProjectIds: [],
           reportPolicy: "context",
+          coordinatorOnly: false,
           createdAt: "2026-11-24T00:00:00.000Z",
           updatedAt: "2026-11-24T00:00:00.000Z",
           archivedAt: null,
+        }
+      : null) as never,
+}));
+vi.mock(import("../../state/entities"), async (importOriginal) => ({
+  ...(await importOriginal()),
+  useQuietThreadShell: ((ref: { threadId: string } | null) =>
+    ref !== null && workingThreads.has(ref.threadId)
+      ? {
+          hasPendingApprovals: false,
+          hasPendingUserInput: false,
+          pendingSubagentRequest: null,
+          pendingBackgroundTasks: [{ kind: "command" }],
+          runtime: { status: "running" },
         }
       : null) as never,
 }));
@@ -192,7 +207,11 @@ it("keeps a Duet channel's title menu at the header start and centres only the a
   openMenu.mockClear();
   try {
     await using screen = await render(
-      <header data-chat-header className="relative flex h-12 w-[900px]">
+      <header
+        data-chat-header
+        className="relative flex h-12"
+        style={{ width: 900, position: "relative" }}
+      >
         <ChatHeader
           activeThreadEnvironmentId={EnvironmentId.make("environment")}
           activeThreadId={ThreadId.make("captain:maria:0")}
@@ -206,13 +225,14 @@ it("keeps a Duet channel's title menu at the header start and centres only the a
       </header>,
     );
 
-    const orb = screen.getByRole("button", { name: "Status: Idle" });
-    await expect.element(orb).toBeVisible();
     expect(screen.container.querySelector('[aria-label="Thread actions for Maria"]')).toBeNull();
     expect(screen.container.querySelector("[data-pane-notch]")).toBeNull();
     expect(screen.container.querySelector("[data-captain-hero-live]")).toBeNull();
 
     const hero = screen.container.querySelector<HTMLElement>("[data-captain-header-hero]")!;
+    expect(getComputedStyle(hero).display).toBe("flex");
+    expect(getComputedStyle(hero).pointerEvents).toBe("none");
+    expect(hero.querySelector("button, a, [role='button']")).toBeNull();
     const avatar = hero.querySelector("[data-captain-avatar]")!;
     expect(avatar.getAttribute("data-duet-palette")).toBe("plum");
     expect(avatar.hasAttribute("data-captain-disc")).toBe(true);
@@ -237,7 +257,7 @@ it("keeps a Duet channel's title menu at the header start and centres only the a
         expect.arrayContaining([
           "Customize Duet",
           "Rename",
-          "Instructions",
+          "Memory",
           "Change icon",
           "New conversation",
           "Archive",
@@ -246,10 +266,50 @@ it("keeps a Duet channel's title menu at the header start and centres only the a
     });
     await userEvent.keyboard("{Escape}");
 
-    await userEvent.click(orb, { button: "right" });
-    expect(openMenu).toHaveBeenCalledOnce();
+    await vi.waitFor(() => {
+      expect(hero.querySelector('[aria-live="polite"]')?.textContent).toBe("Idle");
+    });
+    expect(openMenu).not.toHaveBeenCalled();
   } finally {
     duetShell.enabled = false;
     captainState.enabled = false;
+  }
+});
+
+it("resets a Duet's live status when switching to another Duet", async () => {
+  duetShell.enabled = true;
+  captainState.enabled = true;
+  workingThreads.clear();
+  workingThreads.add("captain:maria:0");
+  const duetHeader = (threadId: string, title: string) => (
+    <ChatHeader
+      activeThreadEnvironmentId={EnvironmentId.make("environment")}
+      activeThreadId={ThreadId.make(threadId)}
+      activeThreadTitle={title}
+      isServerThread
+      activeProject={null}
+      parentThreadLink={null}
+      onOpenThread={() => {}}
+      rightPanelOpen={false}
+    />
+  );
+  try {
+    await using screen = await render(duetHeader("captain:maria:0", "Maria"));
+    await vi.waitFor(() => {
+      expect(screen.container.querySelector("[data-captain-hero-live]")?.textContent).toContain(
+        "Running a command",
+      );
+    });
+
+    await screen.rerender(duetHeader("captain:james:0", "James"));
+
+    const hero = screen.container.querySelector<HTMLElement>("[data-captain-header-hero]")!;
+    expect(hero.querySelector("[data-captain-hero-live]")).toBeNull();
+    expect(hero.textContent).not.toContain("Running a command");
+    expect(hero.querySelector('[aria-live="polite"]')?.textContent).toBe("Idle");
+  } finally {
+    duetShell.enabled = false;
+    captainState.enabled = false;
+    workingThreads.clear();
   }
 });

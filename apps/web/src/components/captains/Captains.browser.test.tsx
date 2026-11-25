@@ -5,29 +5,16 @@ import {
   ThreadId,
   type Captain,
   type CaptainDocument,
-  type CaptainSnapshot,
+  type CaptainMemory,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import { expect, it, vi } from "vite-plus/test";
 import { userEvent, type Locator } from "vite-plus/test/browser";
 import { render } from "../../../test/render";
 
-const live = vi.hoisted(() => ({ data: null as CaptainSnapshot | null }));
-vi.mock(import("./useCaptain"), async (importOriginal) => ({
-  ...(await importOriginal()),
-  useCaptains: () => ({
-    data: live.data,
-    dataUpdatedAt: 0,
-    error: null,
-    failure: null,
-    isPending: false,
-    isSuccess: live.data !== null,
-    refresh: () => {},
-  }),
-}));
-
 import { SidebarProvider } from "../ui/sidebar";
-import { CaptainBriefPanel } from "./CaptainBriefPanel";
+import { CaptainDocuments } from "./CaptainDocuments";
+import { CaptainMemories } from "./CaptainMemories";
 import { CaptainShelfList } from "./CaptainsShelf";
 
 const environmentId = EnvironmentId.make("environment");
@@ -41,6 +28,7 @@ const captain = {
   avatar: { preset: "compass", color: "violet" },
   scopedProjectIds: [],
   reportPolicy: "context",
+  coordinatorOnly: false,
   createdAt: DateTime.formatIso(DateTime.makeUnsafe("2026-11-24")),
   updatedAt: DateTime.formatIso(DateTime.makeUnsafe("2026-11-24")),
   archivedAt: null,
@@ -72,7 +60,7 @@ it("shows Captain attention on the section and opens the primary thread on selec
   expect(open).toHaveBeenCalledWith(threadRef);
 });
 
-it("opens drawer documents with revisions and locked memory", async () => {
+it("opens Duet documents in the Memory editor and shows locked memory", async () => {
   const notes = {
     captainId: captain.id,
     name: "NOTES.md",
@@ -80,31 +68,27 @@ it("opens drawer documents with revisions and locked memory", async () => {
     revision: 4,
     updatedAt: captain.updatedAt,
   } satisfies CaptainDocument;
-  live.data = {
-    captains: [captain],
-    documents: [notes],
-    memories: [
-      {
-        captainId: captain.id,
-        id: CaptainMemoryId.make("locked"),
-        text: "Keep the patch small.",
-        essential: true,
-        userControlled: true,
-        createdAt: captain.createdAt,
-        updatedAt: captain.updatedAt,
-      },
-    ],
-  };
+  const memory = {
+    captainId: captain.id,
+    id: CaptainMemoryId.make("locked"),
+    text: "Keep the patch small.",
+    essential: true,
+    userControlled: true,
+    createdAt: captain.createdAt,
+    updatedAt: captain.updatedAt,
+  } satisfies CaptainMemory;
   await using screen = await render(
-    <CaptainBriefPanel threadRef={threadRef} onDelete={() => {}} />,
+    <>
+      <CaptainDocuments details={{ captain, documents: [notes] }} environmentId={environmentId} />
+      <CaptainMemories captainId={captain.id} environmentId={environmentId} memories={[memory]} />
+    </>,
   );
-  await expect.element(screen.getByText("Tasks in #Maria")).toBeVisible();
-  await activate(screen.getByRole("tab", { name: "Docs" }));
+  await activate(screen.getByRole("button", { name: /NOTES\.md/ }));
   await expect
     .element(screen.getByRole("textbox", { name: "NOTES.md" }))
     .toHaveValue("Check the release.");
-  await expect.element(screen.getByText("Server revision 4")).toBeVisible();
-  await activate(screen.getByRole("button", { name: "AGENTS.md" }));
+  await activate(screen.getByRole("button", { name: "Back to documents" }));
+  await activate(screen.getByRole("button", { name: /AGENTS\.md/ }));
   await expect.element(screen.getByRole("textbox", { name: "AGENTS.md" })).toHaveValue("");
   await expect.element(screen.getByText("Keep the patch small.")).toBeVisible();
   await expect.element(screen.getByText("Locked")).toBeVisible();

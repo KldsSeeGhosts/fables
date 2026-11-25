@@ -15,6 +15,7 @@ import { expect, it } from "vite-plus/test";
 import {
   captainAttentionTotal,
   captainConversationKeys,
+  captainDelegatedLocalTasks,
   captainDocument,
   captainInboxItems,
   captainRecentlyFinishedTasks,
@@ -186,6 +187,61 @@ it("keeps a pre-reset task's pending request on the Captain after it switches co
   const activity = captainThreadActivity(environmentId, maria, shells);
   expect(activity.children.map((thread) => thread.id)).toEqual([oldChild.id]);
   expect(activity.attention).toBe(1);
+});
+
+it("lists shell tasks from every Captain conversation and projection tasks whose shells are not loaded", () => {
+  const base = scopeThreadShell(environmentId, v2ThreadShell);
+  const currentChild = {
+    ...base,
+    id: ThreadId.make("current-child"),
+    archivedAt: null,
+    deletedAt: null,
+    lineage: {
+      rootThreadId: maria.primaryThreadId,
+      parentThreadId: maria.primaryThreadId,
+      relationshipToParent: "subagent" as const,
+    },
+  };
+  const earlierChild = {
+    ...currentChild,
+    id: ThreadId.make("earlier-child"),
+    lineage: {
+      rootThreadId: maria.earlierThreadIds[0]!,
+      parentThreadId: maria.earlierThreadIds[0]!,
+      relationshipToParent: "subagent" as const,
+    },
+  };
+  const unrelated = {
+    ...currentChild,
+    id: ThreadId.make("unrelated"),
+    lineage: {
+      rootThreadId: v2ThreadShell.id,
+      parentThreadId: v2ThreadShell.id,
+      relationshipToParent: "subagent" as const,
+    },
+  };
+  const enriched = {
+    ...task("enriched", "completed", laterAt),
+    threadId: maria.primaryThreadId,
+    childThreadId: currentChild.id,
+  } as OrchestrationV2Subagent;
+  const missingShell = {
+    ...task("missing-shell", "running", null),
+    threadId: maria.primaryThreadId,
+    childThreadId: ThreadId.make("missing-child"),
+  } as OrchestrationV2Subagent;
+  const rows = captainDelegatedLocalTasks({
+    environmentId,
+    captain: maria,
+    shells: [currentChild, earlierChild, unrelated],
+    subagents: [enriched, missingShell],
+  });
+
+  expect(rows).toEqual([
+    { thread: currentChild, subagent: enriched },
+    { thread: earlierChild, subagent: null },
+    { thread: null, subagent: missingShell },
+  ]);
 });
 
 it("keeps tasks targeting both current and earlier Captain conversations", () => {

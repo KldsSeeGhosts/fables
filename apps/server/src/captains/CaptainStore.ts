@@ -26,6 +26,7 @@ const CaptainRow = Schema.Struct({
   avatar: Schema.fromJsonString(Captain.fields.avatar),
   earlierThreadIds: Schema.fromJsonString(Captain.fields.earlierThreadIds),
   scopedProjectIds: Schema.fromJsonString(Captain.fields.scopedProjectIds),
+  coordinatorOnly: Schema.BooleanFromBit,
 });
 const MemoryRow = Schema.Struct({
   ...CaptainMemory.fields,
@@ -59,6 +60,7 @@ const make = Effect.gen(function* () {
   const profiles = sql`SELECT id, name, role, instructions, avatar,
     primary_thread_id AS primaryThreadId, earlier_thread_ids AS earlierThreadIds,
     scoped_project_ids AS scopedProjectIds, report_policy AS reportPolicy,
+    coordinator_only AS coordinatorOnly,
     created_at AS createdAt, updated_at AS updatedAt, archived_at AS archivedAt
     FROM captains`;
   const documents = sql`SELECT captain_id AS captainId, name, content, revision,
@@ -114,18 +116,18 @@ const make = Effect.gen(function* () {
     yield* sql`
       INSERT INTO captains (
         id, name, role, instructions, avatar, primary_thread_id, earlier_thread_ids,
-        scoped_project_ids, report_policy, created_at, updated_at, archived_at
+        scoped_project_ids, report_policy, coordinator_only, created_at, updated_at, archived_at
       ) VALUES (
         ${captain.id}, ${captain.name}, ${captain.role}, ${captain.instructions},
         ${row.avatar}, ${captain.primaryThreadId},
         ${row.earlierThreadIds}, ${row.scopedProjectIds},
-        ${captain.reportPolicy}, ${captain.createdAt}, ${captain.updatedAt}, ${captain.archivedAt}
+        ${captain.reportPolicy}, ${row.coordinatorOnly}, ${captain.createdAt}, ${captain.updatedAt}, ${captain.archivedAt}
       ) ON CONFLICT(id) DO UPDATE SET
         name = excluded.name, role = excluded.role, instructions = excluded.instructions,
         avatar = excluded.avatar, primary_thread_id = excluded.primary_thread_id,
         earlier_thread_ids = excluded.earlier_thread_ids, scoped_project_ids = excluded.scoped_project_ids,
-        report_policy = excluded.report_policy, updated_at = excluded.updated_at,
-        archived_at = excluded.archived_at
+        report_policy = excluded.report_policy, coordinator_only = excluded.coordinator_only,
+        updated_at = excluded.updated_at, archived_at = excluded.archived_at
     `;
     return captain;
   }, Effect.catch(captainUnavailable));

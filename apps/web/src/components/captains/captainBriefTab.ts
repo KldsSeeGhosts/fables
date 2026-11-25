@@ -12,7 +12,7 @@ const tab = Atom.family((key: string) =>
 /** Legacy brief-panel tab mirror, kept while the drawer replaces the old panel surface. */
 export const captainBriefTabAtom = (threadRef: ScopedThreadRef) => tab(scopedThreadKey(threadRef));
 
-export type CaptainDrawerTab = "today" | "all" | "scheduled" | "docs";
+export type CaptainDrawerTab = "today" | "all" | "scheduled";
 
 const drawerTab = Atom.family((key: string) =>
   Atom.make<CaptainDrawerTab>("today").pipe(

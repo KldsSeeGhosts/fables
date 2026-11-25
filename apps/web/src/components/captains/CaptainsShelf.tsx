@@ -1,4 +1,22 @@
 /* oxlint-disable t3code/no-styled-raw-controls -- The Captains section label doubles as the overview link and matches the Threads label beside it. */
+import {
+  closestCenter,
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type Announcements,
+  type DragEndEvent,
+  type UniqueIdentifier,
+} from "@dnd-kit/core";
+import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   captainAttentionTotal,
@@ -8,11 +26,13 @@ import {
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import type { Captain, EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
+import * as Schema from "effect/Schema";
 import { T, useGT, Var } from "gt-react";
 import { ClockIcon, EllipsisIcon, FoldersIcon, ListTodoIcon, PlusIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { useDuetShell } from "../../hooks/useDuetShell";
+import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { cn } from "../../lib/utils";
 import { useProjects, useThreadShells } from "../../state/entities";
@@ -24,6 +44,10 @@ import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { Button, ContentButton } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
 import { SidebarHeaderIconButton } from "../sidebar/SidebarThreadHeader";
+import {
+  RelativeTimeLabel as SidebarRelativeTimeLabel,
+  SidebarStatusLabel,
+} from "../sidebar/SidebarThreadRow";
 import { Tooltip, TooltipTrigger } from "../ui/tooltip";
 import { CaptainAvatar } from "./CaptainAvatar";
 import { captainPaletteOf } from "./captainPalette";
@@ -32,6 +56,7 @@ import { captainBriefTabAtom, openCaptainTasks, type CaptainDrawerTab } from "./
 import { CaptainProfileDialogs, useCaptainProfile } from "./CaptainBriefPanel";
 import { CaptainEditorDialog } from "./CaptainEditorDialog";
 import { useCaptainDestinations, useCaptainEnvironments } from "./captainsDirectory";
+import { moveDuet, orderDuets, type DuetMoveDirection } from "./duetOrder.logic";
 
 /** Thread keys of Captain conversations, which the shelf lists instead of their project. */
 export function useCaptainConversationKeys(): ReadonlySet<string> {
@@ -46,6 +71,13 @@ export function useCaptainConversationKeys(): ReadonlySet<string> {
 }
 
 const NO_CAPTAIN_CONVERSATIONS: ReadonlySet<string> = new Set();
+const DUET_ORDER_STORAGE_KEY = "t3code:sidebar:duet-order";
+const DUET_ORDER_SCHEMA = Schema.Array(Schema.String);
+const DUET_DRAG_MODIFIERS = [restrictToVerticalAxis, restrictToFirstScrollableAncestor];
+const DUET_POINTER_ACTIVATION = { activationConstraint: { distance: 6 } };
+
+const duetRowKey = (environmentId: EnvironmentId, captain: Pick<Captain, "id">) =>
+  `${environmentId}:${captain.id}`;
 
 /** A 6px status dot with an optional count, the only live text a Duet sidebar row carries. */
 function DuetLiveCount({
@@ -84,9 +116,7 @@ type CaptainActivity = {
 };
 
 /**
- * A Duet channel is one borderless line: the Captain's creature and name. The creature moves while
- * the Captain works, a dot at the end counts what waits on you, and everything else waits in the
- * hover card.
+ * A Duet channel is a 48px two-line row: creature and name first, then its live work or scope.
  */
 function DuetChannelRow({
   captain,
@@ -122,6 +152,11 @@ function DuetChannelRow({
   const { primary, children: running = [] } = activity;
   const waiting = !archived && attention > 0;
   const busy = !archived && !waiting && working;
+  const rowKey = duetRowKey(environmentId, captain);
+  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: rowKey,
+    disabled: archived,
+  });
 
   const scoped = projects.filter(
     (project) =>
@@ -134,17 +169,31 @@ function DuetChannelRow({
         ? (scoped[0]?.title ?? gt("1 project"))
         : gt("{count} projects", { count: captain.scopedProjectIds.length });
   const backgroundTasks = primary?.pendingBackgroundTasks.length ?? 0;
-  const liveThread = waiting
+  const attentionThread = waiting
     ? [primary, ...running].find(
         (thread) =>
           thread?.hasPendingApprovals ||
           thread?.hasPendingUserInput ||
           thread?.pendingSubagentRequest != null,
       )
-    : busy
-      ? running[0]
-      : undefined;
+    : undefined;
+  const liveThread = attentionThread ?? (busy ? running[0] : undefined);
   const lead = busy && running.length > 0 ? gt("{count} running", { count: running.length }) : null;
+  const workingDetail =
+    running.length === 1
+      ? running[0]!.title
+      : running.length > 1
+        ? gt("{count} running", { count: running.length })
+        : null;
+  const waitingDetail =
+    attentionThread !== undefined && attentionThread.id !== captain.primaryThreadId
+      ? attentionThread.title
+      : null;
+  const waitingKind = attentionThread?.hasPendingApprovals
+    ? "approval"
+    : attentionThread?.hasPendingUserInput
+      ? "input"
+      : "request";
   const role = captain.role.trim();
   const details = (
     archived ? [] : [lead, liveThread?.title, ...(waiting || busy ? [] : [label, scope, role])]
@@ -153,18 +202,38 @@ function DuetChannelRow({
     details.length === 0
       ? gt("{name}, {status}", { name, status })
       : gt("{name}, {status}, {detail}", { name, status, detail: details.join(", ") });
+  const detailText = archived ? null : waiting ? waitingDetail : busy ? workingDetail : scope;
+  const trailing = waiting ? (
+    <DuetLiveCount
+      tone="needs-input"
+      count={attention}
+      label={gt("{count, plural, one {{count} request} other {{count} requests}}", {
+        count: attention,
+      })}
+    />
+  ) : !archived && !busy && primary ? (
+    <span className="text-meta text-placeholder tabular-nums">
+      <SidebarRelativeTimeLabel timestamp={primary.updatedAt} />
+    </span>
+  ) : null;
 
   return (
     <li
+      ref={setNodeRef}
       data-duet-channel-card=""
       data-duet-palette={captainPaletteOf(captain.avatar)}
-      className="group/captain-row relative flex items-center"
+      className={cn(
+        "group/captain-row relative flex items-center",
+        isDragging && "z-20 rounded-lg bg-sidebar shadow-lg",
+      )}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
     >
       <Tooltip>
         <TooltipTrigger
           render={
             <ContentButton
               variant="duet-channel"
+              {...listeners}
               aria-current={selected ? "page" : undefined}
               aria-label={accessibleLabel}
               onClick={onOpen}
@@ -173,32 +242,58 @@ function DuetChannelRow({
         >
           <CaptainAvatar
             avatar={captain.avatar}
-            size="channel"
+            size="sidebar"
             state={archived ? "archived" : waiting ? "waiting" : busy ? "working" : "idle"}
           />
-          <span className={cn("min-w-0 flex-1 truncate", archived && "text-muted-foreground")}>
-            {name}
-          </span>
-          {waiting || (busy && running.length > 0) ? (
-            <span className="flex shrink-0 transition-opacity duration-120 group-focus-within/captain-row:opacity-0 group-hover/captain-row:opacity-0">
-              {waiting ? (
-                <DuetLiveCount
-                  tone="needs-input"
-                  count={attention > 1 ? attention : undefined}
-                  label={gt("{count, plural, one {{count} request} other {{count} requests}}", {
-                    count: attention,
-                  })}
-                />
-              ) : (
-                <span
-                  data-duet-live="working"
-                  className="text-caption text-(--duet-working-text) tabular-nums"
-                >
-                  {running.length}
+          <span className="grid min-w-0 flex-1 content-center gap-0.5">
+            <span className="flex h-[18px] min-w-0 items-center gap-2">
+              <span
+                className={cn(
+                  "min-w-0 flex-1 truncate text-label",
+                  archived && "text-muted-foreground",
+                )}
+              >
+                {name}
+              </span>
+              {trailing ? (
+                <span className="flex shrink-0 transition-opacity duration-120 group-focus-within/captain-row:opacity-0 group-hover/captain-row:opacity-0">
+                  {trailing}
                 </span>
-              )}
+              ) : null}
             </span>
-          ) : null}
+            <span
+              className={cn(
+                "flex h-4 min-w-0 items-center gap-1.5 text-meta leading-4",
+                waiting
+                  ? "text-(--duet-needs-input-text)"
+                  : busy
+                    ? "text-(--duet-working-text)"
+                    : "text-muted-foreground",
+              )}
+            >
+              {archived ? (
+                <span className="shrink-0 text-muted-foreground">{status}</span>
+              ) : waiting || busy ? (
+                <SidebarStatusLabel
+                  environmentId={environmentId}
+                  compact
+                  kind={waiting ? waitingKind : "working"}
+                  label={status}
+                  workingStartedAt={null}
+                />
+              ) : scoped.length === 1 ? (
+                <ProjectFavicon project={scoped[0]!} className="size-3.5 shrink-0" />
+              ) : (
+                <FoldersIcon aria-hidden className="size-3 shrink-0 text-icon-muted" />
+              )}
+              <span className="min-w-0 flex-1 truncate">{detailText}</span>
+              {label !== undefined ? (
+                <span className="max-w-20 shrink-0 truncate pl-1 text-caption text-placeholder">
+                  {label}
+                </span>
+              ) : null}
+            </span>
+          </span>
         </TooltipTrigger>
         <ThreadHoverCardPopup side="right" align="start" sideOffset={8} className="w-64">
           <ThreadHoverCard title={name}>
@@ -276,7 +371,7 @@ function DuetChannelRow({
           </ThreadHoverCard>
         </ThreadHoverCardPopup>
       </Tooltip>
-      <div className="absolute end-1.5 shrink-0 opacity-0 transition-opacity duration-120 group-focus-within/captain-row:opacity-100 group-hover/captain-row:opacity-100">
+      <div className="absolute end-1.5 top-1/2 shrink-0 -translate-y-1/2 opacity-0 transition-opacity duration-120 group-focus-within/captain-row:opacity-100 group-hover/captain-row:opacity-100">
         {menu}
       </div>
       {children}
@@ -292,6 +387,9 @@ function CaptainShelfRow({
   working,
   activity,
   selected,
+  canMoveUp = false,
+  canMoveDown = false,
+  onMove,
   onOpen,
 }: {
   captain: Captain;
@@ -301,13 +399,16 @@ function CaptainShelfRow({
   working: boolean;
   activity: CaptainActivity;
   selected: boolean;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onMove?: ((direction: DuetMoveDirection) => void) | undefined;
   onOpen: (threadRef: ScopedThreadRef) => void;
 }) {
   const gt = useGT();
   const isDuet = useDuetShell();
   const threadRef = scopeThreadRef(environmentId, captain.primaryThreadId);
   const openView = (tab: CaptainDrawerTab) => {
-    appAtomRegistry.set(captainBriefTabAtom(threadRef), tab === "docs" ? "docs" : "brief");
+    appAtomRegistry.set(captainBriefTabAtom(threadRef), "brief");
     openCaptainTasks(threadRef, tab);
     onOpen(threadRef);
   };
@@ -343,24 +444,44 @@ function CaptainShelfRow({
         <MenuItem onClick={() => openView("today")}>
           <T>Open Tasks</T>
         </MenuItem>
-        <MenuItem onClick={() => openView("docs")}>
-          <T>Open Docs</T>
+        <MenuItem onClick={() => profile.edit("memory")}>
+          <T>Memory</T>
         </MenuItem>
         <MenuSeparator />
-        <MenuItem disabled={!canUpdate} onClick={profile.edit}>
-          <T>Edit Captain</T>
+        <MenuItem disabled={!canUpdate} onClick={() => profile.edit()}>
+          {isDuet ? <T>Customize Duet</T> : <T>Edit Captain</T>}
         </MenuItem>
+        {isDuet && onMove ? (
+          <>
+            <MenuItem disabled={!canMoveUp} onClick={() => onMove("up")}>
+              <T>Move up</T>
+            </MenuItem>
+            <MenuItem disabled={!canMoveDown} onClick={() => onMove("down")}>
+              <T>Move down</T>
+            </MenuItem>
+          </>
+        ) : null}
         <MenuItem
           disabled={pending || !profile.canArchive}
           onClick={() => void profile.changeArchive()}
         >
-          {archived ? <T>Restore Captain</T> : <T>Archive Captain</T>}
+          {isDuet ? (
+            archived ? (
+              <T>Restore</T>
+            ) : (
+              <T>Archive</T>
+            )
+          ) : archived ? (
+            <T>Restore Captain</T>
+          ) : (
+            <T>Archive Captain</T>
+          )}
         </MenuItem>
         {profile.canDelete ? (
           <>
             <MenuSeparator />
             <MenuItem variant="destructive" disabled={pending} onClick={profile.requestDelete}>
-              <T>Delete Captain</T>
+              {isDuet ? <T>Delete</T> : <T>Delete Captain</T>}
             </MenuItem>
           </>
         ) : null}
@@ -474,6 +595,52 @@ export function CaptainShelfList({
     : gt("{count, plural, one {{count} Captain needs input} other {{count} Captains need input}}", {
         count: attention,
       });
+  const [savedDuetOrder, setSavedDuetOrder] = useLocalStorage(
+    DUET_ORDER_STORAGE_KEY,
+    [] as Array<string>,
+    DUET_ORDER_SCHEMA,
+  );
+  const sensors = useSensors(useSensor(PointerSensor, DUET_POINTER_ACTIVATION));
+  const rowEntries = rows.map((row) => ({
+    key: duetRowKey(row.environmentId, row.captain),
+    archived: row.captain.archivedAt !== null,
+    row,
+  }));
+  const orderedRowEntries = isDuet ? orderDuets(rowEntries, savedDuetOrder) : rowEntries;
+  const orderedRows = orderedRowEntries.map(({ row }) => row);
+  const orderedKeys = orderedRows.map((row) => duetRowKey(row.environmentId, row.captain));
+  const activeRowEntries = orderedRowEntries.filter((entry) => !entry.archived);
+  const activeCount = activeRowEntries.length;
+  const activeIndexByKey = new Map(activeRowEntries.map((entry, index) => [entry.key, index]));
+  const handleMoveDuet = (key: string, direction: DuetMoveDirection) => {
+    const nextOrder = moveDuet(rowEntries, savedDuetOrder, key, direction);
+    if (nextOrder !== null) setSavedDuetOrder(nextOrder);
+  };
+  const duetName = (id: UniqueIdentifier | undefined) =>
+    orderedRows.find((row) => duetRowKey(row.environmentId, row.captain) === id)?.captain.name ??
+    "";
+  const duetDragAnnouncements: Announcements = {
+    onDragStart: ({ active }) => gt("Picked up {name}.", { name: duetName(active.id) }),
+    onDragOver: ({ active, over }) =>
+      over
+        ? gt("{name} is over {target}.", { name: duetName(active.id), target: duetName(over.id) })
+        : undefined,
+    onDragEnd: ({ active, over }) =>
+      over
+        ? gt("{name} was moved to {target}.", {
+            name: duetName(active.id),
+            target: duetName(over.id),
+          })
+        : gt("{name} was dropped.", { name: duetName(active.id) }),
+    onDragCancel: ({ active }) => gt("Moving {name} was cancelled.", { name: duetName(active.id) }),
+  };
+  const handleDuetDragEnd = (event: DragEndEvent) => {
+    if (event.over === null || event.active.id === event.over.id) return;
+    const activeIndex = orderedKeys.indexOf(String(event.active.id));
+    const overIndex = orderedKeys.indexOf(String(event.over.id));
+    if (activeIndex === -1 || overIndex === -1) return;
+    setSavedDuetOrder(arrayMove(orderedKeys, activeIndex, overIndex));
+  };
 
   const heading = (
     <>
@@ -483,6 +650,35 @@ export function CaptainShelfList({
       ) : null}
     </>
   );
+
+  const rowsList =
+    orderedRows.length > 0 ? (
+      <ul className="space-y-px">
+        {orderedRows.map(({ captain, environmentId, label, attention, working, ...activity }) => {
+          const key = duetRowKey(environmentId, captain);
+          const activeIndex = activeIndexByKey.get(key);
+          return (
+            <CaptainShelfRow
+              key={key}
+              captain={captain}
+              environmentId={environmentId}
+              {...(label !== undefined ? { label } : {})}
+              attention={attention}
+              working={working}
+              activity={activity}
+              selected={
+                activeThread?.environmentId === environmentId &&
+                activeThread.threadId === captain.primaryThreadId
+              }
+              canMoveUp={activeIndex !== undefined && activeIndex > 0}
+              canMoveDown={activeIndex !== undefined && activeIndex < activeCount - 1}
+              onMove={(direction) => handleMoveDuet(key, direction)}
+              onOpen={onOpen}
+            />
+          );
+        })}
+      </ul>
+    ) : null;
 
   return (
     <li className="mb-1 list-none">
@@ -517,26 +713,21 @@ export function CaptainShelfList({
           </span>
         ) : null}
       </div>
-      {rows.length > 0 ? (
-        <ul className="space-y-px">
-          {rows.map(({ captain, environmentId, label, attention, working, ...activity }) => (
-            <CaptainShelfRow
-              key={`${environmentId}:${captain.id}`}
-              captain={captain}
-              environmentId={environmentId}
-              {...(label !== undefined ? { label } : {})}
-              attention={attention}
-              working={working}
-              activity={activity}
-              selected={
-                activeThread?.environmentId === environmentId &&
-                activeThread.threadId === captain.primaryThreadId
-              }
-              onOpen={onOpen}
-            />
-          ))}
-        </ul>
-      ) : null}
+      {isDuet ? (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={DUET_DRAG_MODIFIERS}
+          onDragEnd={handleDuetDragEnd}
+          accessibility={{ announcements: duetDragAnnouncements }}
+        >
+          <SortableContext items={orderedKeys} strategy={verticalListSortingStrategy}>
+            {rowsList}
+          </SortableContext>
+        </DndContext>
+      ) : (
+        rowsList
+      )}
     </li>
   );
 }

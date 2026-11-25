@@ -1,6 +1,7 @@
 import type { CaptainAvatar as Avatar } from "@t3tools/contracts";
 
 import { cn } from "../../lib/utils";
+import type { DuetActivity } from "../chat/duetStatus.logic";
 import { captainAvatarSizes, captainCreatures, type CaptainAvatarSize } from "./captainAvatarData";
 import {
   captainEmblemOf,
@@ -110,11 +111,17 @@ export function CaptainAvatar({
   avatar,
   size = "row",
   state = "idle",
+  activity,
+  celebrate = false,
   animateOnMount = false,
 }: {
   avatar: Avatar;
   size?: CaptainAvatarSize;
   state?: CaptainAvatarState;
+  /** A finer motion for the state, such as reading or running a command. */
+  activity?: DuetActivity | undefined;
+  /** Plays one completion hop while settling back to idle. */
+  celebrate?: boolean;
   animateOnMount?: boolean;
 }) {
   const palette = captainPaletteOf(avatar);
@@ -126,6 +133,8 @@ export function CaptainAvatar({
       aria-hidden
       data-captain-avatar=""
       data-captain-state={state}
+      data-captain-activity={activity}
+      data-captain-celebrate={celebrate ? "true" : undefined}
       data-captain-animate-on-mount={animateOnMount ? "true" : undefined}
       data-captain-disc={disc ? "" : undefined}
       data-duet-palette={palette}

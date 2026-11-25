@@ -37,6 +37,7 @@ import {
   type OrchestratorMcpTaskCancelResult,
   type OrchestratorMcpUpdateScheduledTaskInput,
   type OrchestratorMcpListScheduledTasksInput,
+  type Project,
   type ProjectId,
   type OrchestratorMcpThreadDetail,
   type OrchestratorMcpThreadInterruptInput,
@@ -119,6 +120,7 @@ import * as ThreadManagementService from "../orchestration-v2/ThreadManagementSe
 import { placeholderThreadTitle } from "../orchestration-v2/placeholderThreadTitle.ts";
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
+import * as TaskFolders from "../workspace/TaskFolders.ts";
 import { isSnoozed } from "../orchestration-v2/ThreadSettlementService.ts";
 import { userFacingDispatchErrorMessage } from "../orchestration-v2/UserFacingErrors.ts";
 import * as ProjectService from "../project/ProjectService.ts";
@@ -147,6 +149,11 @@ import * as RemoteDelegation from "../peer/RemoteDelegation.ts";
 
 // Return recoverable handles before common MCP client timeouts expire.
 const DEFAULT_WAIT_TIMEOUT_MS = 30_000;
+const withoutTrailingSeparators = (path: string) => path.replace(/(?<=.)[\\/]+$/, "");
+const repositoryChoices = (paths: ReadonlyArray<string>) =>
+  paths.length === 0
+    ? "This project has no tracked Git folders available for worktrees."
+    : `Pass one or more of these tracked Git folder paths: ${paths.map((path) => `"${path}"`).join(", ")}.`;
 const MAX_WAIT_TIMEOUT_MS = 45_000;
 const DEFAULT_SECRET_REQUEST_TIMEOUT_MS = 10 * 60 * 1_000;
 const MAX_SECRET_REQUEST_TIMEOUT_MS = 60 * 60 * 1_000;
@@ -1330,6 +1337,7 @@ const make = Effect.gen(function* () {
   const projects = yield* ProjectService.ProjectService;
   const threadLaunch = yield* ThreadLaunchService.ThreadLaunchService;
   const gitDriver = yield* GitVcsDriver.GitVcsDriver;
+  const taskFolders = yield* TaskFolders.TaskFolders;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const remoteDelegation = yield* RemoteDelegation.RemoteDelegation;
 
@@ -1346,6 +1354,78 @@ const make = Effect.gen(function* () {
         }),
       ),
     );
+
+  const delegatedWorktreeStrategy = Effect.fn("OrchestratorMcpService.delegatedWorktreeStrategy")(
+    function* (
+      project: Project,
+      parentWorktreePath: string | null,
+      repositoryPaths: OrchestratorMcpDelegateTaskInput["repositories"],
+    ): Effect.fn.Return<OrchestrationV2ThreadLaunchWorkspaceStrategy, OrchestratorMcpFailure> {
+      // A Git project checks its own repository out every time, so naming it adds nothing.
+      const isProjectRoot = (path: string) =>
+        withoutTrailingSeparators(path) === withoutTrailingSeparators(project.workspaceRoot);
+      const namedProjectRoot = repositoryPaths?.some(isProjectRoot) === true;
+      const repositories = repositoryPaths
+        ?.filter((path) => !isProjectRoot(path))
+        .map((path) => ({ path }));
+      const input = { projectId: project.id };
+      const cannotReadPlan = () =>
+        failure("orchestration_error", "Unable to read the project's repositories.");
+      const taskPlan = yield* taskFolders.plan({ ...input, repositories }).pipe(
+        Effect.catchTags({
+          TaskFolderError: Effect.fnUntraced(function* (error) {
+            if (repositories === undefined || error.cause !== undefined) {
+              return yield* cannotReadPlan();
+            }
+            const plan = yield* taskFolders.plan(input).pipe(Effect.mapError(cannotReadPlan));
+            const hint = repositoryChoices([
+              ...(plan?.projectIsRepository === true ? [project.workspaceRoot] : []),
+              ...(plan?.trackedRepositories ?? []),
+            ]);
+            return yield* failure(
+              "invalid_request",
+              `${error.detail} ${hint} No child was created.`,
+            );
+          }),
+        }),
+      );
+      if (namedProjectRoot && taskPlan?.projectIsRepository === false) {
+        return yield* failure(
+          "invalid_request",
+          `"${project.workspaceRoot}" is not a Git repository, so it cannot get a worktree. ${repositoryChoices(taskPlan.trackedRepositories)} No child was created.`,
+        );
+      }
+      const strategy = {
+        type: "worktree" as const,
+        startFromOrigin: false,
+        ...(repositories === undefined ? {} : { repositories }),
+      };
+      // A plain task folder has no HEAD. Each selected repository uses its own default branch.
+      if (taskPlan?.projectIsRepository === false) return { ...strategy, baseRef: "HEAD" };
+
+      const base = yield* gitDriver
+        .resolveCommit({ cwd: parentWorktreePath ?? project.workspaceRoot, revision: "HEAD" })
+        .pipe(
+          Effect.mapError(() =>
+            failure("invalid_request", "Unable to resolve the parent checkout commit."),
+          ),
+        );
+      // The checkout may belong to another repository, but launch creates from the project root.
+      if (parentWorktreePath !== null) {
+        yield* gitDriver
+          .resolveCommit({ cwd: project.workspaceRoot, revision: base.commitSha })
+          .pipe(
+            Effect.mapError(() =>
+              failure(
+                "invalid_request",
+                `Isolation "worktree" creates the child checkout in project "${project.title}" (${project.workspaceRoot}), which does not contain the parent checkout's commit. Use isolation "shared" to work in the parent's checkout.`,
+              ),
+            ),
+          );
+      }
+      return { ...strategy, baseRef: base.commitSha };
+    },
+  );
 
   const projectDefaultModelSelection = Effect.fn(
     "OrchestratorMcpService.projectDefaultModelSelection",
@@ -2857,6 +2937,12 @@ const make = Effect.gen(function* () {
       };
     }),
     delegateTask: Effect.fn("OrchestratorMcpService.delegateTask")(function* (callerScope, input) {
+      if (input.repositories !== undefined && input.isolation !== "worktree") {
+        return yield* failure(
+          "invalid_request",
+          'Repositories apply only with isolation "worktree". A shared child works in the parent\'s checkout. No child was created.',
+        );
+      }
       const environmentId =
         input.target === undefined
           ? undefined
@@ -2959,36 +3045,14 @@ const make = Effect.gen(function* () {
         parent.thread.interactionMode,
         input.interactionMode,
       );
-      let workspaceStrategy: OrchestrationV2ThreadLaunchWorkspaceStrategy | undefined;
-      if (input.isolation === "worktree" && !isRetryOfAcceptedDelegation) {
-        const project = targetProject ?? (yield* requireProject(delegatedProjectId));
-        const base = yield* gitDriver
-          .resolveCommit({
-            cwd: targetParent.thread.worktreePath ?? project.workspaceRoot,
-            revision: "HEAD",
-          })
-          .pipe(
-            Effect.mapError(() =>
-              failure("invalid_request", "Unable to resolve the parent checkout commit."),
-            ),
-          );
-        // Launch preparation creates the worktree from the project root, so a
-        // parent checkout in another repository (such as a Git folder inside
-        // Scratch) would hand it a commit it cannot find.
-        if (targetParent.thread.worktreePath !== null) {
-          yield* gitDriver
-            .resolveCommit({ cwd: project.workspaceRoot, revision: base.commitSha })
-            .pipe(
-              Effect.mapError(() =>
-                failure(
-                  "invalid_request",
-                  `Isolation "worktree" creates the child checkout in project "${project.title}" (${project.workspaceRoot}), which does not contain the parent checkout's commit. Use isolation "shared" to work in the parent's checkout.`,
-                ),
-              ),
-            );
-        }
-        workspaceStrategy = { type: "worktree", baseRef: base.commitSha, startFromOrigin: false };
-      }
+      const workspaceStrategy =
+        input.isolation === "worktree" && !isRetryOfAcceptedDelegation
+          ? yield* delegatedWorktreeStrategy(
+              targetProject ?? (yield* requireProject(delegatedProjectId)),
+              targetParent.thread.worktreePath,
+              input.repositories,
+            )
+          : undefined;
       const parentNodeId = parentRun.rootNodeId;
       // The command commits the child's preparing run, which only this call
       // prepares, so a caller that goes away must not stop it in between.
@@ -3920,6 +3984,7 @@ export const layer: Layer.Layer<
   | ThreadManagementService.ThreadManagementService
   | ThreadLaunchService.ThreadLaunchService
   | GitVcsDriver.GitVcsDriver
+  | TaskFolders.TaskFolders
   | ProviderRegistry.ProviderRegistry
   | ProviderAdapterRegistry.ProviderAdapterRegistryV2
   | ScheduledTaskService.ScheduledTaskService

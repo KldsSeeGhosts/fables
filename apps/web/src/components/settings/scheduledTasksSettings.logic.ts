@@ -13,7 +13,7 @@ import {
   type RuntimeMode,
   type ProviderInteractionMode,
   type ServerSettings,
-  type ThreadId,
+  ThreadId,
 } from "@t3tools/contracts";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import {
@@ -113,6 +113,9 @@ export function validateScheduledTasksSearch(raw: Record<string, unknown>) {
       : {}),
     ...(typeof raw.taskId === "string" && raw.taskId.trim()
       ? { taskId: ScheduledTaskId.make(raw.taskId) }
+      : {}),
+    ...(typeof raw.templateThreadId === "string" && raw.templateThreadId.trim()
+      ? { templateThreadId: ThreadId.make(raw.templateThreadId) }
       : {}),
   };
 }
@@ -387,6 +390,26 @@ export function moveDraftToThread(
     threadId: thread.id,
     projectId: thread.projectId,
     threadMode: draft.threadMode === "new_thread" ? "continue" : draft.threadMode,
+  };
+}
+
+/** A new routine that posts into an existing conversation and follows its workspace and modes. */
+export function scheduledTaskThreadTemplate(thread: {
+  readonly id: ThreadId;
+  readonly projectId: ProjectId;
+  readonly modelSelection: ModelSelection;
+  readonly runtimeMode: RuntimeMode;
+  readonly interactionMode: ProviderInteractionMode;
+}): Partial<DraftState> {
+  return {
+    projectId: thread.projectId,
+    threadId: thread.id,
+    threadMode: "continue",
+    workspaceMode: "root",
+    modelKey: `${thread.modelSelection.instanceId}:${thread.modelSelection.model}`,
+    runtimeMode: thread.runtimeMode,
+    interactionMode: thread.interactionMode,
+    baseModelSelection: thread.modelSelection,
   };
 }
 
