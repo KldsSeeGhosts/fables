@@ -363,6 +363,15 @@ export type EffortDisplay = typeof EffortDisplay.Type;
 export const ToolCallVisibility = Schema.Literals(["showAll", "hideSuccessful", "hideAll", "zen"]);
 export type ToolCallVisibility = typeof ToolCallVisibility.Type;
 
+export const DuetToolCallVisibility = Schema.Literals([
+  "inherit",
+  "showAll",
+  "hideSuccessful",
+  "hideAll",
+  "zen",
+]);
+export type DuetToolCallVisibility = typeof DuetToolCallVisibility.Type;
+
 /** What the open thread reads to a screen reader: turn status, the agent's in-between messages too, or every step. */
 export const ScreenReaderAnnouncements = Schema.Literals(["status", "messages", "everything"]);
 export type ScreenReaderAnnouncements = typeof ScreenReaderAnnouncements.Type;
@@ -649,6 +658,9 @@ export const ClientSettingsSchema = Schema.Struct({
   turnWorkFoldEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   toolCallVisibility: ToolCallVisibility.pipe(
     Schema.withDecodingDefault(Effect.succeed("showAll" as const)),
+  ),
+  duetToolCallVisibility: DuetToolCallVisibility.pipe(
+    Schema.withDecodingDefault(Effect.succeed("inherit" as const)),
   ),
   screenReaderAnnouncements: ScreenReaderAnnouncements.pipe(
     Schema.withDecodingDefault(Effect.succeed("status" as const)),
@@ -2282,6 +2294,7 @@ export const ClientSettingsPatch = Schema.Struct({
   boringSidebarMultilineRows: Schema.optionalKey(Schema.Boolean),
   turnWorkFoldEnabled: Schema.optionalKey(Schema.Boolean),
   toolCallVisibility: Schema.optionalKey(ToolCallVisibility),
+  duetToolCallVisibility: Schema.optionalKey(DuetToolCallVisibility),
   screenReaderAnnouncements: Schema.optionalKey(ScreenReaderAnnouncements),
   screenReaderWindowTitle: Schema.optionalKey(Schema.Boolean),
   threadDetailsUsageEnabled: Schema.optionalKey(Schema.Boolean),
