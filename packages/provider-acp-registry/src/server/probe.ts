@@ -225,6 +225,7 @@ export function normalizeAcpRegistryLiveConfiguration(
   configOptions: ReadonlyArray<EffectAcpSchema.SessionConfigOption>,
   modeState?: Parameters<typeof acpProviderOptionDescriptors>[0]["modeState"],
   modelState?: EffectAcpSchema.SessionModelState | null,
+  configOptionsReported = false,
 ): AcpRegistryLiveConfiguration {
   const modelOption = findModelConfigOption(configOptions);
   const currentModelId =
@@ -259,15 +260,18 @@ export function normalizeAcpRegistryLiveConfiguration(
   const modelOptionIds = new Set(
     configOptions.filter(isModelScopedOption).map((option) => option.id),
   );
+  const scoped = descriptors.filter((descriptor) => modelOptionIds.has(descriptor.id));
   return {
-    models,
+    models: models.map((model) =>
+      model.id === boundedCurrentModelId && (configOptionsReported || configOptions.length > 0)
+        ? { ...model, configOptions: scoped }
+        : model,
+    ),
     currentModelId: models.some((model) => model.id === boundedCurrentModelId)
       ? boundedCurrentModelId
       : null,
     configOptions: descriptors,
-    modelOptionIds: descriptors
-      .filter((descriptor) => modelOptionIds.has(descriptor.id))
-      .map((descriptor) => descriptor.id),
+    modelOptionIds: scoped.map((descriptor) => descriptor.id),
     modelsFromModelSelect: modelOption !== undefined,
   };
 }
@@ -276,24 +280,31 @@ const probeAcpRegistryModelOptions = Effect.fn("AcpRegistryProbe.probeModelOptio
   runtime: AcpSessionRuntime.AcpSessionRuntime["Service"],
   configuration: AcpRegistryLiveConfiguration,
   modelOption: ReturnType<typeof findModelConfigOption>,
+  progress: AcpRegistryConfigurationProbeInput["modelOptionProgress"],
   budgetMs: number,
 ) {
   if (
     modelOption === undefined ||
     configuration.currentModelId === null ||
-    !configuration.modelOptionIds?.length ||
+    (!configuration.modelOptionIds?.length && !progress?.hasScopedOptions) ||
     budgetMs <= 0
   ) {
-    return configuration;
+    return { configuration };
   }
-  // Keep the original default and shared options. Large catalogs can take
-  // dozens of seconds to sweep, so probe the leading choices within a budget.
-  const candidates = configuration.models
-    .filter((model) => model.id !== configuration.currentModelId)
-    .slice(0, MAX_MODEL_OPTION_PROBE_SWITCHES);
+  const models = configuration.models.filter((model) => model.id !== configuration.currentModelId);
+  const lastIndex = models.findIndex((model) => model.id === progress?.lastAttemptedModelId);
+  const rotated = [...models.slice(lastIndex + 1), ...models.slice(0, lastIndex + 1)];
+  const known = progress?.knownModelIds;
+  // Rotate even when a switch fails so early rejected models cannot stall discovery.
+  const candidates = [
+    ...rotated.filter((model) => !known?.has(model.id)),
+    ...rotated.filter((model) => known?.has(model.id)),
+  ].slice(0, MAX_MODEL_OPTION_PROBE_SWITCHES);
   const modelOptions = new Map<string, AcpRegistryLiveConfiguration["configOptions"]>();
+  let lastAttemptedModelId: string | undefined;
   yield* Effect.gen(function* () {
     for (const model of candidates) {
+      lastAttemptedModelId = model.id;
       const switched = yield* runtime.setConfigOption(modelOption.id, model.id).pipe(Effect.option);
       if (Option.isNone(switched)) continue;
       const latest = yield* runtime.getConfigOptions;
@@ -312,11 +323,14 @@ const probeAcpRegistryModelOptions = Effect.fn("AcpRegistryProbe.probeModelOptio
     }
   }).pipe(Effect.timeoutOption(budgetMs));
   return {
-    ...configuration,
-    models: configuration.models.map((model) => {
-      const configOptions = modelOptions.get(model.id);
-      return configOptions === undefined ? model : { ...model, configOptions };
-    }),
+    configuration: {
+      ...configuration,
+      models: configuration.models.map((model) => {
+        const configOptions = modelOptions.get(model.id);
+        return configOptions === undefined ? model : { ...model, configOptions };
+      }),
+    },
+    lastAttemptedModelId,
   };
 });
 
@@ -384,6 +398,7 @@ export function acpRegistryProbeResult(
       started.sessionSetupResult.configOptions ?? [],
       parseSessionModeState(started.sessionSetupResult),
       started.sessionSetupResult.models,
+      started.sessionSetupResult.configOptions != null,
     );
   return AcpRegistryProbeResult.make({
     instanceId,
@@ -430,6 +445,11 @@ export interface AcpRegistryConfigurationProbeInput {
   readonly settings: AcpRegistrySettings;
   readonly cwd: string;
   readonly environment: NodeJS.ProcessEnv;
+  readonly modelOptionProgress?: {
+    readonly knownModelIds: ReadonlySet<string>;
+    readonly hasScopedOptions: boolean;
+    readonly lastAttemptedModelId: string | undefined;
+  };
 }
 
 type AcpRegistryManagementInput = AcpRegistryConfigurationProbeInput;
@@ -439,6 +459,7 @@ export interface AcpRegistryConfigurationProbeResult {
   readonly probe: AcpRegistryProbeResult;
   readonly slashCommands: ReadonlyArray<ServerProviderSlashCommand>;
   readonly skills: ReadonlyArray<ServerProviderSkill>;
+  readonly lastAttemptedModelId?: string;
 }
 
 export type AcpRegistryConfigurationProbe<Requirements = never> = (
@@ -648,19 +669,22 @@ export const probeAcpRegistryConfiguration = Effect.fn("AcpRegistryProbe.probeCo
       );
 
       // config_option_update replaces the full option set, so an empty notice is authoritative.
-      const configOptions = (yield* Ref.get(configOptionsRef)) ?? (yield* runtime.getConfigOptions);
+      const notifiedConfigOptions = yield* Ref.get(configOptionsRef);
+      const configOptions = notifiedConfigOptions ?? (yield* runtime.getConfigOptions);
       const configuration = normalizeAcpRegistryLiveConfiguration(
         configOptions,
         (yield* runtime.getModeState) ?? parseSessionModeState(started.sessionSetupResult),
         started.sessionSetupResult.models,
+        notifiedConfigOptions !== undefined || started.sessionSetupResult.configOptions != null,
       );
       // Only switch models if this probe session can be deleted.
-      const liveConfiguration =
+      const modelProbe =
         started.initializeResult.agentCapabilities?.sessionCapabilities?.delete != null
           ? yield* probeAcpRegistryModelOptions(
               runtime,
               configuration,
               findModelConfigOption(configOptions),
+              input.modelOptionProgress,
               Math.min(
                 MAX_MODEL_OPTION_PROBE_MS,
                 probeStartedAt +
@@ -669,13 +693,13 @@ export const probeAcpRegistryConfiguration = Effect.fn("AcpRegistryProbe.probeCo
                   PROBE_SESSION_DELETE_TIMEOUT_MS,
               ),
             )
-          : configuration;
+          : { configuration };
 
       return {
         resolved,
         started,
         commands: yield* Ref.get(commandsRef),
-        liveConfiguration,
+        modelProbe,
       };
     }).pipe(
       Effect.scoped,
@@ -710,8 +734,11 @@ export const probeAcpRegistryConfiguration = Effect.fn("AcpRegistryProbe.probeCo
           command: result.resolved.spawn.command,
           args: result.resolved.spawn.args,
         },
-        result.liveConfiguration,
+        result.modelProbe.configuration,
       ),
+      ...(result.modelProbe.lastAttemptedModelId === undefined
+        ? {}
+        : { lastAttemptedModelId: result.modelProbe.lastAttemptedModelId }),
       slashCommands: result.commands.slashCommands,
       skills: result.commands.skills,
     };

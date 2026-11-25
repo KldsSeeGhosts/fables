@@ -72,6 +72,8 @@ export const makeAcpRegistryAuthenticationState = Effect.fn("makeAcpRegistryAuth
       );
     if (saved && saved.binding !== binding) yield* persist(false);
     return {
+      binding,
+      bindingChanged: saved !== undefined && saved.binding !== binding,
       get: Ref.get(confirmed),
       set: (authenticated: boolean) =>
         lock.withPermit(
