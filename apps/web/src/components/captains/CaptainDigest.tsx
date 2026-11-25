@@ -1,59 +1,19 @@
+/* oxlint-disable t3code/no-dot-separated-text -- The Duet schedule row uses the requested compact "Morning brief · time" label. */
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import type { Captain, CaptainDocument, EnvironmentId, ScheduledTask } from "@t3tools/contracts";
 import { T, useGT } from "gt-react";
 import { SunriseIcon } from "lucide-react";
-import { useAtomValue } from "@effect/atom-react";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState } from "react";
 
 import { useDuetShell } from "../../hooks/useDuetShell";
-import { serverEnvironment } from "../../state/server";
-import { useAtomCommand } from "../../state/use-atom-command";
-import ChatMarkdown from "../ChatMarkdown";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { Switch } from "../ui/switch";
 import { Text } from "../ui/text";
 import { captainMorningBriefTaskId, useCaptainMorningBrief } from "./captainMorningBrief";
 import { captainCommandError } from "./useCaptain";
 
 const DEFAULT_BRIEF_TIME = "08:00";
-
-/** A Captain's DIGEST.md, rendered as prose, or a prompt to schedule the brief that writes it. */
-export function CaptainDigest({
-  document,
-  environmentId,
-  loading,
-  action,
-}: {
-  document: CaptainDocument | undefined;
-  environmentId: EnvironmentId;
-  loading: boolean;
-  action?: ReactNode;
-}) {
-  const content = document?.content.trim() ?? "";
-  if (content !== "") {
-    return (
-      <article aria-label={document?.name} className="min-w-0">
-        <ChatMarkdown text={content} cwd={undefined} environmentId={environmentId} />
-      </article>
-    );
-  }
-  return (
-    <div className="flex flex-col items-start gap-3 rounded-card border border-dashed border-border p-4">
-      <Text variant="body" tone="muted" render={<p />}>
-        {loading ? (
-          <T>Loading the brief…</T>
-        ) : (
-          <T>
-            No brief yet. A morning brief writes DIGEST.md with progress, blockers and decisions.
-          </T>
-        )}
-      </Text>
-      {loading ? null : action}
-    </div>
-  );
-}
 
 /** The first lines of a digest as plain text, for previews. */
 export function captainDigestPreview(document: CaptainDocument | undefined) {
@@ -85,8 +45,6 @@ export function CaptainMorningBriefControl({
   const isDuet = useDuetShell();
   const timeId = useId();
   const morningBrief = useCaptainMorningBrief(environmentId);
-  const canRun = useAtomValue(serverEnvironment.runScheduledTaskNow.permissionAtom(environmentId));
-  const runNow = useAtomCommand(serverEnvironment.runScheduledTaskNow, { reportFailure: false });
   const scheduledTime = task?.schedule.type === "fixed_time" ? task.schedule.timeOfDay : null;
   const [time, setTime] = useState<string | null>(null);
   const [enabled, setEnabled] = useState<boolean | null>(null);
@@ -115,87 +73,57 @@ export function CaptainMorningBriefControl({
     }
   };
 
-  const refresh = async () => {
-    if (task === undefined || pending) return;
-    setPending(true);
-    setError(null);
-    const result = await runNow({ environmentId, input: { id: task.id } });
-    setPending(false);
-    if (result._tag === "Failure")
-      setError(captainCommandError(result, gt("Could not run the morning brief.")));
-  };
-
+  const dirty = time !== null || enabled !== null;
+  const timeLabel = new Date(`2024-01-01T${shownTime}:00`).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
   return (
-    <Popover>
-      <PopoverTrigger render={<Button variant="secondary" size="sm" />}>
-        <SunriseIcon aria-hidden />
-        {task === undefined ? (
-          <T>Schedule morning brief</T>
-        ) : task.enabled && scheduledTime !== null ? (
-          gt("Morning brief at {time}", { time: scheduledTime })
-        ) : (
-          <T>Morning brief off</T>
-        )}
-      </PopoverTrigger>
-      <PopoverPopup width="sm" align="end">
-        <div className="flex flex-col gap-3">
-          <Text variant="label" render={<h3 />}>
-            <T>Morning brief</T>
+    <div className="rounded-lg border border-(--duet-hairline) px-3 py-2.5">
+      <div className="flex min-w-0 items-center gap-3">
+        <SunriseIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <Text variant="label" className="truncate" render={<div />}>
+            {gt("Morning brief · {time}", { time: timeLabel })}
           </Text>
-          <Text variant="meta" tone="muted" render={<p />}>
+          <Text variant="meta" tone="muted" render={<div />}>
             {isDuet ? (
-              <T>Every day, this Duet updates DIGEST.md in its current conversation.</T>
+              <T>Updates DIGEST.md each day.</T>
             ) : (
-              <T>Every day, the Captain updates DIGEST.md in its current conversation.</T>
+              <T>Updates the Captain digest each day.</T>
             )}
           </Text>
-          <label htmlFor={timeId} className="flex items-center justify-between gap-3">
-            <Text variant="body">
-              <T>Time</T>
-            </Text>
-            <Input
-              id={timeId}
-              type="time"
-              nativeInput
-              size="sm"
-              className="w-32"
-              disabled={!canSave || pending}
-              value={shownTime}
-              onChange={(event) => setTime(event.target.value)}
-            />
-          </label>
-          <label className="flex items-center justify-between gap-3">
-            <Text variant="body">
-              <T>Enabled</T>
-            </Text>
-            <Switch
-              checked={shownEnabled}
-              disabled={!canSave || pending}
-              onCheckedChange={(checked) => setEnabled(checked)}
-            />
-          </label>
-          {error !== null ? (
-            <Text variant="meta" tone="destructive" role="alert" render={<p />}>
-              {error}
-            </Text>
-          ) : null}
-          <div className="flex flex-wrap justify-end gap-1.5">
-            {task !== undefined ? (
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={!canRun || pending}
-                onClick={() => void refresh()}
-              >
-                <T>Refresh now</T>
-              </Button>
-            ) : null}
-            <Button size="sm" disabled={!canSave || pending} onClick={() => void save()}>
-              <T>Save</T>
-            </Button>
-          </div>
         </div>
-      </PopoverPopup>
-    </Popover>
+        <Input
+          id={timeId}
+          aria-label={gt("Morning brief time")}
+          type="time"
+          nativeInput
+          size="sm"
+          className="w-28"
+          disabled={!canSave || pending}
+          value={shownTime}
+          onChange={(event) => setTime(event.target.value)}
+        />
+        <Switch
+          aria-label={gt("Enable morning brief")}
+          checked={shownEnabled}
+          disabled={!canSave || pending}
+          onCheckedChange={(checked) => setEnabled(checked)}
+        />
+      </div>
+      {dirty ? (
+        <div className="mt-2 flex justify-end">
+          <Button size="xs" disabled={!canSave || pending} onClick={() => void save()}>
+            <T>Save</T>
+          </Button>
+        </div>
+      ) : null}
+      {error !== null ? (
+        <p role="alert" className="mt-2 text-meta text-destructive-foreground">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }

@@ -1,6 +1,4 @@
-/* oxlint-disable shadcn/no-raw-colors, shadcn/no-arbitrary-values -- The V3 Duet spec fixes these exact static status-ring colors. */
 import { useGT } from "gt-react";
-import { CircleCheck, CircleSlash, CircleX } from "lucide-react";
 
 import { cn } from "../../lib/utils";
 import type { CaptainTaskStatus } from "./captainTaskStatus.logic";
@@ -27,7 +25,18 @@ export function useCaptainTaskStatusLabel(status: CaptainTaskStatus): string {
   }
 }
 
-/** The Duet task state glyph. Every ring is static SVG; scanning never repaints it. */
+const ringColor: Record<CaptainTaskStatus, string> = {
+  "needs-input": "#a98546",
+  working: "#d97757",
+  ready: "#1e7d2c",
+  failed: "var(--destructive-foreground)",
+  stopped: "#838383",
+  scheduled: "#838383",
+  done: "#838383",
+  unknown: "#838383",
+};
+
+/** The Duet task state ring. Only rotation animates, and reduced motion leaves it static. */
 export function CaptainTaskRing({
   status,
   className,
@@ -35,53 +44,49 @@ export function CaptainTaskRing({
   readonly status: CaptainTaskStatus;
   readonly className?: string;
 }) {
-  if (status === "done") {
-    return (
-      <CircleCheck aria-hidden className={cn("size-3.5 shrink-0 text-[#838383]", className)} />
-    );
-  }
-  if (status === "failed") {
-    return (
-      <CircleX
-        aria-hidden
-        className={cn("size-3.5 shrink-0 text-destructive-foreground", className)}
-      />
-    );
-  }
-  if (status === "stopped" || status === "unknown") {
-    return (
-      <CircleSlash aria-hidden className={cn("size-3.5 shrink-0 text-[#838383]", className)} />
-    );
-  }
+  const color = ringColor[status];
   return (
-    <svg aria-hidden viewBox="0 0 14 14" className={cn("size-3.5 shrink-0", className)} fill="none">
-      {status === "needs-input" ? (
-        <>
-          <circle cx="7" cy="7" r="5.5" stroke="#a98546" strokeWidth="1.5" />
-          <path d="M7 1.5A5.5 5.5 0 0 0 7 12.5Z" fill="#a98546" />
-        </>
-      ) : status === "working" ? (
+    <svg
+      aria-hidden
+      viewBox="0 0 16 16"
+      className={cn(
+        "size-3.5 shrink-0 duet:size-4",
+        status === "working" && "animate-spin motion-reduce:animate-none",
+        className,
+      )}
+      fill="none"
+    >
+      <circle
+        cx="8"
+        cy="8"
+        r="6.25"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeDasharray={status === "working" ? "3 2.4" : undefined}
+        strokeLinecap="round"
+      />
+      {status === "needs-input" ? <circle cx="8" cy="8" r="2" fill={color} /> : null}
+      {status === "ready" ? <circle cx="8" cy="8" r="2.25" fill={color} /> : null}
+      {status === "failed" ? (
         <path
-          d="M7 1.5a5.5 5.5 0 1 1-3.89 1.61"
-          stroke="#d97757"
-          strokeWidth="1.5"
+          d="M5.75 5.75l4.5 4.5m0-4.5l-4.5 4.5"
+          stroke={color}
+          strokeWidth="1.4"
           strokeLinecap="round"
         />
-      ) : status === "ready" ? (
-        <>
-          <circle cx="7" cy="7" r="5.5" stroke="#1e7d2c" strokeWidth="1.5" />
-          <circle cx="7" cy="7" r="1.75" fill="#1e7d2c" />
-        </>
-      ) : (
-        <circle
-          cx="7"
-          cy="7"
-          r="5.5"
-          stroke="#a3a3a3"
-          strokeWidth="1.5"
-          strokeDasharray="2.5 2.5"
+      ) : null}
+      {status === "done" ? (
+        <path
+          d="M5.4 8.2l1.8 1.8 3.6-4"
+          stroke={color}
+          strokeWidth="1.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
         />
-      )}
+      ) : null}
+      {status === "stopped" || status === "unknown" || status === "scheduled" ? (
+        <path d="M5.7 10.3l4.6-4.6" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+      ) : null}
     </svg>
   );
 }
