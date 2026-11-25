@@ -2266,7 +2266,7 @@ it.layer(
       });
     });
 
-    it("fills missing capabilities from the previous provider snapshot", () => {
+    it("fills missing capabilities and honors an explicit ACP option removal", () => {
       const previousProvider = {
         instanceId: ProviderInstanceId.make("cursor"),
         driver: ProviderDriverKind.make("cursor"),
@@ -2313,6 +2313,14 @@ it.layer(
       assert.deepStrictEqual(
         ProviderRegistry.mergeProviderSnapshot(previousProvider, refreshedProvider).models,
         [...previousProvider.models],
+      );
+      const driver = ProviderDriverKind.make("acpRegistry");
+      assert.deepStrictEqual(
+        ProviderRegistry.mergeProviderSnapshot(
+          { ...previousProvider, driver },
+          { ...refreshedProvider, driver },
+        ).models,
+        [...refreshedProvider.models],
       );
     });
 

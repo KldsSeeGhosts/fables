@@ -285,7 +285,16 @@ const mergeProviderModels = (
   const previousBySlug = new Map(previousModels.map((model) => [model.slug, model] as const));
   const mergedModels = nextModels.map((model) => {
     const previousModel = previousBySlug.get(model.slug);
-    if (!previousModel || hasModelCapabilities(model) || !hasModelCapabilities(previousModel)) {
+    const acpClearedOptions =
+      provider.driver === ProviderDriverKind.make("acpRegistry") &&
+      !model.isCustom &&
+      model.capabilities?.optionDescriptors?.length === 0;
+    if (
+      !previousModel ||
+      acpClearedOptions ||
+      hasModelCapabilities(model) ||
+      !hasModelCapabilities(previousModel)
+    ) {
       return model;
     }
     return {

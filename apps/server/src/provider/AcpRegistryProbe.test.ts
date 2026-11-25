@@ -87,6 +87,14 @@ describe("ACP Registry probe", () => {
       modelConfigId: "model",
     } satisfies AcpSessionRuntime.AcpSessionRuntimeStartResult);
 
+    const effort = {
+      id: "effort",
+      label: "Effort",
+      type: "select",
+      options: [{ id: "high", label: "High" }],
+      currentValue: "high",
+      role: "reasoning",
+    };
     expect(result).toEqual({
       instanceId,
       ready: true,
@@ -102,17 +110,10 @@ describe("ACP Registry probe", () => {
         },
         { id: "login", name: "Terminal login", description: null, type: "terminal" },
       ],
-      models: [{ id: "gpt-5.4", name: "GPT-5.4", description: null }],
+      models: [{ id: "gpt-5.4", name: "GPT-5.4", description: null, configOptions: [effort] }],
       currentModelId: "gpt-5.4",
       configOptions: [
-        {
-          id: "effort",
-          label: "Effort",
-          type: "select",
-          options: [{ id: "high", label: "High" }],
-          currentValue: "high",
-          role: "reasoning",
-        },
+        effort,
         {
           id: "mode",
           label: "Mode",
@@ -251,24 +252,23 @@ describe("ACP Registry probe", () => {
       modelConfigId: "model",
     } satisfies AcpSessionRuntime.AcpSessionRuntimeStartResult);
 
+    const reasoning = {
+      id: "reasoning",
+      label: "Reasoning",
+      type: "select",
+      currentValue: "high",
+      options: [
+        { id: "medium", label: "Medium" },
+        { id: "high", label: "High" },
+      ],
+      role: "reasoning",
+    };
     expect(result.models).toEqual([
       { id: codexModel, name: "GPT-6.1 Sol", description: null },
-      { id: goModel, name: "DeepSeek V4.1 Flash", description: null },
+      { id: goModel, name: "DeepSeek V4.1 Flash", description: null, configOptions: [reasoning] },
     ]);
     expect(result.currentModelId).toBe(goModel);
-    expect(result.configOptions).toEqual([
-      {
-        id: "reasoning",
-        label: "Reasoning",
-        type: "select",
-        currentValue: "high",
-        options: [
-          { id: "medium", label: "Medium" },
-          { id: "high", label: "High" },
-        ],
-        role: "reasoning",
-      },
-    ]);
+    expect(result.configOptions).toEqual([reasoning]);
   });
 
   it.each(["config option", "session model state"] as const)(

@@ -268,6 +268,10 @@ export const AcpRegistryProbeModel = Schema.Struct({
   id: AcpRegistryProbeText,
   name: AcpRegistryProbeText,
   description: AcpRegistryProbeDescription,
+  // Model-scoped options observed with this model selected.
+  configOptions: Schema.optionalKey(
+    Schema.Array(ProviderOptionDescriptor).check(Schema.isMaxLength(16)),
+  ),
   // The reasoning control the agent advertises for this model; null when it has none.
   reasoningEffort: Schema.optionalKey(Schema.NullOr(ProviderOptionDescriptor)),
 });
