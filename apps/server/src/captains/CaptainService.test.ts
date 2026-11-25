@@ -1,7 +1,9 @@
 import { assert, it } from "@effect/vitest";
 import {
   CaptainId,
+  CaptainError,
   CaptainMemoryId,
+  captainPrimaryThreadId,
   ProjectId,
   ProviderInstanceId,
   ScheduledTaskError,
@@ -25,6 +27,7 @@ import * as Sqlite from "../persistence/Sqlite.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ScheduledTasks from "../scheduledTasks/ScheduledTaskService.ts";
+import * as CaptainHandoff from "./captainHandoff.ts";
 import * as CaptainService from "./CaptainService.ts";
 import * as CaptainStore from "./CaptainStore.ts";
 import { captainDelegationProject, makeCaptainCanWake } from "./captainDelegation.ts";
@@ -249,10 +252,164 @@ it.effect(
         assert.equal((yield* binding)[0]?.thread_id, next.primaryThreadId);
         assert.deepStrictEqual(yield* service.resetConversation(reset), next);
         assert.equal(f.invalidations(), 1);
-        assert.deepStrictEqual(yield* store.document(next, "NOTES.md"), document);
+        const notes = yield* store.document(next, "NOTES.md");
+        assert.isAbove(notes.revision, document.revision);
+        assert.include(notes.content, "## Handoff from the previous conversation");
+        assert.include(notes.content, "Carry this across resets.");
+        assert.include(notes.content, "1 scheduled task moved to the new conversation.");
+        assert.equal(
+          notes.content.match(/^## Handoff from the previous conversation/gm)?.length,
+          1,
+        );
         assert.deepStrictEqual(yield* store.listMemories(next.id, { limit: 2 }), [memory]);
       }).pipe(Effect.provide(f.layer));
     }),
+);
+
+it.effect("writes a reset handoff and still resets when the handoff write fails", () =>
+  Effect.gen(function* () {
+    const f = fixture();
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainService.CaptainService;
+      const store = yield* CaptainStore.CaptainStore;
+      const sql = yield* SqlClient.SqlClient;
+      const captain = yield* service.create({ ...input, scopedProjectIds: [project] });
+      const childThreadId = ThreadId.make("thread:child");
+      const at = "2026-11-24T10:00:00.000Z";
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_subagents (
+          subagent_id, thread_id, parent_node_id, provider, origin, status,
+          child_thread_id, started_at, updated_at, payload_json
+        ) VALUES ('task-1', ${captain.primaryThreadId}, 'node', 'codex', 'app_owned', 'running',
+          ${childThreadId}, ${at}, ${at}, ${JSON.stringify({
+            title: "Review the migration",
+            progress: "Checking projection rows\nMore detail",
+          })})
+      `;
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_runtime_requests (
+          runtime_request_id, thread_id, node_id, kind, status, created_at, payload_json
+        ) VALUES ('request-1', ${childThreadId}, 'node', 'command', 'pending', ${at}, '{}')
+      `;
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_turn_items (
+          turn_item_id, thread_id, ordinal, type, status, updated_at, payload_json
+        ) VALUES ('item-1', ${childThreadId}, 1, 'approval_request', 'pending', ${at},
+          ${JSON.stringify({ requestId: "request-1", prompt: "Run the migration test" })})
+      `;
+      const message = (
+        id: string,
+        role: "user" | "assistant",
+        text: string,
+        createdAt: string,
+      ) => sql`
+        INSERT INTO orchestration_v2_projection_messages (
+          message_id, thread_id, role, streaming, created_at, updated_at, payload_json
+        ) VALUES (${id}, ${captain.primaryThreadId}, ${role}, 0, ${createdAt}, ${createdAt},
+          ${JSON.stringify({ text })})
+      `;
+      yield* message("user-old", "user", "Earlier request", "2026-11-24T09:00:00.000Z");
+      yield* message(
+        "user-last",
+        "user",
+        "Please finish the migration",
+        "2026-11-24T09:05:00.000Z",
+      );
+      yield* message(
+        "assistant-last",
+        "assistant",
+        "I am checking the projection rows",
+        "2026-11-24T09:06:00.000Z",
+      );
+
+      const next = yield* service.resetConversation({
+        captainId: captain.id,
+        expectedThreadId: captain.primaryThreadId,
+      });
+      const notes = yield* store.document(next, "NOTES.md");
+      assert.include(notes.content, "### Active delegated tasks");
+      assert.include(
+        notes.content,
+        "- Review the migration (running, follow: thread:child): Checking projection rows",
+      );
+      assert.include(notes.content, "### Waiting on the user");
+      assert.include(
+        notes.content,
+        "- command approval on thread:child: Run the migration test [request: request-1]",
+      );
+      assert.include(notes.content, "> Please finish the migration");
+      assert.include(notes.content, "> I am checking the projection rows");
+      assert.notInclude(notes.content, "Earlier request");
+
+      yield* sql`
+        CREATE TRIGGER fail_captain_document_insert BEFORE INSERT ON captain_documents
+        BEGIN SELECT RAISE(ABORT, 'Cannot write notes.'); END
+      `;
+      const blocked = yield* service.create({ ...input, captainId: CaptainId.make("blocked") });
+      const reset = yield* service.resetConversation({
+        captainId: blocked.id,
+        expectedThreadId: blocked.primaryThreadId,
+      });
+      assert.notEqual(reset.primaryThreadId, blocked.primaryThreadId);
+      assert.equal((yield* store.document(reset, "NOTES.md")).content, "");
+    }).pipe(Effect.provide(f.layer));
+  }),
+);
+
+it.effect("retries one stale NOTES.md revision when writing a handoff", () =>
+  Effect.gen(function* () {
+    let reads = 0;
+    let writes = 0;
+    const captain = {
+      id: input.captainId,
+      name: input.name,
+      role: input.role,
+      instructions: input.instructions,
+      avatar: input.avatar,
+      reportPolicy: input.reportPolicy,
+      scopedProjectIds: input.scopedProjectIds,
+      primaryThreadId: captainPrimaryThreadId(input.captainId, 0),
+      earlierThreadIds: [],
+      createdAt: "2026-11-24T10:00:00.000Z",
+      updatedAt: "2026-11-24T10:00:00.000Z",
+      archivedAt: null,
+    };
+    const storeLayer = Layer.mock(CaptainStore.CaptainStore)({
+      document: () =>
+        Effect.sync(() => {
+          reads++;
+          return {
+            captainId: captain.id,
+            name: "NOTES.md" as const,
+            content: reads === 1 ? "stale" : "latest",
+            revision: reads === 1 ? 0 : 1,
+            updatedAt: "2026-11-24T10:00:00.000Z",
+          };
+        }),
+      updateDocument: (update) =>
+        Effect.gen(function* () {
+          writes++;
+          if (writes === 1) {
+            return yield* new CaptainError({ code: "conflict", message: "Notes changed." });
+          }
+          assert.equal(update.expectedRevision, 1);
+          assert.include(update.content, "latest");
+          return {
+            captainId: update.captainId,
+            name: update.name,
+            content: update.content,
+            revision: update.expectedRevision + 1,
+            updatedAt: "2026-11-24T10:01:00.000Z",
+          };
+        }),
+    });
+
+    yield* CaptainHandoff.write({ captain, previousThreadId: captain.primaryThreadId }).pipe(
+      Effect.provide(Layer.merge(storeLayer, Sqlite.layerMemory)),
+    );
+    assert.equal(reads, 2);
+    assert.equal(writes, 2);
+  }),
 );
 
 it.effect(
