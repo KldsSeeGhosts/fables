@@ -178,6 +178,7 @@
   justify-content: center;
   border-radius: 6px;
   outline: none;
+  background: transparent;
 }
 
 [data-duet-header-icon]:focus-visible {
@@ -190,20 +191,58 @@
 
 @variant light {
   [data-duet-header-icon] {
-    color: #555555;
+    color: #5c5c5c;
   }
 
   [data-duet-header-icon]:hover {
     background: #f0f0f0;
   }
+
+  [data-duet-header-icon][data-pressed],
+  [data-duet-header-icon][aria-pressed="true"],
+  [data-duet-header-icon][aria-expanded="true"],
+  [data-duet-header-icon][data-popup-open] {
+    background: #e5e5e5;
+    color: var(--foreground);
+  }
 }
 
 @variant dark {
   [data-duet-header-icon] {
-    color: #c4c4c4;
+    color: #b4b4b4;
   }
 
   [data-duet-header-icon]:hover {
-    background: #2c2c2c;
+    background: #2a2a2a;
+  }
+
+  [data-duet-header-icon][data-pressed],
+  [data-duet-header-icon][aria-pressed="true"],
+  [data-duet-header-icon][aria-expanded="true"],
+  [data-duet-header-icon][data-popup-open] {
+    background: #333333;
+    color: var(--foreground);
+  }
+}
+
+[data-duet-resize-line] {
+  background: transparent;
+}
+
+@variant light {
+  .group:hover [data-duet-resize-line],
+  .group:active [data-duet-resize-line],
+  .group/resize-column:hover [data-duet-resize-line],
+  [data-duet-resize-line][data-active] {
+    background: #d4d4d4;
+  }
+}
+
+@variant dark {
+  .group:hover [data-duet-resize-line],
+  .group:active [data-duet-resize-line],
+  .group/resize-column:hover [data-duet-resize-line],
+  [data-duet-resize-line][data-active] {
+    background: #3a3a3a;
   }
 }

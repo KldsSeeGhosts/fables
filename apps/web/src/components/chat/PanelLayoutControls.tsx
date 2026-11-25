@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-styled-raw-controls -- Duet header utility buttons use exact square icon-button geometry outside shared button variants. */
 import "./DuetStatusOrb.css";
 
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
@@ -23,11 +22,12 @@ import {
   SquarePenIcon,
   TerminalIcon,
 } from "lucide-react";
-import { memo, useState, type ReactElement } from "react";
+import { memo, useRef, useState, type ReactElement } from "react";
 
 import { useNavigate } from "@tanstack/react-router";
 
 import { useDuetShell } from "../../hooks/useDuetShell";
+import { observeResize } from "../../lib/observeResize";
 import type { ThreadPanelPresentation } from "../../rightPanelLayout";
 import { selectActiveRightPanel, useRightPanelStore } from "../../rightPanelStore";
 import { useEnvironment, usePrimaryEnvironmentId } from "../../state/environments";
@@ -46,6 +46,9 @@ import {
   MenuPopup,
   MenuRadioGroup,
   MenuRadioItem,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
   MenuTrigger,
 } from "../ui/menu";
 import { PopoverCreateHandle, PopoverTrigger } from "../ui/popover";
@@ -140,7 +143,7 @@ function DuetIconButton({
       disabled={action.disabled}
       onClick={action.onClick}
       data-duet-header-icon
-      className={`shrink-0 ${action.active ? "bg-(--duet-row-active)" : ""} ${className ?? ""}`}
+      className={`shrink-0 ${className ?? ""}`}
     >
       {icon}
     </button>
@@ -153,6 +156,42 @@ function DuetIconButton({
   );
 }
 
+function DuetMachineMenuItems({ machine }: { machine: DuetMachineControl }) {
+  const gt = useGT();
+  return machine.environments.length > 0 ? (
+    <MenuRadioGroup
+      value={machine.autoLabel ? "auto" : machine.environmentId}
+      onValueChange={(value) =>
+        value === "auto" ? machine.onAuto?.() : machine.onChange?.(value as EnvironmentId)
+      }
+    >
+      {machine.onAuto ? (
+        <MenuRadioItem value="auto" disabled={machine.locked} closeOnClick>
+          <span className="min-w-0 truncate">{machine.autoLabel ?? gt("Auto balance")}</span>
+        </MenuRadioItem>
+      ) : null}
+      {machine.environments.map((environment) => (
+        <MenuRadioItem
+          key={environment.environmentId}
+          value={environment.environmentId}
+          disabled={
+            machine.locked ||
+            (!machine.onChange && environment.environmentId !== machine.environmentId)
+          }
+          closeOnClick
+        >
+          <span className="flex min-w-0 items-center gap-1.5">
+            <EnvironmentMachineIcon kind={environment.machine} className="size-3" />
+            <span className="min-w-0 truncate">{environment.label}</span>
+          </span>
+        </MenuRadioItem>
+      ))}
+    </MenuRadioGroup>
+  ) : (
+    <div className="px-2 py-1.5 text-muted-foreground text-body">{machine.label}</div>
+  );
+}
+
 function DuetMachineButton({ machine }: { machine: DuetMachineControl }) {
   const gt = useGT();
   const trigger = (
@@ -162,7 +201,7 @@ function DuetMachineButton({ machine }: { machine: DuetMachineControl }) {
       data-duet-header-icon
       className="shrink-0"
     >
-      <MonitorIcon aria-hidden className="size-4" />
+      <MonitorIcon aria-hidden className="size-4" strokeWidth={1.75} />
     </button>
   );
   return (
@@ -173,40 +212,7 @@ function DuetMachineButton({ machine }: { machine: DuetMachineControl }) {
           <MenuGroupLabel>
             <T>Run on</T>
           </MenuGroupLabel>
-          {machine.environments.length > 0 ? (
-            <MenuRadioGroup
-              value={machine.autoLabel ? "auto" : machine.environmentId}
-              onValueChange={(value) =>
-                value === "auto" ? machine.onAuto?.() : machine.onChange?.(value as EnvironmentId)
-              }
-            >
-              {machine.onAuto ? (
-                <MenuRadioItem value="auto" disabled={machine.locked} closeOnClick>
-                  <span className="min-w-0 truncate">
-                    {machine.autoLabel ?? gt("Auto balance")}
-                  </span>
-                </MenuRadioItem>
-              ) : null}
-              {machine.environments.map((environment) => (
-                <MenuRadioItem
-                  key={environment.environmentId}
-                  value={environment.environmentId}
-                  disabled={
-                    machine.locked ||
-                    (!machine.onChange && environment.environmentId !== machine.environmentId)
-                  }
-                  closeOnClick
-                >
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    <EnvironmentMachineIcon kind={environment.machine} className="size-3" />
-                    <span className="min-w-0 truncate">{environment.label}</span>
-                  </span>
-                </MenuRadioItem>
-              ))}
-            </MenuRadioGroup>
-          ) : (
-            <div className="px-2 py-1.5 text-muted-foreground text-body">{machine.label}</div>
-          )}
+          <DuetMachineMenuItems machine={machine} />
         </MenuGroup>
       </MenuPopup>
     </Menu>
@@ -214,49 +220,115 @@ function DuetMachineButton({ machine }: { machine: DuetMachineControl }) {
 }
 
 function DuetOverflowMenu({
+  captain,
+  machine,
   terminal,
   browser,
   diff,
+  threadDetails,
+  foldUtilityControls,
 }: {
+  captain: boolean;
+  machine?: DuetMachineControl | null | undefined;
   terminal?: DuetHeaderAction | null | undefined;
   browser?: DuetHeaderAction | null | undefined;
   diff?: DuetHeaderAction | null | undefined;
+  threadDetails: DuetHeaderAction;
+  foldUtilityControls: boolean;
 }) {
   const gt = useGT();
   const entries = [
     terminal
-      ? { key: "terminal", action: terminal, icon: <TerminalIcon className="size-3.5" /> }
+      ? {
+          key: "terminal",
+          action: terminal,
+          icon: <TerminalIcon className="size-3.5" strokeWidth={1.75} />,
+        }
       : null,
-    browser ? { key: "browser", action: browser, icon: <GlobeIcon className="size-3.5" /> } : null,
-    diff ? { key: "diff", action: diff, icon: <FileDiffIcon className="size-3.5" /> } : null,
+    browser
+      ? {
+          key: "browser",
+          action: browser,
+          icon: <GlobeIcon className="size-3.5" strokeWidth={1.75} />,
+        }
+      : null,
+    diff
+      ? {
+          key: "diff",
+          action: diff,
+          icon: <FileDiffIcon className="size-3.5" strokeWidth={1.75} />,
+        }
+      : null,
   ].filter((entry) => entry !== null);
-  if (entries.length === 0) return null;
   return (
     <Menu>
       <MenuTrigger
         render={
-          <button
-            type="button"
-            data-duet-header-icon
-            className="shrink-0 @min-[720px]/header-actions:hidden"
-          >
-            <EllipsisIcon aria-hidden className="size-4" />
+          <button type="button" data-duet-header-icon className="shrink-0">
+            <EllipsisIcon aria-hidden className="size-4" strokeWidth={1.75} />
           </button>
         }
         aria-label={gt("More header actions")}
       />
-      <MenuPopup align="end">
-        {entries.map((entry) => (
-          <MenuItem
-            key={entry.key}
-            disabled={entry.action.disabled}
-            closeOnClick
-            onClick={entry.action.onClick}
-          >
-            {entry.icon}
-            {entry.action.label}
-          </MenuItem>
-        ))}
+      <MenuPopup align="end" width="wide">
+        {captain ? (
+          <MenuGroup>
+            <MenuItem
+              disabled={threadDetails.disabled}
+              selected={threadDetails.active === true}
+              closeOnClick
+              onClick={threadDetails.onClick}
+            >
+              <ListFilterIcon className="size-3.5" strokeWidth={1.75} />
+              <T>Thread details</T>
+            </MenuItem>
+            {entries.map((entry) => (
+              <MenuItem
+                key={entry.key}
+                disabled={entry.action.disabled}
+                selected={entry.action.active === true}
+                closeOnClick
+                onClick={entry.action.onClick}
+              >
+                {entry.icon}
+                {entry.action.label}
+              </MenuItem>
+            ))}
+          </MenuGroup>
+        ) : (
+          <>
+            {machine ? (
+              <MenuSub>
+                <MenuSubTrigger>
+                  <MonitorIcon className="size-3.5" strokeWidth={1.75} />
+                  <T>Run on</T>
+                </MenuSubTrigger>
+                <MenuSubPopup>
+                  <MenuGroup>
+                    <MenuGroupLabel>
+                      <T>Run on</T>
+                    </MenuGroupLabel>
+                    <DuetMachineMenuItems machine={machine} />
+                  </MenuGroup>
+                </MenuSubPopup>
+              </MenuSub>
+            ) : null}
+            {foldUtilityControls
+              ? entries.map((entry) => (
+                  <MenuItem
+                    key={entry.key}
+                    disabled={entry.action.disabled}
+                    selected={entry.action.active === true}
+                    closeOnClick
+                    onClick={entry.action.onClick}
+                  >
+                    {entry.icon}
+                    {entry.action.label}
+                  </MenuItem>
+                ))
+              : null}
+          </>
+        )}
       </MenuPopup>
     </Menu>
   );
@@ -301,10 +373,11 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
         : gt("No scope")
     : null;
   const parentThreadId = shell?.lineage.parentThreadId ?? null;
+  const captainChannel = threadRef !== null && isCaptainThreadId(threadRef.threadId);
   const captainTasksRef =
     threadRef === null
       ? null
-      : captain
+      : captainChannel
         ? threadRef
         : parentThreadId !== null && isCaptainThreadId(parentThreadId)
           ? scopeThreadRef(threadRef.environmentId, parentThreadId)
@@ -312,6 +385,22 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   const tasksActive = useRightPanelStore(
     (state) => selectActiveRightPanel(state.byThreadKey, captainTasksRef) === "captain-brief",
   );
+  const [compactDuetHeader, setCompactDuetHeader] = useState(false);
+  const stopMeasuringRef = useRef<(() => void) | null>(null);
+  const [rootRef] = useState(() => (node: HTMLDivElement | null) => {
+    stopMeasuringRef.current?.();
+    stopMeasuringRef.current = null;
+    if (!node) {
+      setCompactDuetHeader(false);
+      return;
+    }
+    const header = node.closest<HTMLElement>("[data-chat-header]");
+    if (!header) return;
+    const update = () => setCompactDuetHeader(header.getBoundingClientRect().width < 720);
+    update();
+    stopMeasuringRef.current = observeResize(header, update);
+  });
+  const foldDuetUtilityControls = duet && !captainChannel && compactDuetHeader;
   if (mobileSidebarSheetMounted) return null;
   const toggleTasks = () => {
     if (captainTasksRef === null) return;
@@ -388,7 +477,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   );
   const threadPanelControl = (
     <Tooltip>
-      <TooltipTrigger render={<span className="flex shrink-0" data-thread-panel-toggle />}>
+      <TooltipTrigger render={<span className="me-2 flex shrink-0" data-thread-panel-toggle />}>
         {threadPanelPresentation === "popover" ? (
           <PopoverTrigger handle={threadPanelPopoverHandle} render={threadPanelToggle} />
         ) : (
@@ -416,65 +505,82 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
         }
       : null;
 
+  const threadDetailsAction: DuetHeaderAction = {
+    label: gt("Thread details"),
+    onClick: onToggleThreadPanel,
+    active: threadPanelOpen,
+    disabled: disabledReason !== null,
+  };
+
   return (
     <div
-      className="flex h-full shrink-0 items-center gap-1 [-webkit-app-region:no-drag]"
+      ref={rootRef}
+      className="flex h-full shrink-0 items-center gap-0 [-webkit-app-region:no-drag]"
       data-panel-layout-controls
     >
       {/* The workspace menu (pen ZVAPz) is the pane's only top-right control. */}
-      {showThreadPanelControl ? threadPanelControl : null}
+      {showThreadPanelControl && (!duet || !captainChannel) ? threadPanelControl : null}
       {duet && duetControls ? (
         <>
-          {captainTasksRef !== null ? (
-            <DuetIconButton
-              action={{
-                label: gt("Tasks"),
-                onClick: toggleTasks,
-                active: tasksActive,
-              }}
-              icon={
-                captain ? (
-                  <span className="relative flex size-4 items-center justify-center">
-                    <ListChecksIcon aria-hidden className="size-4" />
-                  </span>
-                ) : (
-                  <ListChecksIcon aria-hidden className="size-4" />
-                )
-              }
-            />
-          ) : null}
-          {newAction ? (
-            <DuetIconButton
-              action={newAction}
-              icon={<SquarePenIcon aria-hidden className="size-4" />}
-            />
-          ) : null}
-          {duetControls.machine ? <DuetMachineButton machine={duetControls.machine} /> : null}
-          {duetControls.terminal ? (
-            <DuetIconButton
-              action={duetControls.terminal}
-              className="@max-[720px]/header-actions:hidden"
-              icon={<TerminalIcon aria-hidden className="size-4" />}
-            />
-          ) : null}
-          {duetControls.browser ? (
-            <DuetIconButton
-              action={duetControls.browser}
-              className="@max-[720px]/header-actions:hidden"
-              icon={<GlobeIcon aria-hidden className="size-4" />}
-            />
-          ) : null}
-          {duetControls.diff ? (
-            <DuetIconButton
-              action={duetControls.diff}
-              className="@max-[720px]/header-actions:hidden"
-              icon={<FileDiffIcon aria-hidden className="size-4" />}
-            />
-          ) : null}
+          {captainChannel ? (
+            <>
+              {captainTasksRef !== null ? (
+                <DuetIconButton
+                  action={{
+                    label: gt("Tasks"),
+                    onClick: toggleTasks,
+                    active: tasksActive,
+                  }}
+                  icon={<ListChecksIcon aria-hidden className="size-4" strokeWidth={1.75} />}
+                />
+              ) : null}
+              {newAction ? (
+                <DuetIconButton
+                  action={newAction}
+                  icon={<SquarePenIcon aria-hidden className="size-4" strokeWidth={1.75} />}
+                />
+              ) : null}
+              {duetControls.machine ? <DuetMachineButton machine={duetControls.machine} /> : null}
+            </>
+          ) : (
+            <>
+              {newAction ? (
+                <DuetIconButton
+                  action={newAction}
+                  icon={<SquarePenIcon aria-hidden className="size-4" strokeWidth={1.75} />}
+                />
+              ) : null}
+              {duetControls.terminal && !foldDuetUtilityControls ? (
+                <DuetIconButton
+                  action={duetControls.terminal}
+
+                  icon={<TerminalIcon aria-hidden className="size-4" strokeWidth={1.75} />}
+                />
+              ) : null}
+              {duetControls.browser && !foldDuetUtilityControls ? (
+                <DuetIconButton
+                  action={duetControls.browser}
+
+                  icon={<GlobeIcon aria-hidden className="size-4" strokeWidth={1.75} />}
+                />
+              ) : null}
+              {duetControls.diff && !foldDuetUtilityControls ? (
+                <DuetIconButton
+                  action={duetControls.diff}
+
+                  icon={<FileDiffIcon aria-hidden className="size-4" strokeWidth={1.75} />}
+                />
+              ) : null}
+            </>
+          )}
           <DuetOverflowMenu
+            captain={captainChannel}
+            machine={captainChannel ? null : duetControls.machine}
             terminal={duetControls.terminal}
             browser={duetControls.browser}
             diff={duetControls.diff}
+            threadDetails={threadDetailsAction}
+            foldUtilityControls={foldDuetUtilityControls}
           />
         </>
       ) : null}

@@ -21,6 +21,7 @@ import {
   openLayoutTab,
   placeLayoutContent,
   placeLayoutTabs,
+  replaceFocusedLayoutContent,
   replaceLayoutTabContent,
   resizeLayoutColumnEdge,
   sameLayoutSpan,
@@ -822,6 +823,22 @@ describe("moveLayoutTabToWorkspace", () => {
     expect(moved.workspaces.map(isBlankLayoutWorkspace)).toEqual([false, false, true]);
     expect(selectFocusedWorkspace(moved)).toBe(moved.workspaces[0]);
     expect(selectFocusedTab(moved)?.content).toBe(second);
+  });
+});
+
+describe("replaceFocusedLayoutContent", () => {
+  it("replaces the focused tab instead of accumulating a sibling", () => {
+    const replaced = replaceFocusedLayoutContent(layoutOf([[["A!"]]]), chatOf("B"));
+
+    expect(shapeOf(replaced)).toEqual([[[["B!"]]]]);
+  });
+
+  it("focuses content already open elsewhere instead of duplicating it", () => {
+    const base = layoutOf([[["A!"], ["B"]]]);
+    const replaced = replaceFocusedLayoutContent(base, chatOf("B"));
+
+    expect(selectFocusedTab(replaced)?.content).toEqual(chatOf("B"));
+    expect(shapeOf(replaced)).toEqual([[[["A"], ["B!"]]]]);
   });
 });
 

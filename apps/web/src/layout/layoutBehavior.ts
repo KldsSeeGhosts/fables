@@ -7,7 +7,7 @@
 import type { LayoutSettings } from "@t3tools/contracts";
 import { create } from "zustand";
 
-import type { LayoutCompanionKind } from "./layoutModel";
+import type { LayoutCompanionSizeKey } from "./layoutModel";
 
 export type {
   LayoutNewTabPosition,
@@ -19,7 +19,7 @@ export type {
 
 export type LayoutBehavior = Omit<LayoutSettings, "template"> & {
   /** The share a new terminal or side pane takes from its chat (Your layout). */
-  readonly companionShares: Partial<Record<LayoutCompanionKind, number>>;
+  readonly companionShares: Partial<Record<LayoutCompanionSizeKey, number>>;
   /**
    * Labs › Scrolling workspaces. Off, `whenNoRoom` is always "always-shrink" and the
    * workspace, overview and strip-scroll commands do nothing.

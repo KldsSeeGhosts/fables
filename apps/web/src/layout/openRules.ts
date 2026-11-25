@@ -163,6 +163,10 @@ export function toggleThreadSurfaceTab(
     useLayoutStore.getState().focusTab(tab.tab.id);
     return;
   }
+  if (!tab) {
+    const chat = findThreadChat(layout, threadRef);
+    if (chat) requestLayoutSurfacePlacement(threadRef, layoutSurfacePlacement(chat, false));
+  }
   toggle();
 }
 

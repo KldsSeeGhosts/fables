@@ -44,7 +44,7 @@ import {
   resizeLayoutColumn,
   resizeLayoutColumnEdge,
   resizeLayoutPane,
-  type LayoutCompanionKind,
+  type LayoutCompanionSizeKey,
   type LayoutDirection,
   type LayoutOpenOptions,
   type LayoutOpenPlacement,
@@ -281,7 +281,7 @@ interface LayoutStoreState {
    * (`terminal`) its chat, remembered from when they last hid. A kind without
    * one opens at the layout template's share.
    */
-  companionShares: Partial<Record<LayoutCompanionKind, number>>;
+  companionShares: Partial<Record<LayoutCompanionSizeKey, number>>;
   /** Drop the remembered sizes, so surfaces open as Settings says again. */
   forgetCompanionShares: () => void;
   /** Put new tabs somewhere as a group (see `placeLayoutTabs`). */
@@ -609,9 +609,9 @@ export const useLayoutStore = create<LayoutStoreState>()(
   ),
 );
 
-function decodeCompanionShares(value: unknown): Partial<Record<LayoutCompanionKind, number>> {
-  const shares: Partial<Record<LayoutCompanionKind, number>> = {};
-  for (const key of ["panel", "terminal"] as const) {
+function decodeCompanionShares(value: unknown): Partial<Record<LayoutCompanionSizeKey, number>> {
+  const shares: Partial<Record<LayoutCompanionSizeKey, number>> = {};
+  for (const key of ["panel", "terminal", "duet-tasks-drawer"] as const) {
     const raw =
       value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined;
     if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) shares[key] = raw;

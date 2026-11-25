@@ -12,6 +12,7 @@ import {
   isLayoutPageContent,
   openLayoutGhostChat,
   openLayoutTab,
+  replaceFocusedLayoutContent,
   replaceLayoutTabContent,
   selectFocusedTab,
   showLayoutContent,
@@ -20,6 +21,7 @@ import {
   type LayoutTabContent,
 } from "./layoutModel";
 import { useLayoutBehavior, type LayoutNewTabPosition } from "./layoutBehavior";
+import { useDuetShell } from "../hooks/useDuetShell";
 import { arrangeLayoutChange, useLayoutStore, type LayoutNewTabRequest } from "./layoutStore";
 import { followLayoutCompanions } from "./openRules";
 import { layoutChatRoute } from "./useLayoutSettingsSync";
@@ -54,8 +56,10 @@ function showRouteInLayout(
   content: LayoutTabContent,
   promotedDraftId: DraftId | null,
   newTab: RouteNewTab | null,
+  duetSingleFocus = false,
 ): LayoutState {
   if (isLayoutPageContent(content)) {
+    if (duetSingleFocus) return replaceFocusedLayoutContent(layout, content);
     const opened = openLayoutTab(layout, content);
     const existing = findLayoutTabByContent(opened, content);
     return existing ? replaceLayoutTabContent(opened, existing.tab.id, content) : opened;
@@ -91,7 +95,9 @@ function showRouteInLayout(
       position: newTab.position,
     });
   }
-  return showLayoutContent(layout, content);
+  return duetSingleFocus
+    ? replaceFocusedLayoutContent(layout, content)
+    : showLayoutContent(layout, content);
 }
 
 /**
@@ -129,6 +135,7 @@ export function useLayoutRouteSync(
   );
   const newTabRequest = useLayoutStore((state) => state.newTabRequest?.request ?? null);
   const { newTabPosition } = useLayoutBehavior();
+  const duetSingleFocus = useDuetShell();
   const newTab: RouteNewTab | null =
     newTabRequest === null
       ? null
@@ -167,7 +174,7 @@ export function useLayoutRouteSync(
           pending && routeContent && !restoringWorkspace
             ? arrangeLayoutChange(
                 layout,
-                showRouteInLayout(layout, routeContent, promotedDraftId, newTab),
+                showRouteInLayout(layout, routeContent, promotedDraftId, newTab, duetSingleFocus),
               )
             : layout,
         content: routeContent,
@@ -200,12 +207,12 @@ export function useLayoutRouteSync(
         useLayoutStore
           .getState()
           .commitDerived(base, derived, (current) =>
-            showRouteInLayout(current, content, promotedDraftId, newTab),
+            showRouteInLayout(current, content, promotedDraftId, newTab, duetSingleFocus),
           ),
       );
     }
     if (newTab && content) useLayoutStore.getState().clearNewTabRequest();
-  }, [appModalPaused, request, routeKey]);
+  }, [appModalPaused, duetSingleFocus, request, routeKey]);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to layout focus changes and keeps the router URL aligned with the focused tab
   useEffect(() => {
