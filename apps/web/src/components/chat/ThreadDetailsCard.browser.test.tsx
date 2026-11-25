@@ -3,6 +3,7 @@ import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@t3tools/contract
 import { expect, it, vi } from "vite-plus/test";
 import { page } from "vite-plus/test/browser";
 import { act, render } from "../../../test/render";
+import { setAppearanceMode, setTheme } from "../../hooks/useTheme";
 import { selectThreadPanelOpen, useRightPanelStore } from "../../rightPanelStore";
 import { PopoverCreateHandle } from "../ui/popover";
 import { ChatCanvasContext } from "./ChatCanvasContext";
@@ -37,6 +38,25 @@ function setup() {
     anchor: { current: anchor },
     handle: PopoverCreateHandle(),
     [Symbol.dispose]: () => anchor.remove(),
+  };
+}
+
+function salonTheme(appearance: "light" | "dark"): Disposable {
+  setTheme("ksg-salon");
+  setAppearanceMode(appearance);
+  return {
+    [Symbol.dispose]: () => {
+      setTheme("system");
+      setAppearanceMode("system");
+    },
+  };
+}
+
+async function wideViewport(): Promise<AsyncDisposable> {
+  const previous = { width: window.innerWidth, height: window.innerHeight };
+  await page.viewport(900, 700);
+  return {
+    [Symbol.asyncDispose]: () => page.viewport(previous.width, previous.height),
   };
 }
 
@@ -239,3 +259,34 @@ it("focuses the requested branch row when opening the details popover", async ()
   await act(() => useRightPanelStore.getState().setThreadPanelOpen(threadB, "popover", true));
   await expect.element(page.getByRole("button", { name: "feature/current" })).toHaveFocus();
 });
+
+it.each(["light", "dark"] as const)(
+  "floats the Duet details popover clear of the %s page edge",
+  async (appearance) => {
+    using _theme = salonTheme(appearance);
+    await using _viewport = await wideViewport();
+    using fixture = setup();
+    fixture.anchor.current.style.width = "100vw";
+    fixture.anchor.current.style.height = "52px";
+    await using _screen = await render(
+      <div data-page-background className="fixed inset-0 bg-background">
+        <Card threadRef={threadB} inline={false} fixture={fixture} />
+      </div>,
+    );
+    await act(() => useRightPanelStore.getState().setThreadPanelOpen(threadB, "popover", true));
+    await expect.element(page.getByText("Details for thread-b")).toBeVisible();
+
+    const panel = document.querySelector<HTMLElement>('[data-thread-details-panel="popover"]')!;
+    const pageBackground = document.querySelector<HTMLElement>("[data-page-background]")!;
+    const panelStyle = getComputedStyle(panel);
+    expect(panelStyle.backgroundColor).not.toBe(getComputedStyle(pageBackground).backgroundColor);
+    expect(panelStyle.borderRightWidth).toBe("1px");
+    expect(panelStyle.boxShadow).not.toBe("none");
+    expect(Number.parseFloat(panelStyle.borderTopLeftRadius)).toBeGreaterThan(0);
+    await vi.waitFor(() => {
+      const rightGap = window.innerWidth - panel.getBoundingClientRect().right;
+      expect(rightGap).toBeGreaterThanOrEqual(8);
+      expect(rightGap).toBeLessThan(8.5);
+    });
+  },
+);
