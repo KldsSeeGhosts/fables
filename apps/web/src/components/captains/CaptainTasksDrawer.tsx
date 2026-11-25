@@ -410,10 +410,12 @@ function ScheduledRoutineRow({
           <MoreHorizontalIcon aria-hidden />
         </MenuTrigger>
         <MenuPopup align="end">
-          <MenuItem disabled={!canRun || archived || pending} onClick={() => void act("run")}>
-            <PlayIcon aria-hidden />
-            <T>Run now</T>
-          </MenuItem>
+          {task.schedule.type === "webhook" ? null : (
+            <MenuItem disabled={!canRun || archived || pending} onClick={() => void act("run")}>
+              <PlayIcon aria-hidden />
+              <T>Run now</T>
+            </MenuItem>
+          )}
           <MenuItem disabled={!canSetEnabled || pending} onClick={() => void act("toggle")}>
             {task.enabled ? <PauseIcon aria-hidden /> : <PlayIcon aria-hidden />}
             {task.enabled ? <T>Pause</T> : <T>Resume</T>}
