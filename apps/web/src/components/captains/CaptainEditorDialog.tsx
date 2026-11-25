@@ -214,14 +214,7 @@ export function CaptainEditorDialog({
                 </Toggle>
               </ToggleGroup>
             ) : null}
-            {section === "memory" && captain !== undefined ? (
-              <CaptainMemorySection
-                captain={captain}
-                environmentId={environmentId}
-                onClose={onClose}
-              />
-            ) : null}
-            <div style={{ display: section === "profile" ? "contents" : "none" }}>
+            <div className={section === "profile" ? "space-y-4" : "hidden"}>
               {showEnvironment ? (
                 <div className="grid gap-1.5">
                   <label htmlFor={`${fieldId}-environment`} className="text-label">
@@ -438,6 +431,13 @@ export function CaptainEditorDialog({
                 </p>
               ) : null}
             </div>
+            {section === "memory" && captain !== undefined ? (
+              <CaptainMemorySection
+                captain={captain}
+                environmentId={environmentId}
+                onClose={onClose}
+              />
+            ) : null}
           </DialogPanel>
           <DialogFooter>
             <Button type="button" variant="secondary" disabled={saving} onClick={onClose}>
