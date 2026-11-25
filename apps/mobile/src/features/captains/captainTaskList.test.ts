@@ -63,7 +63,7 @@ describe("captainTaskGroups", () => {
     task("not-a-captain", ThreadId.make("thread-elsewhere")),
   ];
 
-  it("keeps open work and the last day's outcomes for today, the waiting task first", () => {
+  it("keeps open work and the last day's outcomes for today, newest first", () => {
     const groups = captainTaskGroups({
       environments: [{ environmentId, captains: [maria, ada] }],
       shells,
@@ -71,8 +71,8 @@ describe("captainTaskGroups", () => {
       nowMs,
     });
     expect(groups.map(({ captain }) => captain.id)).toEqual(["maria"]);
-    expect(groups[0]!.rows.map(({ thread }) => thread.id)).toEqual(["question", "fresh-done"]);
-    expect(groups[0]!.rows[0]!.status).toBe("needs-input");
+    expect(groups[0]!.rows.map(({ thread }) => thread.id)).toEqual(["fresh-done", "question"]);
+    expect(groups[0]!.rows[1]!.status).toBe("needs-input");
   });
 
   it("lists every delegated task for all", () => {
@@ -83,9 +83,9 @@ describe("captainTaskGroups", () => {
       nowMs,
     });
     expect(groups[0]!.rows.map(({ thread }) => thread.id)).toEqual([
-      "question",
       "fresh-done",
       "old-done",
+      "question",
     ]);
   });
 
