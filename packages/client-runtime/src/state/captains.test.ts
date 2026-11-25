@@ -19,6 +19,7 @@ import {
   captainInboxItems,
   captainRecentlyFinishedTasks,
   captainScheduledTasks,
+  captainThreadActivity,
 } from "./captains.ts";
 import { threadKey } from "./entities.ts";
 import { scopeThreadShell } from "./models.ts";
@@ -149,6 +150,42 @@ it("collects pending attention from current Captain conversations and active chi
     },
   ]);
   expect(captainAttentionTotal(environments, shells)).toBe(2);
+});
+
+it("keeps a pre-reset task's pending request on the Captain after it switches conversations", () => {
+  const base = scopeThreadShell(environmentId, v2ThreadShell);
+  const earlier = maria.earlierThreadIds[0]!;
+  const primary = { ...base, id: maria.primaryThreadId, title: "Maria", updatedAt: earlierAt };
+  const oldChild = {
+    ...base,
+    id: ThreadId.make("old-child"),
+    title: "Release check",
+    updatedAt: laterAt,
+    hasPendingApprovals: true,
+    lineage: {
+      rootThreadId: earlier,
+      parentThreadId: earlier,
+      relationshipToParent: "subagent" as const,
+    },
+  };
+  const environments = [{ environmentId, captains: [maria] }];
+  const shells = [primary, oldChild];
+
+  expect(captainInboxItems(environments, shells)).toEqual([
+    {
+      kind: "approval",
+      environmentId,
+      captainId: maria.id,
+      threadRef: { environmentId, threadId: oldChild.id },
+      title: "Release check",
+      isChild: true,
+      updatedAt: laterAt,
+    },
+  ]);
+  expect(captainAttentionTotal(environments, shells)).toBe(1);
+  const activity = captainThreadActivity(environmentId, maria, shells);
+  expect(activity.children.map((thread) => thread.id)).toEqual([oldChild.id]);
+  expect(activity.attention).toBe(1);
 });
 
 it("keeps tasks targeting both current and earlier Captain conversations", () => {

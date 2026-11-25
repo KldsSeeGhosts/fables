@@ -27,18 +27,21 @@ export const captainChildIsActive = (thread: EnvironmentThreadShell) =>
 
 export function captainThreadActivity(
   environmentId: EnvironmentId,
-  captain: Captain,
+  captain: Pick<Captain, "primaryThreadId" | "earlierThreadIds">,
   family: ReadonlyArray<EnvironmentThreadShell>,
 ) {
   const local = family.filter(
     (thread) => thread.environmentId === environmentId && thread.deletedAt === null,
   );
   const primary = local.find((thread) => thread.id === captain.primaryThreadId);
+  // Tasks delegated before a reset still belong to this Captain until they finish.
+  const conversations = new Set<ThreadId>([captain.primaryThreadId, ...captain.earlierThreadIds]);
   const children = local.filter(
     (thread) =>
       thread.archivedAt === null &&
       thread.lineage.relationshipToParent === "subagent" &&
-      thread.lineage.parentThreadId === captain.primaryThreadId &&
+      thread.lineage.parentThreadId !== null &&
+      conversations.has(thread.lineage.parentThreadId) &&
       captainChildIsActive(thread),
   );
   const attention = [primary, ...children].filter(
@@ -60,7 +63,10 @@ export function captainThreadActivity(
 
 type CaptainEnvironment = {
   readonly environmentId: EnvironmentId;
-  readonly captains: ReadonlyArray<Pick<Captain, "id" | "primaryThreadId" | "archivedAt">>;
+  readonly captains: ReadonlyArray<
+    Pick<Captain, "id" | "primaryThreadId" | "archivedAt"> &
+      Partial<Pick<Captain, "earlierThreadIds">>
+  >;
 };
 
 export interface CaptainInboxItem {
@@ -78,13 +84,18 @@ function* captainAttentionThreads(
   shells: ReadonlyArray<EnvironmentThreadShell>,
 ) {
   const primaryThreads = new Map<string, CaptainId>();
+  // Every conversation's crew reports to the Captain's current primary, so a reset never hides a waiting task.
+  const crewParents = new Map<string, { captainId: CaptainId; captainKey: string }>();
   for (const { environmentId, captains } of environments) {
     for (const captain of captains) {
-      if (captain.archivedAt === null) {
-        primaryThreads.set(
-          threadKey({ environmentId, threadId: captain.primaryThreadId }),
-          captain.id,
-        );
+      if (captain.archivedAt !== null) continue;
+      const captainKey = threadKey({ environmentId, threadId: captain.primaryThreadId });
+      primaryThreads.set(captainKey, captain.id);
+      for (const threadId of [captain.primaryThreadId, ...(captain.earlierThreadIds ?? [])]) {
+        crewParents.set(threadKey({ environmentId, threadId }), {
+          captainId: captain.id,
+          captainKey,
+        });
       }
     }
   }
@@ -113,10 +124,11 @@ function* captainAttentionThreads(
       lineage.relationshipToParent === "subagent" &&
       lineage.parentThreadId !== null
     ) {
-      const captainKey = threadKey({ environmentId, threadId: lineage.parentThreadId });
-      const captainId = primaryThreads.get(captainKey);
-      if (captainId !== undefined) {
-        yield { captainId, captainKey, thread, threadRef, isChild: true };
+      const parent = crewParents.get(
+        threadKey({ environmentId, threadId: lineage.parentThreadId }),
+      );
+      if (parent !== undefined) {
+        yield { ...parent, thread, threadRef, isChild: true };
       }
     }
   }
