@@ -14,6 +14,7 @@ import {
   makeCaptainBriefingLedger,
   type CaptainBriefingDelivery,
 } from "./captainBriefingLedger.ts";
+import * as CaptainHonchoMemory from "./CaptainHonchoMemory.ts";
 import * as CaptainStore from "./CaptainStore.ts";
 import {
   CAPTAIN_HANDOFF_MAX_LENGTH,
@@ -76,6 +77,12 @@ export const formatCaptainBriefing = (input: {
     .filter(Boolean)
     .join("\n\n");
 };
+
+export const formatCaptainLongTermMemoryBlock = (text: string) =>
+  text.trim() === ""
+    ? ""
+    : `Long-term memory:
+${prefix(text, 4_000)}`;
 
 const firstParagraph = (result: string) => {
   const [paragraph = ""] = result.trim().split(/\r?\n\s*\r?\n/, 1);
@@ -180,6 +187,8 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
   const projects = yield* ProjectService.ProjectService;
   const briefings = makeCaptainBriefingLedger();
   const crewBriefings = makeCaptainBriefingLedger();
+  const longTermMemoryBriefings = makeCaptainBriefingLedger();
+  const honcho = yield* Effect.serviceOption(CaptainHonchoMemory.CaptainHonchoMemory);
 
   // A delegated child gets the Captain's crew rules only, never its private profile or memories.
   const readCrewContext = Effect.fn("CaptainService.crewContext")(function* (
@@ -267,7 +276,18 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
         agents: agents.content,
         notes: notes.content,
       });
+      const longTermMemory =
+        Option.isSome(honcho) && honcho.value.enabled
+          ? yield* honcho.value.longTermMemory(captain)
+          : Option.none<string>();
+      const longTermMemoryBlock = Option.isSome(longTermMemory)
+        ? formatCaptainLongTermMemoryBlock(longTermMemory.value)
+        : "";
       const plan = delivery === undefined ? undefined : briefings.plan(delivery, briefing);
+      const longTermMemoryPlan =
+        delivery === undefined || longTermMemoryBlock === ""
+          ? undefined
+          : longTermMemoryBriefings.plan(delivery, longTermMemoryBlock);
       const compactionOpenLoops =
         plan?.compacted === true && Option.isSome(sql)
           ? formatCaptainCompactionOpenLoops(
@@ -280,6 +300,11 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
         text: [
           plan?.full === false ? unchangedBriefing(captain) : briefing,
           compactionOpenLoops,
+          delivery === undefined
+            ? longTermMemoryBlock
+            : longTermMemoryPlan?.full === true
+              ? longTermMemoryBlock
+              : "",
           formatCaptainReports(reports, threadId),
           delivery === undefined
             ? ""
@@ -291,7 +316,13 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
         ]
           .filter((part) => part !== "")
           .join("\n\n"),
-        delivered: plan === undefined ? Effect.void : Effect.sync(plan.commit),
+        delivered:
+          plan === undefined
+            ? Effect.void
+            : Effect.sync(() => {
+                plan.commit();
+                longTermMemoryPlan?.commit();
+              }),
       };
     },
     Effect.catch((cause) =>

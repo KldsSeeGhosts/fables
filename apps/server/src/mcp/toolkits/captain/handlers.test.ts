@@ -11,8 +11,10 @@ import {
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import { McpSchema, McpServer } from "effect/ai";
 
+import * as CaptainHonchoMemory from "../../../captains/CaptainHonchoMemory.ts";
 import * as CaptainStore from "../../../captains/CaptainStore.ts";
 import * as ThreadManagement from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as Sqlite from "../../../persistence/Sqlite.ts";
@@ -73,6 +75,15 @@ const layers = McpHttpServer.toolkitRegistration(CaptainToolkit, CaptainHandlers
     }),
   ),
   Layer.provideMerge(CaptainStore.layer),
+  Layer.provideMerge(
+    Layer.mock(CaptainHonchoMemory.CaptainHonchoMemory)({
+      enabled: true,
+      mirrorTurnItem: () => Effect.void,
+      longTermMemory: () => Effect.succeed(Option.none()),
+      search: () => Effect.succeed(["Uses pnpm"]),
+      drain: Effect.void,
+    }),
+  ),
   Layer.provide(Sqlite.layerMemory),
   Layer.provide(NodeCrypto.layer),
 );
@@ -138,6 +149,7 @@ it.effect(
       assert.notOk(remembered.isError);
       const search = yield* call("captain_memory_search", { query: "agent" });
       assert.include(JSON.stringify(search.content), "Agent note");
+      assert.include(JSON.stringify(search.content), "Recalled: Uses pnpm");
       assert.notInclude(JSON.stringify(search.content), "Owner note");
     }).pipe(Effect.provide(layers)),
 );
