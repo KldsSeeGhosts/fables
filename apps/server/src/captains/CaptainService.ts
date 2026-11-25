@@ -183,11 +183,17 @@ const make = Effect.gen(function* () {
         .pipe(Effect.catch(CaptainStore.captainUnavailable));
       if (previous === null)
         return yield* invalid("The Captain's previous thread could not be found.");
-      yield* CaptainHandoff.write({ captain: current, previousThreadId: previousId }).pipe(
+      // Read before the reset moves scheduled tasks; NOTES.md changes only once the reset commits.
+      const handoff = yield* CaptainHandoff.prepare({
+        captain: current,
+        previousThreadId: previousId,
+      }).pipe(
         Effect.provideService(SqlClient.SqlClient, sql),
-        Effect.provideService(CaptainStore.CaptainStore, store),
+        Effect.asSome,
         Effect.catch((cause) =>
-          Effect.logWarning("Could not write the Captain handoff before resetting.", { cause }),
+          Effect.logWarning("Could not read the Captain handoff before resetting.", {
+            cause,
+          }).pipe(Effect.as(Option.none<string>())),
         ),
       );
       const primaryThreadId = captainPrimaryThreadId(
@@ -211,6 +217,14 @@ const make = Effect.gen(function* () {
           }),
         )
         .pipe(Effect.catchTags({ SqlError: CaptainStore.captainUnavailable }));
+      if (Option.isSome(handoff)) {
+        yield* CaptainHandoff.save({ captain, section: handoff.value }).pipe(
+          Effect.provideService(CaptainStore.CaptainStore, store),
+          Effect.catch((cause) =>
+            Effect.logWarning("Could not write the Captain handoff after resetting.", { cause }),
+          ),
+        );
+      }
       yield* schedules.invalidateList;
       yield* store.notify(captain.id);
       return captain;

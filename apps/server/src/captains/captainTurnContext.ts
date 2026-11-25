@@ -19,12 +19,21 @@ import * as CaptainStore from "./CaptainStore.ts";
 const prefix = (text: string, length: number) =>
   text.length <= length ? text : `${text.slice(0, length)}…`;
 
-const coordinatorBriefing = `How you work:
+// The report policy decides whether finished crew wakes the Captain, so the waiting rule follows it.
+const crewWaitRule: Record<Captain["reportPolicy"], string> = {
+  react: "While crew works, end your turn and let completion wake you. Do not poll.",
+  context:
+    "While crew works, end your turn. Finished reports arrive with the user's next message, not as a wake-up. Do not poll.",
+  ignore:
+    "While crew works, end your turn. You are not told when crew finishes; check a task with `task_status` only when the user asks about it. Do not poll.",
+};
+
+const coordinatorBriefing = (captain: Captain) => `How you work:
 - Answer quick questions and lookups yourself.
 - Delegate anything that edits code with \`delegate_task\` and \`isolation: "worktree"\`.
 - Scale crew to the task: one child for one change, two to four for independent parallel work, none for a lookup.
 - Every brief states the objective, the expected output, boundaries (files or areas it owns and must not touch), and a done-check (the command or observation that proves it is done).
-- While crew works, end your turn and let completion wake you. Do not poll.
+- ${crewWaitRule[captain.reportPolicy]}
 - Relay each result to the user as one line plus the task link. Do not paste crew output.
 - Questions a child asks the user stay in that child's thread.
 - When crew opens a PR you are responsible for, watch it with \`watch_pull_request\`.
@@ -43,7 +52,7 @@ export const formatCaptainBriefing = (input: {
   return [
     `Captain profile: ${captain.name}${captain.role ? ` (${captain.role})` : ""}`,
     captain.instructions && `Instructions:\n${prefix(captain.instructions, 4_000)}`,
-    captain.coordinatorOnly && coordinatorBriefing,
+    captain.coordinatorOnly && coordinatorBriefing(captain),
     projects.length > 0
       ? `Scoped local projects:\n${projects.map(({ id, title }) => `- ${prefix(title, 100)} [${prefix(id, 100)}]`).join("\n")}${captain.scopedProjectIds.length > projects.length ? "\n- Additional projects are listed in captain_read." : ""}`
       : "Workspace scope: No projects selected.",
@@ -62,21 +71,39 @@ const firstParagraph = (result: string) => {
   return prefix(paragraph.replace(/\s+/g, " ").trim(), 280);
 };
 
+// task_status only finds tasks of the calling conversation, so earlier ones point at their thread.
+const fullReportPointer = (
+  report: {
+    readonly id: string;
+    readonly threadId?: string;
+    readonly childThreadId?: string | null;
+  },
+  currentThreadId: string | undefined,
+) =>
+  report.threadId === undefined || report.threadId === currentThreadId
+    ? ` Read the full report with task_status(taskId: "${report.id}").`
+    : report.childThreadId
+      ? ` It ran from an earlier conversation; read the full report with t3_thread_read(threadId: "${report.childThreadId}").`
+      : "";
+
 export const formatCaptainReports = (
   reports: ReadonlyArray<{
     readonly id: string;
     readonly title: string | null;
     readonly result: string;
+    readonly threadId?: string;
+    readonly childThreadId?: string | null;
   }>,
+  currentThreadId?: string,
 ) =>
   reports.length === 0
     ? ""
     : `Recent delegated task reports:\n${reports
         .slice(0, 6)
-        .map(({ id, title, result }) => {
-          const summary = firstParagraph(result);
-          const label = `${prefix(title ?? id, 140)} [${id}]`;
-          return `- ${summary === "" ? label : `${label}: ${summary}`} Read the full report with task_status(taskId: "${id}").`;
+        .map((report) => {
+          const summary = firstParagraph(report.result);
+          const label = `${prefix(report.title ?? report.id, 140)} [${report.id}]`;
+          return `- ${summary === "" ? label : `${label}: ${summary}`}${fullReportPointer(report, currentThreadId)}`;
         })
         .join("\n")}`;
 
@@ -177,9 +204,12 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
               readonly id: string;
               readonly title: string | null;
               readonly result: string;
+              readonly threadId: string;
+              readonly childThreadId: string | null;
             }>`
           SELECT subagent_id AS id, json_extract(payload_json, '$.title') AS title,
-            substr(json_extract(payload_json, '$.result'), 1, 281) AS result
+            substr(json_extract(payload_json, '$.result'), 1, 281) AS result,
+            thread_id AS threadId, child_thread_id AS childThreadId
           FROM orchestration_v2_projection_subagents
           WHERE ${sql.value.in("thread_id", reportThreadIds)}
             AND origin = 'app_owned'
@@ -205,7 +235,7 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
       return {
         text: [
           plan?.full === false ? unchangedBriefing(captain) : briefing,
-          formatCaptainReports(reports),
+          formatCaptainReports(reports, threadId),
         ]
           .filter((part) => part !== "")
           .join("\n\n"),

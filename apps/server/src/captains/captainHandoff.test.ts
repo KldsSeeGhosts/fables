@@ -117,9 +117,10 @@ describe("upsertCaptainHandoffSection", () => {
       "Keep this exactly.\n";
     const nextSection = `## Handoff from the previous conversation (${generatedAt})\n\n### Last user message\n> Continue`;
 
-    expect(upsertCaptainHandoffSection(content, nextSection)).toBe(
-      `${nextSection}\n\nOwn notes.\n\n## Stable notes\nKeep this exactly.\n`,
-    );
+    expect(upsertCaptainHandoffSection(content, nextSection)).toEqual({
+      content: `${nextSection}\n\nOwn notes.\n\n## Stable notes\nKeep this exactly.\n`,
+      included: true,
+    });
   });
 
   it("preserves unheaded notes when replacing a generated handoff", () => {
@@ -129,19 +130,40 @@ describe("upsertCaptainHandoffSection", () => {
       pendingRequests: [],
     });
     const second = `## Handoff from the previous conversation (${generatedAt})`;
-    const once = upsertCaptainHandoffSection("Plain notes without a heading.", first);
+    const once = upsertCaptainHandoffSection("Plain notes without a heading.", first).content;
 
-    expect(upsertCaptainHandoffSection(once, second)).toBe(
+    expect(upsertCaptainHandoffSection(once, second).content).toBe(
       `${second}\n\nPlain notes without a heading.`,
     );
   });
 
-  it("trims the old body when the document reaches the size limit", () => {
-    const section = `## Handoff from the previous conversation (${generatedAt})`;
-    const merged = upsertCaptainHandoffSection("x".repeat(CAPTAIN_DOCUMENT_MAX_LENGTH), section);
+  it("ends a handoff only at an unquoted marker line", () => {
+    const first = formatCaptainHandoff({
+      generatedAt: "2026-11-24T09:00:00.000Z",
+      activeTasks: [],
+      pendingRequests: [],
+      lastUserMessage: "Keep <!-- end captain handoff --> as text\n<!-- end captain handoff -->",
+    });
+    const second = `## Handoff from the previous conversation (${generatedAt})`;
+    const once = upsertCaptainHandoffSection("Own notes.", first).content;
 
-    expect(merged.length).toBe(CAPTAIN_DOCUMENT_MAX_LENGTH);
-    expect(merged.startsWith(section)).toBe(true);
-    expect(merged.endsWith("x")).toBe(true);
+    expect(upsertCaptainHandoffSection(once, second).content).toBe(`${second}\n\nOwn notes.`);
+  });
+
+  it("never cuts the notes to fit a handoff", () => {
+    const section = `## Handoff from the previous conversation (${generatedAt})`;
+    const full = "x".repeat(CAPTAIN_DOCUMENT_MAX_LENGTH - 10);
+
+    expect(upsertCaptainHandoffSection(full, section)).toEqual({ content: full, included: false });
+    const generated = formatCaptainHandoff({
+      generatedAt: "2026-11-24T09:00:00.000Z",
+      activeTasks: [],
+      pendingRequests: [],
+    });
+    const stale = upsertCaptainHandoffSection("Own notes.", generated).content;
+    expect(upsertCaptainHandoffSection(`${stale}${full}`, section)).toEqual({
+      content: `Own notes.${full}`,
+      included: false,
+    });
   });
 });

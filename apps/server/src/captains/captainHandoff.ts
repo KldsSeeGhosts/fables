@@ -14,6 +14,8 @@ const NEXT_SECTION_PATTERN = /\n## /;
 const OMITTED_LINE = "- Additional handoff details were omitted to keep this section short.";
 // NOTES.md is freeform; the marker keeps replacement from treating unheaded notes as handoff body.
 const HANDOFF_END_MARKER = "<!-- end captain handoff -->";
+// Only a marker on its own line ends the section; a quoted message that mentions it stays body text.
+const HANDOFF_END_MARKER_LINE = /^<!-- end captain handoff -->$/m;
 
 export interface CaptainHandoffTask {
   readonly title: string;
@@ -114,7 +116,7 @@ const removeEarlierHandoff = (content: string) => {
   if (match?.index === undefined) return content;
   const afterHeading = match.index + match[0].length;
   const remainder = content.slice(afterHeading);
-  const marker = remainder.indexOf(HANDOFF_END_MARKER);
+  const marker = HANDOFF_END_MARKER_LINE.exec(remainder)?.index ?? -1;
   const nextSection = remainder.search(NEXT_SECTION_PATTERN);
   let end: number;
   if (marker !== -1 && (nextSection === -1 || marker < nextSection)) {
@@ -126,21 +128,28 @@ const removeEarlierHandoff = (content: string) => {
   return content.slice(0, match.index) + content.slice(end);
 };
 
+/**
+ * Puts the new handoff first and drops any earlier one. The user's own notes are never cut, so a
+ * handoff that does not fit is left out and only the stale one is removed.
+ */
 export const upsertCaptainHandoffSection = (content: string, section: string) => {
   const rest = removeEarlierHandoff(content);
-  const merged = rest === "" ? section : `${section}\n\n${rest}`;
+  if (rest === "") return { content: section, included: true };
+  const merged = `${section}\n\n${rest}`;
   return merged.length <= CAPTAIN_DOCUMENT_MAX_LENGTH
-    ? merged
-    : merged.slice(0, CAPTAIN_DOCUMENT_MAX_LENGTH);
+    ? { content: merged, included: true }
+    : { content: rest, included: false };
 };
 
-export const write = Effect.fn("CaptainHandoff.write")(function* (input: {
+/** Reads the open loops of a Captain conversation before a reset moves its scheduled tasks. */
+export const prepare = Effect.fn("CaptainHandoff.prepare")(function* (input: {
   readonly captain: Captain;
   readonly previousThreadId: ThreadId;
 }) {
   const { captain, previousThreadId } = input;
   const sql = yield* SqlClient.SqlClient;
-  const store = yield* CaptainStore.CaptainStore;
+  // Work started in an earlier conversation can still be running; its handoff line would be lost.
+  const conversationIds = [previousThreadId, ...captain.earlierThreadIds];
 
   const activeTaskRows = yield* sql<{
     readonly id: string;
@@ -155,14 +164,14 @@ export const write = Effect.fn("CaptainHandoff.write")(function* (input: {
       substr(json_extract(payload_json, '$.title'), 1, 91) AS title,
       substr(json_extract(payload_json, '$.progress'), 1, 121) AS progress
     FROM orchestration_v2_projection_subagents
-    WHERE thread_id = ${previousThreadId}
+    WHERE thread_id IN ${sql.in(conversationIds)}
       AND origin = 'app_owned'
       AND status IN ('idle', 'pending', 'running', 'waiting')
     ORDER BY COALESCE(started_at, updated_at), subagent_id
   `;
 
   const requestThreadIds = [
-    previousThreadId,
+    ...conversationIds,
     ...new Set(
       activeTaskRows.flatMap((row) => (row.childThreadId === null ? [] : [row.childThreadId])),
     ),
@@ -207,7 +216,7 @@ export const write = Effect.fn("CaptainHandoff.write")(function* (input: {
     SELECT count(*) AS count FROM scheduled_tasks WHERE thread_id = ${previousThreadId}
   `;
 
-  const section = formatCaptainHandoff({
+  return formatCaptainHandoff({
     generatedAt: DateTime.formatIso(yield* DateTime.now),
     activeTasks: activeTaskRows.map((row) => ({
       title: row.title ?? row.id,
@@ -225,13 +234,27 @@ export const write = Effect.fn("CaptainHandoff.write")(function* (input: {
     lastAssistantMessage: lastAssistantRow?.text ?? undefined,
     scheduledTaskCount: scheduledTasks?.count ?? 0,
   });
+});
+
+/** Writes a prepared handoff into NOTES.md, retrying once when the Captain edits it meanwhile. */
+export const save = Effect.fn("CaptainHandoff.save")(function* (input: {
+  readonly captain: Captain;
+  readonly section: string;
+}) {
+  const { captain, section } = input;
+  const store = yield* CaptainStore.CaptainStore;
 
   const writeOnce = Effect.gen(function* () {
     const notes = yield* store.document(captain, "NOTES.md");
+    const next = upsertCaptainHandoffSection(notes.content, section);
+    if (!next.included) {
+      yield* Effect.logWarning("NOTES.md has no room for the Captain handoff.");
+    }
+    if (next.content === notes.content) return notes;
     return yield* store.updateDocument({
       captainId: captain.id,
       name: "NOTES.md",
-      content: upsertCaptainHandoffSection(notes.content, section),
+      content: next.content,
       expectedRevision: notes.revision,
     });
   });

@@ -233,6 +233,10 @@ it.effect(
         f.failReset();
         assert.equal((yield* Effect.flip(service.resetConversation(reset))).code, "unavailable");
         assert.deepStrictEqual(yield* store.find(captain.id), beforeReset);
+        assert.notInclude(
+          (yield* store.document(captain, "NOTES.md")).content,
+          "## Handoff from the previous conversation",
+        );
         const binding = sql<{
           thread_id: string;
         }>`SELECT thread_id FROM scheduled_tasks WHERE task_id = 'scheduled'`;
@@ -341,6 +345,21 @@ it.effect("writes a reset handoff and still resets when the handoff write fails"
       assert.include(notes.content, "> I am checking the projection rows");
       assert.notInclude(notes.content, "Earlier request");
 
+      const again = yield* service.resetConversation({
+        captainId: next.id,
+        expectedThreadId: next.primaryThreadId,
+      });
+      const carried = yield* store.document(again, "NOTES.md");
+      assert.include(
+        carried.content,
+        "- Review the migration (running, follow: thread:child): Checking projection rows",
+      );
+      assert.include(carried.content, "- command approval on thread:child");
+      assert.equal(
+        carried.content.match(/^## Handoff from the previous conversation/gm)?.length,
+        1,
+      );
+
       yield* sql`
         CREATE TRIGGER fail_captain_document_insert BEFORE INSERT ON captain_documents
         BEGIN SELECT RAISE(ABORT, 'Cannot write notes.'); END
@@ -405,9 +424,10 @@ it.effect("retries one stale NOTES.md revision when writing a handoff", () =>
         }),
     });
 
-    yield* CaptainHandoff.write({ captain, previousThreadId: captain.primaryThreadId }).pipe(
-      Effect.provide(Layer.merge(storeLayer, Sqlite.layerMemory)),
-    );
+    yield* CaptainHandoff.save({
+      captain,
+      section: "## Handoff from the previous conversation (2026-11-24T10:00:00.000Z)",
+    }).pipe(Effect.provide(storeLayer));
     assert.equal(reads, 2);
     assert.equal(writes, 2);
   }),

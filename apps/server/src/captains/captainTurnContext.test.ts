@@ -40,6 +40,22 @@ describe("formatCaptainBriefing", () => {
     expect(coordinated).toContain('`delegate_task` and `isolation: "worktree"`');
     expect(coordinated).toContain("`captain_document_write`");
   });
+
+  it("tells the Captain how finished crew reaches it under each report policy", () => {
+    const rule = (reportPolicy: Captain["reportPolicy"]) =>
+      formatCaptainBriefing({
+        captain: { ...captain, coordinatorOnly: true, reportPolicy },
+        projects: [],
+        memories: [],
+        agents: "",
+        notes: "",
+      });
+    expect(rule("react")).toContain("let completion wake you");
+    expect(rule("context")).toContain("arrive with the user's next message");
+    expect(rule("context")).not.toContain("let completion wake you");
+    expect(rule("ignore")).toContain("You are not told when crew finishes");
+    expect(rule("ignore")).not.toContain("let completion wake you");
+  });
 });
 
 describe("formatCaptainReports", () => {
@@ -57,6 +73,26 @@ describe("formatCaptainReports", () => {
       '- Fix the flaky test [task-1]: Fixed the flaky test. It now waits for the close event. Read the full report with task_status(taskId: "task-1").',
     );
     expect(formatted).not.toContain("Details that stay in the child.");
+  });
+
+  it("points reports from an earlier conversation at their task thread", () => {
+    const formatted = formatCaptainReports(
+      [
+        { id: "task-1", title: "Now", result: "Done.", threadId: "captain:maria:1" },
+        {
+          id: "task-0",
+          title: "Before",
+          result: "Done earlier.",
+          threadId: "captain:maria:0",
+          childThreadId: "thread:child-0",
+        },
+      ],
+      "captain:maria:1",
+    );
+
+    expect(formatted).toContain('Read the full report with task_status(taskId: "task-1").');
+    expect(formatted).toContain('t3_thread_read(threadId: "thread:child-0")');
+    expect(formatted).not.toContain('task_status(taskId: "task-0")');
   });
 
   it("truncates a long first paragraph and keeps at most six reports", () => {
