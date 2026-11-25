@@ -10,8 +10,10 @@ import { cn } from "../../lib/cn";
 import { useHomeRouteVisible } from "../home/home-route-visibility";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { CaptainOrb } from "./CaptainOrb";
+import { orderCaptainHomeRows } from "./captainHomeOrder";
 import { captainShells, captainShellsByConversation } from "./captainShellIndex";
 import { useCaptainsDirectory } from "./useCaptainsDirectory";
+import { useDuetShell } from "./useDuetShell";
 
 /** Captains above the thread list: who is working, who waits on you, and the way to each. */
 export function CaptainsHomeSection(props: {
@@ -19,6 +21,7 @@ export function CaptainsHomeSection(props: {
   readonly environmentId: EnvironmentId | null;
 }) {
   const gt = useGT();
+  const isDuet = useDuetShell();
   const navigation = useNavigation();
   const selectDetail = useSelectWorkspaceDetail();
   const visible = useHomeRouteVisible();
@@ -28,16 +31,18 @@ export function CaptainsHomeSection(props: {
   });
   if (props.hidden || environments.every(({ captains }) => captains.length === 0)) return null;
   const byConversation = captainShellsByConversation(shells);
-  const rows = environments.flatMap((environment) =>
-    environment.captains.map((captain) => {
-      const own = captainShells(byConversation, environment.environmentId, captain);
-      return {
-        environment,
-        captain,
-        own,
-        activity: captainThreadActivity(environment.environmentId, captain, own),
-      };
-    }),
+  const rows = orderCaptainHomeRows(
+    environments.flatMap((environment) =>
+      environment.captains.map((captain) => {
+        const own = captainShells(byConversation, environment.environmentId, captain);
+        return {
+          environment,
+          captain,
+          own,
+          activity: captainThreadActivity(environment.environmentId, captain, own),
+        };
+      }),
+    ),
   );
   const waiting = captainInboxItems(
     environments,
@@ -47,7 +52,7 @@ export function CaptainsHomeSection(props: {
     <View className="gap-1 px-2 pb-3 pt-2">
       <View className="flex-row items-center gap-2 px-2 pb-1">
         <Text className="min-w-0 flex-1 font-t3-medium text-xs text-foreground-muted">
-          {gt("Captains")}
+          {isDuet ? gt("Duets") : gt("Captains")}
         </Text>
         <Pressable
           accessibilityRole="button"
@@ -77,7 +82,7 @@ export function CaptainsHomeSection(props: {
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={gt("Captain tasks")}
+          accessibilityLabel={isDuet ? gt("Duet tasks") : gt("Captain tasks")}
           hitSlop={6}
           onPress={() => navigation.navigate("CaptainTasks", {})}
           className="flex-row items-center gap-1 rounded-full bg-subtle px-2.5 py-1"

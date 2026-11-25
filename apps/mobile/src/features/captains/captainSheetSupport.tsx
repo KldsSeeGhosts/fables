@@ -12,6 +12,7 @@ import { appAtomRegistry } from "../../state/atom-registry";
 import { threadFamilies } from "../../state/threads";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import type { CaptainEnvironment } from "./useCaptainsDirectory";
+import { useDuetShell } from "./useDuetShell";
 
 /**
  * Closes the sheet, then selects the thread as Home's rows do, so a split view keeps its list
@@ -34,6 +35,7 @@ export function CaptainEnvironmentNotices(props: {
   readonly environments: ReadonlyArray<CaptainEnvironment>;
 }) {
   const gt = useGT();
+  const isDuet = useDuetShell();
   const notices = props.environments.filter(({ status }) => status !== "ready");
   if (notices.length === 0) return null;
   const named = props.environments.length > 1;
@@ -48,11 +50,19 @@ export function CaptainEnvironmentNotices(props: {
         >
           {status === "failed"
             ? named
-              ? gt("Could not load Captains from {environment}.", { environment: label })
-              : gt("Could not load Captains.")
+              ? isDuet
+                ? gt("Could not load Duets from {environment}.", { environment: label })
+                : gt("Could not load Captains from {environment}.", { environment: label })
+              : isDuet
+                ? gt("Could not load Duets.")
+                : gt("Could not load Captains.")
             : named
-              ? gt("Loading Captains from {environment}…", { environment: label })
-              : gt("Loading Captains…")}
+              ? isDuet
+                ? gt("Loading Duets from {environment}…", { environment: label })
+                : gt("Loading Captains from {environment}…", { environment: label })
+              : isDuet
+                ? gt("Loading Duets…")
+                : gt("Loading Captains…")}
         </Text>
       ))}
     </View>

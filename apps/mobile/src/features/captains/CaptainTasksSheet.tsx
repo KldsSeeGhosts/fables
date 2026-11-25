@@ -20,6 +20,7 @@ import {
   useOpenThreadFromSheet,
 } from "./captainSheetSupport";
 import { useCaptainsDirectory } from "./useCaptainsDirectory";
+import { useDuetShell } from "./useDuetShell";
 
 export type CaptainTasksParams = {
   readonly environmentId?: string;
@@ -68,6 +69,7 @@ export function CaptainTasksSheet({ route }: StaticScreenProps<CaptainTasksParam
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const gt = useGT();
+  const isDuet = useDuetShell();
   const m = useMessages();
   const nowMs = useNowMinuteMs();
   const [range, setRange] = useState<CaptainTaskRange>("today");
@@ -91,9 +93,10 @@ export function CaptainTasksSheet({ route }: StaticScreenProps<CaptainTasksParam
     captainId: route.params?.captainId,
   });
   const single = route.params?.captainId !== undefined;
+  const fallbackTitle = isDuet ? gt("Duet tasks") : gt("Captain tasks");
   const title = single
-    ? (listed.flatMap(({ captains }) => captains)[0]?.name ?? gt("Captain tasks"))
-    : gt("Captain tasks");
+    ? (listed.flatMap(({ captains }) => captains)[0]?.name ?? fallbackTitle)
+    : fallbackTitle;
   const openThread = useOpenThreadFromSheet();
   const openTask = (row: CaptainTaskRow) => openThread(row.thread.environmentId, row.thread.id);
   const loading = families === "pending" || environments.some(({ status }) => status === "loading");

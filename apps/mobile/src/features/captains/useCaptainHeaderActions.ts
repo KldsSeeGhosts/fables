@@ -9,6 +9,7 @@ import { Atom } from "effect/reactivity";
 import type { AppBarAction } from "../../components/ui/AppBar.types";
 import { environmentThreadShells } from "../../state/threads";
 import { useCaptainOfThread } from "./useCaptainsDirectory";
+import { useDuetShell } from "./useDuetShell";
 
 const NO_SHELLS_ATOM = Atom.make<ReadonlyArray<EnvironmentThreadShell>>([]).pipe(
   Atom.withLabel("mobile-captain-header:no-shells"),
@@ -22,6 +23,7 @@ export function useCaptainHeaderActions(
   thread: { readonly environmentId: EnvironmentId; readonly threadId: ThreadId } | null,
 ): ReadonlyArray<AppBarAction> {
   const gt = useGT();
+  const isDuet = useDuetShell();
   const navigation = useNavigation();
   const captain = useCaptainOfThread(thread?.environmentId ?? null, thread?.threadId ?? null);
   // Selected as a number so shell updates re-render the header only when the count changes.
@@ -45,7 +47,9 @@ export function useCaptainHeaderActions(
       accessibilityLabel:
         attention > 0
           ? gt("Tasks, {count} waiting on you", { count: attention })
-          : gt("Captain tasks"),
+          : isDuet
+            ? gt("Duet tasks")
+            : gt("Captain tasks"),
       icon: attention > 0 ? "bell.badge" : "list.number",
       separateBackground: false,
       onPress: () => navigation.navigate("CaptainTasks", params),
