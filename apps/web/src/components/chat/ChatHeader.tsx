@@ -362,7 +362,7 @@ export const ChatHeader = memo(function ChatHeader({
   const showCenteredOrb = duet && isServerThread && captain != null;
   const openCaptainThread = (threadId: ThreadId) => onOpenThread(threadId);
   return (
-    <div className="relative flex min-w-0 flex-1 self-stretch">
+    <div className="flex min-w-0 flex-1 self-stretch">
       {showCenteredOrb ? (
         <div className="absolute left-1/2 top-[11px] z-20 -translate-x-1/2 [-webkit-app-region:no-drag]">
           <DuetStatusOrb threadRef={activeThreadRef} />
