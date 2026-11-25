@@ -13,6 +13,7 @@ import {
 } from "@t3tools/contracts";
 import { AcpRegistrySettings } from "../settings.ts";
 import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Clock from "effect/Clock";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -52,7 +53,9 @@ const COMMAND_ADVERTISEMENT_GRACE = "500 millis";
 // Agents that fetch their catalog after session setup (Qoder CLI, OpenCode)
 // settle it in seconds, not milliseconds; commands arrive much sooner.
 const MODEL_ADVERTISEMENT_GRACE = "5 seconds";
-const PROBE_SESSION_DELETE_TIMEOUT = "5 seconds";
+const PROBE_SESSION_DELETE_TIMEOUT_MS = 5_000;
+const MAX_MODEL_OPTION_PROBE_SWITCHES = 8;
+const MAX_MODEL_OPTION_PROBE_MS = 3_000;
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 const boundedText = (value: string, maximumLength: number): string =>
@@ -215,6 +218,9 @@ export interface AcpRegistryLiveConfiguration {
   readonly modelsFromModelSelect?: boolean;
 }
 
+const isModelScopedOption = (option: EffectAcpSchema.SessionConfigOption): boolean =>
+  isAcpThoughtLevelOption(option) || option.category === "model_config";
+
 export function normalizeAcpRegistryLiveConfiguration(
   configOptions: ReadonlyArray<EffectAcpSchema.SessionConfigOption>,
   modeState?: Parameters<typeof acpProviderOptionDescriptors>[0]["modeState"],
@@ -251,9 +257,7 @@ export function normalizeAcpRegistryLiveConfiguration(
   });
   const descriptors = acpProviderOptionDescriptors({ configOptions, modeState });
   const modelOptionIds = new Set(
-    configOptions
-      .filter((option) => isAcpThoughtLevelOption(option) || option.category === "model_config")
-      .map((option) => option.id),
+    configOptions.filter(isModelScopedOption).map((option) => option.id),
   );
   return {
     models,
@@ -267,6 +271,54 @@ export function normalizeAcpRegistryLiveConfiguration(
     modelsFromModelSelect: modelOption !== undefined,
   };
 }
+
+const probeAcpRegistryModelOptions = Effect.fn("AcpRegistryProbe.probeModelOptions")(function* (
+  runtime: AcpSessionRuntime.AcpSessionRuntime["Service"],
+  configuration: AcpRegistryLiveConfiguration,
+  modelOption: ReturnType<typeof findModelConfigOption>,
+  budgetMs: number,
+) {
+  if (
+    modelOption === undefined ||
+    configuration.currentModelId === null ||
+    !configuration.modelOptionIds?.length ||
+    budgetMs <= 0
+  ) {
+    return configuration;
+  }
+  // Keep the original default and shared options. Large catalogs can take
+  // dozens of seconds to sweep, so probe the leading choices within a budget.
+  const candidates = configuration.models
+    .filter((model) => model.id !== configuration.currentModelId)
+    .slice(0, MAX_MODEL_OPTION_PROBE_SWITCHES);
+  const modelOptions = new Map<string, AcpRegistryLiveConfiguration["configOptions"]>();
+  yield* Effect.gen(function* () {
+    for (const model of candidates) {
+      const switched = yield* runtime.setConfigOption(modelOption.id, model.id).pipe(Effect.option);
+      if (Option.isNone(switched)) continue;
+      const latest = yield* runtime.getConfigOptions;
+      const reported =
+        findModelConfigOption(latest)?.currentValue === model.id
+          ? latest
+          : switched.value.configOptions;
+      if (findModelConfigOption(reported)?.currentValue !== model.id) continue;
+      modelOptions.set(
+        model.id,
+        acpProviderOptionDescriptors({
+          configOptions: reported.filter(isModelScopedOption),
+          modeState: undefined,
+        }),
+      );
+    }
+  }).pipe(Effect.timeoutOption(budgetMs));
+  return {
+    ...configuration,
+    models: configuration.models.map((model) => {
+      const configOptions = modelOptions.get(model.id);
+      return configOptions === undefined ? model : { ...model, configOptions };
+    }),
+  };
+});
 
 const emptyAcpRegistryAvailableCommands = (): AcpRegistryAvailableCommands => ({
   slashCommands: [],
@@ -447,6 +499,7 @@ export const probeAcpRegistryConfiguration = Effect.fn("AcpRegistryProbe.probeCo
     const pty = yield* Effect.serviceOption(PtyAdapter.PtyAdapter);
 
     const result = yield* Effect.gen(function* () {
+      const probeStartedAt = yield* Clock.currentTimeMillis;
       // Resolution may install packages; bound it by the probe deadline.
       const resolved = yield* catalog
         .resolve(input.settings, input.cwd, input.environment)
@@ -573,7 +626,7 @@ export const probeAcpRegistryConfiguration = Effect.fn("AcpRegistryProbe.probeCo
       yield* Effect.addFinalizer(() =>
         runtime
           .deleteSession(started.sessionId)
-          .pipe(Effect.timeoutOption(PROBE_SESSION_DELETE_TIMEOUT), Effect.ignore),
+          .pipe(Effect.timeoutOption(PROBE_SESSION_DELETE_TIMEOUT_MS), Effect.ignore),
       );
       const hasInitialModels = acpRegistryAdvertisesModelCatalog(
         started.sessionSetupResult.configOptions,
@@ -595,11 +648,28 @@ export const probeAcpRegistryConfiguration = Effect.fn("AcpRegistryProbe.probeCo
       );
 
       // config_option_update replaces the full option set, so an empty notice is authoritative.
-      const liveConfiguration = normalizeAcpRegistryLiveConfiguration(
-        (yield* Ref.get(configOptionsRef)) ?? (yield* runtime.getConfigOptions),
+      const configOptions = (yield* Ref.get(configOptionsRef)) ?? (yield* runtime.getConfigOptions);
+      const configuration = normalizeAcpRegistryLiveConfiguration(
+        configOptions,
         (yield* runtime.getModeState) ?? parseSessionModeState(started.sessionSetupResult),
         started.sessionSetupResult.models,
       );
+      // Only switch models if this probe session can be deleted.
+      const liveConfiguration =
+        started.initializeResult.agentCapabilities?.sessionCapabilities?.delete != null
+          ? yield* probeAcpRegistryModelOptions(
+              runtime,
+              configuration,
+              findModelConfigOption(configOptions),
+              Math.min(
+                MAX_MODEL_OPTION_PROBE_MS,
+                probeStartedAt +
+                  probeTimeoutMs -
+                  (yield* Clock.currentTimeMillis) -
+                  PROBE_SESSION_DELETE_TIMEOUT_MS,
+              ),
+            )
+          : configuration;
 
       return {
         resolved,

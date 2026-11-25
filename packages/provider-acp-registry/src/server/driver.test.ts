@@ -47,6 +47,7 @@ import {
   acpRegistryAdvertisesModelCatalog,
   acpRegistryProbeResult,
   normalizeAcpRegistryLiveConfiguration,
+  probeAcpRegistryConfiguration,
 } from "./probe.ts";
 
 const decodeSettings = Schema.decodeSync(AcpRegistrySettings);
@@ -1194,16 +1195,26 @@ describe("acpRegistryAdvertisesModelCatalog", () => {
 });
 
 const fakeAgentSource = `
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 const send = (message) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...message }) + "\\n");
+const modelConfig = process.argv[3] ? JSON.parse(readFileSync(process.argv[3], "utf8")) : null;
+const configOptions = (modelId) => [
+  { id: "mode", name: "Mode", type: "select", category: "mode", currentValue: "ask", options: [{ value: "ask", name: "Ask" }] },
+  {
+    id: "model", name: "Model", type: "select", category: "model", currentValue: modelId,
+    options: Object.keys(modelConfig).map((value) => ({ value, name: value })),
+  },
+  ...modelConfig[modelId],
+];
 createInterface({ input: process.stdin }).on("line", (line) => {
-  const { id, method } = JSON.parse(line);
+  const { id, method, params } = JSON.parse(line);
   if (id === undefined) return;
   if (method === "initialize") {
+    const agentCapabilities = modelConfig ? { sessionCapabilities: { delete: {} } } : {};
     send({
       id,
-      result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [], agentInfo: { name: "fake", version: "1.5.9" } },
+      result: { protocolVersion: 1, agentCapabilities, authMethods: [], agentInfo: { name: "fake", version: "1.5.9" } },
     });
   } else if (method === "session/new") {
     const modelIds = JSON.parse(readFileSync(process.argv[2], "utf8"));
@@ -1211,10 +1222,10 @@ createInterface({ input: process.stdin }).on("line", (line) => {
       id,
       result: {
         sessionId: "probe-session",
-        models: {
+        ...(modelConfig ? { configOptions: configOptions(modelIds[0]) } : { models: {
           currentModelId: modelIds[0],
           availableModels: modelIds.map((modelId) => ({ modelId, name: modelId })),
-        },
+        } }),
       },
     });
     send({
@@ -1224,6 +1235,18 @@ createInterface({ input: process.stdin }).on("line", (line) => {
         update: { sessionUpdate: "available_commands_update", availableCommands: [] },
       },
     });
+  } else if (method === "session/set_config_option") {
+    const { value } = params;
+    if (modelConfig?.[value] == null) {
+      send({ id, error: { code: -32602, message: "Model unavailable" } });
+    } else {
+      send({ id, result: { configOptions: configOptions(value) } });
+    }
+  } else if (method === "session/delete") {
+    writeFileSync(process.argv[3] + ".deleted", params.sessionId);
+    send({ id, result: {} });
+  } else if (method === "session/prompt") {
+    throw new Error("The probe must never send a prompt");
   } else {
     send({ id, result: {} });
   }
@@ -1247,6 +1270,95 @@ const driverLayer = TestProviderHost.layer({ runBackgroundWork: false }).pipe(
 );
 
 it.layer(driverLayer, { excludeTestServices: true })("AcpRegistryDriver", (it) => {
+  it.effect("discovers each model's session options in the disposable startup probe", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "acp-driver-" });
+      const agentPath = path.join(directory, "agent.mjs");
+      const modelsPath = path.join(directory, "models.json");
+      const configPath = path.join(directory, "config.json");
+      const thoughtLevel = (levels: ReadonlyArray<string>) => ({
+        id: "thought_level",
+        name: "Thought level",
+        category: "thought_level",
+        type: "select",
+        currentValue: levels[0],
+        options: levels.map((value) => ({ value, name: value })),
+      });
+      const speed = {
+        id: "speed",
+        name: "Speed",
+        category: "model_config",
+        type: "select",
+        currentValue: "standard",
+        options: ["standard", "fast"].map((value) => ({ value, name: value })),
+      };
+      const modelConfig = {
+        "model-default": [thoughtLevel(["medium", "high"])],
+        "model-rejected": null,
+        "model-alternate": [thoughtLevel(["low", "high", "max"]), speed],
+        "model-without-options": [],
+      };
+      yield* fileSystem.writeFileString(agentPath, fakeAgentSource);
+      yield* fileSystem.writeFileString(modelsPath, JSON.stringify(Object.keys(modelConfig)));
+      yield* fileSystem.writeFileString(configPath, JSON.stringify(modelConfig));
+
+      const snapshot = yield* checkAcpRegistryProviderStatus(
+        {
+          ...identity,
+          settings: decodeSettings({ agentId: "test-agent" }),
+          cwd: directory,
+          environment: {},
+        },
+        probeAcpRegistryConfiguration,
+      ).pipe(
+        Effect.provideService(AcpRegistrySupport.AcpRegistryCatalog, {
+          ...catalogWithInspection({
+            status: "ready",
+            agentId: "test-agent",
+            version: "1.5.9",
+            distribution: "npx",
+          }),
+          resolve: () =>
+            Effect.succeed({
+              distribution: "npx" as const,
+              spawn: { command: process.execPath, args: [agentPath, modelsPath, configPath] },
+            }),
+        }),
+      );
+      expect(snapshot.models.find((model) => model.isDefault)?.slug).toBe("model-default");
+      expect(
+        snapshot.models.map((model) => [
+          model.slug,
+          model.capabilities?.optionDescriptors?.map((option) => [
+            option.id,
+            option.type === "select" ? option.options.map((choice) => choice.id) : [],
+          ]),
+        ]),
+      ).toEqual([
+        [
+          "model-default",
+          [
+            ["mode", ["ask"]],
+            ["thought_level", ["medium", "high"]],
+          ],
+        ],
+        ["model-rejected", [["mode", ["ask"]]]],
+        [
+          "model-alternate",
+          [
+            ["mode", ["ask"]],
+            ["thought_level", ["low", "high", "max"]],
+            ["speed", ["standard", "fast"]],
+          ],
+        ],
+        ["model-without-options", [["mode", ["ask"]]]],
+      ]);
+      expect(yield* fileSystem.readFileString(configPath + ".deleted")).toBe("probe-session");
+    }),
+  );
+
   it.effect("creates without inspecting the agent, which may fetch the registry", () =>
     Effect.gen(function* () {
       const instance = yield* AcpRegistryDriver.create({

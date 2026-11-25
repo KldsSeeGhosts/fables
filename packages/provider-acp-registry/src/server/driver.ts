@@ -183,26 +183,33 @@ function modelsFromDiscovery(
     discovery === undefined || discovery.configOptions.length === 0
       ? EMPTY_CAPABILITIES
       : createModelCapabilities({ optionDescriptors: discovery.configOptions });
-  // Model-specific options describe only the session's current model; other
-  // models keep the shared ones plus what an earlier session reported for them.
+  // The session's model-specific options describe only its current model.
   const modelOptionIds = new Set(discovery?.modelOptionIds ?? []);
   const shared = (discovery?.configOptions ?? []).filter(
     (descriptor) => !modelOptionIds.has(descriptor.id),
   );
   const sharedIds = new Set(shared.map((descriptor) => descriptor.id));
-  const capabilitiesFor = ({ id: slug, reasoningEffort }: AcpRegistryProbeModel) => {
+  const capabilitiesFor = ({
+    id: slug,
+    configOptions: modelOptions,
+    reasoningEffort,
+  }: AcpRegistryProbeModel) => {
     if (slug === discovery?.currentModelId) return capabilities;
-    // The levels a model advertises replace the ones an earlier session reported.
-    const own = (
-      previousModels.find((model) => model.slug === slug)?.capabilities?.optionDescriptors ?? []
-    ).filter(
-      (descriptor) =>
-        !sharedIds.has(descriptor.id) &&
-        (reasoningEffort === undefined ||
+    const own = modelOptions ?? [
+      ...(
+        previousModels.find((model) => model.slug === slug)?.capabilities?.optionDescriptors ?? []
+      ).filter(
+        (descriptor) =>
+          reasoningEffort === undefined ||
           descriptor.type !== "select" ||
-          descriptor.role !== "reasoning"),
-    );
-    const optionDescriptors = [...shared, ...own, ...(reasoningEffort ? [reasoningEffort] : [])];
+          descriptor.role !== "reasoning",
+      ),
+      ...(reasoningEffort ? [reasoningEffort] : []),
+    ];
+    const optionDescriptors = [
+      ...shared,
+      ...own.filter((descriptor) => !sharedIds.has(descriptor.id)),
+    ];
     return optionDescriptors.length === 0
       ? EMPTY_CAPABILITIES
       : createModelCapabilities({ optionDescriptors });
