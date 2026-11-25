@@ -151,17 +151,6 @@ export function captainTaskActivityMs(input: {
   return Date.parse(input.thread?.updatedAt ?? input.thread?.createdAt ?? "") || 0;
 }
 
-const STATUS_ORDER: Record<CaptainTaskStatus, number> = {
-  "needs-input": 0,
-  working: 1,
-  failed: 2,
-  ready: 3,
-  unknown: 4,
-  stopped: 5,
-  scheduled: 6,
-  done: 7,
-};
-
 /** Recent keeps open work regardless of age and finished work from the last day. */
 export const captainTaskIsRecent = (
   status: CaptainTaskStatus,
@@ -169,8 +158,8 @@ export const captainTaskIsRecent = (
   cutoffMs: number,
 ) => status === "needs-input" || status === "working" || updatedAtMs >= cutoffMs;
 
-/** Needs you first, then running work, then outcomes to review; ties keep the newest first. */
+/** Newest activity first; status decides whether a task is recent, not where it sorts. */
 export const compareCaptainTasks = (
-  a: { readonly status: CaptainTaskStatus; readonly updatedAtMs: number },
-  b: { readonly status: CaptainTaskStatus; readonly updatedAtMs: number },
-) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || b.updatedAtMs - a.updatedAtMs;
+  a: { readonly updatedAtMs: number },
+  b: { readonly updatedAtMs: number },
+) => b.updatedAtMs - a.updatedAtMs;

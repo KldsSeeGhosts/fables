@@ -2,6 +2,7 @@ import { asLaunchingThread } from "@t3tools/client-runtime/state/thread-inbox";
 import { useAtomMount } from "@effect/atom-react";
 import { formatModelSlugName } from "@t3tools/shared/model";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
+import { WorkingStatusShine } from "../WorkingStatusShine";
 import { ThreadTerminalStatusButton } from "../ThreadStatusIndicators";
 import { discardComposerDraft } from "../../lib/discardComposerDraft";
 import { formatWorktreePathForDisplay } from "../../worktreeCleanup";
@@ -312,6 +313,7 @@ export function SidebarStatusLabel(props: {
           props.kind === "limited"
         ? "text-(--duet-needs-input)"
         : null;
+  const label = props.label ?? messages(status.label);
   return (
     <span
       className={cn(
@@ -320,7 +322,13 @@ export function SidebarStatusLabel(props: {
       )}
     >
       <status.Icon aria-hidden className={props.compact ? "size-3 shrink-0" : "size-4 shrink-0"} />
-      {props.label ?? messages(status.label)}
+      {props.kind === "working" ? (
+        <WorkingStatusShine className={isDuet ? "text-(--duet-working-text)" : undefined}>
+          {label}
+        </WorkingStatusShine>
+      ) : (
+        label
+      )}
       {!props.compact &&
       (props.kind === "working" || props.kind === "preparing" || props.kind === "waiting") ? (
         <span aria-hidden>

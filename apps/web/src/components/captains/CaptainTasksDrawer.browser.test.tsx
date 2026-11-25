@@ -1,3 +1,4 @@
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import {
   CaptainId,
   EnvironmentId,
@@ -188,6 +189,32 @@ it("shows Captain tasks with their status and workspace detail", async () => {
   await expect.element(screen.getByText("Fix checkout")).toBeVisible();
   await expect.element(screen.getByText("Needs input")).toBeVisible();
   await expect.element(screen.getByText("fix/checkout")).toBeVisible();
+});
+
+it("wraps a working task's status text in the shine element", async () => {
+  resetState();
+  state.children = [
+    makeThreadFixture({
+      id: childThreadId,
+      environmentId,
+      projectId: ProjectId.make("project"),
+      title: "Fix checkout",
+      branch: "fix/checkout",
+      updatedAt: "2100-01-01T00:00:00.000Z",
+      runtime: { status: "running" } as EnvironmentThreadShell["runtime"],
+      lineage: {
+        rootThreadId: captain.primaryThreadId,
+        parentThreadId: captain.primaryThreadId,
+        relationshipToParent: "subagent",
+      },
+    }),
+  ];
+  await using screen = await render(
+    <CaptainTasksDrawer threadRef={threadRef} onClose={() => {}} />,
+  );
+
+  await expect.element(screen.getByText("Working")).toBeVisible();
+  expect(screen.container.querySelector(".working-status-shine")?.textContent).toBe("Working");
 });
 
 it("queues a quick task as a user turn on the Captain primary thread", async () => {

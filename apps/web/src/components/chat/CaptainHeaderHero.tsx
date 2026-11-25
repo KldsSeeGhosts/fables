@@ -72,6 +72,7 @@ import {
   MenuTrigger,
 } from "../ui/menu";
 import { toastManager } from "../ui/toast";
+import { WorkingStatusShine } from "../WorkingStatusShine";
 import { useDuetThreadStatus } from "./DuetThreadStatus";
 
 const LAYOUT_MENU_ICONS: Record<string, LucideIcon> = {
@@ -409,7 +410,13 @@ export function CaptainHeaderHero({
               data-captain-hero-live-label="current"
               className="col-start-1 row-start-1 max-w-64 truncate"
             >
-              {status.liveLabel}
+              {status.state === "working" ? (
+                <WorkingStatusShine className="text-(--duet-working-text)">
+                  {status.liveLabel}
+                </WorkingStatusShine>
+              ) : (
+                status.liveLabel
+              )}
             </span>
           </span>
         ) : null}
