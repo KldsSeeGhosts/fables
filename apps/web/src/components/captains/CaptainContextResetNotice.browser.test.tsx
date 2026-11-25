@@ -6,6 +6,7 @@ import {
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
+import { Atom } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
@@ -13,7 +14,25 @@ import { render } from "../../../test/render";
 
 const state = vi.hoisted(() => ({
   captain: null as Captain | null,
+  canReset: true,
 }));
+
+const allowed = Atom.make(true);
+const denied = Atom.make(false);
+vi.mock(import("../../state/server"), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    serverEnvironment: {
+      ...actual.serverEnvironment,
+      resetCaptainConversation: {
+        run: vi.fn(),
+        permissionAtom: () => (state.canReset ? allowed : denied),
+        label: "test command",
+      },
+    } as never,
+  };
+});
 
 vi.mock(import("./useCaptain"), async (importOriginal) => ({
   ...(await importOriginal()),
@@ -41,8 +60,9 @@ const captain = {
 } satisfies Captain;
 const threadRef = { environmentId, threadId: captain.primaryThreadId };
 
-function setup(value: Captain | null = captain) {
+function setup(value: Captain | null = captain, canReset = true) {
   state.captain = value;
+  state.canReset = canReset;
 }
 
 function notice(percent: number | null, ref: ScopedThreadRef | null = threadRef) {
@@ -94,6 +114,12 @@ it("stays hidden below 75%, for non-Duet threads, archived Duets, and earlier co
 
   setup();
   await screen.rerender(notice(80, { environmentId, threadId: ThreadId.make("captain:maria:1") }));
+  await expect.element(screen.getByText(/This conversation is .* full\./)).not.toBeInTheDocument();
+});
+
+it("stays hidden for a viewer who cannot reset the Duet", async () => {
+  setup(captain, false);
+  await using screen = await render(notice(95));
   await expect.element(screen.getByText(/This conversation is .* full\./)).not.toBeInTheDocument();
 });
 

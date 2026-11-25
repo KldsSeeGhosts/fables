@@ -1,9 +1,11 @@
+import { useAtomValue } from "@effect/atom-react";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { Captain, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 import { T, useGT } from "gt-react";
 import { MessageSquarePlusIcon } from "lucide-react";
 import { useState } from "react";
 
+import { serverEnvironment } from "../../state/server";
 import { Button } from "../ui/button";
 import { ComposerBanner } from "../chat/ComposerBanner";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "../chat/ComposerBannerStack";
@@ -22,6 +24,9 @@ export function CaptainContextResetNotice({
 }) {
   const gt = useGT();
   const captain = useCaptain(threadRef);
+  const canReset = useAtomValue(
+    serverEnvironment.resetCaptainConversation.permissionAtom(threadRef?.environmentId ?? null),
+  );
   const [resetTarget, setResetTarget] = useState<{
     readonly captain: Captain;
     readonly threadRef: ScopedThreadRef;
@@ -49,6 +54,7 @@ export function CaptainContextResetNotice({
     captain === undefined ||
     captain.primaryThreadId !== threadRef.threadId ||
     captain.archivedAt !== null ||
+    !canReset ||
     percent === null ||
     usedPercentage === null ||
     usedPercentage < 75
