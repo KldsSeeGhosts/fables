@@ -241,7 +241,7 @@ function DigestCard({
       >
         <ContentButton
           variant="card-row"
-          aria-label={gt("Open {name}", { name: captain.name })}
+          aria-label={gt("Open {name}'s conversation", { name: captain.name })}
           onClick={onOpen}
           className="w-full text-left"
         >
