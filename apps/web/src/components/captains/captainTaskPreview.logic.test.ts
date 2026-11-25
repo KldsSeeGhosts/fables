@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  TASK_PREVIEW_DATA_URL_MAX_CHARS,
+  TASK_PREVIEW_DATA_URL_MAX_BYTES,
   taskPreviewImageSource,
 } from "./captainTaskPreview.logic";
 
@@ -41,13 +41,21 @@ describe("taskPreviewImageSource", () => {
     ).toBe("https://example.com/second.png");
   });
 
-  it("skips a data URL over the cap", () => {
-    const oversized = `data:image/png;base64,${"A".repeat(TASK_PREVIEW_DATA_URL_MAX_CHARS)}`;
+  it("uses a small image data URL", () => {
+    const dataUrl = "data:image/png;base64,AA";
+    expect(taskPreviewImageSource(`![inline](${dataUrl})`, workspaceRoot)).toBe(dataUrl);
+  });
+
+  it("skips a data URL over the byte cap", () => {
+    const oversized = `data:image/png;base64,${"A".repeat(TASK_PREVIEW_DATA_URL_MAX_BYTES)}`;
     expect(
       taskPreviewImageSource(
         `![fallback](https://example.com/fallback.png)\n\n![oversized](${oversized})`,
         workspaceRoot,
       ),
     ).toBe("https://example.com/fallback.png");
+
+    const wideCharacters = `data:image/svg+xml,${"é".repeat(45_000)}`;
+    expect(taskPreviewImageSource(`![wide](${wideCharacters})`, workspaceRoot)).toBeNull();
   });
 });
