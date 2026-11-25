@@ -117,14 +117,23 @@ it("folds coding utility controls into overflow below 720px", async () => {
   });
 });
 
-it("keeps the thread details toggle in a Captain channel header", async () => {
+it("keeps a Captain header to the orb, details, Tasks and one overflow menu", async () => {
   const onToggleThreadPanel = vi.fn();
   await using screen = await render(controls({ threadId: "captain:maria:0", onToggleThreadPanel }));
 
   await expect.element(screen.getByRole("button", { name: "Tasks" })).toBeVisible();
-  await expect.element(screen.getByRole("button", { name: "New conversation" })).toBeVisible();
-  await expect.element(screen.getByRole("button", { name: "Choose machine" })).toBeVisible();
+  await expect.element(screen.getByRole("button", { name: /^Status:/ })).toBeVisible();
+  expect(screen.container.querySelector('[aria-label="New conversation"]')).toBeNull();
+  expect(screen.container.querySelector('[aria-label="Choose machine"]')).toBeNull();
   expect(screen.container.querySelector('[aria-label="Terminal"]')).toBeNull();
+
+  await userEvent.click(screen.getByRole("button", { name: "More header actions" }));
+  await vi.waitFor(() => {
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("Run on");
+    expect(text).toContain("Terminal");
+  });
+  await userEvent.keyboard("{Escape}");
 
   await userEvent.click(screen.getByRole("button", { name: "Toggle thread details panel" }));
   expect(onToggleThreadPanel).toHaveBeenCalledOnce();

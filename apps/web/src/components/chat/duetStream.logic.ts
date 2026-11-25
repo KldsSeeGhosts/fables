@@ -208,6 +208,10 @@ function documentReference(
   };
 }
 
+// A web or mail link points off the workspace and stays an ordinary link.
+const hasUrlScheme = (value: string) => /^(?:https?|mailto):/i.test(value);
+const FENCE_LINE = /^[ \t]{0,3}(?:```|~~~)/gm;
+
 function parseStandaloneDocumentParagraph(
   paragraph: string,
   key: string,
@@ -219,9 +223,10 @@ function parseStandaloneDocumentParagraph(
   if (link) {
     const label = link[1]!;
     const href = link[2] ?? link[3] ?? null;
+    if (href !== null && hasUrlScheme(href)) return null;
     return documentReference(label, href, key) ?? documentReference(href ?? "", href, key);
   }
-  if (/^[^\s[\]()]+\.(?:md|html)$/i.test(trimmed)) {
+  if (!hasUrlScheme(trimmed) && /^[^\s[\]()]+\.(?:md|html)$/i.test(trimmed)) {
     return documentReference(trimmed, trimmed, key);
   }
   const bareCaptain = captainDocumentName(trimmed);
@@ -239,9 +244,17 @@ export function extractDuetDocumentCards(markdown: string): {
   const pieces = markdown.split(/(\n[ \t]*\n+)/);
   const kept: string[] = [];
   const documents: DuetDocumentReference[] = [];
+  let inFence = false;
   for (let index = 0; index < pieces.length; index += 1) {
     const piece = pieces[index]!;
     if (index % 2 === 1) {
+      kept.push(piece);
+      continue;
+    }
+    const fences = piece.match(FENCE_LINE)?.length ?? 0;
+    const insideCode = inFence || fences > 0;
+    if (fences % 2 === 1) inFence = !inFence;
+    if (insideCode) {
       kept.push(piece);
       continue;
     }

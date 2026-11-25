@@ -336,7 +336,7 @@ it.effect(
               parentThreadId,
               relationshipToParent: parentThreadId === null ? null : "subagent",
             },
-          });
+          }).pipe(Effect.map(({ text }) => text));
         const context = yield* read(captain.primaryThreadId);
         assert.include(context, "Captain profile: Maria (Coordinator)");
         assert.include(context, "Workspace [project]");
@@ -345,6 +345,33 @@ it.effect(
         assert.notInclude(context, "Keep this optional");
         assert.notInclude(context, "Run the tests before reporting.");
         assert.isBelow(context.length, 5_000);
+
+        // A provider thread that took the briefing gets a pointer until something in it changes.
+        const delivery = { providerThreadId: "provider-thread", usedTokens: 1_000 };
+        const primaryThread = {
+          id: captain.primaryThreadId,
+          lineage: { parentThreadId: null, relationshipToParent: null },
+        };
+        const first = yield* readContext(primaryThread, delivery);
+        assert.include(first.text, "Always mention this");
+        yield* first.delivered;
+        const second = yield* readContext(primaryThread, delivery);
+        assert.notInclude(second.text, "Always mention this");
+        assert.include(second.text, "unchanged since they were last given");
+        yield* service.updateDocument({
+          captainId: captain.id,
+          name: "NOTES.md",
+          content: "Notes changed.",
+          expectedRevision: 1,
+        });
+        assert.include((yield* readContext(primaryThread, delivery)).text, "Notes changed.");
+        yield* service.updateDocument({
+          captainId: captain.id,
+          name: "NOTES.md",
+          content: "Notes are included",
+          expectedRevision: 2,
+        });
+
         assert.equal(yield* read(ThreadId.make("ordinary")), "");
         const crew = yield* read(ThreadId.make("child"), captain.primaryThreadId);
         assert.include(crew, "Run the tests before reporting.");
@@ -442,7 +469,7 @@ it.effect("surfaces reports from conversations before a reset on the current con
         readContext({
           id: next.primaryThreadId,
           lineage: { parentThreadId: null, relationshipToParent: null },
-        });
+        }).pipe(Effect.map(({ text }) => text));
       yield* sql`
         INSERT INTO orchestration_v2_projection_threads (
           thread_id, project_id, title, default_provider, runtime_mode, interaction_mode,

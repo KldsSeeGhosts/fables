@@ -110,4 +110,20 @@ describe("extractDuetDocumentCards", () => {
     expect(extracted.text).toContain("[image](image.png)");
     expect(extracted.documents).toEqual([]);
   });
+
+  it("keeps public links as links, whether bare or labelled", () => {
+    const markdown =
+      "See the guide.\n\n[Guide](https://example.com/guide.html)\n\nhttps://example.com/notes.md";
+    const extracted = extractDuetDocumentCards(markdown);
+    expect(extracted.text).toBe(markdown);
+    expect(extracted.documents).toEqual([]);
+  });
+
+  it("leaves fenced code byte for byte, even with blank lines inside", () => {
+    const markdown =
+      "Example:\n\n```text\n\nnotes.md\n\nDIGEST.md\n\n```\n\n[Report](docs/report.md)";
+    const extracted = extractDuetDocumentCards(markdown);
+    expect(extracted.text).toBe("Example:\n\n```text\n\nnotes.md\n\nDIGEST.md\n\n```");
+    expect(extracted.documents.map((document) => document.title)).toEqual(["report.md"]);
+  });
 });

@@ -116,7 +116,7 @@ it("shows Captain tasks with their status and workspace detail", async () => {
 
   await expect.element(screen.getByText("Tasks in #Maria")).toBeVisible();
   await expect
-    .element(screen.getByRole("tab", { name: "Today" }))
+    .element(screen.getByRole("tab", { name: "Recent" }))
     .toHaveAttribute("aria-selected", "true");
   await expect.element(screen.getByRole("tab", { name: "All" })).toBeVisible();
   await expect.element(screen.getByRole("tab", { name: "Scheduled" })).toBeVisible();

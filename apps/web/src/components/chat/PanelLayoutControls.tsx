@@ -24,18 +24,15 @@ import {
 } from "lucide-react";
 import { memo, useRef, useState, type ReactElement } from "react";
 
-import { useNavigate } from "@tanstack/react-router";
-
 import { useDuetShell } from "../../hooks/useDuetShell";
 import { observeResize } from "../../lib/observeResize";
 import type { ThreadPanelPresentation } from "../../rightPanelLayout";
 import { selectActiveRightPanel, useRightPanelStore } from "../../rightPanelStore";
 import { useEnvironment, usePrimaryEnvironmentId } from "../../state/environments";
 import { useProjects, useQuietThreadShell } from "../../state/entities";
-import { buildThreadRouteParams } from "../../threadRoutes";
 import type { EnvironmentOption } from "../BranchToolbar.logic";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
-import { CaptainResetDialog } from "../captains/CaptainResetButton";
+import { DuetStatusOrb } from "./DuetStatusOrb";
 import { useCaptain } from "../captains/useCaptain";
 import { Button } from "../ui/button";
 import {
@@ -192,42 +189,13 @@ function DuetMachineMenuItems({ machine }: { machine: DuetMachineControl }) {
   );
 }
 
-function DuetMachineButton({ machine }: { machine: DuetMachineControl }) {
-  const gt = useGT();
-  const trigger = (
-    <button
-      type="button"
-      aria-label={gt("Choose machine")}
-      data-duet-header-icon
-      className="shrink-0"
-    >
-      <MonitorIcon aria-hidden className="size-4" strokeWidth={1.75} />
-    </button>
-  );
-  return (
-    <Menu>
-      <MenuTrigger render={trigger} aria-label={gt("Choose machine")} />
-      <MenuPopup align="end" width="wide">
-        <MenuGroup>
-          <MenuGroupLabel>
-            <T>Run on</T>
-          </MenuGroupLabel>
-          <DuetMachineMenuItems machine={machine} />
-        </MenuGroup>
-      </MenuPopup>
-    </Menu>
-  );
-}
-
 function DuetOverflowMenu({
-  captain,
   machine,
   terminal,
   browser,
   diff,
   foldUtilityControls,
 }: {
-  captain: boolean;
   machine?: DuetMachineControl | null | undefined;
   terminal?: DuetHeaderAction | null | undefined;
   browser?: DuetHeaderAction | null | undefined;
@@ -269,9 +237,24 @@ function DuetOverflowMenu({
         aria-label={gt("More header actions")}
       />
       <MenuPopup align="end" width="wide">
-        {captain ? (
-          <MenuGroup>
-            {entries.map((entry) => (
+        {machine ? (
+          <MenuSub>
+            <MenuSubTrigger>
+              <MonitorIcon className="size-3.5" strokeWidth={1.75} />
+              <T>Run on</T>
+            </MenuSubTrigger>
+            <MenuSubPopup>
+              <MenuGroup>
+                <MenuGroupLabel>
+                  <T>Run on</T>
+                </MenuGroupLabel>
+                <DuetMachineMenuItems machine={machine} />
+              </MenuGroup>
+            </MenuSubPopup>
+          </MenuSub>
+        ) : null}
+        {foldUtilityControls
+          ? entries.map((entry) => (
               <MenuItem
                 key={entry.key}
                 disabled={entry.action.disabled}
@@ -282,42 +265,8 @@ function DuetOverflowMenu({
                 {entry.icon}
                 {entry.action.label}
               </MenuItem>
-            ))}
-          </MenuGroup>
-        ) : (
-          <>
-            {machine ? (
-              <MenuSub>
-                <MenuSubTrigger>
-                  <MonitorIcon className="size-3.5" strokeWidth={1.75} />
-                  <T>Run on</T>
-                </MenuSubTrigger>
-                <MenuSubPopup>
-                  <MenuGroup>
-                    <MenuGroupLabel>
-                      <T>Run on</T>
-                    </MenuGroupLabel>
-                    <DuetMachineMenuItems machine={machine} />
-                  </MenuGroup>
-                </MenuSubPopup>
-              </MenuSub>
-            ) : null}
-            {foldUtilityControls
-              ? entries.map((entry) => (
-                  <MenuItem
-                    key={entry.key}
-                    disabled={entry.action.disabled}
-                    selected={entry.action.active === true}
-                    closeOnClick
-                    onClick={entry.action.onClick}
-                  >
-                    {entry.icon}
-                    {entry.action.label}
-                  </MenuItem>
-                ))
-              : null}
-          </>
-        )}
+            ))
+          : null}
       </MenuPopup>
     </Menu>
   );
@@ -340,8 +289,6 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   const duet = useDuetShell();
   const mobileSidebarSheetMounted = useMobileSidebarSheetMounted();
   const captain = useCaptain(duet ? threadRef : null);
-  const [captainResetOpen, setCaptainResetOpen] = useState(false);
-  const navigate = useNavigate();
   const projects = useProjects();
   const shell = useQuietThreadShell(duet ? threadRef : null);
   const environment = useEnvironment(threadRef?.environmentId ?? null);
@@ -482,17 +429,9 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
     </Tooltip>
   );
 
-  const newAction: DuetHeaderAction | null = captain
-    ? {
-        label: gt("New conversation"),
-        onClick: () => setCaptainResetOpen(true),
-      }
-    : duetControls?.onNew
-      ? {
-          label: gt("New side chat"),
-          onClick: duetControls.onNew,
-        }
-      : null;
+  const newAction: DuetHeaderAction | null = duetControls?.onNew
+    ? { label: gt("New side chat"), onClick: duetControls.onNew }
+    : null;
 
   return (
     <div
@@ -501,6 +440,11 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
       data-panel-layout-controls
     >
       {/* The workspace menu (pen ZVAPz) is the pane's only top-right control. */}
+      {duet && captainChannel && threadRef !== null ? (
+        <span className="me-1 flex shrink-0">
+          <DuetStatusOrb threadRef={threadRef} size="header" />
+        </span>
+      ) : null}
       {showThreadPanelControl ? threadPanelControl : null}
       {duet && duetControls ? (
         <>
@@ -516,13 +460,6 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
                   icon={<ListChecksIcon aria-hidden className="size-4" strokeWidth={1.75} />}
                 />
               ) : null}
-              {newAction ? (
-                <DuetIconButton
-                  action={newAction}
-                  icon={<SquarePenIcon aria-hidden className="size-4" strokeWidth={1.75} />}
-                />
-              ) : null}
-              {duetControls.machine ? <DuetMachineButton machine={duetControls.machine} /> : null}
             </>
           ) : (
             <>
@@ -556,27 +493,13 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
             </>
           )}
           <DuetOverflowMenu
-            captain={captainChannel}
-            machine={captainChannel ? null : duetControls.machine}
+            machine={duetControls.machine}
             terminal={duetControls.terminal}
             browser={duetControls.browser}
             diff={duetControls.diff}
-            foldUtilityControls={foldDuetUtilityControls}
+            foldUtilityControls={captainChannel || foldDuetUtilityControls}
           />
         </>
-      ) : null}
-      {captainResetOpen && captain && threadRef ? (
-        <CaptainResetDialog
-          captain={captain}
-          environmentId={threadRef.environmentId}
-          onClose={() => setCaptainResetOpen(false)}
-          onReset={(threadId) => {
-            void navigate({
-              to: "/$environmentId/$threadId",
-              params: buildThreadRouteParams(scopeThreadRef(threadRef.environmentId, threadId)),
-            });
-          }}
-        />
       ) : null}
     </div>
   );

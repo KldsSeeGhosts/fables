@@ -4,7 +4,6 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { captainForThread, captainScheduledTasks } from "@t3tools/client-runtime/state/captains";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import {
-  isOrchestrationV2WorkActive,
   type OrchestrationV2Subagent,
   type ProjectId,
   type ScopedThreadRef,
@@ -42,11 +41,14 @@ import {
 import { CaptainDocuments } from "./CaptainDocuments";
 import { CaptainEarlierConversations } from "./CaptainEarlierConversations";
 import { CaptainMemories } from "./CaptainMemories";
+import { CaptainTaskRing, useCaptainTaskStatusLabel } from "./CaptainTaskRing";
 import {
-  CaptainTaskRing,
-  captainTaskRingStatus,
-  type CaptainTaskRingStatus,
-} from "./CaptainTaskRing";
+  captainSubagentTaskStatus,
+  captainTaskIsRecent,
+  captainThreadTaskStatus,
+  compareCaptainTasks,
+  type CaptainTaskStatus,
+} from "./captainTaskStatus.logic";
 import { captainDrawerTabAtom } from "./captainBriefTab";
 import { useCaptains } from "./useCaptain";
 import { useClientSettings } from "../../hooks/useSettings";
@@ -55,29 +57,16 @@ import { formatRelativeElapsed } from "../../timestampFormat";
 
 const DAY_MS = 24 * 60 * 60_000;
 
-const statusColor: Record<CaptainTaskRingStatus, string> = {
+const statusColor: Record<CaptainTaskStatus, string> = {
   "needs-input": "#9f7832",
   working: "#d97757",
   ready: "#1e7d2c",
+  failed: "var(--destructive-foreground)",
+  stopped: "#838383",
   scheduled: "#838383",
   done: "#838383",
+  unknown: "#838383",
 };
-
-function useStatusLabel(status: CaptainTaskRingStatus): string {
-  const gt = useGT();
-  switch (status) {
-    case "needs-input":
-      return gt("Needs input", { $context: "delegated task status" });
-    case "working":
-      return gt("Working", { $context: "delegated task status" });
-    case "ready":
-      return gt("Ready for review", { $context: "delegated task status" });
-    case "scheduled":
-      return gt("Scheduled", { $context: "delegated task status" });
-    case "done":
-      return gt("Done", { $context: "delegated task status" });
-  }
-}
 
 function compactElapsed(
   isoDate: string,
@@ -86,17 +75,6 @@ function compactElapsed(
 ): string {
   const elapsed = Math.max(0, nowMs - Date.parse(isoDate));
   return formatRelativeElapsed(elapsed, resolve).value;
-}
-
-function taskNeedsInput(
-  thread: Pick<
-    EnvironmentThreadShell,
-    "hasPendingUserInput" | "hasPendingApprovals" | "pendingSubagentRequest"
-  >,
-) {
-  return Boolean(
-    thread.hasPendingUserInput || thread.hasPendingApprovals || thread.pendingSubagentRequest,
-  );
 }
 
 function taskDiffTotals(threadRef: ScopedThreadRef) {
@@ -128,14 +106,14 @@ function TaskCardLayout({
   meta,
   onOpen,
 }: {
-  readonly status: CaptainTaskRingStatus;
+  readonly status: CaptainTaskStatus;
   readonly title: string;
   readonly elapsed: string;
   readonly detail: string | null;
   readonly meta?: ReactNode;
   readonly onOpen: () => void;
 }) {
-  const statusLabel = useStatusLabel(status);
+  const statusLabel = useCaptainTaskStatusLabel(status);
   return (
     <li className="relative">
       <button
@@ -189,7 +167,7 @@ function LocalTaskCard({
   const messages = useMessages();
   const childRef = scopeThreadRef(parent.environmentId, thread.id);
   const diff = taskDiffTotals(childRef);
-  const status = captainTaskRingStatus(thread);
+  const status = captainThreadTaskStatus(thread);
   const pullRequest =
     thread.pullRequests[0] ?? thread.linkedPullRequest ?? thread.branchPullRequest ?? null;
   const detail = thread.runtime?.lastError ?? thread.branch ?? thread.latestRun?.status ?? null;
@@ -230,12 +208,6 @@ function LocalTaskCard({
   );
 }
 
-function remoteStatus(task: OrchestrationV2Subagent): CaptainTaskRingStatus {
-  if (isOrchestrationV2WorkActive(task.status)) return "working";
-  if (task.status === "completed") return "ready";
-  return "done";
-}
-
 function RemoteTaskCard({
   parent,
   task,
@@ -252,7 +224,7 @@ function RemoteTaskCard({
   const detail = task.progress ?? task.result?.trim().split("\n", 1)[0] ?? child.label;
   return (
     <TaskCardLayout
-      status={remoteStatus(task)}
+      status={captainSubagentTaskStatus(task)}
       title={title}
       elapsed={compactElapsed(
         new Date(DateTime.toEpochMillis(task.updatedAt)).toISOString(),
@@ -270,6 +242,68 @@ function RemoteTaskCard({
         })
       }
     />
+  );
+}
+
+function sortedCrewThreads(
+  threads: ReadonlyArray<EnvironmentThreadShell>,
+  recentCutoff: number | null,
+) {
+  return threads
+    .map((thread) => ({
+      thread,
+      status: captainThreadTaskStatus(thread),
+      updatedAtMs: Date.parse(thread.updatedAt),
+    }))
+    .filter(
+      ({ status, updatedAtMs }) =>
+        recentCutoff === null || captainTaskIsRecent(status, updatedAtMs, recentCutoff),
+    )
+    .sort(compareCaptainTasks)
+    .map(({ thread }) => thread);
+}
+
+/** Tasks delegated before a reset stay with the Captain, listed under their own heading. */
+function EarlierConversationTasks({
+  parent,
+  conversation,
+  cutoff,
+  projectTitles,
+  nowMs,
+}: {
+  readonly parent: ScopedThreadRef;
+  readonly conversation: ScopedThreadRef;
+  readonly cutoff: number | null;
+  readonly projectTitles: ReadonlyMap<ProjectId, string>;
+  readonly nowMs: number;
+}) {
+  const threads = sortedCrewThreads(
+    useChildThreadInputs(conversation).filter(
+      (thread) =>
+        thread.archivedAt === null &&
+        thread.lineage.relationshipToParent === "subagent" &&
+        thread.lineage.parentThreadId === conversation.threadId,
+    ),
+    cutoff,
+  );
+  if (threads.length === 0) return null;
+  return (
+    <section className="mt-5">
+      <h3 className="mb-2 text-[12px] text-(--duet-meta)">
+        <T>From an earlier conversation</T>
+      </h3>
+      <ul className="flex flex-col gap-[18px]">
+        {threads.map((thread) => (
+          <LocalTaskCard
+            key={thread.id}
+            parent={parent}
+            thread={thread}
+            projectTitle={projectTitles.get(thread.projectId)}
+            nowMs={nowMs}
+          />
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -335,15 +369,19 @@ export function CaptainTasksDrawer({
   }
 
   const cutoff = nowMs - DAY_MS;
-  const todayChildren = children.filter(
-    (thread) => Date.parse(thread.updatedAt) >= cutoff || taskNeedsInput(thread),
-  );
-  const todayRemote = delegated.filter(
-    (task) =>
-      DateTime.toEpochMillis(task.updatedAt) >= cutoff || isOrchestrationV2WorkActive(task.status),
-  );
-  const visibleChildren = tab === "today" ? todayChildren : children;
-  const visibleRemote = tab === "today" ? todayRemote : delegated;
+  const recent = tab === "today";
+  const visibleChildren = sortedCrewThreads(children, recent ? cutoff : null);
+  const visibleRemote = delegated
+    .map((task) => ({
+      task,
+      status: captainSubagentTaskStatus(task),
+      updatedAtMs: DateTime.toEpochMillis(task.updatedAt),
+    }))
+    .filter(
+      ({ status, updatedAtMs }) => !recent || captainTaskIsRecent(status, updatedAtMs, cutoff),
+    )
+    .sort(compareCaptainTasks)
+    .map(({ task }) => task);
   const scheduled = captainScheduledTasks(tasksQuery.data?.tasks ?? [], captain);
   const openThread = (threadId: ThreadId) =>
     useRightPanelStore.getState().openThread(threadRef, threadId);
@@ -399,7 +437,7 @@ export function CaptainTasksDrawer({
             onClick={() => setTab(entry)}
           >
             {entry === "today"
-              ? gt("Today", { $context: "Captain tasks drawer tab" })
+              ? gt("Recent", { $context: "Captain tasks drawer tab" })
               : entry === "all"
                 ? gt("All", { $context: "Captain tasks drawer tab" })
                 : entry === "scheduled"
@@ -410,9 +448,10 @@ export function CaptainTasksDrawer({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-3 pb-4">
         {tab === "today" || tab === "all" ? (
-          visibleChildren.length + visibleRemote.length === 0 ? (
+          visibleChildren.length + visibleRemote.length === 0 &&
+          (captain?.earlierThreadIds.length ?? 0) === 0 ? (
             <DrawerEmpty>
-              {tab === "today" ? <T>No tasks need you today.</T> : <T>No delegated tasks yet.</T>}
+              {tab === "today" ? <T>No recent tasks.</T> : <T>No delegated tasks yet.</T>}
             </DrawerEmpty>
           ) : (
             <ul className="flex flex-col gap-[18px]">
@@ -431,6 +470,18 @@ export function CaptainTasksDrawer({
             </ul>
           )
         ) : null}
+        {(tab === "today" || tab === "all") && captain
+          ? captain.earlierThreadIds.map((threadId) => (
+              <EarlierConversationTasks
+                key={threadId}
+                parent={threadRef}
+                conversation={scopeThreadRef(threadRef.environmentId, threadId)}
+                cutoff={recent ? cutoff : null}
+                projectTitles={projectTitles}
+                nowMs={nowMs}
+              />
+            ))
+          : null}
         {tab === "scheduled" ? (
           <div className="flex flex-col gap-4">
             <div className="flex justify-end">

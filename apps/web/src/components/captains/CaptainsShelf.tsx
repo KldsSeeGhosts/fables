@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-styled-raw-controls -- The Captains section label doubles as the overview link and matches the Threads label beside it. */
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   captainAttentionTotal,
@@ -7,20 +8,10 @@ import {
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import type { Captain, EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
-import * as Schema from "effect/Schema";
 import { T, useGT, Var } from "gt-react";
-import {
-  ClockIcon,
-  CompassIcon,
-  EllipsisIcon,
-  FoldersIcon,
-  ListTodoIcon,
-  PlusIcon,
-} from "lucide-react";
+import { ClockIcon, EllipsisIcon, FoldersIcon, ListTodoIcon, PlusIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { flushSync } from "react-dom";
 
-import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useDuetShell } from "../../hooks/useDuetShell";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { cn } from "../../lib/utils";
@@ -30,11 +21,9 @@ import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { RelativeTime } from "../RelativeTime";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
-import { Badge } from "../ui/badge";
 import { Button, ContentButton } from "../ui/button";
-import { CollapsibleSectionHeader, SectionHeaderStatus } from "../ui/collapsible-section-header";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
-import { SidebarMenuButton } from "../ui/sidebar";
+import { SidebarHeaderIconButton } from "../sidebar/SidebarThreadHeader";
 import { Tooltip, TooltipTrigger } from "../ui/tooltip";
 import { CaptainAvatar } from "./CaptainAvatar";
 import { captainPaletteOf } from "./captainPalette";
@@ -57,47 +46,6 @@ export function useCaptainConversationKeys(): ReadonlySet<string> {
 }
 
 const NO_CAPTAIN_CONVERSATIONS: ReadonlySet<string> = new Set();
-
-/** The sidebar's entry to the Captains page, with the number of Captains waiting on the user. */
-export function CaptainsHubRow({ active, onOpen }: { active: boolean; onOpen: () => void }) {
-  const gt = useGT();
-  const { supporting, results } = useCaptainEnvironments();
-  const shells = useThreadShells(supporting.length > 0);
-  if (supporting.length === 0) return null;
-  const attention = captainAttentionTotal(
-    supporting.map(({ environmentId }, index) => ({
-      environmentId,
-      captains: AsyncResult.getOrElse(results[index]!, () => null)?.captains ?? [],
-    })),
-    shells,
-  );
-  return (
-    <SidebarMenuButton
-      data-sidebar-row="nav:captains"
-      className="mt-1"
-      isActive={active}
-      aria-current={active ? "page" : undefined}
-      onClick={onOpen}
-    >
-      <CompassIcon />
-      <span className="min-w-0 flex-1 truncate">
-        <T>Captains</T>
-      </span>
-      {attention > 0 ? (
-        <Badge
-          variant="warning"
-          size="sm"
-          aria-label={gt(
-            "{count, plural, one {{count} Captain needs input} other {{count} Captains need input}}",
-            { count: attention },
-          )}
-        >
-          {attention}
-        </Badge>
-      ) : null}
-    </SidebarMenuButton>
-  );
-}
 
 /** A 6px status dot with an optional count, the only live text a Duet sidebar row carries. */
 function DuetLiveCount({
@@ -481,12 +429,18 @@ function CaptainShelfRow({
   );
 }
 
+/**
+ * Captains are the sidebar's one channel list: the header opens the Captains overview, and each
+ * row opens that Captain's conversation.
+ */
 export function CaptainShelfList({
   rows,
   activeThread,
+  attention: attentionTotal,
+  overviewActive = false,
   onOpen,
+  onOpenOverview,
   onCreate,
-  onReveal,
 }: {
   rows: ReadonlyArray<
     {
@@ -498,86 +452,85 @@ export function CaptainShelfList({
     } & CaptainActivity
   >;
   activeThread: ScopedThreadRef | null;
+  /** Captains waiting on the user, counting their delegated threads; defaults to the rows'. */
+  attention?: number | undefined;
+  overviewActive?: boolean;
   onOpen: (threadRef: ScopedThreadRef) => void;
+  onOpenOverview?: (() => void) | undefined;
   onCreate?: (() => void) | undefined;
-  onReveal?: ((header: HTMLElement) => void) | undefined;
 }) {
   const gt = useGT();
-  const [expanded, setExpanded] = useLocalStorage(
-    "t3code:sidebar:captains-expanded",
-    true,
-    Schema.Boolean,
+  const attention =
+    attentionTotal ??
+    rows.reduce(
+      (count, row) => count + Number(row.captain.archivedAt === null && row.attention > 0),
+      0,
+    );
+  const attentionLabel = gt(
+    "{count, plural, one {{count} Captain needs input} other {{count} Captains need input}}",
+    { count: attention },
   );
-  const activeCount = rows.filter(({ captain }) => captain.archivedAt === null).length;
-  const attention = rows.reduce(
-    (count, row) => count + Number(row.captain.archivedAt === null && row.attention > 0),
-    0,
+
+  const heading = (
+    <>
+      <span className="truncate">
+        <T>Captains</T>
+      </span>
+      {attention > 0 ? (
+        <DuetLiveCount tone="needs-input" count={attention} label={attentionLabel} />
+      ) : null}
+    </>
   );
-  const rowList = rows.map(({ captain, environmentId, label, attention, working, ...activity }) => (
-    <CaptainShelfRow
-      key={`${environmentId}:${captain.id}`}
-      captain={captain}
-      environmentId={environmentId}
-      {...(label !== undefined ? { label } : {})}
-      attention={attention}
-      working={working}
-      activity={activity}
-      selected={
-        activeThread?.environmentId === environmentId &&
-        activeThread.threadId === captain.primaryThreadId
-      }
-      onOpen={onOpen}
-    />
-  ));
 
   return (
-    <li className="mx-0.5 mb-1 list-none">
-      <div className="flex items-center">
-        <CollapsibleSectionHeader
-          data-sidebar-row="shelf:captains"
-          tone="shelf"
-          expanded={expanded}
-          onPointerDown={(event) => event.preventDefault()}
-          onClick={(event) => {
-            if (expanded) {
-              setExpanded(false);
-            } else {
-              flushSync(() => setExpanded(true));
-              onReveal?.(event.currentTarget);
-            }
-          }}
-          accessory={
-            !expanded && attention > 0 ? (
-              <SectionHeaderStatus>
-                <span
-                  aria-label={gt(
-                    "{count, plural, one {{count} Captain needs input} other {{count} Captains need input}}",
-                    { count: attention },
-                  )}
-                >
-                  {attention}
-                </span>
-              </SectionHeaderStatus>
-            ) : (
-              <span className="text-meta tabular-nums">{activeCount}</span>
-            )
-          }
-        >
-          <T>Channels</T>
-        </CollapsibleSectionHeader>
-        {onCreate ? (
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            onClick={onCreate}
-            aria-label={gt("New Captain")}
-            title={gt("New Captain")}
+    <li className="mb-1 list-none">
+      <div
+        data-sidebar-row="shelf:captains"
+        className="group/captains-label mt-1 flex h-7 items-center justify-between gap-1 px-2"
+      >
+        {onOpenOverview ? (
+          <button
+            type="button"
+            data-captains-overview-link=""
+            aria-current={overviewActive ? "page" : undefined}
+            onClick={onOpenOverview}
+            className="-ms-1 flex h-6 min-w-0 cursor-pointer items-center gap-1.5 rounded-row px-1 text-meta text-sidebar-muted-foreground outline-none hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-[current=page]:text-sidebar-foreground"
           >
-            <PlusIcon />
-          </Button>
+            {heading}
+          </button>
+        ) : (
+          <span className="flex min-w-0 items-center gap-1.5 text-meta text-sidebar-muted-foreground">
+            {heading}
+          </span>
+        )}
+        {onCreate ? (
+          <span className="flex items-center opacity-60 focus-within:opacity-100 group-hover/captains-label:opacity-100">
+            <SidebarHeaderIconButton size="label" label={gt("New Captain")} onClick={onCreate}>
+              <PlusIcon />
+            </SidebarHeaderIconButton>
+          </span>
         ) : null}
       </div>
-      {expanded ? <ul className="space-y-0.5">{rowList}</ul> : null}
+      {rows.length > 0 ? (
+        <ul className="space-y-px">
+          {rows.map(({ captain, environmentId, label, attention, working, ...activity }) => (
+            <CaptainShelfRow
+              key={`${environmentId}:${captain.id}`}
+              captain={captain}
+              environmentId={environmentId}
+              {...(label !== undefined ? { label } : {})}
+              attention={attention}
+              working={working}
+              activity={activity}
+              selected={
+                activeThread?.environmentId === environmentId &&
+                activeThread.threadId === captain.primaryThreadId
+              }
+              onOpen={onOpen}
+            />
+          ))}
+        </ul>
+      ) : null}
     </li>
   );
 }
@@ -585,13 +538,15 @@ export function CaptainShelfList({
 export function CaptainsShelf({
   primaryEnvironmentId,
   activeThread,
+  overviewActive,
   onOpen,
-  onReveal,
+  onOpenOverview,
 }: {
   primaryEnvironmentId: EnvironmentId | null;
   activeThread: ScopedThreadRef | null;
+  overviewActive: boolean;
   onOpen: (threadRef: ScopedThreadRef) => void;
-  onReveal: (header: HTMLElement) => void;
+  onOpenOverview: () => void;
 }) {
   const { supporting, results } = useCaptainEnvironments();
   const { destinations, destination } = useCaptainDestinations(primaryEnvironmentId);
@@ -599,9 +554,13 @@ export function CaptainsShelf({
   const [creating, setCreating] = useState(false);
   if (supporting.length === 0) return null;
 
+  const environments = supporting.map(({ environmentId }, index) => ({
+    environmentId,
+    captains: AsyncResult.getOrElse(results[index]!, () => null)?.captains ?? [],
+  }));
   const rows = supporting
     .flatMap(({ environmentId, label }, index) =>
-      (AsyncResult.getOrElse(results[index]!, () => null)?.captains ?? []).map((captain) => ({
+      environments[index]!.captains.map((captain) => ({
         environmentId,
         ...(supporting.length > 1 ? { label } : {}),
         captain,
@@ -617,8 +576,10 @@ export function CaptainsShelf({
       <CaptainShelfList
         rows={rows}
         activeThread={activeThread}
+        attention={captainAttentionTotal(environments, shells)}
+        overviewActive={overviewActive}
         onOpen={onOpen}
-        onReveal={onReveal}
+        onOpenOverview={onOpenOverview}
         onCreate={destination ? () => setCreating(true) : undefined}
       />
       {creating && destination ? (

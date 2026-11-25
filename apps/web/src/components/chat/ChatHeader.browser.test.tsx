@@ -186,7 +186,7 @@ it("uses the always-tabless Duet header and keeps the hidden terminal chip", asy
   }
 });
 
-it("centers the status orb only for a Duet Captain channel", async () => {
+it("keeps the Duet Captain channel header tabless without duplicating the status orb", async () => {
   duetShell.enabled = true;
   captainState.enabled = true;
   try {
@@ -203,7 +203,10 @@ it("centers the status orb only for a Duet Captain channel", async () => {
       />,
     );
 
-    await expect.element(screen.getByRole("button", { name: "Status: Idle" })).toBeVisible();
+    await expect
+      .element(screen.getByRole("button", { name: "Thread actions for Maria" }))
+      .toBeVisible();
+    expect(screen.container.querySelector('[aria-label="Status: Idle"]')).toBeNull();
     expect(screen.container.querySelector("[data-pane-notch]")).toBeNull();
   } finally {
     duetShell.enabled = false;

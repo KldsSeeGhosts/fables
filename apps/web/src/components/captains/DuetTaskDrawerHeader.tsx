@@ -14,7 +14,8 @@ import { useQuietThreadShell } from "../../state/entities";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
-import { captainTaskRingStatus } from "./CaptainTaskRing";
+import { useCaptainTaskStatusLabel } from "./CaptainTaskRing";
+import { captainThreadTaskStatus } from "./captainTaskStatus.logic";
 
 function showTaskInChannel(childThreadId: ThreadId) {
   const selector = `[data-duet-task-header="${CSS.escape(childThreadId)}"]`;
@@ -51,17 +52,7 @@ export function DuetTaskDrawerHeader({
   const { trailingEdge } = useLayoutPane();
   const childRef = scopeThreadRef(parentThreadRef.environmentId, childThreadId);
   const shell = useQuietThreadShell(childRef);
-  const status = shell ? captainTaskRingStatus(shell) : null;
-  const statusLabel =
-    status === null
-      ? null
-      : status === "needs-input"
-        ? gt("Needs input", { $context: "delegated task status" })
-        : status === "working"
-          ? gt("Working", { $context: "delegated task status" })
-          : status === "ready"
-            ? gt("Ready for review", { $context: "delegated task status" })
-            : gt("Done", { $context: "delegated task status" });
+  const statusLabel = useCaptainTaskStatusLabel(captainThreadTaskStatus(shell));
   const title = shell?.title.trim() || gt("Task", { $context: "Captain delegated task" });
   const subtitleParts = [statusLabel, shell?.branch].filter(
     (part): part is string => typeof part === "string" && part.length > 0,

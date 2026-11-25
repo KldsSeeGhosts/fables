@@ -26,6 +26,7 @@ vi.mock(import("./useCaptain"), async (importOriginal) => ({
   }),
 }));
 
+import { SidebarProvider } from "../ui/sidebar";
 import { CaptainBriefPanel } from "./CaptainBriefPanel";
 import { CaptainShelfList } from "./CaptainsShelf";
 
@@ -51,23 +52,22 @@ async function activate(locator: Locator) {
   await userEvent.keyboard("{Enter}");
 }
 
-it("shows collapsed Captain attention and opens the primary thread on selection", async () => {
+it("shows Captain attention on the section and opens the primary thread on selection", async () => {
   const open = vi.fn();
   await using screen = await render(
-    <ul>
-      <CaptainShelfList
-        rows={[{ environmentId, captain, attention: 1, working: true }]}
-        activeThread={null}
-        onOpen={open}
-        onCreate={() => {}}
-      />
-    </ul>,
+    <SidebarProvider>
+      <ul>
+        <CaptainShelfList
+          rows={[{ environmentId, captain, attention: 1, working: true }]}
+          activeThread={null}
+          onOpen={open}
+          onCreate={() => {}}
+        />
+      </ul>
+    </SidebarProvider>,
   );
   await expect.element(screen.getByRole("button", { name: /Maria, Needs input/ })).toBeVisible();
-  await activate(screen.getByRole("button", { name: /^Channels/ }));
   await expect.element(screen.getByLabelText("1 Captain needs input")).toBeVisible();
-  await expect.element(screen.getByText("Maria")).not.toBeInTheDocument();
-  await activate(screen.getByRole("button", { name: /^Channels/ }));
   await activate(screen.getByRole("button", { name: /Maria, Needs input/ }));
   expect(open).toHaveBeenCalledWith(threadRef);
 });

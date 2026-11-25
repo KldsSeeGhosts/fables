@@ -68,11 +68,7 @@ import {
   type ShownOrder,
 } from "@t3tools/client-runtime/state/thread-search";
 import { foldSearchQuery, rankMessageMatches } from "@t3tools/shared/paletteSearch";
-import {
-  CaptainsHubRow,
-  CaptainsShelf,
-  useCaptainConversationKeys,
-} from "./captains/CaptainsShelf";
+import { CaptainsShelf, useCaptainConversationKeys } from "./captains/CaptainsShelf";
 import { findForMessageMatch, openThreadFindOnQuery } from "./chat/threadFindStore";
 import {
   threadRuntimeCanArchive,
@@ -3583,8 +3579,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         ref={sidebarContentRef}
         className="min-h-full"
         fixedHeader={
-          <SidebarGroup className="z-[1]">
-            {!isDuet || duetSearchOpen || isSearchingThreads ? (
+          !isDuet || duetSearchOpen || isSearchingThreads ? (
+            <SidebarGroup className="z-[1]">
               <div className={isDuet ? "mx-2 mb-1" : undefined}>
                 <SidebarThreadHeader
                   hasProjects={projectGroups.length > 0}
@@ -3612,15 +3608,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                   searchAutoFocus={isDuet}
                 />
               </div>
-            ) : null}
-            <CaptainsHubRow
-              active={captainsPageFocused}
-              onOpen={() => {
-                if (isMobile) setOpenMobile(false);
-                void openLayoutPage("captains");
-              }}
-            />
-          </SidebarGroup>
+            </SidebarGroup>
+          ) : null
         }
       >
         <SidebarGroup className="flex-1" role="presentation">
@@ -3935,8 +3924,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           key="captains-shelf"
                           primaryEnvironmentId={primaryEnvironmentId}
                           activeThread={currentThreadRef}
+                          overviewActive={captainsPageFocused}
                           onOpen={navigateToThread}
-                          onReveal={revealSidebarShelf}
+                          onOpenOverview={() => {
+                            if (isMobile) setOpenMobile(false);
+                            void openLayoutPage("captains");
+                          }}
                         />,
                         ...(isDuet
                           ? [

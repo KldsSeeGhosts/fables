@@ -2137,11 +2137,15 @@ export const layer: Layer.Layer<
             ),
             ...(sideChatContext === "" || sideChatHandoff === undefined ? [] : [sideChatHandoff]),
           ];
-          const captainContext =
+          const captain =
             compact || slashCommand || turnInput.resume
-              ? ""
-              : yield* readCaptainContext(projection.thread);
-          const context = [delivery.context, sideChatContext, restartNote, captainContext]
+              ? undefined
+              : yield* readCaptainContext(projection.thread, {
+                  // A new native session under the same provider thread starts without the briefing.
+                  providerThreadId: `${runningProviderThread.id}:${runningProviderThread.nativeThreadRef?.nativeId ?? ""}`,
+                  usedTokens: runningProviderThread.contextUsage?.usedTokens ?? null,
+                });
+          const context = [delivery.context, sideChatContext, restartNote, captain?.text ?? ""]
             .filter((part) => part !== "")
             .join("\n\n");
           const { restartContinuationOfRunId: _resumedRunId, ...promptedInput } = turnInput;
@@ -2197,6 +2201,7 @@ export const layer: Layer.Layer<
                 : Effect.void,
             ),
           );
+          if (captain !== undefined && prompted) yield* captain.delivered;
           // Serialize acceptance writes against dropped-terminal restoration so neither overwrites the other.
           yield* inlineDeliveryLock.withPermits(1)(
             Effect.gen(function* () {
