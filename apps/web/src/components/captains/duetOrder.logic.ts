@@ -1,3 +1,5 @@
+export type DuetMoveDirection = "up" | "down";
+
 export interface DuetOrderEntry {
   readonly key: string;
   readonly archived: boolean;
@@ -29,4 +31,26 @@ export function orderDuets<T extends DuetOrderEntry>(
   const active = indexed.filter(({ entry }) => !entry.archived).toSorted(compare);
   const archived = indexed.filter(({ entry }) => entry.archived).toSorted(compare);
   return [...active, ...archived].map(({ entry }) => entry);
+}
+
+/** Moves one active Duet within the active section and returns the full key order to persist. */
+export function moveDuet<T extends DuetOrderEntry>(
+  entries: ReadonlyArray<T>,
+  preferredOrder: ReadonlyArray<string>,
+  key: string,
+  direction: DuetMoveDirection,
+): Array<string> | null {
+  const ordered = orderDuets(entries, preferredOrder);
+  const firstArchivedIndex = ordered.findIndex((entry) => entry.archived);
+  const activeCount = firstArchivedIndex === -1 ? ordered.length : firstArchivedIndex;
+  const index = ordered.findIndex((entry) => entry.key === key);
+  if (index === -1 || index >= activeCount) return null;
+  const targetIndex = direction === "up" ? index - 1 : index + 1;
+  if (targetIndex < 0 || targetIndex >= activeCount) return null;
+
+  const keys = ordered.map((entry) => entry.key);
+  const moved = keys[index]!;
+  keys.splice(index, 1);
+  keys.splice(targetIndex, 0, moved);
+  return keys;
 }

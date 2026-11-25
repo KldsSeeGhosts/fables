@@ -2,9 +2,12 @@ const MAX_EXCERPT_LINES = 10;
 const MAX_EXCERPT_CHARS = 720;
 
 /** A bounded prefix of DIGEST.md that keeps its markdown structure intact for preview cards. */
-export function captainDigestMarkdownExcerpt(content: string): string {
+export function captainDigestMarkdownExcerpt(content: string): {
+  readonly markdown: string;
+  readonly truncated: boolean;
+} {
   const source = content.trim();
-  if (source === "") return "";
+  if (source === "") return { markdown: "", truncated: false };
   const lines = source.split("\n");
   const excerpt: string[] = [];
   let chars = 0;
@@ -26,5 +29,5 @@ export function captainDigestMarkdownExcerpt(content: string): string {
     text = text.slice(0, MAX_EXCERPT_CHARS).trimEnd();
     truncated = true;
   }
-  return truncated ? `${text}\n\n…` : text;
+  return { markdown: truncated ? `${text}\n\n…` : text, truncated };
 }

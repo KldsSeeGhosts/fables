@@ -3705,14 +3705,15 @@
   "ef09996d9ccd8cca": "Hay una solicitud esperando en la conversación",
   "03e86518e61d784f": "Trabajando en la conversación",
   "3bb94f0bae9c1d5b": "Sin trabajo activo",
-  "b1687c7b2b91e569": "Open {name}",
+  "b1687c7b2b91e569": "Abrir {name}",
   "e197c4963bacc746": "{count} en curso",
   "53b6a1bb66a65417": "{count} en espera",
-  "028afed6c979f656": "Open {name}'s brief",
   "4e12308e94e922da": "{count, plural, one {{count} Duet} other {{count} Duets}}",
   "ad9ff454b35227ab": "{count, plural, one {{count} Captain} other {{count} Captains}}",
   "97884c869683f97f": "{count, plural, one {{count} needs you} other {{count} need you}}",
   "e39a57514be028e9": "Review",
+  "43c5fbd02c6f330a": "Mostrar menos",
+  "865207be4b43ffca": "Mostrar el resumen completo",
   "365b89c1bf46f4ac": "Loading the brief…",
   "539bdb6a947368b8": "No se pudo cargar el resumen.",
   "96dcdd195f928a1a": "Aún no hay resumen. Activa el resumen matutino en Tareas → Programadas de un Duet.",
@@ -3767,6 +3768,8 @@
     }
   ],
   "8c0f949711fac555": "Open Tasks",
+  "05766f1d708a32a9": "Mover hacia arriba",
+  "f3208165e06efd92": "Mover hacia abajo",
   "b3adfd30f3d67559": "Duets",
   "a18028279286010a": "Captains",
   "03acd05550650d8f": "Task",
@@ -4835,7 +4838,6 @@
     }
   ],
   "e58a1d884fa1d8f2": "Thread details",
-  "43c5fbd02c6f330a": "Show less",
   "de45b075b016cb14": [
     "Show ",
     {
@@ -10473,8 +10475,6 @@
   "49c4b1953878f177": "Add {name} to favorites",
   "d55104ad9bc4be14": "Show {name} in the model picker",
   "1f52ac7bf9eba697": "Add custom model",
-  "05766f1d708a32a9": "Move up",
-  "f3208165e06efd92": "Move down",
   "b6ad307ba765d6f4": "Edit name and options",
   "082c6baa31baf1c7": "Remove custom model",
   "d118c06deaf33a65": "Launch arguments",

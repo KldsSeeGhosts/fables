@@ -1,6 +1,6 @@
 import { expect, it } from "vite-plus/test";
 
-import { orderDuets } from "./duetOrder.logic";
+import { moveDuet, orderDuets } from "./duetOrder.logic";
 
 const entry = (key: string, archived = false) => ({ key, archived });
 const keys = (entries: ReadonlyArray<{ key: string }>) => entries.map(({ key }) => key);
@@ -42,4 +42,30 @@ it("preserves the source order of unknown active and archived Duets", () => {
     "local:first-archived",
     "local:second-archived",
   ]);
+});
+
+it("moves an active Duet one step in the saved order", () => {
+  const entries = [entry("local:maria"), entry("local:ada"), entry("local:archived", true)];
+  const preferred = ["local:ada", "local:maria", "local:archived"];
+
+  expect(moveDuet(entries, preferred, "local:ada", "down")).toEqual([
+    "local:maria",
+    "local:ada",
+    "local:archived",
+  ]);
+  expect(moveDuet(entries, preferred, "local:maria", "up")).toEqual([
+    "local:maria",
+    "local:ada",
+    "local:archived",
+  ]);
+});
+
+it("does not move archived Duets or move active Duets into the archived section", () => {
+  const entries = [entry("local:ada"), entry("local:maria"), entry("local:archived", true)];
+  const preferred = ["local:ada", "local:maria", "local:archived"];
+
+  expect(moveDuet(entries, preferred, "local:ada", "up")).toBeNull();
+  expect(moveDuet(entries, preferred, "local:maria", "down")).toBeNull();
+  expect(moveDuet(entries, preferred, "local:archived", "up")).toBeNull();
+  expect(moveDuet(entries, preferred, "local:missing", "down")).toBeNull();
 });

@@ -9,7 +9,7 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/model
 import type { Captain, EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { T, useGT, useLocale } from "gt-react";
 import { GitForkIcon, MessageCircleQuestionIcon, PlusIcon, ShieldAlertIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useDuetShell } from "../../hooks/useDuetShell";
 import { useNowMinute } from "../../hooks/useNowMinute";
@@ -221,7 +221,9 @@ function DigestCard({
   const details = useCaptains(environmentId, captain.id);
   const document = captainDocument(details.data, captain.id, "DIGEST.md");
   const preview = captainDigestPreview(document);
-  const excerpt = preview === "" ? "" : captainDigestMarkdownExcerpt(document?.content ?? "");
+  const fullDigest = document?.content ?? "";
+  const excerpt = preview === "" ? null : captainDigestMarkdownExcerpt(fullDigest);
+  const [expanded, setExpanded] = useState(false);
   const loading = details.data === null && details.error === null;
   const dateLabel =
     document && preview !== ""
@@ -239,7 +241,7 @@ function DigestCard({
       >
         <ContentButton
           variant="card-row"
-          aria-label={gt("Open {name}'s brief", { name: captain.name })}
+          aria-label={gt("Open {name}", { name: captain.name })}
           onClick={onOpen}
           className="w-full text-left"
         >
@@ -264,11 +266,30 @@ function DigestCard({
             </Text>
           ) : null}
         </ContentButton>
-        <div className={excerpt === "" ? "px-4 pb-4" : "min-h-28 px-4 pb-4"}>
-          {excerpt !== "" ? (
-            <div data-duet-digest-preview="" className="min-h-0 overflow-hidden">
-              <ChatMarkdown text={excerpt} cwd={undefined} environmentId={environmentId} />
-            </div>
+        <div className={excerpt === null ? "px-4 pb-4" : "min-h-28 px-4 pb-4"}>
+          {excerpt !== null ? (
+            <>
+              <div data-duet-digest-preview="" className="min-h-0 overflow-hidden">
+                <ChatMarkdown
+                  text={expanded ? fullDigest : excerpt.markdown}
+                  cwd={undefined}
+                  environmentId={environmentId}
+                />
+              </div>
+              {excerpt.truncated ? (
+                <div className="pt-2">
+                  <Button
+                    type="button"
+                    variant="ghost-muted"
+                    size="xs"
+                    aria-expanded={expanded}
+                    onClick={() => setExpanded((open) => !open)}
+                  >
+                    {expanded ? <T>Show less</T> : <T>Show full brief</T>}
+                  </Button>
+                </div>
+              ) : null}
+            </>
           ) : (
             <Text variant="body" tone="muted" render={<p />}>
               {loading ? (
@@ -299,7 +320,7 @@ export function CaptainsInbox({
   environments: ReadonlyArray<CaptainChannelEnvironment>;
   shells: ReadonlyArray<EnvironmentThreadShell>;
   onOpenThread: (threadRef: ScopedThreadRef) => void;
-  /** Opens a Captain's conversation on its Make view, where the brief lives. */
+  /** Opens a Captain's conversation. */
   onOpenCaptain: (environmentId: EnvironmentId, captain: Captain) => void;
   onCreate?: (() => void) | undefined;
 }) {

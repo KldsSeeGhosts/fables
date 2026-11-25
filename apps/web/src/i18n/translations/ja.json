@@ -3705,14 +3705,15 @@
   "ef09996d9ccd8cca": "会話でリクエストが待機中です",
   "03e86518e61d784f": "会話で作業中",
   "3bb94f0bae9c1d5b": "進行中の作業はありません",
-  "b1687c7b2b91e569": "Open {name}",
+  "b1687c7b2b91e569": "{name}を開く",
   "e197c4963bacc746": "{count} 件実行中",
   "53b6a1bb66a65417": "{count} 件待機中",
-  "028afed6c979f656": "Open {name}'s brief",
   "4e12308e94e922da": "{count, plural, other {{count} 個の Duet}}",
   "ad9ff454b35227ab": "{count, plural, other {{count} 人の Captain}}",
   "97884c869683f97f": "{count, plural, one {{count} needs you} other {{count} need you}}",
   "e39a57514be028e9": "Review",
+  "43c5fbd02c6f330a": "折りたたむ",
+  "865207be4b43ffca": "ブリーフ全体を表示",
   "365b89c1bf46f4ac": "Loading the brief…",
   "539bdb6a947368b8": "ブリーフを読み込めませんでした。",
   "96dcdd195f928a1a": "まだブリーフはありません。Duet のタスク → スケジュールで朝のブリーフを有効にしてください。",
@@ -3767,6 +3768,8 @@
     }
   ],
   "8c0f949711fac555": "Open Tasks",
+  "05766f1d708a32a9": "上に移動",
+  "f3208165e06efd92": "下に移動",
   "b3adfd30f3d67559": "Duets",
   "a18028279286010a": "Captains",
   "03acd05550650d8f": "Task",
@@ -4835,7 +4838,6 @@
     }
   ],
   "e58a1d884fa1d8f2": "Thread details",
-  "43c5fbd02c6f330a": "Show less",
   "de45b075b016cb14": [
     "Show ",
     {
@@ -10473,8 +10475,6 @@
   "49c4b1953878f177": "Add {name} to favorites",
   "d55104ad9bc4be14": "Show {name} in the model picker",
   "1f52ac7bf9eba697": "Add custom model",
-  "05766f1d708a32a9": "Move up",
-  "f3208165e06efd92": "Move down",
   "b6ad307ba765d6f4": "Edit name and options",
   "082c6baa31baf1c7": "Remove custom model",
   "d118c06deaf33a65": "Launch arguments",

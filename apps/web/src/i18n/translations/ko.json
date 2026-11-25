@@ -3705,14 +3705,15 @@
   "ef09996d9ccd8cca": "대화에서 요청이 대기 중입니다",
   "03e86518e61d784f": "대화에서 작업 중",
   "3bb94f0bae9c1d5b": "진행 중인 작업 없음",
-  "b1687c7b2b91e569": "Open {name}",
+  "b1687c7b2b91e569": "{name} 열기",
   "e197c4963bacc746": "{count}개 실행 중",
   "53b6a1bb66a65417": "{count}개 대기 중",
-  "028afed6c979f656": "Open {name}'s brief",
   "4e12308e94e922da": "{count, plural, other {Duet {count}개}}",
   "ad9ff454b35227ab": "{count, plural, other {Captain {count}명}}",
   "97884c869683f97f": "{count, plural, one {{count} needs you} other {{count} need you}}",
   "e39a57514be028e9": "Review",
+  "43c5fbd02c6f330a": "접기",
+  "865207be4b43ffca": "전체 브리핑 보기",
   "365b89c1bf46f4ac": "Loading the brief…",
   "539bdb6a947368b8": "브리핑을 불러올 수 없습니다.",
   "96dcdd195f928a1a": "아직 브리핑이 없습니다. Duet의 작업 → 예약됨에서 아침 브리핑을 켜세요.",
@@ -3767,6 +3768,8 @@
     }
   ],
   "8c0f949711fac555": "Open Tasks",
+  "05766f1d708a32a9": "위로 이동",
+  "f3208165e06efd92": "아래로 이동",
   "b3adfd30f3d67559": "Duets",
   "a18028279286010a": "Captains",
   "03acd05550650d8f": "Task",
@@ -4835,7 +4838,6 @@
     }
   ],
   "e58a1d884fa1d8f2": "Thread details",
-  "43c5fbd02c6f330a": "Show less",
   "de45b075b016cb14": [
     "Show ",
     {
@@ -10473,8 +10475,6 @@
   "49c4b1953878f177": "Add {name} to favorites",
   "d55104ad9bc4be14": "Show {name} in the model picker",
   "1f52ac7bf9eba697": "Add custom model",
-  "05766f1d708a32a9": "Move up",
-  "f3208165e06efd92": "Move down",
   "b6ad307ba765d6f4": "Edit name and options",
   "082c6baa31baf1c7": "Remove custom model",
   "d118c06deaf33a65": "Launch arguments",
