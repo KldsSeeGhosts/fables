@@ -116,11 +116,14 @@ const MODELS = {
   "gpt-6.1-sol": "GPT-6.1 Sol",
   "gpt-6-astra": "GPT-6 Astra",
   "gpt-6-luna": "GPT-6 Luna",
+  "opencode-go/deepseek-v4.1-flash": "DeepSeek V4.1 Flash",
 } as const;
 type Model = keyof typeof MODELS;
-/** GPT models replay a Codex capture through CLIProxyAPI, the rest a Claude Code capture. */
-const isCodex = (model: Model): model is Extract<Model, `gpt-${string}`> =>
-  model.startsWith("gpt-");
+/** GPT and proxy-routed models replay a Codex capture through CLIProxyAPI, the rest a Claude Code capture. */
+const isCodex = (
+  model: Model,
+): model is Extract<Model, `gpt-${string}` | `opencode-go/${string}`> =>
+  model.startsWith("gpt-") || model.startsWith("opencode-go/");
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
 // USD per million tokens. Cache writes use the 5-minute rate.
 export const PRICES = {
