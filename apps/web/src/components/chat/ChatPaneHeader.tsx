@@ -2,6 +2,7 @@ import { useGT } from "gt-react";
 import { useRef, useState, type ReactNode, type Ref } from "react";
 
 import { isElectron } from "../../env";
+import { useDuetShell } from "../../hooks/useDuetShell";
 import { useLayoutPane } from "../../layout/layoutPaneContext";
 import { observeResize } from "../../lib/observeResize";
 import { workspaceAreaProps } from "../../lib/workspaceFocus";
@@ -91,14 +92,16 @@ export function ChatPaneHeaderControls({
   children: ReactNode;
 }) {
   const { split, trailingEdge } = useLayoutPane();
+  const duet = useDuetShell();
   return (
     <div
       ref={measureRef}
       className={cn(
         "pointer-events-none z-50 flex h-[var(--workspace-topbar-height)] items-center gap-1 [-webkit-app-region:no-drag]",
         trailingEdge ? "md:pe-(--workspace-pane-local-controls-right)" : "md:pe-2",
-        // Several panes each carry their own cluster at their own top-right.
-        split || local
+        // Several panes each carry their own cluster at their own top-right. Duet controls
+        // always do: the chat pane's edge stays their anchor when panels open beside it.
+        split || local || duet
           ? "absolute top-[var(--workspace-pane-local-controls-top)] right-[var(--workspace-pane-local-controls-right)] md:top-0 md:right-0"
           : "fixed top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] mr-px md:right-(--workspace-pane-inset) md:mr-0",
       )}

@@ -94,7 +94,7 @@ describe("captainTaskIsRecent and compareCaptainTasks", () => {
     expect(captainTaskIsRecent("failed", 200, 100)).toBe(true);
   });
 
-  it("orders needs you, then running, then failures and reviews, newest first", () => {
+  it("orders by newest activity first regardless of status", () => {
     const tasks = [
       { id: "done", status: "done", updatedAtMs: 9 },
       { id: "ready-old", status: "ready", updatedAtMs: 1 },
@@ -104,12 +104,12 @@ describe("captainTaskIsRecent and compareCaptainTasks", () => {
       { id: "failed", status: "failed", updatedAtMs: 3 },
     ] as const;
     expect([...tasks].sort(compareCaptainTasks).map((task) => task.id)).toEqual([
-      "ask",
-      "working",
-      "failed",
-      "ready-new",
-      "ready-old",
       "done",
+      "ready-new",
+      "failed",
+      "working",
+      "ready-old",
+      "ask",
     ]);
   });
 });

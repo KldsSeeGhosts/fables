@@ -1075,6 +1075,7 @@ describe("ClaudeAdapterV2 context usage", () => {
       cachedInputTokens: 0,
       outputTokens: 0,
       reasoningOutputTokens: 0,
+      autoCompactThreshold: 167_000,
       updatedAt: "2026-08-29T00:03:00.000Z",
     });
   });
@@ -11147,11 +11148,11 @@ describe("ClaudeAdapterV2 background wake turns", () => {
   );
 
   it.effect.each([
-    { autoCompactWindow: "", model: "claude-sonnet-4-6", threshold: undefined },
+    { autoCompactWindow: "", model: "claude-sonnet-4-6", threshold: 167_000 },
     { autoCompactWindow: "150000", model: "claude-sonnet-4-6", threshold: 117_000 },
-    { autoCompactWindow: "200000", model: "claude-sonnet-4-6", threshold: undefined },
-    { autoCompactWindow: "650000", model: "claude-sonnet-4-6", threshold: undefined },
-    { autoCompactWindow: "650000", model: "uncatalogued-model", threshold: 617_000 },
+    { autoCompactWindow: "200000", model: "claude-sonnet-4-6", threshold: 167_000 },
+    { autoCompactWindow: "650000", model: "claude-sonnet-4-6", threshold: 167_000 },
+    { autoCompactWindow: "650000", model: "uncatalogued-model", threshold: undefined },
     {
       autoCompactWindow: "",
       model: "claude-opus-5-5",
@@ -11183,7 +11184,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       model: "claude-opus-5-5",
       userSettings: '{"autoCompactWindow":500000}',
       projectSettings: '{"modelSettings":{"claude-opus-5-5":{"autoCompactWindow":"auto"}}}',
-      threshold: undefined,
+      threshold: 967_000,
     },
     {
       autoCompactWindow: "",
@@ -11196,19 +11197,19 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       autoCompactWindow: "",
       model: "claude-opus-5-5",
       userSettings: '{"autoCompactWindow":"invalid"}',
-      threshold: undefined,
+      threshold: 967_000,
     },
     {
       autoCompactWindow: "",
       model: "claude-opus-5-5",
       userSettings: '{"autoCompactWindow":500000,}',
-      threshold: undefined,
+      threshold: 967_000,
     },
     {
       autoCompactWindow: "",
       model: "claude-opus-5-5",
       userSettings: '{/* invalid */ "autoCompactWindow":500000}',
-      threshold: undefined,
+      threshold: 967_000,
     },
     {
       autoCompactWindow: "",

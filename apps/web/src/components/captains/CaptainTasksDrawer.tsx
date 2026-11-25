@@ -57,10 +57,12 @@ import { formatRelativeElapsed } from "../../timestampFormat";
 import { scheduleLabel } from "../settings/scheduledTasksSettings.logic";
 import { usePanelTabSlots } from "../PanelTabBreadcrumb";
 import { ProjectFavicon } from "../ProjectFavicon";
+import { WorkingStatusShine } from "../WorkingStatusShine";
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
 import { toastManager } from "../ui/toast";
 import { CaptainMorningBriefControl, captainMorningBriefTask } from "./CaptainDigest";
+import { CaptainTaskPreview, type CaptainTaskPreviewProps } from "./CaptainTaskPreview";
 import { CaptainTaskRing, useCaptainTaskStatusLabel } from "./CaptainTaskRing";
 import {
   captainLocalTaskStatus,
@@ -184,6 +186,7 @@ function TaskCardLayout({
   title,
   elapsed,
   detail,
+  preview,
   meta,
   onOpen,
 }: {
@@ -191,6 +194,7 @@ function TaskCardLayout({
   readonly title: string;
   readonly elapsed: string;
   readonly detail: string | null;
+  readonly preview?: CaptainTaskPreviewProps | undefined;
   readonly meta?: ReactNode;
   readonly onOpen: () => void;
 }) {
@@ -210,9 +214,16 @@ function TaskCardLayout({
           <span className="shrink-0 text-[12px] leading-4 text-(--duet-meta)">{elapsed}</span>
         </span>
         <span className="mt-0.5 block truncate pl-5.5 text-[12.5px] leading-4.5 duet:pl-[26px]">
-          <span style={{ color: statusColor[status] }}>{statusLabel}</span>
+          <span style={{ color: statusColor[status] }}>
+            {status === "working" ? (
+              <WorkingStatusShine>{statusLabel}</WorkingStatusShine>
+            ) : (
+              statusLabel
+            )}
+          </span>
           {detail ? <span className="text-muted-foreground"> · {detail}</span> : null}
         </span>
+        {preview ? <CaptainTaskPreview {...preview} /> : null}
         {meta ? (
           <span className="relative mt-2 block pl-5.5 duet:pl-[26px]">
             <span
@@ -255,6 +266,13 @@ function LocalTaskCard({
     snapshot?.additions !== undefined && snapshot.deletions !== undefined
       ? { additions: snapshot.additions, deletions: snapshot.deletions }
       : null;
+  const resultPreview =
+    row.status === "ready" ||
+    row.status === "done" ||
+    row.status === "failed" ||
+    row.status === "stopped"
+      ? row.subagent?.result
+      : null;
   if (childThreadId === null) return null;
   return (
     <TaskCardLayout
@@ -262,6 +280,16 @@ function LocalTaskCard({
       title={row.title ?? gt("Subagent")}
       elapsed={compactElapsed(row.activityAtMs, nowMs, messages)}
       detail={row.detail}
+      preview={
+        resultPreview
+          ? {
+              environmentId: thread?.environmentId ?? parent.environmentId,
+              threadId: childThreadId,
+              workspaceRoot: thread?.worktreePath ?? project?.workspaceRoot,
+              result: resultPreview,
+            }
+          : undefined
+      }
       onOpen={() => useRightPanelStore.getState().openThread(parent, childThreadId)}
       meta={
         project || thread?.branch || pullRequest || diff ? (

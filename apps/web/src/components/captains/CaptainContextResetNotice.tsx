@@ -1,5 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import type { ContextWindowSnapshot } from "@t3tools/client-runtime/state/context-window";
 import type { Captain, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 import { T, useGT } from "gt-react";
 import { MessageSquarePlusIcon } from "lucide-react";
@@ -12,14 +13,17 @@ import { ComposerBannerStack, type ComposerBannerStackItem } from "../chat/Compo
 import { CaptainResetDialog } from "./CaptainResetButton";
 import { useCaptain } from "./useCaptain";
 
-/** Offers a fresh Duet conversation when the active one's context is nearly full. */
+/** Offers a fresh Duet conversation when the active one is nearing automatic compaction. */
 export function CaptainContextResetNotice({
   threadRef,
-  usedPercentage,
+  contextWindow,
   onOpenThread,
 }: {
   readonly threadRef: ScopedThreadRef | null;
-  readonly usedPercentage: number | null;
+  readonly contextWindow: Pick<
+    ContextWindowSnapshot,
+    "usedTokens" | "maxTokens" | "autoCompactThreshold"
+  > | null;
   readonly onOpenThread: (threadId: ThreadId) => void;
 }) {
   const gt = useGT();
@@ -35,9 +39,16 @@ export function CaptainContextResetNotice({
     () => new Set(),
   );
   const threadKey = threadRef === null ? null : scopedThreadKey(threadRef);
+  // No threshold means the provider does not report one or compaction is off; measure the window.
+  const compacts = contextWindow?.autoCompactThreshold != null;
+  const compactionLimit = contextWindow?.autoCompactThreshold ?? contextWindow?.maxTokens ?? null;
+  const compactionPercentage =
+    contextWindow !== null && compactionLimit !== null && compactionLimit > 0
+      ? (contextWindow.usedTokens / compactionLimit) * 100
+      : null;
   const percent =
-    usedPercentage !== null && Number.isFinite(usedPercentage)
-      ? Math.round(Math.max(0, Math.min(100, usedPercentage)))
+    compactionPercentage !== null && Number.isFinite(compactionPercentage)
+      ? Math.round(Math.max(0, Math.min(100, compactionPercentage)))
       : null;
   const resetDialog = resetTarget ? (
     <CaptainResetDialog
@@ -56,13 +67,13 @@ export function CaptainContextResetNotice({
     captain.archivedAt !== null ||
     !canReset ||
     percent === null ||
-    usedPercentage === null ||
-    usedPercentage < 75
+    compactionPercentage === null ||
+    compactionPercentage < 75
   ) {
     return resetDialog;
   }
 
-  const locked = usedPercentage >= 90;
+  const locked = compactionPercentage >= 90;
   if (!locked && dismissedThreadKeys.has(threadKey)) return resetDialog;
 
   const dismiss = () => {
@@ -77,7 +88,9 @@ export function CaptainContextResetNotice({
     id: `captain-context-reset:${threadKey}`,
     variant: locked ? "warning" : "info",
     icon: <MessageSquarePlusIcon />,
-    title: gt("This conversation is {percent}% full.", { percent }),
+    title: compacts
+      ? gt("This conversation is {percent}% of the way to automatic compaction.", { percent })
+      : gt("This conversation is {percent}% full.", { percent }),
     description: gt("Start a new one and NOTES.md, memories and running tasks carry over."),
     actions: (
       <Button size="xs" variant="secondary" onClick={() => setResetTarget({ captain, threadRef })}>
@@ -87,7 +100,9 @@ export function CaptainContextResetNotice({
     ...(locked
       ? {}
       : {
-          dismissLabel: gt("Dismiss context usage notice"),
+          dismissLabel: compacts
+            ? gt("Dismiss compaction notice")
+            : gt("Dismiss context usage notice"),
           onDismiss: dismiss,
         }),
   };

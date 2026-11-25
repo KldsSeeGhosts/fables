@@ -24,7 +24,13 @@ import {
   captainThreadActivity,
 } from "@t3tools/client-runtime/state/captains";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
-import type { Captain, EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
+import {
+  resolveEnvironmentMachineKind,
+  type Captain,
+  type EnvironmentId,
+  type EnvironmentMachineKind,
+  type ScopedThreadRef,
+} from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
 import * as Schema from "effect/Schema";
 import { T, useGT, Var } from "gt-react";
@@ -36,7 +42,6 @@ import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { cn } from "../../lib/utils";
 import { useProjects, useThreadShells } from "../../state/entities";
-import { useEnvironmentMachines } from "../../state/environments";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { RelativeTime } from "../RelativeTime";
@@ -83,7 +88,7 @@ const DUET_POINTER_ACTIVATION = { activationConstraint: { distance: 6 } };
 const duetRowKey = (environmentId: EnvironmentId, captain: Pick<Captain, "id">) =>
   `${environmentId}:${captain.id}`;
 
-/** A 6px status dot with an optional count, the only live text a Duet sidebar row carries. */
+/** A 6px status dot with an optional count for requests that need the user. */
 function DuetLiveCount({
   tone,
   count,
@@ -126,6 +131,7 @@ function DuetChannelRow({
   captain,
   environmentId,
   label,
+  machineKind = "server",
   attention,
   working,
   archived,
@@ -139,6 +145,7 @@ function DuetChannelRow({
   captain: Captain;
   environmentId: EnvironmentId;
   label: string | undefined;
+  machineKind?: EnvironmentMachineKind | undefined;
   attention: number;
   working: boolean;
   archived: boolean;
@@ -152,7 +159,6 @@ function DuetChannelRow({
   const gt = useGT();
   const { name } = captain;
   const projects = useProjects();
-  const machines = useEnvironmentMachines();
   const { primary, children: running = [] } = activity;
   const waiting = !archived && attention > 0;
   const busy = !archived && !waiting && working;
@@ -193,21 +199,37 @@ function DuetChannelRow({
     attentionThread !== undefined && attentionThread.id !== captain.primaryThreadId
       ? attentionThread.title
       : null;
-  const waitingKind = attentionThread?.hasPendingApprovals
-    ? "approval"
-    : attentionThread?.hasPendingUserInput
-      ? "input"
-      : "request";
   const role = captain.role.trim();
   const details = (
-    archived ? [] : [lead, liveThread?.title, ...(waiting || busy ? [] : [label, scope, role])]
+    archived
+      ? []
+      : [
+          lead,
+          liveThread?.title,
+          ...(label === undefined ? [] : [label]),
+          ...(waiting || busy ? [] : [scope, role]),
+        ]
   ).filter((part): part is string => !!part);
   const accessibleLabel =
     details.length === 0
       ? gt("{name}, {status}", { name, status })
       : gt("{name}, {status}, {detail}", { name, status, detail: details.join(", ") });
-  const detailText = archived ? null : waiting ? waitingDetail : busy ? workingDetail : scope;
-  const trailing = waiting ? (
+  const detailText = archived
+    ? null
+    : waiting
+      ? (waitingDetail ?? status)
+      : busy
+        ? (workingDetail ?? scope)
+        : scope;
+  const trailing = busy ? (
+    <SidebarStatusLabel
+      environmentId={environmentId}
+      compact
+      kind="working"
+      label={status}
+      workingStartedAt={null}
+    />
+  ) : waiting ? (
     <DuetLiveCount
       tone="needs-input"
       count={attention}
@@ -215,7 +237,7 @@ function DuetChannelRow({
         count: attention,
       })}
     />
-  ) : !archived && !busy && primary ? (
+  ) : !archived && primary ? (
     <span className="text-meta text-placeholder tabular-nums">
       <SidebarRelativeTimeLabel timestamp={primary.updatedAt} />
     </span>
@@ -277,14 +299,6 @@ function DuetChannelRow({
             >
               {archived ? (
                 <span className="shrink-0 text-muted-foreground">{status}</span>
-              ) : waiting || busy ? (
-                <SidebarStatusLabel
-                  environmentId={environmentId}
-                  compact
-                  kind={waiting ? waitingKind : "working"}
-                  label={status}
-                  workingStartedAt={null}
-                />
               ) : scoped.length === 1 ? (
                 <ProjectFavicon project={scoped[0]!} className="size-3.5 shrink-0" />
               ) : (
@@ -292,8 +306,12 @@ function DuetChannelRow({
               )}
               <span className="min-w-0 flex-1 truncate">{detailText}</span>
               {label !== undefined ? (
-                <span className="max-w-20 shrink-0 truncate pl-1 text-caption text-placeholder">
-                  {label}
+                <span role="img" aria-label={label} className="flex shrink-0 pl-1 text-placeholder">
+                  <EnvironmentMachineIcon
+                    aria-hidden
+                    kind={machineKind}
+                    className="size-3 shrink-0"
+                  />
                 </span>
               ) : null}
             </span>
@@ -334,7 +352,7 @@ function DuetChannelRow({
               <div className="flex min-w-0 items-center gap-2">
                 <EnvironmentMachineIcon
                   aria-hidden
-                  kind={machines.get(environmentId) ?? "server"}
+                  kind={machineKind}
                   className="size-3 shrink-0 stroke-muted-foreground"
                 />
                 <span className="min-w-0 truncate">{label}</span>
@@ -375,7 +393,7 @@ function DuetChannelRow({
           </ThreadHoverCard>
         </ThreadHoverCardPopup>
       </Tooltip>
-      <div className="absolute end-1.5 top-1/2 shrink-0 -translate-y-1/2 opacity-0 transition-opacity duration-120 group-focus-within/captain-row:opacity-100 group-hover/captain-row:opacity-100">
+      <div className="absolute end-1.5 top-[15px] shrink-0 -translate-y-1/2 opacity-0 transition-opacity duration-120 group-focus-within/captain-row:opacity-100 group-hover/captain-row:opacity-100">
         {menu}
       </div>
       {children}
@@ -387,6 +405,7 @@ function CaptainShelfRow({
   captain,
   environmentId,
   label,
+  machineKind,
   attention,
   working,
   activity,
@@ -399,6 +418,7 @@ function CaptainShelfRow({
   captain: Captain;
   environmentId: EnvironmentId;
   label?: string;
+  machineKind?: EnvironmentMachineKind | undefined;
   attention: number;
   working: boolean;
   activity: CaptainActivity;
@@ -499,6 +519,7 @@ function CaptainShelfRow({
         captain={current}
         environmentId={environmentId}
         label={label}
+        machineKind={machineKind}
         attention={attention}
         working={working}
         archived={archived}
@@ -571,6 +592,7 @@ export function CaptainShelfList({
     {
       environmentId: EnvironmentId;
       label?: string;
+      machineKind?: EnvironmentMachineKind | undefined;
       captain: Captain;
       attention: number;
       working: boolean;
@@ -658,29 +680,32 @@ export function CaptainShelfList({
   const rowsList =
     orderedRows.length > 0 ? (
       <ul className="space-y-px">
-        {orderedRows.map(({ captain, environmentId, label, attention, working, ...activity }) => {
-          const key = duetRowKey(environmentId, captain);
-          const activeIndex = activeIndexByKey.get(key);
-          return (
-            <CaptainShelfRow
-              key={key}
-              captain={captain}
-              environmentId={environmentId}
-              {...(label !== undefined ? { label } : {})}
-              attention={attention}
-              working={working}
-              activity={activity}
-              selected={
-                activeThread?.environmentId === environmentId &&
-                activeThread.threadId === captain.primaryThreadId
-              }
-              canMoveUp={activeIndex !== undefined && activeIndex > 0}
-              canMoveDown={activeIndex !== undefined && activeIndex < activeCount - 1}
-              onMove={(direction) => handleMoveDuet(key, direction)}
-              onOpen={onOpen}
-            />
-          );
-        })}
+        {orderedRows.map(
+          ({ captain, environmentId, label, machineKind, attention, working, ...activity }) => {
+            const key = duetRowKey(environmentId, captain);
+            const activeIndex = activeIndexByKey.get(key);
+            return (
+              <CaptainShelfRow
+                key={key}
+                captain={captain}
+                environmentId={environmentId}
+                {...(label !== undefined ? { label } : {})}
+                machineKind={machineKind}
+                attention={attention}
+                working={working}
+                activity={activity}
+                selected={
+                  activeThread?.environmentId === environmentId &&
+                  activeThread.threadId === captain.primaryThreadId
+                }
+                canMoveUp={activeIndex !== undefined && activeIndex > 0}
+                canMoveDown={activeIndex !== undefined && activeIndex < activeCount - 1}
+                onMove={(direction) => handleMoveDuet(key, direction)}
+                onOpen={onOpen}
+              />
+            );
+          },
+        )}
       </ul>
     ) : null;
 
@@ -760,10 +785,11 @@ export function CaptainsShelf({
     captains: AsyncResult.getOrElse(results[index]!, () => null)?.captains ?? [],
   }));
   const rows = supporting
-    .flatMap(({ environmentId, label }, index) =>
+    .flatMap(({ environmentId, label, serverConfig }, index) =>
       environments[index]!.captains.map((captain) => ({
         environmentId,
         ...(supporting.length > 1 ? { label } : {}),
+        machineKind: resolveEnvironmentMachineKind(serverConfig ?? null),
         captain,
         ...captainThreadActivity(environmentId, captain, shells),
       })),

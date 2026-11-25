@@ -110,7 +110,7 @@ export const formatCaptainReports = (
 
 export const formatCaptainCrewRules = (captain: Captain, crew: string) =>
   [
-    `Crew rules from Captain ${captain.name}:\n- Work only in your own working directory and the folders listed with it. If the brief gives a path in another checkout, use the matching folder in yours.\n- For multi-step work, keep a progress note in your worktree and commit after each step.\n- Run the focused tests or checks that prove the change, and report the evidence.\n- Do not report done until the done-check from your brief passes.\n- End your final message with a 2 to 4 sentence summary first, then details.`,
+    `Crew rules from Captain ${captain.name}:\n- Work only in your own working directory and the folders listed with it. If the brief gives a path in another checkout, use the matching folder in yours.\n- For multi-step work, keep a progress note in your worktree and commit after each step.\n- Run the focused tests or checks that prove the change, and report the evidence.\n- Do not report done until the done-check from your brief passes.\n- End your final message with a 2 to 4 sentence summary first, then details.\n- If you took a screenshot or made an image of the result, put the clearest one in that final message as a markdown image with its absolute path.`,
     crew.trim() === "" ? "" : `CREW.md:\n${prefix(crew, 2_000)}`,
   ]
     .filter((part) => part !== "")
