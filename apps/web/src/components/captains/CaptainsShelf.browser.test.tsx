@@ -264,7 +264,7 @@ it("gives needs input precedence over working with an amber count", async () => 
 });
 
 it("keeps line two filled when the Duet itself works or waits without its crew", async () => {
-  const secondLine = (row: HTMLElement) =>
+  const secondLine = (row: Element) =>
     row.querySelector(":scope > span.grid")?.children[1]?.textContent;
   {
     await using screen = await renderList({ working: true });
