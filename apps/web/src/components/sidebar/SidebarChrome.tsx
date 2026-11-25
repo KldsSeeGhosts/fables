@@ -1,10 +1,8 @@
 import {
   ArrowLeftIcon,
   ChartNoAxesColumnIcon,
-  MoonIcon,
   SearchIcon,
   SettingsIcon,
-  SunIcon,
   WorkflowIcon,
 } from "lucide-react";
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
@@ -13,7 +11,6 @@ import { memo } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
-import { useTheme } from "../../hooks/useTheme";
 import { useDuetShell } from "../../hooks/useDuetShell";
 import { cn } from "../../lib/utils";
 import { observeResize } from "../../lib/observeResize";
@@ -356,18 +353,11 @@ const DuetSidebarUtilityMenu = memo(function DuetSidebarUtilityMenu() {
   const pullRequestsSupported = usePullRequestsSupported();
   const issuesSupported = useIssuesSupported();
   const workflowsReachable = useWorkflowEnvironmentIds().length > 0;
-  const { resolvedTheme, setAppearanceChoice } = useTheme();
   const closeMobileSidebar = () => {
     if (isMobile) setOpenMobile(false);
   };
-  const dark = resolvedTheme === "dark";
   return (
     <TooltipProvider>
-      <ul className="flex w-full min-w-0 flex-row items-center gap-1 px-2">
-        <SidebarThreadUndoNotice />
-        <SidebarUpstreamUpdatePill />
-        <SidebarUpdatePill />
-      </ul>
       <div data-duet-sidebar-footer="" className="flex h-12 items-center gap-0.5 px-2.5">
         {isOnUtilityPage ? (
           <SidebarUtilityItem
@@ -434,13 +424,11 @@ const DuetSidebarUtilityMenu = memo(function DuetSidebarUtilityMenu() {
             void navigate({ to: "/usage" });
           }}
         />
-        <span className="flex-1" />
-        <SidebarUtilityItem
-          size="header"
-          icon={dark ? <SunIcon className="size-4" /> : <MoonIcon className="size-4" />}
-          label={dark ? gt("Use light appearance") : gt("Use dark appearance")}
-          onClick={() => setAppearanceChoice(dark ? "light" : "dark")}
-        />
+        <ul className="flex min-w-0 flex-1 flex-row items-center">
+          <SidebarThreadUndoNotice />
+          <SidebarUpstreamUpdatePill />
+          <SidebarUpdatePill />
+        </ul>
       </div>
     </TooltipProvider>
   );

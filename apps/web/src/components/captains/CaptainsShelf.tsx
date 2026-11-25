@@ -1,4 +1,20 @@
 /* oxlint-disable t3code/no-styled-raw-controls -- The Captains section label doubles as the overview link and matches the Threads label beside it. */
+import {
+  closestCenter,
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   captainAttentionTotal,
@@ -8,11 +24,13 @@ import {
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import type { Captain, EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
+import * as Schema from "effect/Schema";
 import { T, useGT, Var } from "gt-react";
 import { ClockIcon, EllipsisIcon, FoldersIcon, ListTodoIcon, PlusIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { useDuetShell } from "../../hooks/useDuetShell";
+import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { cn } from "../../lib/utils";
 import { useProjects, useThreadShells } from "../../state/entities";
@@ -24,6 +42,10 @@ import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { Button, ContentButton } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
 import { SidebarHeaderIconButton } from "../sidebar/SidebarThreadHeader";
+import {
+  RelativeTimeLabel as SidebarRelativeTimeLabel,
+  SidebarStatusLabel,
+} from "../sidebar/SidebarThreadRow";
 import { Tooltip, TooltipTrigger } from "../ui/tooltip";
 import { CaptainAvatar } from "./CaptainAvatar";
 import { captainPaletteOf } from "./captainPalette";
@@ -32,6 +54,7 @@ import { captainBriefTabAtom, openCaptainTasks, type CaptainDrawerTab } from "./
 import { CaptainProfileDialogs, useCaptainProfile } from "./CaptainBriefPanel";
 import { CaptainEditorDialog } from "./CaptainEditorDialog";
 import { useCaptainDestinations, useCaptainEnvironments } from "./captainsDirectory";
+import { orderDuets } from "./duetOrder.logic";
 
 /** Thread keys of Captain conversations, which the shelf lists instead of their project. */
 export function useCaptainConversationKeys(): ReadonlySet<string> {
@@ -46,6 +69,13 @@ export function useCaptainConversationKeys(): ReadonlySet<string> {
 }
 
 const NO_CAPTAIN_CONVERSATIONS: ReadonlySet<string> = new Set();
+const DUET_ORDER_STORAGE_KEY = "t3code:sidebar:duet-order";
+const DUET_ORDER_SCHEMA = Schema.Array(Schema.String);
+const DUET_DRAG_MODIFIERS = [restrictToVerticalAxis, restrictToFirstScrollableAncestor];
+const DUET_POINTER_ACTIVATION = { activationConstraint: { distance: 6 } };
+
+const duetRowKey = (environmentId: EnvironmentId, captain: Pick<Captain, "id">) =>
+  `${environmentId}:${captain.id}`;
 
 /** A 6px status dot with an optional count, the only live text a Duet sidebar row carries. */
 function DuetLiveCount({
@@ -84,9 +114,7 @@ type CaptainActivity = {
 };
 
 /**
- * A Duet channel is one borderless line: the Captain's creature and name. The creature moves while
- * the Captain works, a dot at the end counts what waits on you, and everything else waits in the
- * hover card.
+ * A Duet channel is a 48px two-line row: creature and name first, then its live work or scope.
  */
 function DuetChannelRow({
   captain,
@@ -122,6 +150,11 @@ function DuetChannelRow({
   const { primary, children: running = [] } = activity;
   const waiting = !archived && attention > 0;
   const busy = !archived && !waiting && working;
+  const rowKey = duetRowKey(environmentId, captain);
+  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: rowKey,
+    disabled: archived,
+  });
 
   const scoped = projects.filter(
     (project) =>
@@ -134,17 +167,31 @@ function DuetChannelRow({
         ? (scoped[0]?.title ?? gt("1 project"))
         : gt("{count} projects", { count: captain.scopedProjectIds.length });
   const backgroundTasks = primary?.pendingBackgroundTasks.length ?? 0;
-  const liveThread = waiting
+  const attentionThread = waiting
     ? [primary, ...running].find(
         (thread) =>
           thread?.hasPendingApprovals ||
           thread?.hasPendingUserInput ||
           thread?.pendingSubagentRequest != null,
       )
-    : busy
-      ? running[0]
-      : undefined;
+    : undefined;
+  const liveThread = attentionThread ?? (busy ? running[0] : undefined);
   const lead = busy && running.length > 0 ? gt("{count} running", { count: running.length }) : null;
+  const workingDetail =
+    running.length === 1
+      ? running[0]!.title
+      : running.length > 1
+        ? gt("{count} running", { count: running.length })
+        : null;
+  const waitingDetail =
+    attentionThread !== undefined && attentionThread.id !== captain.primaryThreadId
+      ? attentionThread.title
+      : null;
+  const waitingKind = attentionThread?.hasPendingApprovals
+    ? "approval"
+    : attentionThread?.hasPendingUserInput
+      ? "input"
+      : "request";
   const role = captain.role.trim();
   const details = (
     archived ? [] : [lead, liveThread?.title, ...(waiting || busy ? [] : [label, scope, role])]
@@ -153,12 +200,32 @@ function DuetChannelRow({
     details.length === 0
       ? gt("{name}, {status}", { name, status })
       : gt("{name}, {status}, {detail}", { name, status, detail: details.join(", ") });
+  const detailText = archived ? null : waiting ? waitingDetail : busy ? workingDetail : scope;
+  const trailing = waiting ? (
+    <DuetLiveCount
+      tone="needs-input"
+      count={attention}
+      label={gt("{count, plural, one {{count} request} other {{count} requests}}", {
+        count: attention,
+      })}
+    />
+  ) : !archived && !busy && primary ? (
+    <span className="text-meta text-placeholder tabular-nums">
+      <SidebarRelativeTimeLabel timestamp={primary.updatedAt} />
+    </span>
+  ) : null;
 
   return (
     <li
+      ref={setNodeRef}
       data-duet-channel-card=""
       data-duet-palette={captainPaletteOf(captain.avatar)}
-      className="group/captain-row relative flex items-center"
+      className={cn(
+        "group/captain-row relative flex items-center",
+        isDragging && "z-20 rounded-lg bg-sidebar shadow-lg",
+      )}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      {...listeners}
     >
       <Tooltip>
         <TooltipTrigger
@@ -173,32 +240,58 @@ function DuetChannelRow({
         >
           <CaptainAvatar
             avatar={captain.avatar}
-            size="channel"
+            size="sidebar"
             state={archived ? "archived" : waiting ? "waiting" : busy ? "working" : "idle"}
           />
-          <span className={cn("min-w-0 flex-1 truncate", archived && "text-muted-foreground")}>
-            {name}
-          </span>
-          {waiting || (busy && running.length > 0) ? (
-            <span className="flex shrink-0 transition-opacity duration-120 group-focus-within/captain-row:opacity-0 group-hover/captain-row:opacity-0">
-              {waiting ? (
-                <DuetLiveCount
-                  tone="needs-input"
-                  count={attention > 1 ? attention : undefined}
-                  label={gt("{count, plural, one {{count} request} other {{count} requests}}", {
-                    count: attention,
-                  })}
-                />
-              ) : (
-                <span
-                  data-duet-live="working"
-                  className="text-caption text-(--duet-working-text) tabular-nums"
-                >
-                  {running.length}
+          <span className="grid min-w-0 flex-1 content-center gap-0.5">
+            <span className="flex h-[18px] min-w-0 items-center gap-2">
+              <span
+                className={cn(
+                  "min-w-0 flex-1 truncate text-label",
+                  archived && "text-muted-foreground",
+                )}
+              >
+                {name}
+              </span>
+              {trailing ? (
+                <span className="flex shrink-0 transition-opacity duration-120 group-focus-within/captain-row:opacity-0 group-hover/captain-row:opacity-0">
+                  {trailing}
                 </span>
-              )}
+              ) : null}
             </span>
-          ) : null}
+            <span
+              className={cn(
+                "flex h-4 min-w-0 items-center gap-1.5 text-meta leading-4",
+                waiting
+                  ? "text-(--duet-needs-input-text)"
+                  : busy
+                    ? "text-(--duet-working-text)"
+                    : "text-muted-foreground",
+              )}
+            >
+              {archived ? (
+                <span className="shrink-0 text-muted-foreground">{status}</span>
+              ) : waiting || busy ? (
+                <SidebarStatusLabel
+                  environmentId={environmentId}
+                  compact
+                  kind={waiting ? waitingKind : "working"}
+                  label={status}
+                  workingStartedAt={null}
+                />
+              ) : scoped.length === 1 ? (
+                <ProjectFavicon project={scoped[0]!} className="size-3.5 shrink-0" />
+              ) : (
+                <FoldersIcon aria-hidden className="size-3 shrink-0 text-icon-muted" />
+              )}
+              <span className="min-w-0 flex-1 truncate">{detailText}</span>
+              {label !== undefined ? (
+                <span className="max-w-20 shrink-0 truncate pl-1 text-caption text-placeholder">
+                  {label}
+                </span>
+              ) : null}
+            </span>
+          </span>
         </TooltipTrigger>
         <ThreadHoverCardPopup side="right" align="start" sideOffset={8} className="w-64">
           <ThreadHoverCard title={name}>
@@ -276,7 +369,7 @@ function DuetChannelRow({
           </ThreadHoverCard>
         </ThreadHoverCardPopup>
       </Tooltip>
-      <div className="absolute end-1.5 shrink-0 opacity-0 transition-opacity duration-120 group-focus-within/captain-row:opacity-100 group-hover/captain-row:opacity-100">
+      <div className="absolute end-1.5 top-1/2 shrink-0 -translate-y-1/2 opacity-0 transition-opacity duration-120 group-focus-within/captain-row:opacity-100 group-hover/captain-row:opacity-100">
         {menu}
       </div>
       {children}
@@ -474,6 +567,30 @@ export function CaptainShelfList({
     : gt("{count, plural, one {{count} Captain needs input} other {{count} Captains need input}}", {
         count: attention,
       });
+  const [savedDuetOrder, setSavedDuetOrder] = useLocalStorage(
+    DUET_ORDER_STORAGE_KEY,
+    [] as Array<string>,
+    DUET_ORDER_SCHEMA,
+  );
+  const sensors = useSensors(useSensor(PointerSensor, DUET_POINTER_ACTIVATION));
+  const orderedRows = isDuet
+    ? orderDuets(
+        rows.map((row) => ({
+          key: duetRowKey(row.environmentId, row.captain),
+          archived: row.captain.archivedAt !== null,
+          row,
+        })),
+        savedDuetOrder,
+      ).map(({ row }) => row)
+    : rows;
+  const orderedKeys = orderedRows.map((row) => duetRowKey(row.environmentId, row.captain));
+  const handleDuetDragEnd = (event: DragEndEvent) => {
+    if (event.over === null || event.active.id === event.over.id) return;
+    const activeIndex = orderedKeys.indexOf(String(event.active.id));
+    const overIndex = orderedKeys.indexOf(String(event.over.id));
+    if (activeIndex === -1 || overIndex === -1) return;
+    setSavedDuetOrder(arrayMove(orderedKeys, activeIndex, overIndex));
+  };
 
   const heading = (
     <>
@@ -483,6 +600,28 @@ export function CaptainShelfList({
       ) : null}
     </>
   );
+
+  const rowsList =
+    orderedRows.length > 0 ? (
+      <ul className="space-y-px">
+        {orderedRows.map(({ captain, environmentId, label, attention, working, ...activity }) => (
+          <CaptainShelfRow
+            key={duetRowKey(environmentId, captain)}
+            captain={captain}
+            environmentId={environmentId}
+            {...(label !== undefined ? { label } : {})}
+            attention={attention}
+            working={working}
+            activity={activity}
+            selected={
+              activeThread?.environmentId === environmentId &&
+              activeThread.threadId === captain.primaryThreadId
+            }
+            onOpen={onOpen}
+          />
+        ))}
+      </ul>
+    ) : null;
 
   return (
     <li className="mb-1 list-none">
@@ -517,26 +656,20 @@ export function CaptainShelfList({
           </span>
         ) : null}
       </div>
-      {rows.length > 0 ? (
-        <ul className="space-y-px">
-          {rows.map(({ captain, environmentId, label, attention, working, ...activity }) => (
-            <CaptainShelfRow
-              key={`${environmentId}:${captain.id}`}
-              captain={captain}
-              environmentId={environmentId}
-              {...(label !== undefined ? { label } : {})}
-              attention={attention}
-              working={working}
-              activity={activity}
-              selected={
-                activeThread?.environmentId === environmentId &&
-                activeThread.threadId === captain.primaryThreadId
-              }
-              onOpen={onOpen}
-            />
-          ))}
-        </ul>
-      ) : null}
+      {isDuet ? (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={DUET_DRAG_MODIFIERS}
+          onDragEnd={handleDuetDragEnd}
+        >
+          <SortableContext items={orderedKeys} strategy={verticalListSortingStrategy}>
+            {rowsList}
+          </SortableContext>
+        </DndContext>
+      ) : (
+        rowsList
+      )}
     </li>
   );
 }
