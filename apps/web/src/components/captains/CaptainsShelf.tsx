@@ -71,7 +71,8 @@ export function CaptainsHubRow({ active, onOpen }: { active: boolean; onOpen: ()
     ) : null;
   if (isDuet) {
     return (
-      <div className="relative">
+      // The header group's 8px bottom padding shrinks to the tree's 2px row gap.
+      <div className="relative -mb-1.5">
         <ContentButton
           variant="duet-row"
           data-sidebar-row="nav:captains"
@@ -87,7 +88,7 @@ export function CaptainsHubRow({ active, onOpen }: { active: boolean; onOpen: ()
         {/* The channel tree's trunk starts here and crosses the header group's bottom padding. */}
         <span
           aria-hidden
-          className="pointer-events-none absolute top-full left-4 h-2 w-px bg-(--duet-tree-line)"
+          className="pointer-events-none absolute top-full left-4 h-0.5 w-px bg-(--duet-tree-line)"
         />
       </div>
     );
@@ -325,9 +326,9 @@ export function CaptainShelfList({
               aria-hidden
               className="pointer-events-none absolute top-0 bottom-8 left-4 w-px bg-(--duet-tree-line)"
             />
-            <ul className="flex flex-col">{rowList}</ul>
+            <ul className="flex flex-col gap-0.5">{rowList}</ul>
             {onCreate ? (
-              <div className={DUET_TREE_BRANCH_CLASS_NAME}>
+              <div className={cn(DUET_TREE_BRANCH_CLASS_NAME, rowList.length > 0 && "mt-0.5")}>
                 <ContentButton
                   variant="duet-row-quiet"
                   onClick={onCreate}

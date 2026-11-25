@@ -3,7 +3,11 @@
    geometry stays in index.css. */
 html:root[data-theme-id="ksg-salon"] {
   --duet-hairline: #ebebeb;
-  --duet-row-active: #e5e5e5;
+  --duet-row-active: #dddddd;
+  --duet-sidebar-border: #f1f1f1;
+  --duet-chrome-icon: #8a8a8a;
+  --duet-composer-border: #e3e3e3;
+  --duet-composer-focus-border: #cfcfcf;
   --duet-assistant-bubble: #f2f2f2;
   --duet-ready: #1e7d2c;
   --duet-needs-input: #9f7832;
@@ -37,6 +41,9 @@ html:root[data-theme-id="ksg-salon"] {
     --duet-needs-input-ring: #d6a34a;
     --duet-link: #6aa2e8;
     --composer-fill: #303030;
+    --duet-sidebar-border: #262626;
+    --duet-composer-border: #363636;
+    --duet-composer-focus-border: #404040;
     --duet-tree-line: #333333;
     --duet-quiet-pill-foreground: #a3a3a3;
     --duet-quiet-pill-hover-fill: #252525;
@@ -69,7 +76,38 @@ html:root[data-theme-id="ksg-salon"] {
   }
 
   [data-slot="sidebar-inner"] {
-    border-inline-end: 1px solid var(--duet-hairline);
+    border-inline-end: 1px solid var(--duet-sidebar-border);
+  }
+
+  [data-duet-wordmark] {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  [data-duet-sidebar-nav] svg,
+  [data-duet-sidebar-footer] svg {
+    color: var(--duet-chrome-icon);
+  }
+
+  [data-duet-sidebar-nav] svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  [data-duet-card-title] {
+    font-size: 0.84375rem;
+    line-height: 1.125rem;
+    font-weight: 500;
+  }
+
+  [data-duet-card-title="receded"] {
+    font-weight: 400;
+  }
+
+  [data-duet-card-meta] > [role="img"]:first-child svg {
+    width: 12px;
+    height: 12px;
   }
 
   [data-preview-panel-mode] {
@@ -99,9 +137,29 @@ html:root[data-theme-id="ksg-salon"] {
   }
 
   [data-duet-composer-leading] > button,
-  [data-duet-composer-leading] > span > button {
-    width: 1.75rem;
-    height: 1.75rem;
+  [data-duet-composer-leading] > span > button,
+  [data-duet-composer-inline] > button,
+  [data-duet-composer-inline] > span > button {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  [data-duet-composer-leading] > :is(button, span > button) svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* Dark Duet shows return only once there is something to send. */
+  [data-duet-composer="dark"] [data-composer-send]:disabled:not([aria-busy]) {
+    visibility: hidden;
+  }
+
+  [data-duet-composer="dark"] [data-composer-send]:enabled {
+    color: #8a8a8a;
+  }
+
+  [data-duet-composer="dark"] [data-composer-send]:enabled:is(:hover, :focus-visible) {
+    color: var(--foreground);
   }
 
   /* Coding-thread meta reads as quiet text: 13px icons, 12px apart, no chip. */
@@ -138,6 +196,22 @@ html:root[data-theme-id="ksg-salon"] {
     color: var(--foreground);
   }
 
+  /* Dark meta reads model first, then effort and permission one step quieter. */
+  [data-duet-composer="dark"] [data-duet-composer-footer-controls],
+  [data-duet-composer="dark"]
+    [data-duet-composer-footer-controls]
+    [data-chat-composer-resting-controls] {
+    color: #9a9a9a;
+    font-size: 12px;
+  }
+
+  [data-duet-composer="dark"]
+    [data-duet-composer-footer-controls]
+    [data-chat-composer-resting-controls]
+    > :first-child {
+    color: #d0d0d0;
+  }
+
   /* Connected pane tabs become a flat strip: no notch shape, ears or rim. */
   @media (width >= 48rem) {
     [data-slot="sidebar"][data-variant="inset"] ~ [data-slot="sidebar-inset"] {
@@ -161,7 +235,6 @@ html:root[data-theme-id="ksg-salon"] {
         margin: 0;
         pointer-events: auto;
         mask-image: none;
-        border-block-end: 1px solid var(--duet-hairline);
       }
 
       [data-pane-notch=""] [data-layout-tab-strip] .surface-pane-tab,
@@ -324,7 +397,19 @@ html:root[data-theme-id="ksg-salon"] {
   }
 
   [data-chat-hero] h1 {
-    font-weight: 400;
+    line-height: 2rem;
+    font-weight: 500;
+  }
+
+  /* A trailing spacer lifts the centred hero group to about 45% of the canvas. */
+  [data-chat-composer-overlay]:has([data-chat-hero])::after {
+    content: "";
+    flex: 0 1 10%;
+  }
+
+  /* Pills sit 12px under the composer row rather than after its 18px bottom spacer. */
+  [data-chat-composer-overlay] > :has(> * > [data-chat-hero-starters]) {
+    margin-block-start: -6px;
   }
 
   [data-duet-task-highlight="true"] {

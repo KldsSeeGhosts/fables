@@ -156,13 +156,16 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         <div className="relative z-10 flex min-w-0 flex-1 items-center">
           <div
             aria-hidden
-            className="hidden w-[calc(var(--workspace-controls-left)+var(--workspace-titlebar-control-size)+0.5rem)] shrink-0 md:block"
+            className="hidden w-[calc(var(--workspace-controls-left)+var(--workspace-titlebar-control-size)-2px)] shrink-0 md:block"
           />
-          <div className={DUET_WORDMARK_CLASS_NAME}>
+          <div data-duet-wordmark="" className={DUET_WORDMARK_CLASS_NAME}>
             {/* oxlint-disable-next-line t3code/no-untranslated-copy -- product wordmark */}
             KSG Duet
           </div>
-          <div className="order-3 flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag] [[data-macos-window-controls]_&]:order-1">
+          <div
+            data-duet-sidebar-nav=""
+            className="order-3 flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag] [[data-macos-window-controls]_&]:order-1"
+          >
             <NavigationHistoryButton direction="back" onStageBackdrop={false} />
             <NavigationHistoryButton direction="forward" onStageBackdrop={false} />
           </div>
@@ -170,12 +173,13 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
           <Button
             size="icon-sm"
             variant="ghost"
+            data-duet-sidebar-nav=""
             className="order-4 [-webkit-app-region:no-drag]"
             aria-label={gt("Search")}
             title={gt("Search")}
             onClick={() => onSearch?.()}
           >
-            <SearchIcon className="size-4" />
+            <SearchIcon className="size-3.5" />
           </Button>
         </div>
       ) : (
@@ -392,7 +396,7 @@ const DuetSidebarUtilityMenu = memo(function DuetSidebarUtilityMenu() {
         <SidebarUpstreamUpdatePill />
         <SidebarUpdatePill />
       </ul>
-      <div className="flex h-12 items-center gap-0.5 border-t border-(--duet-hairline) px-2">
+      <div data-duet-sidebar-footer="" className="flex h-12 items-center gap-0.5 px-2">
         <SidebarUtilityItem
           size="header"
           icon={<SettingsIcon className="size-4" />}

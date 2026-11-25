@@ -73,6 +73,7 @@ import {
   useRef,
   useState,
   type ComponentProps,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { flushSync } from "react-dom";
@@ -249,6 +250,8 @@ import {
   type ExpandedImagePreview,
 } from "./ExpandedImagePreview";
 import { cn, isMacPlatform, randomUUID } from "~/lib/utils";
+import { contextMenuSourceOf } from "~/contextMenuSource";
+import { readLocalApi } from "~/localApi";
 import {
   getComposerSubmissionValidationMessage,
   isComposerSubmissionBlocked,
@@ -3773,6 +3776,20 @@ export function ChatComposer(props: ChatComposerProps) {
       ? gt("Add a reply")
       : gt("Describe a task or ask a question");
   const showDuetComposerFooterControls = !isCaptainPrimaryThread;
+  const isDuetDark = isDuetShell && resolvedTheme === "dark";
+  // Dark Duet drops the voice chevron, so the mic's right-click menu carries voice settings.
+  const openDuetVoiceMenu = async (event: ReactMouseEvent) => {
+    if (event.defaultPrevented) return;
+    const api = readLocalApi();
+    if (!api) return;
+    event.preventDefault();
+    const clicked = await api.contextMenu.show(
+      [{ id: "voice-settings", label: gt("Voice settings") }] as const,
+      { x: event.clientX, y: event.clientY },
+      contextMenuSourceOf(event),
+    );
+    if (clicked === "voice-settings") void navigate({ to: "/settings/voice" });
+  };
 
   const requestCard =
     !isComposerCollapsedMobile && pendingUserInputs.length > 0 ? (
@@ -3938,9 +3955,10 @@ export function ChatComposer(props: ChatComposerProps) {
       }}
       className={cn(
         "mx-auto w-full min-w-0 max-w-(--chat-content-max-width) rounded-[inherit]",
-        isDuetShell && (isCaptainPrimaryThread ? "max-w-166" : "max-w-168"),
+        isDuetShell && (isDuetDark ? "max-w-160" : "max-w-166"),
       )}
       data-chat-composer-form="true"
+      data-duet-composer={isDuetShell ? (isDuetDark ? "dark" : "light") : undefined}
       {...threadContextDropTargetProps()}
     >
       {requestCardHost && requestCard ? (
@@ -4080,7 +4098,10 @@ export function ChatComposer(props: ChatComposerProps) {
               data-chat-composer-body="true"
               className={cn(
                 isDuetShell
-                  ? "composer-prompt-body relative grid min-h-11 grid-cols-1 items-center rounded-xl border border-input bg-(--composer-fill) ps-4 pe-11 py-1.5"
+                  ? cn(
+                      "composer-prompt-body relative grid grid-cols-1 items-center rounded-lg border border-(--duet-composer-border) bg-(--composer-fill) focus-within:border-(--duet-composer-focus-border)",
+                      isDuetDark ? "min-h-9 py-2 ps-9 pe-16" : "min-h-10 py-2.5 ps-3.25 pe-10",
+                    )
                   : "composer-prompt-body relative grid min-h-12 grid-cols-1 items-center pt-3 pb-0.5 ps-4.5 pe-4",
                 isComposerCollapsedMobile && "hidden",
               )}
@@ -4153,7 +4174,8 @@ export function ChatComposer(props: ChatComposerProps) {
 
               <div
                 className={cn(
-                  "relative min-w-0 py-1.5 [grid-area:prompt] transition-opacity duration-150",
+                  "relative min-w-0 [grid-area:prompt] transition-opacity duration-150",
+                  isDuetShell ? null : "py-1.5",
                   composerSendHeld && "opacity-65",
                 )}
               >
@@ -4266,13 +4288,36 @@ export function ChatComposer(props: ChatComposerProps) {
                   />
                 </ComposerContextActionsContext>
               </div>
+              {isDuetDark && composerAttachButton ? (
+                <div
+                  data-duet-composer-inline="leading"
+                  className="absolute bottom-1.5 left-[5px] z-10 flex"
+                >
+                  {composerAttachButton}
+                </div>
+              ) : null}
               {isDuetShell ? (
                 <div
                   data-chat-composer-actions="right"
                   data-chat-composer-transition-actions="true"
-                  className="absolute right-2 bottom-1.5 z-10 flex items-center"
+                  className={cn(
+                    "absolute z-10 flex items-center",
+                    // Dark return centres 29px left of the mic, or takes its 17px slot without one.
+                    isDuetDark
+                      ? cn("bottom-0.5", showsSpeechAction ? "right-8" : "right-[3px]")
+                      : "right-1.5 bottom-1",
+                  )}
                 >
                   {composerFooterPrimaryActions}
+                </div>
+              ) : null}
+              {isDuetDark && showsSpeechAction ? (
+                <div
+                  data-duet-composer-inline="trailing"
+                  className="absolute right-[5px] bottom-1.5 z-10 flex"
+                  onContextMenu={(event) => void openDuetVoiceMenu(event)}
+                >
+                  {renderSpeechAction(false)}
                 </div>
               ) : null}
             </div>
@@ -4280,9 +4325,17 @@ export function ChatComposer(props: ChatComposerProps) {
               data-chat-composer-toolbar="true"
               data-duet-composer-footer={isDuetShell ? "" : undefined}
               className={cn(
+                // Icon centres sit 17px below the box and, in light, 17px in from its left edge.
                 isDuetShell
-                  ? "relative mt-2 flex h-7 min-w-0 items-center gap-1"
+                  ? cn(
+                      "relative mt-[5px] flex h-6 min-w-0 items-center gap-1",
+                      !isDuetDark && "ps-1.25",
+                    )
                   : "flex min-h-11 min-w-0 items-center gap-1 ps-2 pe-2 pb-2",
+                isDuetDark &&
+                  !showDuetComposerFooterControls &&
+                  stashQueue.length === 0 &&
+                  "hidden",
                 isComposerCollapsedMobile && "hidden",
               )}
             >
@@ -4290,9 +4343,9 @@ export function ChatComposer(props: ChatComposerProps) {
                 className="flex min-w-0 flex-1 items-center gap-0.5"
                 data-duet-composer-leading={isDuetShell ? "" : undefined}
               >
-                {composerAttachButton}
-                {isDuetShell ? renderSpeechAction(false) : null}
-                {isDuetShell ? (
+                {isDuetDark ? null : composerAttachButton}
+                {isDuetShell && !isDuetDark ? renderSpeechAction(false) : null}
+                {isDuetShell && !isDuetDark ? (
                   <Button
                     type="button"
                     variant="ghost"

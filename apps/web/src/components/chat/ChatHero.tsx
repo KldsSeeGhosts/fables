@@ -89,7 +89,11 @@ export function ChatHeroGreeting({
   const captain = useCaptain(threadRef);
   const duet = useDuetShell();
   return (
-    <div data-chat-hero="" className="flex flex-col items-center gap-3 duet:gap-1 text-center">
+    // Duet pulls the 24px lane padding in so the title sits 12px above the composer.
+    <div
+      data-chat-hero=""
+      className="flex flex-col items-center gap-3 duet:-mb-3 duet:gap-1 text-center"
+    >
       {duet ? (
         captain ? (
           <div className="mb-2">
@@ -132,6 +136,7 @@ export function ChatHeroStarters({
     <div
       role="group"
       aria-label={gt("Suggested prompts")}
+      data-chat-hero-starters=""
       className="flex flex-wrap items-center justify-center gap-2"
     >
       {starters.map((starter) => (

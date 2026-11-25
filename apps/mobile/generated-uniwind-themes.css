@@ -2944,9 +2944,9 @@
       --color-card-alt: #ffffff;
       --color-card-translucent: rgba(255, 255, 255, 0.8);
       --color-thread-canvas: #ffffff;
-      --color-thread-selected: #e5e5e5;
+      --color-thread-selected: #dddddd;
       --color-thread-selected-foreground: #242424;
-      --color-thread-selected-foreground-muted: #666666;
+      --color-thread-selected-foreground-muted: #616161;
       --color-thread-hover: #f0f0f0;
       --color-row-hover: #f0f0f0;
       --color-composer-panel: rgba(255, 255, 255, 0.88);
@@ -3110,7 +3110,7 @@
       --color-thread-selected: #404040;
       --color-thread-selected-foreground: #d6d6d6;
       --color-thread-selected-foreground-muted: #ababab;
-      --color-thread-hover: #2c2c2c;
+      --color-thread-hover: #2a2a2a;
       --color-row-hover: #2c2c2c;
       --color-composer-panel: rgba(25, 25, 25, 0.92);
       --color-composer-surface: rgba(37, 37, 37, 0.9);
@@ -3182,7 +3182,7 @@
       --color-backdrop: rgba(0, 0, 0, 0.48);
       --color-drawer: #1f1f1f;
       --color-drawer-foreground: #d6d6d6;
-      --color-drawer-foreground-muted: #939393;
+      --color-drawer-foreground-muted: #919191;
       --color-drawer-border: #262626;
       --color-drawer-shadow: rgba(0, 0, 0, 0.32);
       --color-dot-separator: rgba(138, 138, 138, 0.35);

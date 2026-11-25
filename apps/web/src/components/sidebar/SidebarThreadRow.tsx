@@ -143,7 +143,6 @@ import { useThreadHasUnsentDraft } from "../../composerDraftStore";
 import { ThreadDetailsIssueRows } from "../chat/ThreadDetailsIssueRows";
 import { IssueGlyph, issueStatePresentation } from "../issue/issuePresentation";
 
-const DUET_CARD_RADIUS_CLASS = "rounded-lg";
 const DUET_CARD_TITLE_TYPE_CLASS = "text-control";
 
 // The fields thread rows show. Provider status pushes refresh `checkedAt`,
@@ -1148,7 +1147,6 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     shouldRecede &&
       (status === "preparing" || status === "working") &&
       "opacity-70 transition-opacity hover:opacity-100 focus-within:opacity-100 motion-reduce:transition-none",
-    isDuet && variant === "card" && DUET_CARD_RADIUS_CLASS,
     isFileDragOver && "ring-1 ring-inset ring-primary/70",
     isFileDragOver && !props.isActive && !isSelected && "bg-sidebar-row-hover",
     props.sortable?.isDragging &&
@@ -1204,6 +1202,9 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     ) : (
       <span
         ref={isRegeneratingTitle ? observeVisibleAnimation : undefined}
+        data-duet-card-title={
+          isDuet && variant === "card" ? (shouldRecede ? "receded" : "") : undefined
+        }
         className={cn(
           isDuet && variant === "card"
             ? cn(
@@ -1422,6 +1423,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     runningTerminalIds.length === 0;
   const metaLine = metaLineEmpty ? null : (
     <div
+      data-duet-card-meta={isDuet ? "" : undefined}
       className={cn(
         "mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-meta font-normal",
         isDuet && "mt-0 h-4 text-muted-foreground",
@@ -1439,7 +1441,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
           <EnvironmentMachineIcon
             aria-hidden
             kind={props.environmentMachine}
-            className="size-3.5 shrink-0 text-icon-muted"
+            className={cn("shrink-0 text-icon-muted", isDuet ? "size-3" : "size-3.5")}
           />
           <span className="min-w-0 flex-1 truncate">{props.environmentLabel}</span>
         </>
@@ -1751,7 +1753,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
             className={cn(
               "relative z-10",
               isDuet
-                ? cn("flex flex-col gap-0.5 px-2.5 py-2", metaLineEmpty ? "h-9" : "h-[54px]")
+                ? cn("flex flex-col gap-0.5 px-2.5 py-2", metaLineEmpty ? "h-[52px]" : "h-[70px]")
                 : cn(
                     "h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)",
                     metaLineEmpty && "h-auto",
