@@ -367,6 +367,7 @@ it.effect("retries one stale NOTES.md revision when writing a handoff", () =>
       instructions: input.instructions,
       avatar: input.avatar,
       reportPolicy: input.reportPolicy,
+      coordinatorOnly: false,
       scopedProjectIds: input.scopedProjectIds,
       primaryThreadId: captainPrimaryThreadId(input.captainId, 0),
       earlierThreadIds: [],
