@@ -72,7 +72,7 @@ import {
   captainTaskIsRecent,
   compareCaptainTasks,
   type CaptainTaskStatus,
-} from "./captainTaskStatus.logic";
+} from "@t3tools/client-runtime/state/captain-tasks";
 import { captainDrawerTabAtom } from "./captainBriefTab";
 import { useCaptains } from "./useCaptain";
 import { useClientSettings } from "../../hooks/useSettings";

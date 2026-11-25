@@ -28,8 +28,8 @@ export function orderDuets<T extends DuetOrderEntry>(
     return left.index - right.index;
   };
   const indexed = entries.map((entry, index) => ({ entry, index }));
-  const active = indexed.filter(({ entry }) => !entry.archived).toSorted(compare);
-  const archived = indexed.filter(({ entry }) => entry.archived).toSorted(compare);
+  const active = indexed.filter(({ entry }) => !entry.archived).sort(compare);
+  const archived = indexed.filter(({ entry }) => entry.archived).sort(compare);
   return [...active, ...archived].map(({ entry }) => entry);
 }
 

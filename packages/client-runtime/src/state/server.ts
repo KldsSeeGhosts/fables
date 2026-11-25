@@ -1480,6 +1480,19 @@ export function createServerEnvironmentAtoms<R, E>(
       sources.map(({ environmentId, atom }) => ({ environmentId, result: get(atom) })),
     ).pipe(Atom.withLabel(`environment-data:server:workflows:live-across:${environmentIdsKey}`));
   });
+  const captainsLive = createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+    label: "environment-data:server:captains:live",
+    tag: WS_METHODS.captainsSubscribe,
+  });
+  const captainsLiveAcross = Atom.family((environmentIdsKey: string) => {
+    const sources = (JSON.parse(environmentIdsKey) as EnvironmentId[]).map((environmentId) => ({
+      environmentId,
+      atom: captainsLive({ environmentId, input: {} }),
+    }));
+    return Atom.make((get) =>
+      sources.map(({ environmentId, atom }) => ({ environmentId, result: get(atom) })),
+    ).pipe(Atom.withLabel(`environment-data:server:captains:live-across:${environmentIdsKey}`));
+  });
   // One change of a run or file at a time per target, so a double click does not act twice.
   const workflowRunConcurrency = {
     mode: "singleFlight" as const,
@@ -1658,10 +1671,8 @@ export function createServerEnvironmentAtoms<R, E>(
         return Atom.make((get) => snapshot(get)?.definition?.revision);
       },
     }),
-    captainsLive: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
-      label: "environment-data:server:captains:live",
-      tag: WS_METHODS.captainsSubscribe,
-    }),
+    captainsLive,
+    captainsLiveAcross,
     scheduledTasksLive: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:server:scheduled-tasks:live",
       tag: WS_METHODS.scheduledTasksSubscribe,

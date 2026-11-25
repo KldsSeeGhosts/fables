@@ -103,6 +103,7 @@ import { useFabScroll } from "./FabScrollContext";
 import { holdLaunchSplashForHomeRows, settleLaunchSplashHomeRows } from "./home-launch-splash";
 import { useWorkspaceTabs } from "../layout/workspace/WorkspaceTabsContext";
 import { ThreadListFilters } from "./ThreadListFilters";
+import { CaptainsHomeSection } from "../captains/CaptainsHomeSection";
 import { deriveHomeEmptyState } from "./home-empty-state";
 
 interface HomeScreenProps {
@@ -704,6 +705,10 @@ export function HomeScreen(props: HomeScreenProps) {
           onProjectChange={props.onProjectChange}
         />
       ) : null}
+      <CaptainsHomeSection
+        hidden={hasSearchQuery || v2ScopedProjectGroup !== null}
+        environmentId={props.selectedEnvironmentId}
+      />
     </>
   );
 

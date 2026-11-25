@@ -54,7 +54,7 @@ import {
   DUET_EMBLEM_ORDER,
   DUET_PALETTE_ORDER,
   DUET_PICKER,
-} from "../captains/captainPalette";
+} from "@t3tools/client-runtime/state/captain-palette";
 import { CaptainResetDialog } from "../captains/CaptainResetButton";
 import {
   Menu,

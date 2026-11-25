@@ -8,9 +8,9 @@ import { MessageCircle } from "lucide-react";
 
 import { useRightPanelStore } from "../../rightPanelStore";
 import { useQuietThreadShell } from "../../state/entities";
-import type { DuetPalette } from "../captains/captainPalette";
+import type { DuetPalette } from "@t3tools/client-runtime/state/captain-palette";
 import { useCaptainTaskStatusLabel } from "../captains/CaptainTaskRing";
-import { captainThreadTaskStatus } from "../captains/captainTaskStatus.logic";
+import { captainThreadTaskStatus } from "@t3tools/client-runtime/state/captain-tasks";
 import type { DuetStreamKind } from "./duetStream.logic";
 
 export interface DuetStreamContextValue {

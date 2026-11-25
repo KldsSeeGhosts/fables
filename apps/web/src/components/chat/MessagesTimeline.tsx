@@ -200,7 +200,7 @@ import { useChildThreadInputs, useQuietThreadShell } from "../../state/entities"
 import { useDeadlinePassed } from "../../hooks/useDeadline";
 import { useClientSettings } from "../../hooks/useSettings";
 import { useDuetShell } from "../../hooks/useDuetShell";
-import { captainPaletteOf } from "../captains/captainPalette";
+import { captainPaletteOf } from "@t3tools/client-runtime/state/captain-palette";
 import { useCaptains } from "../captains/useCaptain";
 import {
   duetTaskHeaderByRowId,

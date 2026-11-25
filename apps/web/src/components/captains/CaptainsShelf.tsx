@@ -59,13 +59,17 @@ import {
 } from "../sidebar/SidebarThreadRow";
 import { Tooltip, TooltipTrigger } from "../ui/tooltip";
 import { CaptainAvatar } from "./CaptainAvatar";
-import { captainPaletteOf } from "./captainPalette";
+import { captainPaletteOf } from "@t3tools/client-runtime/state/captain-palette";
 import { CaptainTaskRing } from "./CaptainTaskRing";
 import { captainBriefTabAtom, openCaptainTasks, type CaptainDrawerTab } from "./captainBriefTab";
 import { CaptainProfileDialogs, useCaptainProfile } from "./CaptainBriefPanel";
 import { CaptainEditorDialog } from "./CaptainEditorDialog";
 import { useCaptainDestinations, useCaptainEnvironments } from "./captainsDirectory";
-import { moveDuet, orderDuets, type DuetMoveDirection } from "./duetOrder.logic";
+import {
+  moveDuet,
+  orderDuets,
+  type DuetMoveDirection,
+} from "@t3tools/client-runtime/state/duet-order";
 
 /** Thread keys of Captain conversations, which the shelf lists instead of their project. */
 export function useCaptainConversationKeys(): ReadonlySet<string> {

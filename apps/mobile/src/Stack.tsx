@@ -141,6 +141,9 @@ import { UsageLimitAccountScreen } from "./features/usage/UsageLimitsPooled";
 import { UsageRouteScreen } from "./features/usage/UsageRouteScreen";
 import { WorkflowRunRouteScreen } from "./features/workflows/WorkflowRunRouteScreen";
 import { WorkflowStepSheet } from "./features/workflows/WorkflowStepSheet";
+import { CaptainBriefSheet } from "./features/captains/CaptainBriefSheet";
+import { CaptainsInboxSheet } from "./features/captains/CaptainsInboxSheet";
+import { CaptainTasksSheet } from "./features/captains/CaptainTasksSheet";
 import { SettingsAboutRouteScreen } from "./features/settings/SettingsAboutRouteScreen";
 import { SettingsNotificationsRouteScreen } from "./features/settings/SettingsNotificationsRouteScreen";
 import { SettingsRouteScreen } from "./features/settings/SettingsRouteScreen";
@@ -795,6 +798,18 @@ const RootStackConfig = createWorkspaceStackNavigator({
     WorkflowStep: createNativeStackScreen({
       screen: WorkflowStepSheet,
       options: sheetRoute({ detent: 0.6, androidMaxDetent: 0.95 }),
+    }),
+    CaptainTasks: createNativeStackScreen({
+      screen: CaptainTasksSheet,
+      options: sheetRoute({ detent: 0.65, androidMaxDetent: 0.95 }),
+    }),
+    CaptainsInbox: createNativeStackScreen({
+      screen: CaptainsInboxSheet,
+      options: sheetRoute({ detent: 0.65, androidMaxDetent: 0.95 }),
+    }),
+    CaptainBrief: createNativeStackScreen({
+      screen: CaptainBriefSheet,
+      options: sheetRoute({ detent: 0.75, androidMaxDetent: 0.95 }),
     }),
     ThreadBackgroundWork: createNativeStackScreen({
       screen: ThreadBackgroundWorkSheet,

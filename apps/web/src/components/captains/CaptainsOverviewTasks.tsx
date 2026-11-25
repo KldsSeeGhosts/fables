@@ -21,7 +21,7 @@ import {
   captainTaskDetail,
   captainThreadTaskStatus,
   type CaptainTaskStatus,
-} from "./captainTaskStatus.logic";
+} from "@t3tools/client-runtime/state/captain-tasks";
 
 const elapsedAt = (epochMs: number, nowMs: number, resolve: ReturnType<typeof useMessages>) =>
   formatRelativeElapsed(Math.max(0, nowMs - epochMs), resolve).value;

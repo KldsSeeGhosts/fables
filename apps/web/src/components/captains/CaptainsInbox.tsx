@@ -20,7 +20,7 @@ import { Text } from "../ui/text";
 import { ApprovalBoundaryCard } from "./ApprovalBoundaryCard";
 import { CaptainAvatar } from "./CaptainAvatar";
 import { captainDigestPreview } from "./CaptainDigest";
-import { captainDigestMarkdownExcerpt } from "./captainDigestExcerpt";
+import { captainDigestMarkdownExcerpt } from "@t3tools/client-runtime/state/captain-digest";
 import type { CaptainChannelEnvironment } from "./captainsDirectory";
 import {
   OverviewFinishedTaskRows,

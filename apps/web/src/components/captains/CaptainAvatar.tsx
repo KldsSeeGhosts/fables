@@ -2,7 +2,8 @@ import type { CaptainAvatar as Avatar } from "@t3tools/contracts";
 
 import { cn } from "../../lib/utils";
 import type { DuetActivity } from "../chat/duetStatus.logic";
-import { captainAvatarSizes, captainCreatures, type CaptainAvatarSize } from "./captainAvatarData";
+import { captainCreatures } from "@t3tools/client-runtime/state/captain-creatures";
+import { captainAvatarSizes, type CaptainAvatarSize } from "./captainAvatarData";
 import {
   captainEmblemOf,
   captainPaletteOf,
@@ -12,7 +13,7 @@ import {
   DUET_PICKER,
   type DuetEmblem,
   type DuetPalette,
-} from "./captainPalette";
+} from "@t3tools/client-runtime/state/captain-palette";
 import "./CaptainAvatar.css";
 
 export type CaptainAvatarState = "archived" | "idle" | "waiting" | "working";

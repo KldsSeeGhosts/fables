@@ -1,4 +1,4 @@
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
+import type { EnvironmentThreadShell } from "./models.ts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -8,7 +8,7 @@ import {
   captainTaskIsRecent,
   captainThreadTaskStatus,
   compareCaptainTasks,
-} from "./captainTaskStatus.logic";
+} from "./captainTasks.ts";
 
 const idle = {
   hasPendingUserInput: false,

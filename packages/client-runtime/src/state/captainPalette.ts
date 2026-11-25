@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-sparkles-icon -- "sparkle" is the stored avatar schema literal for the sunburst emblem, not a Sparkles icon. */
 import type {
   CaptainAvatar,
   CaptainAvatarPickerColor,

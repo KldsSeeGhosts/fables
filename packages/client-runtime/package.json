@@ -375,6 +375,26 @@
       "types": "./src/state/captains.ts",
       "default": "./src/state/captains.ts"
     },
+    "./state/captain-tasks": {
+      "types": "./src/state/captainTasks.ts",
+      "default": "./src/state/captainTasks.ts"
+    },
+    "./state/captain-digest": {
+      "types": "./src/state/captainDigest.ts",
+      "default": "./src/state/captainDigest.ts"
+    },
+    "./state/captain-palette": {
+      "types": "./src/state/captainPalette.ts",
+      "default": "./src/state/captainPalette.ts"
+    },
+    "./state/captain-creatures": {
+      "types": "./src/state/captainCreatures.ts",
+      "default": "./src/state/captainCreatures.ts"
+    },
+    "./state/duet-order": {
+      "types": "./src/state/duetOrder.ts",
+      "default": "./src/state/duetOrder.ts"
+    },
     "./state/server": {
       "types": "./src/state/server.ts",
       "default": "./src/state/server.ts"

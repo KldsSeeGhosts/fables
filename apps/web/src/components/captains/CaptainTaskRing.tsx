@@ -1,7 +1,7 @@
 import { useGT } from "gt-react";
 
 import { cn } from "../../lib/utils";
-import type { CaptainTaskStatus } from "./captainTaskStatus.logic";
+import type { CaptainTaskStatus } from "@t3tools/client-runtime/state/captain-tasks";
 
 export function useCaptainTaskStatusLabel(status: CaptainTaskStatus): string {
   const gt = useGT();

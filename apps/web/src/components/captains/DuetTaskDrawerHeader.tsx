@@ -16,7 +16,7 @@ import { usePanelTabSlots } from "../PanelTabBreadcrumb";
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { useCaptainTaskStatusLabel } from "./CaptainTaskRing";
-import { captainThreadTaskStatus } from "./captainTaskStatus.logic";
+import { captainThreadTaskStatus } from "@t3tools/client-runtime/state/captain-tasks";
 
 function showTaskInChannel(childThreadId: ThreadId) {
   const selector = `[data-duet-task-header="${CSS.escape(childThreadId)}"]`;
