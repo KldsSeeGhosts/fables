@@ -3087,6 +3087,8 @@ describe("OrchestratorMcpService provider resolution", () => {
       readonly trackedCount: number;
       readonly parentInWorktree?: boolean;
       readonly select?: boolean;
+      /** Also names the project's own repository, which a Git project always checks out. */
+      readonly nameProjectRoot?: boolean;
     }) {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -3229,16 +3231,29 @@ describe("OrchestratorMcpService provider resolution", () => {
           assert.include(error.message, "unknown");
           for (const folder of trackedFolders) assert.include(error.message, folder.path);
           assert.isNull(yield* Ref.get(request));
+          if (!input.projectIsRepository) {
+            const plainRoot = yield* service
+              .delegateTask(scope, { ...options, repositories: [workspaceRoot] })
+              .pipe(Effect.flip);
+            assert.include(plainRoot.message, "is not a Git repository");
+            assert.isNull(yield* Ref.get(request));
+          }
         }
+        const named = [
+          ...(input.nameProjectRoot ? [`${workspaceRoot}/`] : []),
+          ...(selectedPath === undefined ? [] : [selectedPath]),
+        ];
         yield* service.delegateTask(scope, {
           ...options,
-          ...(selectedPath === undefined ? {} : { repositories: [selectedPath] }),
+          ...(named.length === 0 ? {} : { repositories: named }),
         });
         assert.deepEqual((yield* Ref.get(request))?.workspaceStrategy, {
           type: "worktree",
           baseRef,
           startFromOrigin: false,
-          ...(selectedPath === undefined ? {} : { repositories: [{ path: selectedPath }] }),
+          ...(named.length === 0
+            ? {}
+            : { repositories: selectedPath === undefined ? [] : [{ path: selectedPath }] }),
         });
       }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(dependencies))));
     });
@@ -3266,6 +3281,19 @@ describe("OrchestratorMcpService provider resolution", () => {
         projectIsRepository: true,
         trackedCount: 0,
         parentInWorktree: true,
+      },
+      {
+        name: "a Git project named as its own repository",
+        projectIsRepository: true,
+        trackedCount: 1,
+        nameProjectRoot: true,
+      },
+      {
+        name: "a Git project named with an added repository",
+        projectIsRepository: true,
+        trackedCount: 2,
+        nameProjectRoot: true,
+        select: true,
       },
       {
         name: "a selected repository in a large project",

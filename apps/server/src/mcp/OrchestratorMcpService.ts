@@ -149,6 +149,7 @@ import * as RemoteDelegation from "../peer/RemoteDelegation.ts";
 
 // Return recoverable handles before common MCP client timeouts expire.
 const DEFAULT_WAIT_TIMEOUT_MS = 30_000;
+const withoutTrailingSeparators = (path: string) => path.replace(/(?<=.)[\\/]+$/, "");
 const MAX_WAIT_TIMEOUT_MS = 45_000;
 const DEFAULT_SECRET_REQUEST_TIMEOUT_MS = 10 * 60 * 1_000;
 const MAX_SECRET_REQUEST_TIMEOUT_MS = 60 * 60 * 1_000;
@@ -1356,7 +1357,13 @@ const make = Effect.gen(function* () {
       parentWorktreePath: string | null,
       repositoryPaths: OrchestratorMcpDelegateTaskInput["repositories"],
     ): Effect.fn.Return<OrchestrationV2ThreadLaunchWorkspaceStrategy, OrchestratorMcpFailure> {
-      const repositories = repositoryPaths?.map((path) => ({ path }));
+      // A Git project checks its own repository out every time, so naming it adds nothing.
+      const isProjectRoot = (path: string) =>
+        withoutTrailingSeparators(path) === withoutTrailingSeparators(project.workspaceRoot);
+      const namedProjectRoot = repositoryPaths?.some(isProjectRoot) === true;
+      const repositories = repositoryPaths
+        ?.filter((path) => !isProjectRoot(path))
+        .map((path) => ({ path }));
       const input = { projectId: project.id };
       const cannotReadPlan = () =>
         failure("orchestration_error", "Unable to read the project's repositories.");
@@ -1367,7 +1374,12 @@ const make = Effect.gen(function* () {
               return yield* cannotReadPlan();
             }
             const plan = yield* taskFolders.plan(input).pipe(Effect.mapError(cannotReadPlan));
-            const validPaths = plan?.trackedRepositories.map((path) => `"${path}"`).join(", ");
+            const validPaths = [
+              ...(plan?.projectIsRepository === true ? [project.workspaceRoot] : []),
+              ...(plan?.trackedRepositories ?? []),
+            ]
+              .map((path) => `"${path}"`)
+              .join(", ");
             const hint = validPaths
               ? `Pass one or more of these tracked Git folder paths: ${validPaths}.`
               : "This project has no tracked Git folders available for worktrees.";
@@ -1378,6 +1390,12 @@ const make = Effect.gen(function* () {
           }),
         }),
       );
+      if (namedProjectRoot && taskPlan?.projectIsRepository === false) {
+        return yield* failure(
+          "invalid_request",
+          `"${project.workspaceRoot}" is not a Git repository, so it cannot get a worktree. Pass one or more of these tracked Git folder paths: ${taskPlan.trackedRepositories.map((path) => `"${path}"`).join(", ")}. No child was created.`,
+        );
+      }
       const strategy = {
         type: "worktree" as const,
         startFromOrigin: false,
