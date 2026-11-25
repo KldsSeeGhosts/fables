@@ -1,5 +1,9 @@
+import { getThemeDefinition, resolveThemeHalf } from "../themePalette";
 import { useTheme } from "./useTheme";
 
 export function useDuetShell(): boolean {
-  return useTheme().theme === "ksg-salon";
+  const { theme, themeHalves, resolvedTheme } = useTheme();
+  return (
+    getThemeDefinition(resolveThemeHalf(theme, themeHalves, resolvedTheme))?.id === "ksg-salon"
+  );
 }
