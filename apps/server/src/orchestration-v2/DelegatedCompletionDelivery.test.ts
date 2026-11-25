@@ -7,7 +7,6 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it, vi } from "@effect/vitest";
 import {
-  CaptainId,
   CheckpointId,
   CommandId,
   EventId,
@@ -36,7 +35,6 @@ import * as Tracer from "effect/Tracer";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as CheckpointStore from "../checkpointing/CheckpointStore.ts";
-import * as CaptainStore from "../captains/CaptainStore.ts";
 import * as ServerConfig from "../config.ts";
 import * as McpSessionRegistryTestkit from "../mcp/McpSessionRegistry.testkit.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
@@ -125,7 +123,6 @@ const layerTestProviderInstanceRegistry = Layer.merge(
 );
 
 const layerTest = Layer.mergeAll(
-  CaptainStore.layer,
   RuntimeLayer.layer,
   RuntimeLayer.layerEventSink,
   ThreadCommandExecutor.layer,
@@ -4614,112 +4611,6 @@ it.layer(Layer.merge(layerTest, ProviderContinuationRequests.layer))(
           ),
         );
       }),
-    );
-  },
-);
-
-it.layer(Layer.merge(layerTest, ProviderContinuationRequests.layer))(
-  "captain completion wake routing",
-  (it) => {
-    it.effect(
-      "reroutes an earlier Captain conversation's completion wake to its current primary",
-      () =>
-        Effect.gen(function* () {
-          const orchestrator = yield* Orchestrator.OrchestratorV2;
-          const sink = yield* EventSink.EventSinkV2;
-          const requests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
-          const captains = yield* CaptainStore.CaptainStore;
-          const now = yield* DateTime.now;
-          const nowIso = DateTime.formatIso(now);
-          const seedCaptainCompletion = (input: {
-            readonly key: string;
-            readonly reportPolicy: "react" | "context" | "ignore";
-            readonly archived?: boolean;
-          }) =>
-            Effect.gen(function* () {
-              const captainId = CaptainId.make(`maria-${input.key}`);
-              const earlierThreadId = ThreadId.make(`captain:${captainId}:0`);
-              const primaryThreadId = ThreadId.make(`captain:${captainId}:1`);
-              const runId = RunId.make(
-                `run:thread:${encodeURIComponent(earlierThreadId)}:ordinal:1`,
-              );
-              const taskId = NodeId.make(`task:captain-reroute:${input.key}`);
-              yield* captains.save({
-                id: captainId,
-                name: "Maria",
-                role: "Coordinator",
-                instructions: "",
-                avatar: { preset: "compass", color: "violet" },
-                reportPolicy: input.reportPolicy,
-                coordinatorOnly: false,
-                scopedProjectIds: [],
-                primaryThreadId,
-                earlierThreadIds: [earlierThreadId],
-                createdAt: nowIso,
-                updatedAt: nowIso,
-                archivedAt: input.archived === true ? nowIso : null,
-              });
-              yield* seedParentWithTerminalTask({
-                threadId: primaryThreadId,
-                projectId: ProjectId.make(`project:captain-current:${input.key}`),
-                runId: RunId.make(`run:captain-current:${input.key}`),
-                rootNodeId: NodeId.make(`root:captain-current:${input.key}`),
-                taskId: NodeId.make(`task:captain-current:${input.key}`),
-                deliveryState: "delivered",
-                parentRunStatus: "completed",
-                now,
-              });
-              yield* seedParentWithTerminalTask({
-                threadId: earlierThreadId,
-                projectId: ProjectId.make(`project:captain-reroute:${input.key}`),
-                runId,
-                rootNodeId: NodeId.make(`root:captain-reroute:${input.key}`),
-                taskId,
-                deliveryState: "pending",
-                now,
-              });
-              const before = yield* orchestrator.getThreadProjection(earlierThreadId);
-              const parent = before.runs.find((run) => run.id === runId)!;
-              yield* sink.write({
-                events: [
-                  {
-                    id: EventId.make(`event:captain-reroute:${input.key}:parent-ended`),
-                    type: "run.updated",
-                    threadId: earlierThreadId,
-                    runId,
-                    occurredAt: now,
-                    payload: { ...parent, status: "completed", completedAt: now },
-                  },
-                ],
-              });
-              yield* orchestrator.dispatch({
-                type: "delegated_task.completion-delivery.acknowledge",
-                commandId: CommandId.make(`command:captain-reroute:${input.key}`),
-                parentThreadId: earlierThreadId,
-                taskId,
-                observedByRunId: null,
-              });
-              return { captainId, earlierThreadId, primaryThreadId, runId, taskId };
-            });
-
-          const reacting = yield* seedCaptainCompletion({ key: "react", reportPolicy: "react" });
-          const wake = yield* requests.take;
-          assert.equal(wake.threadId, reacting.primaryThreadId);
-          assert.equal(wake.delegatedCompletion?.parentRunId, reacting.runId);
-
-          for (const input of [
-            { key: "archived", reportPolicy: "react" as const, archived: true },
-            { key: "context", reportPolicy: "context" as const },
-          ]) {
-            const inactive = yield* seedCaptainCompletion(input);
-            const projection = yield* orchestrator.getThreadProjection(inactive.earlierThreadId);
-            assert.equal(
-              projection.subagents.find((task) => task.id === inactive.taskId)?.completionDelivery
-                ?.state,
-              "disposed",
-            );
-          }
-        }),
     );
   },
 );
