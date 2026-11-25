@@ -93,6 +93,7 @@ const make = Effect.gen(function* () {
           ),
         )).projectId;
       const { name, role, instructions, avatar, reportPolicy } = input;
+      const coordinatorOnly = input.coordinatorOnly ?? false;
       const now = yield* timestamp;
       const primaryThreadId = captainPrimaryThreadId(input.captainId, 0);
       yield* createPrimaryThread(primaryThreadId, projectId, name, {
@@ -106,6 +107,7 @@ const make = Effect.gen(function* () {
         instructions,
         avatar,
         reportPolicy,
+        coordinatorOnly,
         scopedProjectIds,
         primaryThreadId,
         earlierThreadIds: [],
@@ -131,6 +133,7 @@ const make = Effect.gen(function* () {
         instructions: input.instructions ?? current.instructions,
         avatar: input.avatar ?? current.avatar,
         reportPolicy: input.reportPolicy ?? current.reportPolicy,
+        coordinatorOnly: input.coordinatorOnly ?? current.coordinatorOnly,
         scopedProjectIds:
           scopedProjectIds === undefined
             ? current.scopedProjectIds

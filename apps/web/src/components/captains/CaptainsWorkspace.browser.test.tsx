@@ -29,6 +29,7 @@ const captain = {
   avatar: { preset: "compass", color: "violet" },
   scopedProjectIds: [],
   reportPolicy: "context",
+  coordinatorOnly: false,
   createdAt: at,
   updatedAt: at,
   archivedAt: null,

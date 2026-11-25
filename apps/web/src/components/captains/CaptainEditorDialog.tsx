@@ -32,6 +32,7 @@ import {
 } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { useCaptainAvatarLabels } from "./captainAvatarLabels";
@@ -81,6 +82,7 @@ export function CaptainEditorDialog({
     normalizeCaptainAvatar(captain?.avatar ?? randomCaptainAvatar()),
   );
   const [reportPolicy, setReportPolicy] = useState<CaptainReportPolicy>("react");
+  const [coordinatorOnly, setCoordinatorOnly] = useState(captain?.coordinatorOnly ?? true);
   const [scopedProjectIds, setScope] = useState<ReadonlyArray<ProjectId>>(
     captain?.scopedProjectIds ?? [],
   );
@@ -104,6 +106,7 @@ export function CaptainEditorDialog({
       instructions,
       avatar,
       scopedProjectIds,
+      coordinatorOnly,
     };
     setError(null);
     setSaving(true);
@@ -389,6 +392,25 @@ export function CaptainEditorDialog({
                   value={instructions}
                   disabled={saving}
                   onChange={(event) => setInstructions(event.target.value)}
+                />
+              </div>
+              <div className="flex items-start justify-between gap-4">
+                <div className="grid gap-1">
+                  <span className="text-label">
+                    <T>Delegate the work</T>
+                  </span>
+                  <p className="text-meta text-muted-foreground">
+                    <T>
+                      Answers quick questions itself and hands anything that edits code to crew in
+                      their own worktrees.
+                    </T>
+                  </p>
+                </div>
+                <Switch
+                  aria-label={gt("Delegate the work")}
+                  checked={coordinatorOnly}
+                  disabled={saving}
+                  onCheckedChange={setCoordinatorOnly}
                 />
               </div>
               <CaptainScope

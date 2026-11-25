@@ -39,10 +39,12 @@ import * as McpSchema from "effect/ai/McpSchema";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 
 import { taskPrompt } from "../../apps/server/src/mcp/delegatedTaskModes.ts";
+import { formatCaptainBriefing } from "../../apps/server/src/captains/captainTurnContext.ts";
 import * as McpInvocationContext from "../../apps/server/src/mcp/McpInvocationContext.ts";
 import { advertisedJsonSchema } from "../../apps/server/src/mcp/advertisedJsonSchema.ts";
 import * as Contracts from "@t3tools/contracts";
 import {
+  CaptainId,
   EnvironmentId,
   ORCHESTRATOR_MCP_RUNNING_TASK_NEXT,
   PullRequestState,
@@ -357,6 +359,8 @@ export const McpToolUseCase = Schema.Struct({
     /** delegate_task `role` for a delegated child. T3 builds the child's first message from it. */
     delegateRole: Schema.optional(OrchestratorMcpTaskRole),
     context: Schema.optional(Schema.String),
+    /** The turn is a coordinator Captain's: its generated briefing is inline ahead of the prompt. */
+    captainBriefing: Schema.optional(Schema.Boolean),
     priorTurns: Schema.optional(
       Schema.Array(
         Schema.Struct({
@@ -453,6 +457,30 @@ const addUsage = (total: Usage, usage: typeof ApiResponse.Type.usage) => {
 
 const text = (value: string): Block => ({ type: "text", text: value });
 const reminder = (value: string) => text(`<system-reminder>\n${value}\n</system-reminder>`);
+
+const coordinatorCaptain = {
+  id: CaptainId.make("eval-captain"),
+  primaryThreadId: ThreadId.make("captain:eval-captain:0"),
+  earlierThreadIds: [],
+  name: "Maria",
+  role: "Coordinator",
+  instructions: "",
+  avatar: { preset: "compass", color: "violet" },
+  scopedProjectIds: [],
+  reportPolicy: "context",
+  coordinatorOnly: true,
+  createdAt: "2026-11-24T12:00:00.000Z",
+  updatedAt: "2026-11-24T12:00:00.000Z",
+  archivedAt: null,
+} satisfies Contracts.Captain;
+
+const coordinatorCaptainBriefing = formatCaptainBriefing({
+  captain: coordinatorCaptain,
+  projects: [],
+  memories: [],
+  agents: "",
+  notes: "",
+});
 const valueText = (value: unknown) =>
   typeof value === "string" ? value : (JSON.stringify(value) ?? "");
 const toolResult = (id: string, content: unknown): Block => ({
@@ -1261,8 +1289,13 @@ export const buildMessages = (sample: Sample) => {
     testCase.promptContext === undefined
       ? testCase.prompt
       : projectComposerContextForProvider({ text: testCase.prompt, ...testCase.promptContext });
-  const prompt =
-    sideChatContext === undefined ? userText : withInlineContext(sideChatContext, userText);
+  const inlineContext = [
+    sideChatContext ?? "",
+    testCase.setup.captainBriefing === true ? coordinatorCaptainBriefing : "",
+  ]
+    .filter((part) => part !== "")
+    .join("\n\n");
+  const prompt = inlineContext === "" ? userText : withInlineContext(inlineContext, userText);
   const childPrompt = () => taskPrompt({ task: prompt, role: delegateRole });
   if (testCase.prompt !== "")
     push("user", text(role === "delegated-child" ? childPrompt() : prompt));

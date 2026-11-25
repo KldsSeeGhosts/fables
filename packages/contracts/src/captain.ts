@@ -86,6 +86,7 @@ const CaptainProfile = Schema.Struct({
   avatar: CaptainAvatar,
   scopedProjectIds: Schema.Array(ProjectId),
   reportPolicy: CaptainReportPolicy,
+  coordinatorOnly: Schema.Boolean,
 });
 
 export const Captain = Schema.Struct({
@@ -146,6 +147,7 @@ export const CaptainKey = Schema.Struct({ captainId: CaptainId });
 
 export const CaptainCreateInput = Schema.Struct({
   ...CaptainProfile.fields,
+  coordinatorOnly: Schema.optional(Schema.Boolean),
   captainId: CaptainId,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
@@ -162,6 +164,7 @@ export const CaptainUpdateInput = Schema.Struct({
   avatar: Schema.optional(CaptainAvatar),
   scopedProjectIds: Schema.optional(CaptainProfile.fields.scopedProjectIds),
   reportPolicy: Schema.optional(CaptainReportPolicy),
+  coordinatorOnly: Schema.optional(CaptainProfile.fields.coordinatorOnly),
 });
 export type CaptainUpdateInput = typeof CaptainUpdateInput.Type;
 

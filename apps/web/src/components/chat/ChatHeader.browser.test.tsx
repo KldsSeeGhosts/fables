@@ -23,6 +23,7 @@ vi.mock(import("../captains/useCaptain"), async (importOriginal) => ({
           avatar: { preset: "compass", color: "violet" },
           scopedProjectIds: [],
           reportPolicy: "context",
+          coordinatorOnly: false,
           createdAt: "2026-11-24T00:00:00.000Z",
           updatedAt: "2026-11-24T00:00:00.000Z",
           archivedAt: null,

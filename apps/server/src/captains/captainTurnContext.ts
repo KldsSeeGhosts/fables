@@ -19,7 +19,20 @@ import * as CaptainStore from "./CaptainStore.ts";
 const prefix = (text: string, length: number) =>
   text.length <= length ? text : `${text.slice(0, length)}…`;
 
-const formatCaptainBriefing = (input: {
+const coordinatorBriefing = `How you work:
+- Answer quick questions and lookups yourself.
+- Delegate anything that edits code with \`delegate_task\` and \`isolation: "worktree"\`.
+- Scale crew to the task: one child for one change, two to four for independent parallel work, none for a lookup.
+- Every brief states the objective, the expected output, boundaries (files or areas it owns and must not touch), and a done-check (the command or observation that proves it is done).
+- While crew works, end your turn and let completion wake you. Do not poll.
+- Relay each result to the user as one line plus the task link. Do not paste crew output.
+- Questions a child asks the user stay in that child's thread.
+- When crew opens a PR you are responsible for, watch it with \`watch_pull_request\`.
+- Settle or archive finished task threads with \`t3_thread_organize\` once relayed.
+- At the end of a substantial turn, keep NOTES.md current (plan, open loops, next step) with \`captain_document_write\`.
+- After reacting to crew results, rewrite the \`## New\` section of DIGEST.md with one line per result that needs the user.`;
+
+export const formatCaptainBriefing = (input: {
   readonly captain: Captain;
   readonly projects: ReadonlyArray<{ readonly id: string; readonly title: string }>;
   readonly memories: ReadonlyArray<CaptainMemory>;
@@ -30,6 +43,7 @@ const formatCaptainBriefing = (input: {
   return [
     `Captain profile: ${captain.name}${captain.role ? ` (${captain.role})` : ""}`,
     captain.instructions && `Instructions:\n${prefix(captain.instructions, 4_000)}`,
+    captain.coordinatorOnly && coordinatorBriefing,
     projects.length > 0
       ? `Scoped local projects:\n${projects.map(({ id, title }) => `- ${prefix(title, 100)} [${prefix(id, 100)}]`).join("\n")}${captain.scopedProjectIds.length > projects.length ? "\n- Additional projects are listed in captain_read." : ""}`
       : "Workspace scope: No projects selected.",
@@ -43,7 +57,12 @@ const formatCaptainBriefing = (input: {
     .join("\n\n");
 };
 
-const formatCaptainReports = (
+const firstParagraph = (result: string) => {
+  const [paragraph = ""] = result.trim().split(/\r?\n\s*\r?\n/, 1);
+  return prefix(paragraph.replace(/\s+/g, " ").trim(), 280);
+};
+
+export const formatCaptainReports = (
   reports: ReadonlyArray<{
     readonly id: string;
     readonly title: string | null;
@@ -52,10 +71,28 @@ const formatCaptainReports = (
 ) =>
   reports.length === 0
     ? ""
-    : `Recent delegated task reports:\n${reports.map(({ id, title, result }) => `- ${prefix(title ?? id, 140)} [${id}]: ${prefix(result, 700)}`).join("\n")}`;
+    : `Recent delegated task reports:\n${reports
+        .slice(0, 6)
+        .map(({ id, title, result }) => {
+          const summary = firstParagraph(result);
+          const label = `${prefix(title ?? id, 140)} [${id}]`;
+          return `- ${summary === "" ? label : `${label}: ${summary}`} Read the full report with task_status(taskId: "${id}").`;
+        })
+        .join("\n")}`;
+
+export const formatCaptainCrewRules = (captain: Captain, crew: string) =>
+  [
+    `Crew rules from Captain ${captain.name}:\n- For multi-step work, keep a progress note in your worktree and commit after each step.\n- Run the focused tests or checks that prove the change, and report the evidence.\n- Do not report done until the done-check from your brief passes.\n- End your final message with a 2 to 4 sentence summary first, then details.`,
+    crew.trim() === "" ? "" : `CREW.md:\n${prefix(crew, 2_000)}`,
+  ]
+    .filter((part) => part !== "")
+    .join("\n\n");
 
 const unchangedBriefing = (captain: Captain) =>
-  `Captain ${captain.name}: your profile, instructions, scope, essential memories, AGENTS.md and NOTES.md are unchanged since they were last given in this conversation. Use captain_read, captain_document_read and captain_memory_search if you need them again.`;
+  `Captain ${captain.name}: your profile, instructions, scope, essential memories, AGENTS.md, NOTES.md and how you work are unchanged since they were last given in this conversation. Use captain_read, captain_document_read and captain_memory_search if you need them again.`;
+
+const unchangedCrewRules = (captain: Captain) =>
+  `Captain ${captain.name}'s crew rules are unchanged since they were last given in this conversation.`;
 
 export interface CaptainTurnContext {
   readonly text: string;
@@ -64,25 +101,29 @@ export interface CaptainTurnContext {
 }
 
 const NO_CONTEXT: CaptainTurnContext = { text: "", delivered: Effect.void };
-const withoutBriefing = (text: string): CaptainTurnContext => ({ text, delivered: Effect.void });
 
 export const makeReadCaptainTurnContext = Effect.gen(function* () {
   const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
   const sql = yield* Effect.serviceOption(SqlClient.SqlClient);
   const projects = yield* ProjectService.ProjectService;
   const briefings = makeCaptainBriefingLedger();
+  const crewBriefings = makeCaptainBriefingLedger();
 
   // A delegated child gets the Captain's crew rules only, never its private profile or memories.
   const readCrewContext = Effect.fn("CaptainService.crewContext")(function* (
     parentThreadId: ThreadId,
+    delivery?: CaptainBriefingDelivery,
   ) {
-    if (Option.isNone(store)) return "";
+    if (Option.isNone(store)) return NO_CONTEXT;
     const captain = yield* store.value.findByConversation(parentThreadId);
-    if (captain === undefined || captain.archivedAt !== null) return "";
+    if (captain === undefined || captain.archivedAt !== null) return NO_CONTEXT;
     const crew = yield* store.value.document(captain, "CREW.md");
-    return crew.content.trim() === ""
-      ? ""
-      : `Crew rules from Captain ${captain.name} (CREW.md):\n${prefix(crew.content, 2_000)}`;
+    const rules = formatCaptainCrewRules(captain, crew.content);
+    const plan = delivery === undefined ? undefined : crewBriefings.plan(delivery, rules);
+    return {
+      text: plan?.full === false ? unchangedCrewRules(captain) : rules,
+      delivered: plan === undefined ? Effect.void : Effect.sync(plan.commit),
+    };
   });
 
   return Effect.fn("CaptainService.turnContext")(
@@ -100,13 +141,11 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
       if (Option.isNone(store)) return NO_CONTEXT;
       if (!isCaptainThreadId(threadId)) {
         const { parentThreadId, relationshipToParent } = thread.lineage;
-        return withoutBriefing(
-          relationshipToParent === "subagent" &&
-            parentThreadId !== null &&
-            isCaptainThreadId(parentThreadId)
-            ? yield* readCrewContext(parentThreadId)
-            : "",
-        );
+        return relationshipToParent === "subagent" &&
+          parentThreadId !== null &&
+          isCaptainThreadId(parentThreadId)
+          ? yield* readCrewContext(parentThreadId, delivery)
+          : NO_CONTEXT;
       }
       const captain = yield* store.value.byThread(threadId);
       if (captain === undefined) return NO_CONTEXT;
@@ -140,7 +179,7 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
               readonly result: string;
             }>`
           SELECT subagent_id AS id, json_extract(payload_json, '$.title') AS title,
-            substr(json_extract(payload_json, '$.result'), 1, 701) AS result
+            substr(json_extract(payload_json, '$.result'), 1, 281) AS result
           FROM orchestration_v2_projection_subagents
           WHERE ${sql.value.in("thread_id", reportThreadIds)}
             AND origin = 'app_owned'
@@ -152,7 +191,7 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
               (SELECT created_at FROM orchestration_v2_projection_threads
                 WHERE thread_id = ${threadId}),
               ''))
-          ORDER BY completed_at DESC, subagent_id DESC LIMIT 4
+          ORDER BY completed_at DESC, subagent_id DESC LIMIT 6
         `
           : [];
       const briefing = formatCaptainBriefing({
