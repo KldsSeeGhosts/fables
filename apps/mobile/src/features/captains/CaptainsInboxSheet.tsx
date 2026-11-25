@@ -1,5 +1,5 @@
 import { captainInboxItems, type CaptainInboxItem } from "@t3tools/client-runtime/state/captains";
-import { StackActions, useNavigation } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
 import { useGT, useMessages } from "gt-react-native";
 import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,6 +11,7 @@ import { ScreenContent } from "../../components/ui/ScreenContent";
 import { SheetHeader } from "../../components/ui/SheetHeader";
 import { CAPTAIN_INBOX_KIND_LABELS } from "./captainLabels";
 import { CaptainOrb } from "./CaptainOrb";
+import { CaptainEnvironmentNotices, useOpenThreadFromSheet } from "./captainSheetSupport";
 import { useCaptainsDirectory } from "./useCaptainsDirectory";
 
 const KIND_ICON = {
@@ -31,14 +32,11 @@ export function CaptainsInboxSheet() {
     environments
       .find(({ environmentId }) => environmentId === item.environmentId)
       ?.captains.find((captain) => captain.id === item.captainId);
-  // The thread replaces this sheet so back returns to the workspace, not to a closed sheet.
+  const openThread = useOpenThreadFromSheet();
   const open = (item: CaptainInboxItem) =>
-    navigation.dispatch(
-      StackActions.replace("Thread", {
-        environmentId: String(item.threadRef.environmentId),
-        threadId: String(item.threadRef.threadId),
-      }),
-    );
+    openThread(item.threadRef.environmentId, item.threadRef.threadId);
+  // Nothing waits only once every environment has answered.
+  const settled = environments.every(({ status }) => status === "ready");
   return (
     <View collapsable={false} className="flex-1 bg-sheet">
       <SheetHeader title={gt("Inbox")} onClose={() => navigation.goBack()} />
@@ -50,10 +48,13 @@ export function CaptainsInboxSheet() {
           contentContainerClassName="px-2 pt-2"
           contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) + 8 }}
         >
+          <CaptainEnvironmentNotices environments={environments} />
           {items.length === 0 ? (
-            <Text className="px-5 py-8 text-center text-sm text-foreground-muted">
-              {gt("Nothing waits on you.")}
-            </Text>
+            settled ? (
+              <Text className="px-5 py-8 text-center text-sm text-foreground-muted">
+                {gt("Nothing waits on you.")}
+              </Text>
+            ) : null
           ) : (
             items.map((item) => {
               const captain = captainOf(item);

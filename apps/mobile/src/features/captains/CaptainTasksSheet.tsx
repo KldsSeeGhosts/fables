@@ -1,4 +1,4 @@
-import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
+import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { msg, useGT, useMessages } from "gt-react-native";
 import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
@@ -14,6 +14,11 @@ import { CAPTAIN_TASK_STATUS_LABELS } from "./captainLabels";
 import { captainTaskGroups, type CaptainTaskRange, type CaptainTaskRow } from "./captainTaskList";
 import { CaptainOrb } from "./CaptainOrb";
 import { CaptainTaskRing } from "./CaptainTaskRing";
+import {
+  CaptainEnvironmentNotices,
+  useCaptainFamilies,
+  useOpenThreadFromSheet,
+} from "./captainSheetSupport";
 import { useCaptainsDirectory } from "./useCaptainsDirectory";
 
 export type CaptainTasksParams = {
@@ -66,31 +71,40 @@ export function CaptainTasksSheet({ route }: StaticScreenProps<CaptainTasksParam
   const m = useMessages();
   const nowMs = useNowMinuteMs();
   const [range, setRange] = useState<CaptainTaskRange>("today");
-  const { environments, shells, showsEnvironment } = useCaptainsDirectory();
-  const groups = captainTaskGroups({
-    environments: environments.filter(
-      ({ environmentId }) =>
-        route.params?.environmentId === undefined || environmentId === route.params.environmentId,
+  const directory = useCaptainsDirectory();
+  const environments = directory.environments.filter(
+    ({ environmentId }) =>
+      route.params?.environmentId === undefined || environmentId === route.params.environmentId,
+  );
+  const listed = environments.map(({ environmentId, captains }) => ({
+    environmentId,
+    captains: captains.filter(
+      (captain) => route.params?.captainId === undefined || captain.id === route.params.captainId,
     ),
-    shells,
+  }));
+  const families = useCaptainFamilies(listed);
+  const groups = captainTaskGroups({
+    environments: listed,
+    shells: directory.shells,
     range,
     nowMs,
     captainId: route.params?.captainId,
   });
   const single = route.params?.captainId !== undefined;
   const title = single
-    ? (environments
-        .flatMap(({ captains }) => captains)
-        .find((captain) => captain.id === route.params?.captainId)?.name ?? gt("Captain tasks"))
+    ? (listed.flatMap(({ captains }) => captains)[0]?.name ?? gt("Captain tasks"))
     : gt("Captain tasks");
-  // The task replaces this sheet so back returns to the workspace, not to a closed sheet.
-  const openTask = (row: CaptainTaskRow) =>
-    navigation.dispatch(
-      StackActions.replace("Thread", {
-        environmentId: String(row.thread.environmentId),
-        threadId: String(row.thread.id),
-      }),
-    );
+  const openThread = useOpenThreadFromSheet();
+  const openTask = (row: CaptainTaskRow) => openThread(row.thread.environmentId, row.thread.id);
+  const loading = families === "pending" || environments.some(({ status }) => status === "loading");
+  // With no environment loaded, the notices above already say why the list is empty.
+  const emptyText = loading
+    ? gt("Loading tasks…")
+    : environments.length > 0 && environments.every(({ status }) => status === "failed")
+      ? null
+      : range === "today"
+        ? gt("Nothing delegated today.")
+        : gt("No delegated tasks yet.");
   return (
     <View collapsable={false} className="flex-1 bg-sheet">
       <SheetHeader title={title} onClose={() => navigation.goBack()} />
@@ -111,10 +125,18 @@ export function CaptainTasksSheet({ route }: StaticScreenProps<CaptainTasksParam
               size="compact"
             />
           </View>
-          {groups.length === 0 ? (
-            <Text className="px-5 py-8 text-center text-sm text-foreground-muted">
-              {range === "today" ? gt("Nothing delegated today.") : gt("No delegated tasks yet.")}
+          <CaptainEnvironmentNotices environments={environments} />
+          {families === "failed" ? (
+            <Text className="px-3 pb-2 text-xs text-danger-foreground">
+              {gt("Some finished tasks could not load.")}
             </Text>
+          ) : null}
+          {groups.length === 0 ? (
+            emptyText === null ? null : (
+              <Text className="px-5 py-8 text-center text-sm text-foreground-muted">
+                {emptyText}
+              </Text>
+            )
           ) : (
             groups.map((group) => (
               <View key={`${group.environmentId}:${group.captain.id}`} className="pb-3">
@@ -122,7 +144,7 @@ export function CaptainTasksSheet({ route }: StaticScreenProps<CaptainTasksParam
                   <View className="flex-row items-center gap-2 px-3 pb-1 pt-2">
                     <CaptainOrb captain={group.captain} size={20} />
                     <Text className="min-w-0 flex-1 font-t3-medium text-xs text-foreground-muted">
-                      {showsEnvironment
+                      {directory.showsEnvironment
                         ? `${group.captain.name} · ${
                             environments.find(
                               ({ environmentId }) => environmentId === group.environmentId,

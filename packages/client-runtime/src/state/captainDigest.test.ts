@@ -12,9 +12,12 @@ it("keeps subheadings inside the New section", () => {
   expect(captainDigestNewSection("## New\n### Today\nOne line")).toBe("### Today\nOne line");
 });
 
-it("returns null when the digest has no New section or it is empty", () => {
+it("returns null only when the digest has no New section", () => {
   expect(captainDigestNewSection("## Earlier\nOld")).toBeNull();
-  expect(captainDigestNewSection("## New\n\n## Earlier\nOld")).toBeNull();
+});
+
+it("returns an empty New section as empty, not as the older entries", () => {
+  expect(captainDigestNewSection("## New\n\n## Earlier\nOld")).toBe("");
 });
 
 it("bounds a long digest excerpt", () => {

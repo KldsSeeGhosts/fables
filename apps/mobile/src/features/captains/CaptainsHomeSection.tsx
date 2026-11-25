@@ -1,4 +1,5 @@
 import { captainInboxItems, captainThreadActivity } from "@t3tools/client-runtime/state/captains";
+import type { EnvironmentId } from "@t3tools/contracts";
 import { useNavigation } from "@react-navigation/native";
 import { useGT } from "gt-react-native";
 import { Pressable, View } from "react-native";
@@ -9,24 +10,39 @@ import { cn } from "../../lib/cn";
 import { useHomeRouteVisible } from "../home/home-route-visibility";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { CaptainOrb } from "./CaptainOrb";
+import { captainShells, captainShellsByConversation } from "./captainShellIndex";
 import { useCaptainsDirectory } from "./useCaptainsDirectory";
 
 /** Captains above the thread list: who is working, who waits on you, and the way to each. */
-export function CaptainsHomeSection(props: { readonly hidden: boolean }) {
+export function CaptainsHomeSection(props: {
+  readonly hidden: boolean;
+  readonly environmentId: EnvironmentId | null;
+}) {
   const gt = useGT();
   const navigation = useNavigation();
   const selectDetail = useSelectWorkspaceDetail();
   const visible = useHomeRouteVisible();
-  const { environments, shells, showsEnvironment } = useCaptainsDirectory({ visible });
+  const { environments, shells, showsEnvironment } = useCaptainsDirectory({
+    visible: visible && !props.hidden,
+    environmentId: props.environmentId,
+  });
+  if (props.hidden || environments.every(({ captains }) => captains.length === 0)) return null;
+  const byConversation = captainShellsByConversation(shells);
   const rows = environments.flatMap((environment) =>
-    environment.captains.map((captain) => ({
-      environment,
-      captain,
-      activity: captainThreadActivity(environment.environmentId, captain, shells),
-    })),
+    environment.captains.map((captain) => {
+      const own = captainShells(byConversation, environment.environmentId, captain);
+      return {
+        environment,
+        captain,
+        own,
+        activity: captainThreadActivity(environment.environmentId, captain, own),
+      };
+    }),
   );
-  if (props.hidden || rows.length === 0) return null;
-  const waiting = captainInboxItems(environments, shells).length;
+  const waiting = captainInboxItems(
+    environments,
+    rows.flatMap(({ own }) => own),
+  ).length;
   return (
     <View className="gap-1 px-2 pb-3 pt-2">
       <View className="flex-row items-center gap-2 px-2 pb-1">

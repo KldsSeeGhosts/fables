@@ -16,7 +16,7 @@ import { SheetHeader } from "../../components/ui/SheetHeader";
 import { SelectableMarkdownText } from "../../native/SelectableMarkdownText";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
-import { useEnvironmentScope } from "../../state/session";
+import { useEnvironmentScope, useEnvironmentScopeDenied } from "../../state/session";
 import { useMarkdownPreviewStyles } from "../files/FileMarkdownPreview";
 import { CaptainOrb } from "./CaptainOrb";
 
@@ -46,14 +46,23 @@ export function CaptainBriefSheet({ route }: StaticScreenProps<CaptainBriefParam
   const environmentId = EnvironmentId.make(route.params.environmentId);
   const captainId = CaptainId.make(route.params.captainId);
   const canRead = useEnvironmentScope(environmentId, AuthOrchestrationReadScope);
+  const readDenied = useEnvironmentScopeDenied(environmentId, AuthOrchestrationReadScope);
   const live = useEnvironmentQuery(
     canRead ? serverEnvironment.captainsLive({ environmentId, input: { captainId } }) : null,
   );
   const captain = live.data?.captains.find((candidate) => candidate.id === captainId);
   const notes = captainDocument(live.data, captainId, "NOTES.md")?.content.trim() ?? "";
   const digest = captainDocument(live.data, captainId, "DIGEST.md")?.content ?? "";
+  // Only a digest with no `## New` section falls back to its excerpt; an empty one is empty.
   const digestNew =
     captainDigestNewSection(digest) ?? captainDigestMarkdownExcerpt(digest).markdown;
+  const unavailable = readDenied
+    ? gt("You cannot read Captains in this environment.")
+    : live.error !== null && live.data === null
+      ? live.error
+      : live.data !== null && captain === undefined
+        ? gt("This Captain no longer exists.")
+        : null;
   const memories = (live.data?.memories ?? []).filter(
     (memory) => memory.captainId === captainId && memory.essential,
   );
@@ -76,7 +85,7 @@ export function CaptainBriefSheet({ route }: StaticScreenProps<CaptainBriefParam
         >
           {captain === undefined ? (
             <Text className="px-5 py-8 text-center text-sm text-foreground-muted">
-              {live.error ?? gt("Loading the brief…")}
+              {unavailable ?? gt("Loading the brief…")}
             </Text>
           ) : (
             <>

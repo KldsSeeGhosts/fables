@@ -2,6 +2,8 @@ import { useGT, useMessages } from "gt-react-native";
 
 import { AppBar } from "../../components/ui/AppBar";
 import type { AppBarAction, AppBarMenu } from "../../components/ui/AppBar.types";
+import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { useCaptainHeaderActions } from "../captains/useCaptainHeaderActions";
 import {
   useAdaptiveWorkspaceLayout,
   useWorkspacePaneState,
@@ -23,6 +25,8 @@ export function ThreadHeader(props: {
   readonly hasThreadCwd: boolean;
   readonly inspectorMode: ThreadInspectorMode | null;
   readonly onOpenFilesInspector: () => void;
+  /** A Captain's conversation adds its Brief and Tasks. */
+  readonly thread?: { readonly environmentId: EnvironmentId; readonly threadId: ThreadId };
 }) {
   const gt = useGT();
   const m = useMessages();
@@ -32,7 +36,8 @@ export function ThreadHeader(props: {
   const gitMenu = useThreadGitMenuDefinition(props.gitControls);
   const terminalMenu = threadTerminalMenu(props.gitControls, m);
   const filesVisible = props.inspectorMode === "files" && panes.auxiliaryPaneVisible;
-  const actions: AppBarAction[] = props.hasThreadCwd
+  const captainActions = useCaptainHeaderActions(props.thread ?? null);
+  const fileActions: AppBarAction[] = props.hasThreadCwd
     ? [
         {
           accessibilityLabel: filesVisible ? gt("Close files") : gt("Open files"),
@@ -44,6 +49,7 @@ export function ThreadHeader(props: {
         },
       ]
     : [];
+  const actions = [...captainActions, ...fileActions];
   const menus = [gitMenu, terminalMenu].filter((menu): menu is AppBarMenu => menu !== null);
 
   return (

@@ -40,6 +40,8 @@ import { useSelectWorkspaceTab } from "../layout/workspace/useSelectWorkspaceTab
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { WorkspaceListEmptyDetail } from "../layout/workspace/WorkspaceListEmptyDetail";
 import { WorkspaceListHeader } from "../layout/workspace/WorkspaceListHeader";
+import { withoutCaptainConversations } from "../captains/captainShellIndex";
+import { useCaptainConversationKeys } from "../captains/useCaptainsDirectory";
 import { buildHomeListFilterMenuItems, homeListFilterEnvironments } from "./home-list-filter-menu";
 
 export function HomeRouteScreen() {
@@ -52,9 +54,10 @@ export function HomeRouteScreen() {
   const projects = useProjects();
   // Stop rebuilding the streaming thread list while Thread covers Home.
   const visible = useHomeRouteVisible();
-  const threads = useLaunchingThreads(
+  const launchingThreads = useLaunchingThreads(
     useAtomValueWhileVisible(steadyNavigationThreadShellsAtom, visible),
   );
+  const captainConversationKeys = useCaptainConversationKeys();
   const { environments: workspaceEnvironments, state: catalogState } = useWorkspaceState();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const navigation = useNavigation();
@@ -70,6 +73,11 @@ export function HomeRouteScreen() {
     else if (workspace) workspace.dispatch({ type: "query", query, tab: "threads" });
     else setLocalSearchQuery(query);
   };
+  // Captain conversations list in the Captains section; a search still finds them.
+  const threads =
+    searchQuery.trim() === ""
+      ? withoutCaptainConversations(launchingThreads, captainConversationKeys)
+      : launchingThreads;
   // Split layouts keep the query; only the stacked layout opens the thread over the list.
   // Android's search field keeps its own open state, which a cleared query would leave open.
   const clearsSearchOnOpen = Platform.OS !== "android" && !layout.usesSplitView;

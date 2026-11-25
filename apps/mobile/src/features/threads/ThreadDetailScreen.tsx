@@ -157,7 +157,6 @@ import { deviceEnvironment } from "../../state/device";
 import { useEnvironmentQuery } from "../../state/query";
 import { threadDevicePreviews } from "../devices/threadDevicePreviews";
 import { ThreadBrowserFloat } from "../browser/ThreadBrowserFloat";
-import { CaptainThreadRail } from "../captains/CaptainThreadRail";
 import { useThreadServerBrowserTabs } from "../../state/preview";
 import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
 import { scopedThreadKey } from "../../lib/scopedEntities";
@@ -1632,14 +1631,6 @@ function ThreadDetailBody(
           loaded={browserTabs.loaded}
           top={navigationHeaderHeight + 8}
           onOpen={openBrowserPreview}
-        />
-      ) : null}
-
-      {showContent ? (
-        <CaptainThreadRail
-          environmentId={props.environmentId}
-          threadId={props.selectedThread.id}
-          top={navigationHeaderHeight + 8}
         />
       ) : null}
 

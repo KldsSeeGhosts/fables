@@ -32,13 +32,15 @@ export function captainDigestMarkdownExcerpt(content: string): {
   return { markdown: truncated ? `${text}\n\n…` : text, truncated };
 }
 
-/** The body of DIGEST.md's `## New` section, or null when the digest has none. */
+/**
+ * The body of DIGEST.md's `## New` section: empty when the section is there with nothing in it,
+ * null only when the digest has no such section.
+ */
 export function captainDigestNewSection(content: string): string | null {
   const lines = content.split("\n");
   const start = lines.findIndex((line) => /^##\s+New\s*$/i.test(line.trim()));
   if (start === -1) return null;
   const rest = lines.slice(start + 1);
   const end = rest.findIndex((line) => /^#{1,2}\s/.test(line.trim()));
-  const body = (end === -1 ? rest : rest.slice(0, end)).join("\n").trim();
-  return body === "" ? null : body;
+  return (end === -1 ? rest : rest.slice(0, end)).join("\n").trim();
 }

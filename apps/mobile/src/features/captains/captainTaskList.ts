@@ -29,7 +29,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Each Captain's delegated tasks, most pressing first. Today keeps open work whatever its age and
- * outcomes from the last day; Captains with nothing to list are left out.
+ * outcomes from the last day; Captains with nothing to list are left out. Idle crew threads are
+ * in `shells` only while their conversations' families are mounted (`useCaptainFamilies`).
  */
 export function captainTaskGroups(input: {
   readonly environments: ReadonlyArray<{

@@ -705,7 +705,10 @@ export function HomeScreen(props: HomeScreenProps) {
           onProjectChange={props.onProjectChange}
         />
       ) : null}
-      <CaptainsHomeSection hidden={hasSearchQuery || v2ScopedProjectGroup !== null} />
+      <CaptainsHomeSection
+        hidden={hasSearchQuery || v2ScopedProjectGroup !== null}
+        environmentId={props.selectedEnvironmentId}
+      />
     </>
   );
 
