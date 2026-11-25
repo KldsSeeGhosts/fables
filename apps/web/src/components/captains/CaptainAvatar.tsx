@@ -122,7 +122,10 @@ function DuetEmblemGlyph({
   );
 }
 
-/** The ring a tile wears 3px outside its edge: a turning arc while working, a halo when waiting. */
+/**
+ * The ring a tile wears 3px outside its edge: a turning arc while working, a halo when waiting.
+ * The stroke is sized for the 30px box around a 24px channel tile, where it renders at 1.5px.
+ */
 export type CaptainAvatarHalo = "working" | "needs-input";
 
 function CaptainAvatarHaloRing({ halo }: { halo: CaptainAvatarHalo }) {
@@ -133,17 +136,17 @@ function CaptainAvatarHaloRing({ halo }: { halo: CaptainAvatarHalo }) {
         aria-hidden
         viewBox="0 0 38 38"
         fill="none"
-        strokeWidth={1.5}
+        strokeWidth={1.9}
         data-captain-avatar-orbit={halo}
         className="pointer-events-none absolute -inset-0.75"
       >
         {halo === "working" ? (
           <>
-            <circle cx="19" cy="19" r="18.25" stroke="var(--duet-orbit-track)" />
+            <circle cx="19" cy="19" r="18.05" stroke="var(--duet-orbit-track)" />
             <circle
               cx="19"
               cy="19"
-              r="18.25"
+              r="18.05"
               pathLength={360}
               stroke="var(--duet-ink)"
               strokeLinecap="round"
@@ -153,7 +156,7 @@ function CaptainAvatarHaloRing({ halo }: { halo: CaptainAvatarHalo }) {
             />
           </>
         ) : (
-          <circle cx="19" cy="19" r="18.25" stroke="var(--duet-needs-input-ring)" />
+          <circle cx="19" cy="19" r="18.05" stroke="var(--duet-needs-input-ring)" />
         )}
       </svg>
     </>

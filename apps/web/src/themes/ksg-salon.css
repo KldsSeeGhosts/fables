@@ -21,8 +21,6 @@ html:root[data-theme-id="ksg-salon"] {
   --duet-quiet-pill-hover-foreground: #242424;
   --duet-working-text: #b85a3c;
   --duet-needs-input-text: #8f6a26;
-  --duet-attention-pill-fill: #f3e6c8;
-  --duet-attention-pill-foreground: #74561d;
   --composer-fill: #ffffff;
   --composer-shadow: none;
   --radius: 0.625rem;
@@ -54,8 +52,6 @@ html:root[data-theme-id="ksg-salon"] {
     --duet-quiet-pill-hover-foreground: #e3e3e3;
     --duet-working-text: #e8957a;
     --duet-needs-input-text: #e3b866;
-    --duet-attention-pill-fill: #4a3c22;
-    --duet-attention-pill-foreground: #f0cf8e;
   }
 
   [data-pane-cut],
@@ -113,17 +109,8 @@ html:root[data-theme-id="ksg-salon"] {
     font-weight: 400;
   }
 
-  [data-duet-channel-meta],
-  [data-duet-channel-stat] {
+  [data-duet-live] {
     font-weight: 400;
-  }
-
-  [data-duet-attention-pill] {
-    font-size: 0.65625rem;
-    line-height: 1rem;
-    font-weight: 600;
-    background-color: var(--duet-attention-pill-fill);
-    color: var(--duet-attention-pill-foreground);
   }
 
   [data-duet-card-meta] > [role="img"]:first-child svg {
@@ -316,6 +303,7 @@ html:root[data-theme-id="ksg-salon"] {
     --duet-channel-branch-active: color-mix(in srgb, var(--duet-ink-base) 45%, #e5e5e5);
     --duet-channel-tile-ring: color-mix(in srgb, var(--duet-ink-base) 14%, transparent);
     --duet-orbit-track: color-mix(in srgb, var(--duet-ink) 14%, transparent);
+    --duet-tile-sheen: rgb(255 255 255 / 0.55);
   }
 
   [data-duet-palette="terracotta"] {
@@ -384,12 +372,17 @@ html:root[data-theme-id="ksg-salon"] {
       --duet-channel-branch-active: color-mix(in srgb, var(--duet-ink) 50%, #333333);
       --duet-channel-tile-ring: color-mix(in srgb, var(--duet-ink) 22%, transparent);
       --duet-orbit-track: color-mix(in srgb, var(--duet-ink) 24%, transparent);
+      --duet-tile-sheen: rgb(255 255 255 / 0.09);
     }
   }
 
-  /* Channel card tiles step from tint to bubble while the card is pointed at or focused. */
+  /* Channel tiles catch light along their top edge, and step from tint to bubble while the row
+     is pointed at or focused. */
   [data-duet-channel-card] [data-captain-tile] {
-    box-shadow: inset 0 0 0 1px var(--duet-channel-tile-ring);
+    background-image: linear-gradient(to bottom, var(--duet-tile-sheen), transparent 60%);
+    box-shadow:
+      inset 0 0 0 1px var(--duet-channel-tile-ring),
+      inset 0 1px 0 var(--duet-tile-sheen);
     transition: background-color 120ms ease-out;
   }
 

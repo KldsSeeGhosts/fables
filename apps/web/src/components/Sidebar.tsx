@@ -3937,7 +3937,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           activeThread={currentThreadRef}
                           onOpen={navigateToThread}
                           onReveal={revealSidebarShelf}
-                          providerEntriesByEnvironment={providerEntriesByEnvironment}
                         />,
                         ...(isDuet
                           ? [
