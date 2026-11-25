@@ -65,14 +65,19 @@ export function captainSubagentTaskStatus(
   }
 }
 
-/** Status of a local task, preferring its settled shell and otherwise its parent-side record. */
+/**
+ * Status of a local task. The child's shell is live, so its requests and runs win; a settled shell
+ * is done; otherwise the parent's record of the delegation decides.
+ */
 export function captainLocalTaskStatus(
   thread: TaskThread | null | undefined,
   subagent: Pick<OrchestrationV2Subagent, "status"> | null | undefined,
 ): CaptainTaskStatus {
+  const live = captainThreadTaskStatus(thread);
+  if (live === "needs-input" || live === "working") return live;
   if (thread?.settledAt != null) return "done";
   if (subagent) return captainSubagentTaskStatus(subagent);
-  return captainThreadTaskStatus(thread);
+  return live;
 }
 
 const firstLine = (text: string | null | undefined) =>

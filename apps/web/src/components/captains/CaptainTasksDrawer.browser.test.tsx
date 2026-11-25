@@ -35,10 +35,9 @@ vi.mock(import("./useCaptain"), async (importOriginal) => ({
 
 vi.mock(import("../../state/entities"), async (importOriginal) => ({
   ...(await importOriginal()),
-  useChildThreadInputs: (() => state.children) as never,
   useProjects: (() => []) as never,
   useQuietThreadProjection: (() => null) as never,
-  useThreadShells: (() => state.children) as never,
+  useQuietThreadShells: (() => state.children) as never,
   useQuietThreadShell: ((ref: { threadId: ThreadId }) =>
     ref.threadId === state.parent?.id
       ? state.parent

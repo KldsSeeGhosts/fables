@@ -83,7 +83,7 @@ export function CaptainMorningBriefControl({
       <div className="flex min-w-0 items-center gap-3">
         <SunriseIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          <Text variant="label" className="truncate" render={<div />}>
+          <Text variant="label" truncate render={<div />}>
             {gt("Morning brief · {time}", { time: timeLabel })}
           </Text>
           <Text variant="meta" tone="muted" render={<div />}>

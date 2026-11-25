@@ -7,7 +7,7 @@ import {
   type CaptainDelegatedLocalTask,
 } from "@t3tools/client-runtime/state/captains";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
-import { type OrchestrationV2Subagent, type ScopedThreadRef } from "@t3tools/contracts";
+import { type OrchestrationV2Subagent, type ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 import { T, useGT, useMessages } from "gt-react";
 import { CalendarClockIcon, ChevronDownIcon, XIcon } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -24,7 +24,7 @@ import {
   useProjects,
   useQuietThreadProjection,
   useQuietThreadShell,
-  useThreadShells,
+  useQuietThreadShells,
 } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
@@ -336,19 +336,24 @@ export function CaptainTasksDrawer({
   const captains = useCaptains(threadRef.environmentId);
   const captain = captainForThread(captains.data, threadRef.threadId);
 
+  // Joined so a Captain snapshot refresh with the same conversations keeps the mounts.
+  const conversationIds =
+    captain === undefined ? "" : [captain.primaryThreadId, ...captain.earlierThreadIds].join("\n");
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- holds each Captain conversation's family rows in shell state while the drawer is open
   useEffect(() => {
-    if (captain === undefined) return;
-    const releases = [captain.primaryThreadId, ...captain.earlierThreadIds].map((threadId) =>
-      threadFamilies.mount(appAtomRegistry, threadRef.environmentId, threadId),
-    );
+    if (conversationIds === "") return;
+    const releases = conversationIds
+      .split("\n")
+      .map((threadId) =>
+        threadFamilies.mount(appAtomRegistry, threadRef.environmentId, ThreadId.make(threadId)),
+      );
     return () => {
       for (const release of releases) release();
     };
-  }, [captain, threadRef.environmentId]);
+  }, [conversationIds, threadRef.environmentId]);
 
   const parentShell = useQuietThreadShell(threadRef);
-  const shells = useThreadShells();
+  const shells = useQuietThreadShells();
   const projects = useProjects();
   const projectsById = new Map(
     projects

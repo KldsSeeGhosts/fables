@@ -1,4 +1,12 @@
-import type { CaptainDocumentName, CaptainId, EnvironmentId } from "@t3tools/contracts";
+import { useAtomValue } from "@effect/atom-react";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import {
+  CaptainError,
+  type CaptainDocumentName,
+  type CaptainId,
+  type EnvironmentId,
+} from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 import { T, useGT } from "gt-react";
 import { ArrowLeftIcon, FileTextIcon } from "lucide-react";
 import { useState } from "react";
@@ -17,6 +25,8 @@ type CaptainDocumentDetails = {
     readonly revision: number;
   }>;
 };
+
+const isCaptainError = Schema.is(CaptainError);
 
 const DOCUMENT_NAMES: ReadonlyArray<CaptainDocumentName> = [
   "AGENTS.md",
@@ -80,18 +90,24 @@ function DocumentEditor({
   readonly onBack: () => void;
 }) {
   const gt = useGT();
-  const document = details.documents.find((entry) => entry.name === name) ?? {
-    name,
-    content: "",
-    revision: 0,
-  };
-  const [content, setContent] = useState(document.content);
+  const allowed = useAtomValue(
+    serverEnvironment.updateCaptainDocument.permissionAtom(environmentId),
+  );
+  const live = details.documents.find((entry) => entry.name === name);
+  const liveContent = live?.content ?? "";
+  const liveRevision = live?.revision ?? 0;
+  // The draft remembers the revision it started from, so a Duet's own edit is never overwritten.
+  const [draft, setDraft] = useState({ content: liveContent, revision: liveRevision });
+  const [serverConflict, setServerConflict] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const update = useAtomCommand(serverEnvironment.updateCaptainDocument, { reportFailure: false });
   const copy = useDocumentCopy(name);
+  const behind = draft.revision < liveRevision;
+  const conflict = behind || serverConflict;
 
   const save = async () => {
+    if (!allowed || saving || conflict) return;
     setSaving(true);
     setError(null);
     const result = await update({
@@ -99,13 +115,15 @@ function DocumentEditor({
       input: {
         captainId: details.captain.id,
         name,
-        content,
-        expectedRevision: document.revision,
+        content: draft.content,
+        expectedRevision: draft.revision,
       },
     });
     setSaving(false);
     if (result._tag === "Failure") {
-      setError(captainCommandError(result, gt("Could not save the document.")));
+      const failure = squashAtomCommandFailure(result);
+      if (isCaptainError(failure) && failure.code === "conflict") setServerConflict(true);
+      else setError(captainCommandError(result, gt("Could not save the document.")));
       return;
     }
     onBack();
@@ -130,10 +148,43 @@ function DocumentEditor({
       <Textarea
         aria-label={name}
         rows={10}
-        value={content}
-        disabled={saving}
-        onChange={(event) => setContent(event.target.value)}
+        value={draft.content}
+        disabled={saving || !allowed}
+        onChange={(event) => setDraft({ ...draft, content: event.target.value })}
       />
+      {conflict ? (
+        <div role="alert" className="grid gap-2 rounded-lg border border-border p-3">
+          <p className="text-meta text-foreground">
+            <T>The Duet changed this document while you were editing. Your draft is still here.</T>
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                setDraft({ content: liveContent, revision: liveRevision });
+                setServerConflict(false);
+              }}
+            >
+              <T>Use the Duet's version</T>
+            </Button>
+            {behind ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setDraft({ ...draft, revision: liveRevision });
+                  setServerConflict(false);
+                }}
+              >
+                <T>Keep my draft</T>
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       {error ? (
         <p role="alert" className="text-meta text-destructive-foreground">
           {error}
@@ -143,7 +194,11 @@ function DocumentEditor({
         <Button type="button" variant="secondary" disabled={saving} onClick={onBack}>
           <T>Cancel</T>
         </Button>
-        <Button type="button" disabled={saving} onClick={() => void save()}>
+        <Button
+          type="button"
+          disabled={!allowed || saving || conflict || draft.content === liveContent}
+          onClick={() => void save()}
+        >
           <T>Save document</T>
         </Button>
       </div>

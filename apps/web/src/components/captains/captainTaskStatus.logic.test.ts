@@ -2,6 +2,7 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/model
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  captainLocalTaskStatus,
   captainSubagentTaskStatus,
   captainTaskIsRecent,
   captainThreadTaskStatus,
@@ -53,6 +54,34 @@ describe("captainSubagentTaskStatus", () => {
     expect(captainSubagentTaskStatus({ status: "completed" })).toBe("ready");
     expect(captainSubagentTaskStatus({ status: "failed" })).toBe("failed");
     expect(captainSubagentTaskStatus({ status: "cancelled" })).toBe("stopped");
+  });
+});
+
+describe("captainLocalTaskStatus", () => {
+  it("lets the child's live request or run win over the parent's record", () => {
+    expect(
+      captainLocalTaskStatus(
+        { ...withRun("completed"), hasPendingApprovals: true },
+        {
+          status: "completed",
+        },
+      ),
+    ).toBe("needs-input");
+    expect(
+      captainLocalTaskStatus(
+        { ...idle, runtime: { status: "running" } as EnvironmentThreadShell["runtime"] },
+        { status: "completed" },
+      ),
+    ).toBe("working");
+  });
+
+  it("treats a settled child as done and otherwise follows the parent's record", () => {
+    expect(
+      captainLocalTaskStatus({ ...idle, settledAt: "2026-11-25" }, { status: "completed" }),
+    ).toBe("done");
+    expect(captainLocalTaskStatus(idle, { status: "failed" })).toBe("failed");
+    expect(captainLocalTaskStatus(null, { status: "running" })).toBe("working");
+    expect(captainLocalTaskStatus(withRun("completed"), null)).toBe("ready");
   });
 });
 
