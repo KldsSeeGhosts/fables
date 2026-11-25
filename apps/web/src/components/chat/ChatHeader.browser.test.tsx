@@ -238,7 +238,7 @@ it("keeps a Duet channel's title menu at the header start and centres only the a
         expect.arrayContaining([
           "Customize Duet",
           "Rename",
-          "Instructions",
+          "Memory",
           "Change icon",
           "New conversation",
           "Archive",
