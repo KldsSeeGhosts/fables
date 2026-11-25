@@ -1510,6 +1510,10 @@ export function ChatSettingsPanel() {
         />
       </SettingsSection>
 
+      <SettingsSection id="activity" title={gt("Activity")}>
+        <ToolCallVisibilitySettingsRows />
+      </SettingsSection>
+
       <SettingsSection id="screen-reader" title={gt("Screen reader")}>
         <ScreenReaderAnnouncementsRow />
         <ScreenReaderWindowTitleRow />

@@ -1,6 +1,6 @@
 import { isElectron } from "../../env";
 import { isMacPlatform } from "../../lib/utils";
-import { RestoreDeviceDefaultsButton, ToolCallVisibilitySettingsRows } from "./SettingsPanels";
+import { RestoreDeviceDefaultsButton } from "./SettingsPanels";
 import type { CSSProperties } from "react";
 import { useState } from "react";
 import { msg, useGT, useMessages } from "gt-react";
@@ -404,10 +404,6 @@ export function AppearanceSettingsPanel() {
             </Select>
           }
         />
-      </SettingsSection>
-
-      <SettingsSection id="tool-calls" title={gt("Tool calls")}>
-        <ToolCallVisibilitySettingsRows />
       </SettingsSection>
 
       <SettingsSection id="appearance-motion" title={gt("Motion")}>
