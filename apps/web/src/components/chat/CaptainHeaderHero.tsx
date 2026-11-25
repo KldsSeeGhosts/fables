@@ -2,6 +2,7 @@
 import "./DuetHeaderChrome.css";
 
 import type { Captain, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+import { useNavigate } from "@tanstack/react-router";
 import { T, useGT } from "gt-react";
 import {
   ArchiveIcon,
@@ -81,11 +82,12 @@ export function CaptainHeaderTitleMenu({
   onContextMenu: (event: ReactMouseEvent) => void;
 }) {
   const gt = useGT();
+  const navigate = useNavigate();
   const status = useDuetThreadStatus(threadRef);
   const profile = useCaptainProfile({
     captain,
     environmentId: threadRef.environmentId,
-    onDelete: () => {},
+    onDelete: () => void navigate({ to: "/captains" }),
   });
   const labels = useCaptainAvatarLabels();
   const [renaming, setRenaming] = useState(false);
