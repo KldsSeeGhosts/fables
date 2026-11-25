@@ -23,7 +23,6 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
-import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
 
 import { CaptainAvatar, type CaptainAvatarState } from "../captains/CaptainAvatar";
@@ -54,7 +53,7 @@ import {
   MenuTrigger,
 } from "../ui/menu";
 import { toastManager } from "../ui/toast";
-import { DuetStatusPopover, useDuetThreadStatus } from "./DuetThreadStatus";
+import { useDuetThreadStatus } from "./DuetThreadStatus";
 
 function avatarStateFor(archived: boolean, statusState: string): CaptainAvatarState {
   if (archived) return "archived";
@@ -138,7 +137,13 @@ export function CaptainHeaderTitleMenu({
           className="flex h-7 max-w-64 items-center gap-1.5 rounded-md px-2 inset-ring inset-ring-ring/50 focus-within:inset-ring-ring"
           data-captain-hero-name=""
         >
-          <CaptainAvatar avatar={current.avatar} size="row" state={avatarState} />
+          <CaptainAvatar
+            avatar={current.avatar}
+            size="row"
+            state={avatarState}
+            activity={status.activity}
+            celebrate={status.celebrating}
+          />
           <input
             autoFocus
             dir="auto"
@@ -169,7 +174,13 @@ export function CaptainHeaderTitleMenu({
               />
             }
           >
-            <CaptainAvatar avatar={current.avatar} size="row" state={avatarState} />
+            <CaptainAvatar
+              avatar={current.avatar}
+              size="row"
+              state={avatarState}
+              activity={status.activity}
+              celebrate={status.celebrating}
+            />
             <span className="min-w-0 truncate" dir={textDirection(current.name)}>
               {current.name}
             </span>
@@ -292,72 +303,49 @@ export function CaptainHeaderTitleMenu({
   );
 }
 
-/**
- * A Duet channel's centred orb and ever-updating live status indicator.
- */
+/** A Duet channel's centred creature and stabilized live status pill. */
 export function CaptainHeaderHero({
   captain,
   threadRef,
-  onContextMenu,
 }: {
   captain: Captain;
   threadRef: ScopedThreadRef;
-  onContextMenu: (event: ReactMouseEvent) => void;
 }) {
-  const gt = useGT();
   const status = useDuetThreadStatus(threadRef);
   const avatarState = avatarStateFor(captain.archivedAt !== null, status.state);
 
-  const orb = (
-    <button
-      type="button"
-      aria-label={gt("Status: {status}", { status: status.stateText })}
-      data-captain-hero-orb=""
-      className="flex size-8 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-    >
-      <CaptainAvatar avatar={captain.avatar} size="orb" state={avatarState} />
-    </button>
-  );
-
   return (
-    <div
-      data-captain-header-hero=""
-      className="pointer-events-none absolute inset-y-0 left-1/2 z-20 flex -translate-x-1/2 items-center"
-    >
-      <div
-        className="pointer-events-auto relative flex items-center [-webkit-app-region:no-drag]"
-        onContextMenu={onContextMenu}
-      >
-        <DuetStatusPopover
-          threadRef={threadRef}
-          status={status}
-          mark={<CaptainAvatar avatar={captain.avatar} size="orb" state={avatarState} />}
-          trigger={orb}
+    <div data-captain-header-hero="" className="pointer-events-none absolute inset-y-0 z-20">
+      <div className="relative flex items-center">
+        <CaptainAvatar
+          avatar={captain.avatar}
+          size="hero"
+          state={avatarState}
+          activity={status.activity}
+          celebrate={status.celebrating}
         />
-        {status.state !== "idle" ? (
+        {status.liveVisible ? (
           <span
+            aria-hidden
             data-captain-hero-live={status.state}
-            className={cn(
-              "pointer-events-none absolute top-full left-1/2 mt-0.5 flex h-6 max-w-72 -translate-x-1/2 items-center gap-1.5 rounded-full border border-(--duet-hairline,var(--border)) bg-background px-2.5 text-caption whitespace-nowrap shadow-xs",
-              status.state === "working"
-                ? "text-(--duet-working-text,var(--foreground))"
-                : status.state === "waiting"
-                  ? "text-(--duet-needs-input-text,var(--warning-foreground))"
-                  : "text-muted-foreground",
-            )}
+            className="absolute top-[calc(100%-10px)] left-1/2 grid h-7 max-w-72 -translate-x-1/2 grid-cols-1 items-center justify-items-center overflow-hidden rounded-full border border-(--duet-panel-border,var(--border)) bg-(--duet-panel-fill,var(--background)) px-3 text-body whitespace-nowrap text-foreground shadow-(--duet-panel-shadow,var(--shadow-md))"
           >
+            {status.liveOutgoing ? (
+              <span
+                key={`outgoing-${status.liveOutgoing.label}`}
+                data-captain-hero-live-label="outgoing"
+                className="col-start-1 row-start-1 max-w-64 truncate"
+              >
+                {status.liveOutgoing.label}
+              </span>
+            ) : null}
             <span
-              aria-hidden
-              className={cn(
-                "size-1.5 shrink-0 rounded-full",
-                status.state === "working"
-                  ? "bg-(--duet-working,var(--info))"
-                  : status.state === "waiting"
-                    ? "bg-(--duet-needs-input-ring,var(--warning))"
-                    : "bg-muted-foreground",
-              )}
-            />
-            <span className="min-w-0 truncate">{status.liveLabel}</span>
+              key={`current-${status.liveLabel}`}
+              data-captain-hero-live-label="current"
+              className="col-start-1 row-start-1 max-w-64 truncate"
+            >
+              {status.liveLabel}
+            </span>
           </span>
         ) : null}
         <span aria-live="polite" className="sr-only">

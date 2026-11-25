@@ -127,3 +127,61 @@
     background: #3a3a3a;
   }
 }
+
+[data-captain-header-root] {
+  position: relative;
+  container-name: duet-header;
+  container-type: inline-size;
+}
+
+/* The hero floats over the chat lane rather than reacting to clicks. */
+[data-captain-header-hero] {
+  position: absolute;
+  inset-block: 0;
+  z-index: 20;
+  display: none;
+  align-items: center;
+  left: calc(50% + var(--chat-header-lane-center-offset, 0px));
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+@container duet-header (width >= 40rem) {
+  [data-captain-header-hero] {
+    display: flex;
+  }
+}
+
+[data-captain-hero-live] {
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes captain-hero-live-in {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes captain-hero-live-out {
+    from {
+      opacity: 1;
+    }
+
+    to {
+      opacity: 0;
+    }
+  }
+
+  [data-captain-hero-live-label="current"] {
+    animation: captain-hero-live-in 180ms ease-out both;
+  }
+
+  [data-captain-hero-live-label="outgoing"] {
+    animation: captain-hero-live-out 180ms ease-out both;
+  }
+}

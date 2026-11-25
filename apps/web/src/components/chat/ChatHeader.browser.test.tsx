@@ -192,7 +192,7 @@ it("keeps a Duet channel's title menu at the header start and centres only the a
   openMenu.mockClear();
   try {
     await using screen = await render(
-      <header data-chat-header className="relative flex h-12 w-[900px]">
+      <header data-chat-header className="relative flex h-12" style={{ width: 900 }}>
         <ChatHeader
           activeThreadEnvironmentId={EnvironmentId.make("environment")}
           activeThreadId={ThreadId.make("captain:maria:0")}
@@ -206,13 +206,14 @@ it("keeps a Duet channel's title menu at the header start and centres only the a
       </header>,
     );
 
-    const orb = screen.getByRole("button", { name: "Status: Idle" });
-    await expect.element(orb).toBeVisible();
     expect(screen.container.querySelector('[aria-label="Thread actions for Maria"]')).toBeNull();
     expect(screen.container.querySelector("[data-pane-notch]")).toBeNull();
     expect(screen.container.querySelector("[data-captain-hero-live]")).toBeNull();
 
     const hero = screen.container.querySelector<HTMLElement>("[data-captain-header-hero]")!;
+    expect(getComputedStyle(hero).display).toBe("flex");
+    expect(getComputedStyle(hero).pointerEvents).toBe("none");
+    expect(hero.querySelector("button, a, [role='button']")).toBeNull();
     const avatar = hero.querySelector("[data-captain-avatar]")!;
     expect(avatar.getAttribute("data-duet-palette")).toBe("plum");
     expect(avatar.hasAttribute("data-captain-disc")).toBe(true);
@@ -246,8 +247,10 @@ it("keeps a Duet channel's title menu at the header start and centres only the a
     });
     await userEvent.keyboard("{Escape}");
 
-    await userEvent.click(orb, { button: "right" });
-    expect(openMenu).toHaveBeenCalledOnce();
+    await vi.waitFor(() => {
+      expect(hero.querySelector('[aria-live="polite"]')?.textContent).toBe("Idle");
+    });
+    expect(openMenu).not.toHaveBeenCalled();
   } finally {
     duetShell.enabled = false;
     captainState.enabled = false;
