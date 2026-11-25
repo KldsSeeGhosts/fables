@@ -1,3 +1,6 @@
+import "~/index.css";
+
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
@@ -64,10 +67,12 @@ vi.mock(import("~/hooks/useThreadActionMenu"), () => ({
 import { render, stubGlobal } from "../../../test/render";
 import { showLayoutTabMenu } from "../../layout/PaneTabs";
 import { LayoutPaneContext, useLayoutPane } from "../../layout/layoutPaneContext";
-import { findLayoutTab } from "../../layout/layoutModel";
+import { createLayoutState, findLayoutTab } from "../../layout/layoutModel";
 import { useLayoutStore } from "../../layout/layoutStore";
 import { ensureLocalApi } from "../../localApi";
+import { ChatPaneHeader, ChatPaneHeaderControls, useHeaderControlsInset } from "./ChatPaneHeader";
 import { ChatHeader } from "./ChatHeader";
+import { PanelLayoutControls } from "./PanelLayoutControls";
 
 function header(title: string) {
   return (
@@ -271,6 +276,105 @@ it("keeps a Duet channel's title menu at the header start and centres only the a
     });
     expect(openMenu).not.toHaveBeenCalled();
   } finally {
+    duetShell.enabled = false;
+    captainState.enabled = false;
+  }
+});
+
+it("truncates a split Duet title before the compact controls", async () => {
+  duetShell.enabled = true;
+  captainState.enabled = false;
+  const longTitle =
+    "A very long split pane thread title that must truncate before the compact header controls";
+  function SplitHeader() {
+    const [controlsInset, measureControls] = useHeaderControlsInset();
+    return (
+      <LayoutPaneContext value={{ ...useLayoutPane(), split: true, tabId: "duet-tab" }}>
+        <div style={{ width: 360 }}>
+          <ChatPaneHeader reserveNativeControlsInset={false}>
+            <ChatPaneHeaderControls measureRef={measureControls}>
+              <PanelLayoutControls
+                threadPanelOpen={false}
+                threadPanelPresentation="inline"
+                threadPanelShortcutLabel={null}
+                onToggleThreadPanel={() => {}}
+                rightPanel={{ open: false, shortcutLabel: null, onToggle: () => {} }}
+              />
+            </ChatPaneHeaderControls>
+            <ChatHeader
+              activeThreadEnvironmentId={EnvironmentId.make("environment")}
+              activeThreadId={ThreadId.make("thread")}
+              activeThreadTitle={longTitle}
+              isServerThread
+              activeProject={null}
+              parentThreadLink={null}
+              onOpenThread={() => {}}
+              rightPanelOpen={false}
+              trailingInset={controlsInset}
+            />
+          </ChatPaneHeader>
+        </div>
+      </LayoutPaneContext>
+    );
+  }
+  try {
+    await using screen = await render(<SplitHeader />);
+    await vi.waitFor(() => {
+      const cluster = screen.container.querySelector<HTMLElement>("[data-panel-layout-controls]")!;
+      const title = screen.container.querySelector<HTMLElement>("[data-duet-header-title]")!;
+      expect(cluster).not.toBeNull();
+      expect(title).not.toBeNull();
+      expect(title.getBoundingClientRect().right).toBeLessThanOrEqual(
+        cluster.getBoundingClientRect().left,
+      );
+    });
+  } finally {
+    duetShell.enabled = false;
+  }
+});
+
+it("includes layout tab actions in a split Duet title menu", async () => {
+  duetShell.enabled = true;
+  captainState.enabled = true;
+  const originalLayout = useLayoutStore.getState().layout;
+  useLayoutStore.setState({ layout: createLayoutState() });
+  const environmentId = EnvironmentId.make("environment");
+  const threadRef = scopeThreadRef(environmentId, ThreadId.make("captain:maria:0"));
+  const content = { kind: "chat", target: { kind: "server", threadRef } } as const;
+  useLayoutStore.getState().openTab(content, { placement: "active-pane", position: "end" });
+  const tabId = findLayoutTab(useLayoutStore.getState().layout, (tab) => tab.content === content)!
+    .tab.id;
+  function SplitDuetHeader() {
+    return (
+      <LayoutPaneContext value={{ ...useLayoutPane(), split: true, tabId }}>
+        <ChatHeader
+          activeThreadEnvironmentId={environmentId}
+          activeThreadId={threadRef.threadId}
+          activeThreadTitle="Maria"
+          isServerThread
+          activeProject={null}
+          parentThreadLink={null}
+          onOpenThread={() => {}}
+          rightPanelOpen={false}
+        />
+      </LayoutPaneContext>
+    );
+  }
+  try {
+    await using screen = await render(<SplitDuetHeader />);
+    await userEvent.click(screen.getByRole("button", { name: "Duet menu for Maria" }));
+
+    await vi.waitFor(() => {
+      const items = Array.from(
+        document.body.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+      ).map((element) => element.textContent);
+      for (const label of ["Split right", "Split down", "Close"]) {
+        expect(items.some((item) => item?.startsWith(label))).toBe(true);
+      }
+    });
+    await userEvent.keyboard("{Escape}");
+  } finally {
+    useLayoutStore.setState({ layout: originalLayout });
     duetShell.enabled = false;
     captainState.enabled = false;
   }
