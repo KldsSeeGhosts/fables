@@ -253,10 +253,16 @@ describe("advanceDuetLiveStatus", () => {
     expect(held.output.celebrating).toBe(true);
     expect(held.wakeAt).toBe(2_000 + DUET_LIVE_CELEBRATE_MS);
 
-    const hidden = advance(held.machine, idle, 2_000 + DUET_LIVE_HIDE_DELAY_MS);
+    const celebrationEnds = advance(held.machine, idle, held.wakeAt!);
+    expect(celebrationEnds.output.visible).toBe(true);
+    expect(celebrationEnds.output.celebrating).toBe(false);
+    expect(celebrationEnds.wakeAt).toBe(2_000 + DUET_LIVE_HIDE_DELAY_MS);
+
+    const hidden = advance(celebrationEnds.machine, idle, celebrationEnds.wakeAt!);
     expect(hidden.output.visible).toBe(false);
     expect(hidden.output.label).toBe("Idle");
-    expect(hidden.machine.celebrateUntil).not.toBeNull();
+    expect(hidden.machine.celebrateUntil).toBeNull();
+    expect(hidden.wakeAt).toBeNull();
   });
 
   it("does not celebrate when waiting resolves without work", () => {

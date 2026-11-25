@@ -264,8 +264,11 @@ export function advanceDuetLiveStatus(
       outgoing = null;
       hideRequestedAt = null;
     } else {
+      const enteringHideHold = hideRequestedAt === null;
       hideRequestedAt ??= now;
-      if (current.activity !== "waiting") celebrateUntil ??= now + DUET_LIVE_CELEBRATE_MS;
+      if (enteringHideHold && current.activity !== "waiting") {
+        celebrateUntil ??= now + DUET_LIVE_CELEBRATE_MS;
+      }
       if (now - hideRequestedAt >= DUET_LIVE_HIDE_DELAY_MS) {
         current = null;
         outgoing = null;
