@@ -5,7 +5,21 @@ import { msg } from "gt-react";
 import { m, type MessageResolver } from "../i18n/messages";
 import { linkedThreadTitle } from "../linkedThreadSurface";
 
+import type { LayoutPageContent } from "./layoutModel";
 import type { RightPanelSurface } from "../rightPanelStore";
+
+const pageTabTitles = {
+  settings: msg("Settings"),
+  usage: msg("Usage"),
+  issues: msg("Issues", { $context: "sidebar link to the list of issues" }),
+  workflows: msg("Workflows"),
+  "pull-requests": msg("Pull requests"),
+  captains: msg("Everything", { $context: "the Captains home page" }),
+} satisfies Record<LayoutPageContent["kind"], ReturnType<typeof msg>>;
+
+export function layoutPageTabTitle(kind: LayoutPageContent["kind"], resolve: MessageResolver) {
+  return resolve(pageTabTitles[kind]);
+}
 
 /** Tabs show the command; the tooltip retains the complete terminal label. */
 export function terminalTabTitle(
@@ -28,7 +42,7 @@ export function surfaceTabTitle(
 ): string {
   switch (surface.kind) {
     case "captain-brief":
-      return resolve(msg("Captain Brief"));
+      return resolve(msg("Tasks"));
     case "diff":
       return resolve(msg("Diff"));
     case "files":

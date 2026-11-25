@@ -88,7 +88,8 @@ export function ThreadDetailsCard({
         mode === "popover" &&
           "max-h-[min(calc(100dvh-6.5rem),calc(var(--available-height,100dvh)-1rem))]",
       )}
-      style={{ height }}
+      // A floating popover sizes to its content up to the max height.
+      style={mode === "inline" ? { height } : undefined}
       onContextMenu={onContextMenu}
       data-thread-details-frame
     >
@@ -151,6 +152,7 @@ export function ThreadDetailsCard({
           requestWorkspaceFocus({ area: "details" });
           return false;
         }}
+        finalFocus={(closeType) => closeType === "keyboard"}
         anchor={anchor}
         align="end"
         // Account for the find panel's 8px card padding.

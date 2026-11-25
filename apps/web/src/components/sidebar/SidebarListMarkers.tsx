@@ -2,7 +2,9 @@ import { CollapsibleSectionHeader } from "../ui/collapsible-section-header";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { type ReactNode, useLayoutEffect } from "react";
+import { useDuetShell } from "~/hooks/useDuetShell";
 import { cn } from "~/lib/utils";
+import { Button } from "../ui/button";
 import {
   animateSidebarLayoutChanges,
   sidebarMarkerId,
@@ -128,28 +130,57 @@ export function SidebarSectionHeader(props: {
       : props.marker === "snoozed-header"
         ? "snoozed"
         : "settled";
+  const isDuet = useDuetShell();
   return (
     <SortableSidebarMarker
       marker={props.marker}
       data-testid={`sidebar-${props.marker}`}
       className={cn("relative mx-0.5 h-8", props.className)}
     >
-      <CollapsibleSectionHeader
-        data-sidebar-row={`shelf:${shelf}`}
-        aria-hidden={props.concealed ? true : undefined}
-        tabIndex={props.concealed ? -1 : undefined}
-        // A click must not focus the toggle: Chromium shows the focus ring on
-        // a clicked button once any key is pressed, even a lone modifier.
-        onPointerDown={(event) => event.preventDefault()}
-        onClick={(event) => props.toggle?.onToggle(event.currentTarget)}
-        disabled={props.toggle === null}
-        expanded={props.toggle?.expanded}
-        tone={props.isDropTarget ? "accent" : props.dragging ? "emphasized" : "shelf"}
-        data-testid={`sidebar-${shelf}-shelf-toggle`}
-        accessory={<span className="text-meta tabular-nums">{props.count}</span>}
-      >
-        {props.label}
-      </CollapsibleSectionHeader>
+      {isDuet ? (
+        <Button
+          type="button"
+          variant="ghost-muted"
+          size="compact"
+          data-sidebar-row={`shelf:${shelf}`}
+          aria-hidden={props.concealed ? true : undefined}
+          tabIndex={props.concealed ? -1 : undefined}
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={(event) => props.toggle?.onToggle(event.currentTarget)}
+          disabled={props.toggle === null}
+          aria-expanded={props.toggle?.expanded}
+          data-testid={`sidebar-${shelf}-shelf-toggle`}
+          className="w-full justify-start"
+        >
+          <span className="min-w-0 truncate">{props.label}</span>
+          <span className="text-meta tabular-nums">{props.count}</span>
+          {props.toggle?.expanded === undefined ? null : (
+            <span
+              aria-hidden
+              className={cn("text-micro leading-none", !props.toggle.expanded && "-rotate-90")}
+            >
+              ⌄
+            </span>
+          )}
+        </Button>
+      ) : (
+        <CollapsibleSectionHeader
+          data-sidebar-row={`shelf:${shelf}`}
+          aria-hidden={props.concealed ? true : undefined}
+          tabIndex={props.concealed ? -1 : undefined}
+          // A click must not focus the toggle: Chromium shows the focus ring on
+          // a clicked button once any key is pressed, even a lone modifier.
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={(event) => props.toggle?.onToggle(event.currentTarget)}
+          disabled={props.toggle === null}
+          expanded={props.toggle?.expanded}
+          tone={props.isDropTarget ? "accent" : props.dragging ? "emphasized" : "shelf"}
+          data-testid={`sidebar-${shelf}-shelf-toggle`}
+          accessory={<span className="text-meta tabular-nums">{props.count}</span>}
+        >
+          {props.label}
+        </CollapsibleSectionHeader>
+      )}
     </SortableSidebarMarker>
   );
 }

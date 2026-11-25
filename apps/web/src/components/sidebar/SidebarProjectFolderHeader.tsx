@@ -4,6 +4,7 @@ import type { ContextMenuSource } from "@t3tools/contracts";
 import { ChevronDownIcon, SquarePenIcon } from "lucide-react";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
 
+import { useDuetShell } from "~/hooks/useDuetShell";
 import { cn } from "~/lib/utils";
 import { contextMenuSourceOf } from "../../contextMenuSource";
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
@@ -51,6 +52,7 @@ export function SidebarProjectFolderHeader(props: {
   ) => void;
 }) {
   const gt = useGT();
+  const isDuet = useDuetShell();
   const m = useMessages();
   const { group, collapsed, hiddenThreads } = props;
   const rowId = sidebarFolderRowId(group.projectKey);
@@ -89,7 +91,12 @@ export function SidebarProjectFolderHeader(props: {
         }}
       >
         <ProjectFavicon project={group} className="size-4 shrink-0" />
-        <span className="min-w-0 flex-1 truncate text-label text-sidebar-foreground/90">
+        <span
+          className={cn(
+            "min-w-0 flex-1 truncate text-label text-sidebar-foreground/90",
+            isDuet && "text-meta text-sidebar-muted-foreground",
+          )}
+        >
           {group.displayName}
         </span>
         {dot ? (

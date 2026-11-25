@@ -24,6 +24,7 @@ export function layoutRoutePage(location: {
   if (location.pathname === "/pull-requests") return { kind: "pull-requests", href: location.href };
   if (location.pathname === "/issues") return { kind: "issues", href: location.href };
   if (location.pathname === "/workflows") return { kind: "workflows", href: location.href };
+  if (location.pathname === "/captains") return { kind: "captains", href: location.href };
   return null;
 }
 
@@ -67,30 +68,36 @@ export function useLayoutPageLocation(): {
   return use(LayoutPageLocationContext) ?? location;
 }
 
-/** The new-tab launcher opts into a page tab in its own pane. */
+export function openLayoutPage(
+  kind: LayoutPageContent["kind"],
+  navigate: (options: { href: string }) => Promise<void>,
+  destination?: LayoutTabDestination,
+  replaceTabId?: string,
+) {
+  if (kind === "settings" || kind === "usage") {
+    return navigate({ href: layoutPageHref({ kind }) }).then(() => {
+      if (replaceTabId) useLayoutStore.getState().closeTab(replaceTabId);
+    });
+  }
+  const store = useLayoutStore.getState();
+  const existing = findLayoutTabByContent(store.layout, { kind });
+  if (existing) {
+    if (replaceTabId && replaceTabId !== existing.tab.id) store.closeTab(replaceTabId);
+    store.focusTab(existing.tab.id);
+  } else if (replaceTabId) store.replaceTabContent(replaceTabId, { kind });
+  else if (destination) store.placeContent({ kind }, destination);
+  else store.openTab({ kind });
+  const content = findLayoutTabByContent(useLayoutStore.getState().layout, { kind })?.tab.content;
+  return navigate({
+    href: layoutPageHref(content && isLayoutPageContent(content) ? content : { kind }),
+  });
+}
+
 export function useOpenLayoutPage() {
   const navigate = useNavigate();
   return (
     kind: LayoutPageContent["kind"],
     destination?: LayoutTabDestination,
     replaceTabId?: string,
-  ) => {
-    if (kind === "settings" || kind === "usage") {
-      return navigate({ href: layoutPageHref({ kind }) }).then(() => {
-        if (replaceTabId) useLayoutStore.getState().closeTab(replaceTabId);
-      });
-    }
-    const store = useLayoutStore.getState();
-    const existing = findLayoutTabByContent(store.layout, { kind });
-    if (existing) {
-      if (replaceTabId && replaceTabId !== existing.tab.id) store.closeTab(replaceTabId);
-      store.focusTab(existing.tab.id);
-    } else if (replaceTabId) store.replaceTabContent(replaceTabId, { kind });
-    else if (destination) store.placeContent({ kind }, destination);
-    else store.openTab({ kind });
-    const content = findLayoutTabByContent(useLayoutStore.getState().layout, { kind })?.tab.content;
-    return navigate({
-      href: layoutPageHref(content && isLayoutPageContent(content) ? content : { kind }),
-    });
-  };
+  ) => openLayoutPage(kind, navigate, destination, replaceTabId);
 }

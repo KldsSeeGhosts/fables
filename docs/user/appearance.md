@@ -6,8 +6,8 @@ sidebar around the light panes. To use different themes for light and dark mode,
 the corresponding preview within each theme. Appearance preferences are saved separately on each
 device or browser.
 
-KSG Code includes Claude and Cursor themes in light and dark mode. They are available on every
-installation without importing or publishing theme files.
+KSG Code includes Claude, Cursor and KSG Salon themes in light and dark mode. They are available
+on every installation without importing or publishing theme files.
 
 On web and desktop, use **Change theme** in the command palette to select a theme without leaving chat.
 Press **Cmd+Option+A** on macOS or **Ctrl+Alt+A** on Windows/Linux to open the theme picker directly.

@@ -27,14 +27,21 @@ export function CaptainDocuments({
   environmentId,
   documents,
   refresh,
+  selected,
+  onSelect,
 }: {
   captain: Captain;
   environmentId: EnvironmentId;
   documents: ReadonlyArray<CaptainDocument>;
   refresh: () => void;
+  /** Lets a caller pick the open document, as the Make view's cards do. */
+  selected?: CaptainDocumentName;
+  onSelect?: (name: CaptainDocumentName) => void;
 }) {
   const gt = useGT();
-  const [name, setName] = useState<CaptainDocumentName>("NOTES.md");
+  const [ownName, setOwnName] = useState<CaptainDocumentName>("NOTES.md");
+  const name = selected ?? ownName;
+  const setName = onSelect ?? setOwnName;
   const [edits, setEdits] = useState<Partial<Record<CaptainDocumentName, Edit>>>({});
   const [saved, setSaved] = useState<Partial<Record<CaptainDocumentName, CaptainDocument>>>({});
   const [serverConflict, setServerConflict] = useState<CaptainDocumentName | null>(null);

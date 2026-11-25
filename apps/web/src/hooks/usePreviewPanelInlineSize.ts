@@ -24,18 +24,26 @@ export function usePreviewPanelInlineSize(
     readonly enabled?: boolean | undefined;
     readonly widthStorageKey?: string | undefined;
     readonly defaultWidth?: number | undefined;
+    readonly minWidth?: number | undefined;
+    readonly maxWidth?: number | undefined;
     readonly container?: HTMLElement | null | undefined;
   } = {},
 ): PreviewPanelInlineSize {
   const enabled = options.enabled ?? true;
   const container = options.container;
+  const minWidth = options.minWidth ?? PREVIEW_PANEL_MIN_WIDTH;
   const [maxWidth, setMaxWidth] = useState(() =>
-    getPreviewPanelMaxWidth(typeof window === "undefined" ? 1280 : window.innerWidth),
+    getPreviewPanelMaxWidth(
+      typeof window === "undefined" ? 1280 : window.innerWidth,
+      undefined,
+      minWidth,
+      options.maxWidth,
+    ),
   );
   const { width, handlers } = useResizableWidth({
     storageKey: options.widthStorageKey ?? PREVIEW_PANEL_WIDTH_STORAGE_KEY,
     defaultWidth: options.defaultWidth ?? PREVIEW_PANEL_DEFAULT_WIDTH,
-    minWidth: PREVIEW_PANEL_MIN_WIDTH,
+    minWidth,
     maxWidth,
     edge: "left",
   });
@@ -45,7 +53,9 @@ export function usePreviewPanelInlineSize(
     // flash on mount. Only the derived cap is stored: the row resizes every frame
     // of a sidebar drag, but an unchanged cap skips re-rendering the owner.
     const measure = () => {
-      setMaxWidth(getPreviewPanelMaxWidth(window.innerWidth, row?.clientWidth));
+      setMaxWidth(
+        getPreviewPanelMaxWidth(window.innerWidth, row?.clientWidth, minWidth, options.maxWidth),
+      );
     };
     measure();
     let frame = 0;
@@ -67,10 +77,15 @@ export function usePreviewPanelInlineSize(
   return { width, handlers, observeRow };
 }
 
-function getPreviewPanelMaxWidth(viewportWidth: number, containerWidth?: number): number {
+function getPreviewPanelMaxWidth(
+  viewportWidth: number,
+  containerWidth?: number,
+  minWidth = PREVIEW_PANEL_MIN_WIDTH,
+  widthCap = Infinity,
+): number {
   const fractionCap = Math.floor(viewportWidth * PREVIEW_PANEL_MAX_WIDTH_FRACTION);
   const containerCap =
     containerWidth === undefined ? Infinity : Math.floor(containerWidth) - SIBLING_COLUMN_MIN_WIDTH;
   // Keep max >= min; an inverted clamp would overwrite the saved width on drag end.
-  return Math.max(PREVIEW_PANEL_MIN_WIDTH, Math.min(fractionCap, containerCap));
+  return Math.max(minWidth, Math.min(fractionCap, containerCap, widthCap));
 }

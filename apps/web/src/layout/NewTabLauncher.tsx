@@ -2,7 +2,7 @@ import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environ
 import type { ProjectId, ScopedThreadRef } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { T, useGT } from "gt-react";
-import { SquareDashedIcon } from "lucide-react";
+import { CompassIcon, SquareDashedIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useLayoutEffect, useRef } from "react";
 
 import { contextMenuSourceOf } from "../contextMenuSource";
@@ -332,6 +332,12 @@ function NewTabLauncherBody({
             onSelect={() => openPage("workflows")}
           />
         ) : null}
+        <DraftProjectRow
+          icon={<CompassIcon className="size-4 shrink-0 text-muted-foreground" />}
+          label={gt("Everything", { $context: "the Captains home page" })}
+          detail=""
+          onSelect={() => openPage("captains")}
+        />
         <LayoutLearningTips />
       </div>
     </div>

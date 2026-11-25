@@ -52,6 +52,7 @@ export function ChatPaneStandIn({ target }: { target: ThreadRouteTarget }) {
               threadPanelPresentation="inline"
               threadPanelShortcutLabel={null}
               onToggleThreadPanel={ignore}
+              threadRef={threadRef}
             />
           </ChatPaneHeaderControls>
           {threadRef ? (

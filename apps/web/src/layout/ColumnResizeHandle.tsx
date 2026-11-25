@@ -26,6 +26,7 @@ import {
 } from "./layoutModel";
 import { getLayoutBehavior } from "./layoutBehavior";
 import { saveLayoutNow, useLayoutStore } from "./layoutStore";
+import { useDuetShell } from "../hooks/useDuetShell";
 
 /** Handles fill the gap between panes (the chrome gutter), centered on the boundary. */
 const HANDLE_SIZE = "8px";
@@ -167,6 +168,8 @@ export function LayoutResizeHandles({
   onPreview: (preview: { layout: LayoutState; heldStripPx: number } | null) => void;
 }) {
   const gt = useGT();
+  const duet = useDuetShell();
+  const columnHandleSize = duet ? "6px" : HANDLE_SIZE;
   const [drag, setDrag] = useState<ActiveDrag | null>(null);
   const [keyboardHandle, setKeyboardHandle] = useState<string | null>(null);
   const dragRef = useRef<ActiveDrag | null>(null);
@@ -446,10 +449,10 @@ export function LayoutResizeHandles({
         aria-label={gt("Resize column")}
         aria-valuenow={Math.round(width * 100)}
         tabIndex={0}
-        className="absolute inset-y-0 z-30 cursor-col-resize touch-none select-none outline-none [-webkit-app-region:no-drag]"
+        className="group/resize-column absolute inset-y-0 z-30 cursor-col-resize touch-none select-none outline-none [-webkit-app-region:no-drag]"
         style={{
-          left: `calc(${((thisColumnLeft + width) / stripWidth) * 100}% - ${HANDLE_SIZE} / 2)`,
-          width: HANDLE_SIZE,
+          left: `calc(${((thisColumnLeft + width) / stripWidth) * 100}% - ${columnHandleSize} / 2)`,
+          width: columnHandleSize,
         }}
         onPointerDown={(event) => {
           const metrics = measure();
@@ -484,7 +487,16 @@ export function LayoutResizeHandles({
           );
           useLayoutStore.getState().resizeColumnEdge(column.id, step, unitWidth);
         }}
-      />,
+      >
+        {duet ? (
+          <span
+            aria-hidden
+            className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2"
+            data-duet-resize-line
+            data-active={drag?.kind === "column" && drag.columnId === column.id ? "" : undefined}
+          />
+        ) : null}
+      </div>,
     );
   });
   const guide = drag ?? keyboardGuides[0];

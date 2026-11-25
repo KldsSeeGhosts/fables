@@ -1,20 +1,36 @@
-import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon, WorkflowIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  ChartNoAxesColumnIcon,
+  EllipsisIcon,
+  MonitorIcon,
+  MoonIcon,
+  SearchIcon,
+  SettingsIcon,
+  SunIcon,
+  WorkflowIcon,
+} from "lucide-react";
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { T, useGT } from "gt-react";
 import { memo } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
+import { useTheme } from "../../hooks/useTheme";
+import { useDuetShell } from "../../hooks/useDuetShell";
 import { cn } from "../../lib/utils";
 import { observeResize } from "../../lib/observeResize";
-import { useIssuesSupported, usePullRequestsSupported } from "../../state/environments";
+import {
+  useConnectedEnvironmentIds,
+  useIssuesSupported,
+  usePullRequestsSupported,
+} from "../../state/environments";
 import {
   resolveEnvironmentIdentificationPillLabel,
   useSidebarStageBackdropVariant,
   SidebarStageBackdrop,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
-import { TooltipProvider } from "../ui/tooltip";
+import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 import { Badge } from "../ui/badge";
 import { T3Wordmark } from "../T3Wordmark";
 import {
@@ -27,6 +43,8 @@ import {
 } from "../ui/sidebar";
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
 import { beginLayoutContentDrag } from "../../layout/layoutDrag";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
+import { Button } from "../ui/button";
 import { useOpenLayoutPage } from "../../layout/pageNavigation";
 import { IssueGlyph } from "../issue/issuePresentation";
 import { useWorkflowEnvironmentIds } from "../workflows/useWorkflowEnvironmentIds";
@@ -36,6 +54,7 @@ import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { SidebarUpstreamUpdatePill } from "./SidebarUpstreamUpdatePill";
+import { NavigationHistoryButton } from "../NavigationHistoryButton";
 
 const SIDEBAR_BRAND_OFFSET = "ml-[var(--workspace-titlebar-content-left)]";
 
@@ -98,14 +117,20 @@ function SidebarBrandMark({ onBackdrop }: { onBackdrop: boolean }) {
   );
 }
 
+const DUET_WORDMARK_CLASS_NAME =
+  "min-w-0 truncate font-display text-title text-sidebar-foreground max-md:pl-2 [[data-macos-window-controls]_&]:hidden";
+
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
+  onSearch,
 }: {
   isElectron: boolean;
+  onSearch?: (() => void) | undefined;
 }) {
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   const backdropVariant = useSidebarStageBackdropVariant(environmentIdentificationMode);
   const gt = useGT();
+  const isDuet = useDuetShell();
 
   return (
     // The sidebar's share of the window chrome row, not a padded SidebarHeader.
@@ -115,6 +140,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         "@container/sidebar-header relative flex h-(--workspace-chrome-row-height) shrink-0 flex-row items-center gap-2 pr-3 md:px-0",
         "md:group-data-[variant=inset]:-ms-(--workspace-sidebar-edge-inset) md:group-data-[variant=inset]:mb-[calc(--spacing(1)-var(--sidebar-content-inset))]",
         isElectron && "drag-region",
+        isDuet && "h-13 pr-2",
       )}
     >
       {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
@@ -126,9 +152,41 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
           aria-label={gt("Toggle main sidebar")}
         />
       </div>
-      <div className="relative z-10 flex h-8 min-w-0 flex-1 flex-wrap content-start items-center gap-x-2 overflow-hidden py-0.5 md:hidden">
-        <SidebarStagePill className="ml-1 hidden @[15rem]/sidebar-header:flex" />
-      </div>
+      {isDuet ? (
+        <div className="relative z-10 flex min-w-0 flex-1 items-center">
+          <div
+            aria-hidden
+            className="hidden w-[calc(var(--workspace-controls-left)+var(--workspace-titlebar-control-size)-2px)] shrink-0 md:block"
+          />
+          <div data-duet-wordmark="" className={DUET_WORDMARK_CLASS_NAME}>
+            {/* oxlint-disable-next-line t3code/no-untranslated-copy -- product wordmark */}
+            KSG Duet
+          </div>
+          <div
+            data-duet-sidebar-nav=""
+            className="order-3 flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag] [[data-macos-window-controls]_&]:order-1"
+          >
+            <NavigationHistoryButton direction="back" onStageBackdrop={false} />
+            <NavigationHistoryButton direction="forward" onStageBackdrop={false} />
+          </div>
+          <div className="order-2 flex-1" />
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            data-duet-sidebar-nav=""
+            className="order-4 [-webkit-app-region:no-drag]"
+            aria-label={gt("Search")}
+            title={gt("Search")}
+            onClick={() => onSearch?.()}
+          >
+            <SearchIcon className="size-3.5" />
+          </Button>
+        </div>
+      ) : (
+        <div className="relative z-10 flex h-8 min-w-0 flex-1 flex-wrap content-start items-center gap-x-2 overflow-hidden py-0.5 md:hidden">
+          <SidebarStagePill className="ml-1 hidden @[15rem]/sidebar-header:flex" />
+        </div>
+      )}
     </div>
   );
 });
@@ -162,18 +220,20 @@ function SidebarStagePill({ className }: { className?: string }) {
 function SidebarUtilityItem({
   icon,
   label,
+  size = "footer",
   onClick,
   onPointerDown,
 }: {
   icon: ReactNode;
   label: string;
+  size?: "header" | "footer";
   onClick: () => void;
   onPointerDown?: ((event: ReactPointerEvent) => void) | undefined;
 }) {
   return (
     <SidebarHeaderIconButton
       label={label}
-      size="footer"
+      size={size}
       onClick={onClick}
       onPointerDown={onPointerDown}
     >
@@ -291,12 +351,139 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   );
 });
 
-export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
+const DuetSidebarUtilityMenu = memo(function DuetSidebarUtilityMenu() {
+  const navigate = useNavigate();
+  const openLayoutPage = useOpenLayoutPage();
+  const gt = useGT();
+  const { isMobile, setOpenMobile } = useSidebar();
+  const connectedCount = useConnectedEnvironmentIds().length;
+  const pullRequestsSupported = usePullRequestsSupported();
+  const issuesSupported = useIssuesSupported();
+  const workflowsReachable = useWorkflowEnvironmentIds().length > 0;
+  const { resolvedTheme, setAppearanceChoice } = useTheme();
+  const closeMobileSidebar = () => {
+    if (isMobile) setOpenMobile(false);
+  };
+  const openSettings = () => {
+    closeMobileSidebar();
+    void navigate({ to: "/settings", search: { pane: undefined } });
+  };
+  const openLinkedEnvironments = () => {
+    closeMobileSidebar();
+    void navigate({ to: "/settings/connections" });
+  };
+  const openPullRequests = () => {
+    closeMobileSidebar();
+    void openLayoutPage("pull-requests");
+  };
+  const openIssues = () => {
+    closeMobileSidebar();
+    void openLayoutPage("issues");
+  };
+  const openWorkflows = () => {
+    closeMobileSidebar();
+    void openLayoutPage("workflows");
+  };
+  const openUsage = () => {
+    closeMobileSidebar();
+    void navigate({ to: "/usage" });
+  };
+  const dark = resolvedTheme === "dark";
   return (
+    <TooltipProvider>
+      <ul className="flex w-full min-w-0 flex-row items-center gap-1 px-2">
+        <SidebarThreadUndoNotice />
+        <SidebarUpstreamUpdatePill />
+        <SidebarUpdatePill />
+      </ul>
+      <div data-duet-sidebar-footer="" className="flex h-12 items-center gap-0.5 px-2">
+        <SidebarUtilityItem
+          size="header"
+          icon={<SettingsIcon className="size-4" />}
+          label={gt("Settings")}
+          onClick={openSettings}
+        />
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="compact"
+                aria-label={gt("Linked environments")}
+                onClick={openLinkedEnvironments}
+              />
+            }
+          >
+            <MonitorIcon className="size-4" />
+            <span className="text-meta tabular-nums text-sidebar-muted-foreground">
+              {connectedCount}
+            </span>
+          </TooltipTrigger>
+          <TooltipPopup side="top">{gt("Linked environments")}</TooltipPopup>
+        </Tooltip>
+        <Menu>
+          <MenuTrigger
+            render={<Button size="icon-sm" variant="ghost" />}
+            aria-label={gt("Sidebar actions")}
+          >
+            <EllipsisIcon className="size-4" />
+          </MenuTrigger>
+          <MenuPopup align="start" side="top">
+            {pullRequestsSupported ? (
+              <MenuItem
+                onClick={openPullRequests}
+                onPointerDown={(event) => beginLayoutContentDrag(event, { kind: "pull-requests" })}
+              >
+                <T>Pull requests</T>
+              </MenuItem>
+            ) : null}
+            {issuesSupported ? (
+              <MenuItem
+                onClick={openIssues}
+                onPointerDown={(event) => beginLayoutContentDrag(event, { kind: "issues" })}
+              >
+                <T>Issues</T>
+              </MenuItem>
+            ) : null}
+            {workflowsReachable ? (
+              <MenuItem
+                onClick={openWorkflows}
+                onPointerDown={(event) => beginLayoutContentDrag(event, { kind: "workflows" })}
+              >
+                <T>Workflows</T>
+              </MenuItem>
+            ) : null}
+            <MenuItem onClick={openUsage}>
+              <T>Usage</T>
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
+        <span className="flex-1" />
+        <SidebarUtilityItem
+          size="header"
+          icon={dark ? <SunIcon className="size-4" /> : <MoonIcon className="size-4" />}
+          label={dark ? gt("Use light appearance") : gt("Use dark appearance")}
+          onClick={() => setAppearanceChoice(dark ? "light" : "dark")}
+        />
+      </div>
+    </TooltipProvider>
+  );
+});
+
+export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
+  const isDuet = useDuetShell();
+  const content = isDuet ? <DuetSidebarUtilityMenu /> : <SidebarUtilityMenu />;
+  return isDuet ? (
+    <div data-sidebar="footer" className="flex flex-col">
+      <SidebarProviderUpdatePill />
+      <SidebarUpdateArchitectureWarning />
+      {content}
+    </div>
+  ) : (
     <SidebarFooter>
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
-      <SidebarUtilityMenu />
+      {content}
     </SidebarFooter>
   );
 });

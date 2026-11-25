@@ -25,7 +25,10 @@ const twMerge = extendTailwindMerge({
         "project-icon",
       ],
       shadow: ["dialog", "composer"],
+      font: ["display"],
       text: [
+        "display-lg",
+        "display",
         "2xs",
         "3xs",
         "4xs",

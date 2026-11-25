@@ -72,6 +72,10 @@ import {
 } from "../../layout/PaneTabs";
 import { useProject, useQuietThreadShell } from "../../state/entities";
 import { useLayoutStore } from "../../layout/layoutStore";
+import { useDuetShell } from "../../hooks/useDuetShell";
+import { DuetHeaderTitle, type HiddenTerminalChip } from "./DuetHeaderTitle";
+export type { HiddenTerminalChip } from "./DuetHeaderTitle";
+import { DuetStatusOrb } from "./DuetStatusOrb";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -93,12 +97,6 @@ interface ChatHeaderProps {
   /** The chat's terminal pane while hidden (cmd+J): its notch offers it back. */
   hiddenTerminal?: HiddenTerminalChip | null | undefined;
   onNewSideChat?: (() => void) | undefined;
-}
-
-export interface HiddenTerminalChip {
-  readonly shortcutLabel: string | null;
-  readonly running: boolean;
-  readonly onShow: () => void;
 }
 
 function resolveRenameCommit(input: {
@@ -130,6 +128,7 @@ export const ChatHeader = memo(function ChatHeader({
   const gt = useGT();
   const messages = useMessages();
   const { tabId: layoutTabId } = useLayoutPane();
+  const duet = useDuetShell();
   // Drag the tab out of its notch to split (pen T5Hy0Q).
   const handleTabPointerDown = (event: React.PointerEvent) => {
     if (layoutTabId !== null) beginLayoutTabDrag(event, layoutTabId);
@@ -319,6 +318,18 @@ export const ChatHeader = memo(function ChatHeader({
       stopRenaming();
     }
   };
+  const handleRenameBlur = (event: React.FocusEvent<HTMLInputElement>) => {
+    if (renameCommittedRef.current) return;
+    if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest("button")) {
+      stopRenaming();
+      return;
+    }
+    commitRename(event.currentTarget.value);
+  };
+  const handleRenameFocus = (event: React.FocusEvent<HTMLInputElement>) => {
+    renameCommittedRef.current = false;
+    event.currentTarget.select();
+  };
   const tabIcon = ghostOf ? (
     <GitForkIcon aria-hidden className="size-3.5 shrink-0" />
   ) : captain ? (
@@ -347,180 +358,232 @@ export const ChatHeader = memo(function ChatHeader({
         tab.content.target.kind === "server" &&
         tab.content.target.threadRef.threadId === parentThreadLink.threadId,
     );
+  const tabless = duet;
+  const showCenteredOrb = duet && isServerThread && captain != null;
+  const openCaptainThread = (threadId: ThreadId) => onOpenThread(threadId);
   return (
-    <div
-      className={cn(
-        "flex min-w-0 flex-1 items-center self-stretch",
-        trailingInset == null && (rightPanelOpen ? "pr-10" : "pr-24"),
-      )}
-      style={trailingInset == null ? undefined : { paddingInlineEnd: trailingInset }}
-      onContextMenu={handleHeaderContextMenu}
-    >
-      <PaneNotch>
-        <LayoutPaneTabStrip>
-          {siblingTabs.before.map((tab) => (
-            <LayoutPaneTab key={tab.id} tab={tab} />
-          ))}
-          {parentThreadLink && !parentTabShown ? (
-            <ParentThreadTab
-              environmentId={activeThreadEnvironmentId}
-              link={parentThreadLink}
-              onOpenThread={onOpenThread}
-            />
-          ) : null}
-          {renamingTitle !== null ? (
-            <div
-              className={cn(
-                PANE_TAB_CLASS,
-                "max-w-full shrink-0 inset-ring inset-ring-ring/50 focus-within:inset-ring-ring",
-              )}
-            >
-              {tabIcon}
-              <input
-                autoFocus
-                dir="auto"
-                aria-label={gt("Thread title")}
-                className="min-w-24 max-w-full bg-transparent outline-none [field-sizing:content]"
-                defaultValue={renamingTitle}
-                onBlur={(event) => {
-                  if (renameCommittedRef.current) return;
-                  if (
-                    event.relatedTarget instanceof HTMLElement &&
-                    event.relatedTarget.closest("button")
-                  ) {
-                    stopRenaming();
-                    return;
-                  }
-                  commitRename(event.currentTarget.value);
-                }}
-                onFocus={(event) => {
-                  renameCommittedRef.current = false;
-                  event.currentTarget.select();
-                }}
-                onKeyDown={handleRenameKeyDown}
-              />
-            </div>
-          ) : (
-            <span className={LAYOUT_TAB_SLOT_CLASS}>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    isServerThread ? (
-                      <PaneTabButton
-                        data-layout-pane-tab={layoutTabId ?? undefined}
-                        type="button"
-                        aria-label={gt("Thread actions for {title}", { title: activeThreadTitle })}
-                        aria-haspopup="menu"
-                        onClick={openMenuFromTitle}
-                        onAuxClick={handleTabAuxClick}
-                        onPointerDown={handleTabPointerDown}
-                        onDoubleClick={canOperateThread ? handleTitleDoubleClick : undefined}
-                      />
-                    ) : (
-                      <div
-                        className={PANE_TAB_CLASS}
-                        data-layout-pane-tab={layoutTabId ?? undefined}
-                        onAuxClick={handleTabAuxClick}
-                        onPointerDown={handleTabPointerDown}
-                      />
-                    )
-                  }
-                >
-                  <span className={LAYOUT_TAB_ICON_CLASS}>{tabIcon}</span>
-                  <h2
-                    className={cn(
-                      "min-w-0",
-                      PANE_TAB_TITLE_CLASS,
-                      ghostShown && PANE_GHOST_TAB_TITLE_CLASS,
-                    )}
-                    dir={textDirection(displayTitle)}
-                  >
-                    {displayTitle}
-                  </h2>
-                </TooltipTrigger>
-                <TooltipPopup side="bottom" className="whitespace-pre-line">
-                  {tabTooltip}
-                </TooltipPopup>
-              </Tooltip>
-              {layoutTabId !== null ? (
-                <LayoutTabCloseButton tabId={layoutTabId} title={activeThreadTitle} />
-              ) : null}
-            </span>
-          )}
-          {siblingTabs.after.map((tab) => (
-            <LayoutPaneTab key={tab.id} tab={tab} />
-          ))}
-          {hiddenTerminal ? (
-            // The hidden terminal keeps a tab like any other pane tab.
-            <span className={LAYOUT_TAB_SLOT_CLASS}>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      data-hidden-terminal-chip=""
-                      className={cn(
-                        PANE_TAB_CLASS,
-                        "cursor-pointer text-left text-muted-foreground hover:surface-ghost-hover hover:text-foreground",
-                      )}
-                      onClick={hiddenTerminal.onShow}
-                      onPointerDown={(event) =>
-                        beginLayoutContentDrag(event, {
-                          kind: "surface",
-                          threadRef: scopeThreadRef(activeThreadEnvironmentId, activeThreadId),
-                          surface: { id: THREAD_TERMINAL_SURFACE_ID, kind: "thread-terminal" },
-                        })
-                      }
-                    />
-                  }
-                >
-                  <SquareTerminal
-                    aria-hidden
-                    className={cn(
-                      "size-3.5 shrink-0",
-                      hiddenTerminal.running && "text-success-foreground",
-                    )}
-                  />
-                  <span className="min-w-0 truncate">
-                    <T>Terminal</T>
-                  </span>
-                </TooltipTrigger>
-                <TooltipPopup side="bottom">
-                  {hiddenTerminal.shortcutLabel
-                    ? gt("Show the terminal ({shortcut})", {
-                        shortcut: hiddenTerminal.shortcutLabel,
-                      })
-                    : gt("Show the terminal")}
-                  <br />
-                  {activeThreadTitle}
-                  <br />
-                  {hiddenTerminal.running ? gt("Process running") : gt("Idle")}
-                </TooltipPopup>
-              </Tooltip>
-            </span>
-          ) : null}
-        </LayoutPaneTabStrip>
-        {layoutTabId !== null ? <LayoutNewTabButton tabId={layoutTabId} /> : null}
-        {renamingTitle === null && activeThreadLinkOrigin ? (
-          <Tooltip>
-            <TooltipTrigger render={<Badge variant="info" size="sm" />}>
-              <T>
-                From <Var>{activeThreadLinkOrigin}</Var>
-              </T>
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              <T>
-                Started by an agent on <Var>{activeThreadLinkOrigin}</Var> through a linked
-                environment.
-              </T>
-            </TooltipPopup>
-          </Tooltip>
-        ) : null}
-      </PaneNotch>
-      {captain ? (
-        <CaptainHeaderActions captain={captain} threadRef={activeThreadRef} onOpen={onOpenThread} />
+    <div className="flex min-w-0 flex-1 self-stretch">
+      {showCenteredOrb ? (
+        <div className="absolute left-1/2 top-[11px] z-20 -translate-x-1/2 [-webkit-app-region:no-drag]">
+          <DuetStatusOrb threadRef={activeThreadRef} />
+        </div>
       ) : null}
-      {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
+      <div
+        className={cn(
+          "relative flex min-w-0 flex-1 items-center self-stretch",
+          trailingInset == null && (rightPanelOpen ? "pr-10" : "pr-24"),
+        )}
+        style={trailingInset == null ? undefined : { paddingInlineEnd: trailingInset }}
+        onContextMenu={handleHeaderContextMenu}
+      >
+        {tabless ? (
+          <>
+            <DuetHeaderTitle
+              captain={captain}
+              project={activeProject}
+              title={displayTitle}
+              layoutTabId={layoutTabId}
+              environmentId={activeThreadEnvironmentId}
+              threadId={activeThreadId}
+              parentThreadLink={parentThreadLink}
+              hiddenTerminal={hiddenTerminal}
+              siblingTabs={siblingTabs}
+              renamingTitle={renamingTitle}
+              onOpenThread={onOpenThread}
+              onPointerDown={handleTabPointerDown}
+              onAuxClick={handleTabAuxClick}
+              onDoubleClick={canOperateThread ? handleTitleDoubleClick : undefined}
+              onClick={isServerThread ? openMenuFromTitle : undefined}
+              onRenameBlur={handleRenameBlur}
+              onRenameFocus={handleRenameFocus}
+              onRenameKeyDown={handleRenameKeyDown}
+            />
+            {activeThreadLinkOrigin ? (
+              <Tooltip>
+                <TooltipTrigger render={<Badge variant="info" size="sm" />}>
+                  <T>
+                    From <Var>{activeThreadLinkOrigin}</Var>
+                  </T>
+                </TooltipTrigger>
+                <TooltipPopup side="top">
+                  <T>
+                    Started by an agent on <Var>{activeThreadLinkOrigin}</Var> through a linked
+                    environment.
+                  </T>
+                </TooltipPopup>
+              </Tooltip>
+            ) : null}
+            {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
+          </>
+        ) : (
+          <>
+            <PaneNotch>
+              <LayoutPaneTabStrip>
+                {siblingTabs.before.map((tab) => (
+                  <LayoutPaneTab key={tab.id} tab={tab} />
+                ))}
+                {parentThreadLink && !parentTabShown ? (
+                  <ParentThreadTab
+                    environmentId={activeThreadEnvironmentId}
+                    link={parentThreadLink}
+                    onOpenThread={onOpenThread}
+                  />
+                ) : null}
+                {renamingTitle !== null ? (
+                  <div
+                    className={cn(
+                      PANE_TAB_CLASS,
+                      "max-w-full shrink-0 inset-ring inset-ring-ring/50 focus-within:inset-ring-ring",
+                    )}
+                  >
+                    {tabIcon}
+                    <input
+                      autoFocus
+                      dir="auto"
+                      aria-label={gt("Thread title")}
+                      className="min-w-24 max-w-full bg-transparent outline-none [field-sizing:content]"
+                      defaultValue={renamingTitle}
+                      onBlur={handleRenameBlur}
+                      onFocus={handleRenameFocus}
+                      onKeyDown={handleRenameKeyDown}
+                    />
+                  </div>
+                ) : (
+                  <span className={LAYOUT_TAB_SLOT_CLASS}>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          isServerThread ? (
+                            <PaneTabButton
+                              data-layout-pane-tab={layoutTabId ?? undefined}
+                              type="button"
+                              aria-label={gt("Thread actions for {title}", {
+                                title: activeThreadTitle,
+                              })}
+                              aria-haspopup="menu"
+                              onClick={openMenuFromTitle}
+                              onAuxClick={handleTabAuxClick}
+                              onPointerDown={handleTabPointerDown}
+                              onDoubleClick={canOperateThread ? handleTitleDoubleClick : undefined}
+                            />
+                          ) : (
+                            <div
+                              className={PANE_TAB_CLASS}
+                              data-layout-pane-tab={layoutTabId ?? undefined}
+                              onAuxClick={handleTabAuxClick}
+                              onPointerDown={handleTabPointerDown}
+                            />
+                          )
+                        }
+                      >
+                        <span className={LAYOUT_TAB_ICON_CLASS}>{tabIcon}</span>
+                        <h2
+                          className={cn(
+                            "min-w-0",
+                            PANE_TAB_TITLE_CLASS,
+                            ghostShown && PANE_GHOST_TAB_TITLE_CLASS,
+                          )}
+                          dir={textDirection(displayTitle)}
+                        >
+                          {displayTitle}
+                        </h2>
+                      </TooltipTrigger>
+                      <TooltipPopup side="bottom" className="whitespace-pre-line">
+                        {tabTooltip}
+                      </TooltipPopup>
+                    </Tooltip>
+                    {layoutTabId !== null ? (
+                      <LayoutTabCloseButton tabId={layoutTabId} title={activeThreadTitle} />
+                    ) : null}
+                  </span>
+                )}
+                {siblingTabs.after.map((tab) => (
+                  <LayoutPaneTab key={tab.id} tab={tab} />
+                ))}
+                {hiddenTerminal ? (
+                  // The hidden terminal keeps a tab like any other pane tab.
+                  <span className={LAYOUT_TAB_SLOT_CLASS}>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            data-hidden-terminal-chip=""
+                            className={cn(
+                              PANE_TAB_CLASS,
+                              "cursor-pointer text-left text-muted-foreground hover:surface-ghost-hover hover:text-foreground",
+                            )}
+                            onClick={hiddenTerminal.onShow}
+                            onPointerDown={(event) =>
+                              beginLayoutContentDrag(event, {
+                                kind: "surface",
+                                threadRef: scopeThreadRef(
+                                  activeThreadEnvironmentId,
+                                  activeThreadId,
+                                ),
+                                surface: {
+                                  id: THREAD_TERMINAL_SURFACE_ID,
+                                  kind: "thread-terminal",
+                                },
+                              })
+                            }
+                          />
+                        }
+                      >
+                        <SquareTerminal
+                          aria-hidden
+                          className={cn(
+                            "size-3.5 shrink-0",
+                            hiddenTerminal.running && "text-success-foreground",
+                          )}
+                        />
+                        <span className="min-w-0 truncate">
+                          <T>Terminal</T>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipPopup side="bottom">
+                        {hiddenTerminal.shortcutLabel
+                          ? gt("Show the terminal ({shortcut})", {
+                              shortcut: hiddenTerminal.shortcutLabel,
+                            })
+                          : gt("Show the terminal")}
+                        <br />
+                        {activeThreadTitle}
+                        <br />
+                        {hiddenTerminal.running ? gt("Process running") : gt("Idle")}
+                      </TooltipPopup>
+                    </Tooltip>
+                  </span>
+                ) : null}
+              </LayoutPaneTabStrip>
+              {layoutTabId !== null ? <LayoutNewTabButton tabId={layoutTabId} /> : null}
+              {renamingTitle === null && activeThreadLinkOrigin ? (
+                <Tooltip>
+                  <TooltipTrigger render={<Badge variant="info" size="sm" />}>
+                    <T>
+                      From <Var>{activeThreadLinkOrigin}</Var>
+                    </T>
+                  </TooltipTrigger>
+                  <TooltipPopup side="top">
+                    <T>
+                      Started by an agent on <Var>{activeThreadLinkOrigin}</Var> through a linked
+                      environment.
+                    </T>
+                  </TooltipPopup>
+                </Tooltip>
+              ) : null}
+            </PaneNotch>
+            {captain && !duet ? (
+              <CaptainHeaderActions
+                captain={captain}
+                threadRef={activeThreadRef}
+                onOpen={openCaptainThread}
+              />
+            ) : null}
+            {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
+          </>
+        )}
+      </div>
     </div>
   );
 });

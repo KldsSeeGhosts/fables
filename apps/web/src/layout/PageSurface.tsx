@@ -29,6 +29,12 @@ const WorkflowsPage = lazy(() =>
   })),
 );
 
+const CaptainsWorkspace = lazy(() =>
+  import("../components/captains/CaptainsWorkspace").then((module) => ({
+    default: module.CaptainsWorkspace,
+  })),
+);
+
 export function LayoutPageBody({ content }: { content: LayoutPageContent }) {
   const location = parseLayoutPageLocation(content);
   const navigate = useNavigate();
@@ -48,6 +54,8 @@ export function LayoutPageBody({ content }: { content: LayoutPageContent }) {
           <IssuesPage />
         ) : content.kind === "workflows" ? (
           <WorkflowsPage />
+        ) : content.kind === "captains" ? (
+          <CaptainsWorkspace />
         ) : (
           <div className="flex min-h-0 flex-1 items-center justify-center">
             <Button

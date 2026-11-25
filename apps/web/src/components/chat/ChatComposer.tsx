@@ -47,6 +47,7 @@ import {
   clampManagedRuntimeMode,
   ProviderDriverKind,
   ProviderInstanceId,
+  isCaptainThreadId,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
   PROVIDER_DISPLAY_NAMES,
@@ -72,9 +73,10 @@ import {
   useRef,
   useState,
   type ComponentProps,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
-import { createPortal, flushSync } from "react-dom";
+import { flushSync } from "react-dom";
 import {
   clampCollapsedComposerCursor,
   type ComposerTrigger,
@@ -248,6 +250,8 @@ import {
   type ExpandedImagePreview,
 } from "./ExpandedImagePreview";
 import { cn, isMacPlatform, randomUUID } from "~/lib/utils";
+import { contextMenuSourceOf } from "~/contextMenuSource";
+import { readLocalApi } from "~/localApi";
 import {
   getComposerSubmissionValidationMessage,
   isComposerSubmissionBlocked,
@@ -261,7 +265,7 @@ import { observeResize } from "~/lib/observeResize";
 const isEnvironmentRequestInvalidError = Schema.is(EnvironmentRequestInvalidError);
 import { toastManager } from "../ui/toast";
 import { m as resolveMessage } from "../../i18n/messages";
-import { BuildingIcon, PaperclipIcon, PlayIcon, ReplyIcon } from "lucide-react";
+import { BuildingIcon, ChevronDownIcon, PaperclipIcon, PlayIcon, ReplyIcon } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { assistantCitationLabel } from "@t3tools/shared/assistantCitations";
 import { assistantCitationNavigation } from "../../lib/assistantCitationNavigation";
@@ -286,6 +290,7 @@ import {
 } from "@t3tools/client-runtime/providerSkills";
 import { useEnvironmentDisconnectDelay } from "../../hooks/useEnvironmentDisconnectDelay";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { useDuetShell } from "../../hooks/useDuetShell";
 import { Kbd } from "../ui/kbd";
 import { useSoftwareKeyboardOpen } from "../../hooks/useSoftwareKeyboardOpen";
 import { useStableCallback } from "../../hooks/useStableCallback";
@@ -301,6 +306,7 @@ import { useComposerImageGroups } from "./useComposerImageGroups";
 import { useComposerStash } from "./useComposerStash";
 import { useComposerContextImport } from "./useComposerContextImport";
 import { useComposerAttachmentIntake } from "./useComposerAttachmentIntake";
+import { useCaptain } from "../captains/useCaptain";
 import { isQueuedFileAttachment, isQueuedImageAttachment } from "./queuedMessageEdit";
 import {
   cancelHeldComposerSend,
@@ -500,8 +506,6 @@ export interface ChatComposerProps {
   threadPullRequests: ReadonlyArray<ThreadPullRequestLink> | undefined;
   /** Where approval, question and plan cards render, above the tray. */
   requestCardHost: HTMLDivElement | null;
-  trayControlsHost?: HTMLDivElement | null;
-  stashHost?: HTMLDivElement | null;
   /** The thread's branch, shown on command approvals next to the working directory. */
   onComposerOverlayHeightChange: (height: number) => void;
 
@@ -667,6 +671,9 @@ export function ChatComposer(props: ChatComposerProps) {
     onRemoveEditingQueuedAttachment,
     onRestoreEditingQueuedAttachment,
   } = props;
+  const isDuetShell = useDuetShell();
+  const isCaptainPrimaryThread = activeThreadId !== null && isCaptainThreadId(activeThreadId);
+  const captain = useCaptain(isCaptainPrimaryThread ? routeThreadRef : null);
   const {
     activePendingProgress: incomingPendingProgress,
     activePendingResolvedAnswers,
@@ -1405,6 +1412,7 @@ export function ChatComposer(props: ChatComposerProps) {
   const editPromptFromTraitsStable = useStableCallback(editPromptFromTraits);
   const promptUltrathink = readPromptUltrathink(prompt);
 
+  const [toolbarControlsHost, setToolbarControlsHost] = useState<HTMLDivElement | null>(null);
   const {
     controlsRef: restingComposerControlsRef,
     attachControls: attachExpandedComposerControls,
@@ -1412,7 +1420,7 @@ export function ChatComposer(props: ChatComposerProps) {
     iconOnlyBlockCount: expandedControlsIconOnlyBlockCount,
     traitsIconOnly: expandedControlsTraitsIconOnly,
     pickerIconOnly: expandedControlsPickerIconOnly,
-  } = useRestingComposerControlsLayout(props.trayControlsHost ?? null);
+  } = useRestingComposerControlsLayout(toolbarControlsHost);
   const pendingPrimaryAction = activePendingProgress
     ? {
         questionIndex: activePendingProgress.questionIndex,
@@ -3749,6 +3757,39 @@ export function ChatComposer(props: ChatComposerProps) {
   const composerAttachButton = showComposerAttachAction ? (
     <ComposerAttachButton onOpenPicker={() => composerAttachInputRef.current?.click()} />
   ) : null;
+  const composerControlsHost = (
+    <div ref={setToolbarControlsHost} className="flex min-w-0 flex-1 items-center">
+      <div
+        ref={attachExpandedComposerControls}
+        data-chat-composer-resting-controls="true"
+        className="flex min-w-0 items-center gap-0.5"
+      >
+        {composerControls}
+      </div>
+    </div>
+  );
+  const duetComposerPlaceholder = isCaptainPrimaryThread
+    ? gt("Message #{channel}", {
+        channel: captain?.name ?? activeThread?.title ?? gt("Captain"),
+      })
+    : activeThread?.lineage.parentThreadId != null
+      ? gt("Add a reply")
+      : gt("Describe a task or ask a question");
+  const showDuetComposerFooterControls = !isCaptainPrimaryThread;
+  const isDuetDark = isDuetShell && resolvedTheme === "dark";
+  // Dark Duet drops the voice chevron, so the mic's right-click menu carries voice settings.
+  const openDuetVoiceMenu = async (event: ReactMouseEvent) => {
+    if (event.defaultPrevented) return;
+    const api = readLocalApi();
+    if (!api) return;
+    event.preventDefault();
+    const clicked = await api.contextMenu.show(
+      [{ id: "voice-settings", label: gt("Voice settings") }] as const,
+      { x: event.clientX, y: event.clientY },
+      contextMenuSourceOf(event),
+    );
+    if (clicked === "voice-settings") void navigate({ to: "/settings/voice" });
+  };
 
   const requestCard =
     !isComposerCollapsedMobile && pendingUserInputs.length > 0 ? (
@@ -3774,6 +3815,63 @@ export function ChatComposer(props: ChatComposerProps) {
         onWriteAnswer={focusComposer}
       />
     ) : null;
+
+  const composerFooterPrimaryActions = (
+    <ComposerFooterPrimaryActions
+      // Stop state belongs to one thread; the composer stays mounted across threads.
+      key={`${environmentId}:${activeThreadId ?? "new"}`}
+      renderSpeechAction={renderSpeechAction}
+      compact={isComposerPrimaryActionsCompact}
+      canOperateThread={canOperateThread}
+      pendingAction={requestCard && requestCardHost ? null : pendingPrimaryAction}
+      isRunning={(phase === "running" || phase === "connecting") && !draftRunsLocally}
+      canInterrupt={canInterrupt}
+      runId={activeThread?.runtime?.activeRunId ?? null}
+      followUpBehavior={followUpBehavior}
+      canSteer={canSteer}
+      alternateShortcutLabel={shortcutLabelForCommand(keybindings, "composer.sendAlternate", {
+        context: {
+          composerFocus: true,
+          draftThreadRoute: routeKind === "draft",
+          turnRunning: true,
+          composerRequiresModifier: composerRequiresModifier(settings.sendShortcut, prompt),
+        },
+      })}
+      voiceInputActive={voiceInputActive}
+      isSendBusy={isSendBusy}
+      isSendHeld={composerSendHeld}
+      sendDisabledReason={primaryActionSendDisabledReason}
+      isEnvironmentUnavailable={primaryActionEnvironmentUnavailable}
+      isPreparingWorktree={isPreparingWorktree}
+      hasSendableContent={hasMessageToSend || voiceInputActive}
+      canResume={showResumeAction}
+      preserveComposerFocusOnPointerDown={isMobileViewport}
+      isEditingQueuedMessage={isEditingQueuedMessage}
+      onSubmitMessage={handleSubmitMessageStable}
+      onResume={onResume}
+      onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
+      onInterrupt={handleInterruptPrimaryActionStable}
+      compactBeforeSendTokens={props.resumeCompactionTokens}
+      keepFullHistory={props.keepFullHistory}
+      onToggleKeepFullHistory={props.onToggleKeepFullHistory}
+    >
+      <VoiceInputSetup
+        environmentId={speechInput.transcriptionEnvironmentId}
+        open={speechInput.setup.open}
+        step={speechInput.setup.step}
+        status={speechInput.status}
+        model={speechInput.setup.model}
+        language={speechInput.setup.language}
+        downloading={speechInput.setup.downloading}
+        error={speechInput.setup.error}
+        onOpenChange={speechInput.setup.setOpen}
+        onRetryCatalog={speechInput.setup.retryCatalog}
+        onDownload={() => void speechInput.setup.download()}
+        onCancelDownload={() => void speechInput.setup.cancelDownload()}
+        onStartRecording={() => void speechInput.setup.startRecording()}
+      />
+    </ComposerFooterPrimaryActions>
+  );
 
   return (
     <form
@@ -3855,35 +3953,17 @@ export function ChatComposer(props: ChatComposerProps) {
         if (isInsideRestingComposerControlScope(event.target)) return;
         composerMentionDragHandlers.onDrop(event);
       }}
-      className="mx-auto w-full min-w-0 max-w-(--chat-content-max-width) rounded-[inherit]"
+      className={cn(
+        "mx-auto w-full min-w-0 max-w-(--chat-content-max-width) rounded-[inherit]",
+        isDuetShell && (isDuetDark ? "max-w-160" : "max-w-166"),
+      )}
       data-chat-composer-form="true"
+      data-duet-composer={isDuetShell ? (isDuetDark ? "dark" : "light") : undefined}
       {...threadContextDropTargetProps()}
     >
       {requestCardHost && requestCard ? (
         <InComposerHost host={requestCardHost} className="contents">
           {requestCard}
-        </InComposerHost>
-      ) : null}
-      {/* Each portal host takes React's whole delegated listener set, so an empty badge mounts none. */}
-      {props.stashHost && stashQueue.length > 0
-        ? createPortal(
-            <ComposerStashBadge
-              count={stashQueue.length}
-              menuOpen={isStashMenuOpen}
-              pulseKey={stashPulseKey}
-              onToggleMenu={toggleStashMenuStable}
-            />,
-            props.stashHost,
-          )
-        : null}
-      {props.trayControlsHost ? (
-        <InComposerHost
-          host={props.trayControlsHost}
-          ref={attachExpandedComposerControls}
-          data-chat-composer-resting-controls="true"
-          className="flex min-w-0 items-center gap-0.5"
-        >
-          {composerControls}
         </InComposerHost>
       ) : null}
       <ComposerBanner.Dock>
@@ -4017,7 +4097,12 @@ export function ChatComposer(props: ChatComposerProps) {
               ref={attachComposerBody}
               data-chat-composer-body="true"
               className={cn(
-                "composer-prompt-body relative grid min-h-12 grid-cols-1 items-center py-2 ps-3.5 pe-2",
+                isDuetShell
+                  ? cn(
+                      "composer-prompt-body relative grid grid-cols-1 items-center rounded-lg border border-(--duet-composer-border) bg-(--composer-fill) focus-within:border-(--duet-composer-focus-border)",
+                      isDuetDark ? "min-h-9 py-2 ps-9 pe-16" : "min-h-10 py-2.5 ps-3.25 pe-10",
+                    )
+                  : "composer-prompt-body relative grid min-h-12 grid-cols-1 items-center pt-3 pb-0.5 ps-4.5 pe-4",
                 isComposerCollapsedMobile && "hidden",
               )}
             >
@@ -4089,7 +4174,8 @@ export function ChatComposer(props: ChatComposerProps) {
 
               <div
                 className={cn(
-                  "relative min-w-0 py-1.5 [grid-area:prompt] transition-opacity duration-150",
+                  "relative min-w-0 [grid-area:prompt] transition-opacity duration-150",
+                  isDuetShell ? null : "py-1.5",
                   composerSendHeld && "opacity-65",
                 )}
               >
@@ -4156,7 +4242,10 @@ export function ChatComposer(props: ChatComposerProps) {
                               ? gt("Enable a provider in Settings to send a message")
                               : environmentDisconnected
                                 ? m(DISCONNECTED_COMPOSER_PLACEHOLDER)
-                                : (offeredPromptSuggestion ?? m(COMPOSER_PROMPT_PLACEHOLDER))
+                                : (offeredPromptSuggestion ??
+                                  (isDuetShell
+                                    ? duetComposerPlaceholder
+                                    : m(COMPOSER_PROMPT_PLACEHOLDER)))
                     }
                     placeholderSuffix={
                       offeredPromptSuggestion !== null ? (
@@ -4199,74 +4288,102 @@ export function ChatComposer(props: ChatComposerProps) {
                   />
                 </ComposerContextActionsContext>
               </div>
-              <div
-                data-chat-composer-actions="right"
-                data-chat-composer-transition-actions="true"
-                className="z-1 flex w-max max-w-full items-center justify-end gap-1.5 self-start justify-self-end [grid-area:prompt] in-data-composer-multiline:self-end"
-              >
-                {composerAttachButton}
-                <ComposerFooterPrimaryActions
-                  // Stop state belongs to one thread; the composer stays mounted across threads.
-                  key={`${environmentId}:${activeThreadId ?? "new"}`}
-                  renderSpeechAction={renderSpeechAction}
-                  compact={isComposerPrimaryActionsCompact}
-                  canOperateThread={canOperateThread}
-                  pendingAction={requestCard && requestCardHost ? null : pendingPrimaryAction}
-                  isRunning={(phase === "running" || phase === "connecting") && !draftRunsLocally}
-                  canInterrupt={canInterrupt}
-                  runId={activeThread?.runtime?.activeRunId ?? null}
-                  followUpBehavior={followUpBehavior}
-                  canSteer={canSteer}
-                  alternateShortcutLabel={shortcutLabelForCommand(
-                    keybindings,
-                    "composer.sendAlternate",
-                    {
-                      context: {
-                        composerFocus: true,
-                        draftThreadRoute: routeKind === "draft",
-                        turnRunning: true,
-                        composerRequiresModifier: composerRequiresModifier(
-                          settings.sendShortcut,
-                          prompt,
-                        ),
-                      },
-                    },
-                  )}
-                  voiceInputActive={voiceInputActive}
-                  isSendBusy={isSendBusy}
-                  isSendHeld={composerSendHeld}
-                  sendDisabledReason={primaryActionSendDisabledReason}
-                  isEnvironmentUnavailable={primaryActionEnvironmentUnavailable}
-                  isPreparingWorktree={isPreparingWorktree}
-                  hasSendableContent={hasMessageToSend || voiceInputActive}
-                  canResume={showResumeAction}
-                  preserveComposerFocusOnPointerDown={isMobileViewport}
-                  isEditingQueuedMessage={isEditingQueuedMessage}
-                  onSubmitMessage={handleSubmitMessageStable}
-                  onResume={onResume}
-                  onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
-                  onInterrupt={handleInterruptPrimaryActionStable}
-                  compactBeforeSendTokens={props.resumeCompactionTokens}
-                  keepFullHistory={props.keepFullHistory}
-                  onToggleKeepFullHistory={props.onToggleKeepFullHistory}
+              {isDuetDark && composerAttachButton ? (
+                <div
+                  data-duet-composer-inline="leading"
+                  className="absolute bottom-1.5 left-[5px] z-10 flex"
                 >
-                  <VoiceInputSetup
-                    environmentId={speechInput.transcriptionEnvironmentId}
-                    open={speechInput.setup.open}
-                    step={speechInput.setup.step}
-                    status={speechInput.status}
-                    model={speechInput.setup.model}
-                    language={speechInput.setup.language}
-                    downloading={speechInput.setup.downloading}
-                    error={speechInput.setup.error}
-                    onOpenChange={speechInput.setup.setOpen}
-                    onRetryCatalog={speechInput.setup.retryCatalog}
-                    onDownload={() => void speechInput.setup.download()}
-                    onCancelDownload={() => void speechInput.setup.cancelDownload()}
-                    onStartRecording={() => void speechInput.setup.startRecording()}
+                  {composerAttachButton}
+                </div>
+              ) : null}
+              {isDuetShell ? (
+                <div
+                  data-chat-composer-actions="right"
+                  data-chat-composer-transition-actions="true"
+                  className={cn(
+                    "absolute z-10 flex items-center",
+                    // Dark return centres 29px left of the mic, or takes its 17px slot without one.
+                    isDuetDark
+                      ? cn("bottom-0.5", showsSpeechAction ? "right-8" : "right-[3px]")
+                      : "right-1.5 bottom-1",
+                  )}
+                >
+                  {composerFooterPrimaryActions}
+                </div>
+              ) : null}
+              {isDuetDark && showsSpeechAction ? (
+                <div
+                  data-duet-composer-inline="trailing"
+                  className="absolute right-[5px] bottom-1.5 z-10 flex"
+                  onContextMenu={(event) => void openDuetVoiceMenu(event)}
+                >
+                  {renderSpeechAction(false)}
+                </div>
+              ) : null}
+            </div>
+            <div
+              data-chat-composer-toolbar="true"
+              data-duet-composer-footer={isDuetShell ? "" : undefined}
+              className={cn(
+                // Icon centres sit 17px below the box and, in light, 17px in from its left edge.
+                isDuetShell
+                  ? cn(
+                      "relative mt-[5px] flex h-6 min-w-0 items-center gap-1",
+                      !isDuetDark && "ps-1.25",
+                    )
+                  : "flex min-h-11 min-w-0 items-center gap-1 ps-2 pe-2 pb-2",
+                isDuetDark &&
+                  !showDuetComposerFooterControls &&
+                  stashQueue.length === 0 &&
+                  "hidden",
+                isComposerCollapsedMobile && "hidden",
+              )}
+            >
+              <div
+                className="flex min-w-0 flex-1 items-center gap-0.5"
+                data-duet-composer-leading={isDuetShell ? "" : undefined}
+              >
+                {isDuetDark ? null : composerAttachButton}
+                {isDuetShell && !isDuetDark ? renderSpeechAction(false) : null}
+                {isDuetShell && !isDuetDark ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={gt("Voice settings")}
+                    onPointerDown={(event) => event.preventDefault()}
+                    onClick={() => void navigate({ to: "/settings/voice" })}
+                  >
+                    <ChevronDownIcon className="size-3.5" />
+                  </Button>
+                ) : null}
+                {isDuetShell ? null : composerControlsHost}
+                {stashQueue.length > 0 ? (
+                  <ComposerStashBadge
+                    count={stashQueue.length}
+                    menuOpen={isStashMenuOpen}
+                    pulseKey={stashPulseKey}
+                    onToggleMenu={toggleStashMenuStable}
                   />
-                </ComposerFooterPrimaryActions>
+                ) : null}
               </div>
+              {isDuetShell && showDuetComposerFooterControls ? (
+                <div
+                  className="ms-auto flex min-w-0 items-center"
+                  data-duet-composer-footer-controls
+                >
+                  {composerControlsHost}
+                </div>
+              ) : null}
+              {isDuetShell ? null : (
+                <div
+                  data-chat-composer-actions="right"
+                  data-chat-composer-transition-actions="true"
+                  className="flex shrink-0 items-center gap-1.5"
+                >
+                  {composerFooterPrimaryActions}
+                </div>
+              )}
             </div>
             {speechInput.preview ? (
               // column-reverse pins the scroll to the bottom; the single inner div keeps the text in normal order.

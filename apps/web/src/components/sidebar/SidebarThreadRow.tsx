@@ -9,6 +9,7 @@ import { contextMenuSourceOf } from "../../contextMenuSource";
 import { requestCustomSnooze } from "../CustomSnoozeDialog";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { useDeadlinePassed } from "~/hooks/useDeadline";
+import { useDuetShell } from "~/hooks/useDuetShell";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/client-runtime/thread-pull-requests";
 import { useDraggable } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
@@ -49,6 +50,7 @@ import {
   CircleDashedIcon,
   CircleDotDashedIcon,
   ClockIcon,
+  EllipsisIcon,
   FolderGit2Icon,
   GitBranchIcon,
   MessageCircleQuestionIcon,
@@ -140,6 +142,8 @@ import { observeVisibleAnimation } from "~/lib/visibleAnimation";
 import { useThreadHasUnsentDraft } from "../../composerDraftStore";
 import { ThreadDetailsIssueRows } from "../chat/ThreadDetailsIssueRows";
 import { IssueGlyph, issueStatePresentation } from "../issue/issuePresentation";
+
+const DUET_CARD_TITLE_TYPE_CLASS = "text-control";
 
 // The fields thread rows show. Provider status pushes refresh `checkedAt`,
 // status and auth on every provider; leaving those out keeps each
@@ -297,12 +301,23 @@ function SidebarStatusLabel(props: {
   compact?: boolean;
 }) {
   const messages = useMessages();
+  const isDuet = useDuetShell();
   const status = SIDEBAR_STATUSES[props.kind];
+  const duetStatusClassName =
+    props.kind === "working" || props.kind === "preparing"
+      ? "text-(--duet-working)"
+      : props.kind === "input" ||
+          props.kind === "request" ||
+          props.kind === "waiting" ||
+          props.kind === "approval" ||
+          props.kind === "limited"
+        ? "text-(--duet-needs-input)"
+        : null;
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1 text-meta leading-4 font-medium",
-        status.className,
+        isDuet && duetStatusClassName !== null ? duetStatusClassName : status.className,
       )}
     >
       <status.Icon aria-hidden className={props.compact ? "size-3 shrink-0" : "size-4 shrink-0"} />
@@ -320,7 +335,9 @@ function SidebarStatusLabel(props: {
 function SidebarProviderStack(props: {
   thread: SidebarThreadSummary;
   providerEntryByInstanceId: ReadonlyMap<string, SidebarProviderEntry>;
+  selected?: boolean;
 }) {
+  const isDuet = useDuetShell();
   const stack = resolveThreadProviderStack(props.thread);
   const currentInstanceId = stack[stack.length - 1]!;
   const currentEntry = props.providerEntryByInstanceId.get(currentInstanceId) ?? null;
@@ -338,7 +355,12 @@ function SidebarProviderStack(props: {
       acpRegistryIconUrl={currentEntry.acpRegistryIconUrl}
       showBadge={showInstanceBadge}
       size="compact"
-      iconClassName="size-3 opacity-60"
+      iconClassName={cn(
+        isDuet ? "size-3.5" : "size-3 opacity-60",
+        isDuet &&
+          !props.selected &&
+          "opacity-60 grayscale transition group-focus-within/sidebar-row:opacity-100 group-focus-within/sidebar-row:grayscale-0 group-hover/sidebar-row:opacity-100 group-hover/sidebar-row:grayscale-0",
+      )}
     />
   );
   if (stack.length === 1) {
@@ -356,7 +378,7 @@ function SidebarProviderStack(props: {
             displayName={entry.displayName}
             acpRegistryAgentId={entry.acpRegistryAgentId}
             acpRegistryIconUrl={entry.acpRegistryIconUrl}
-            iconClassName="size-3 opacity-35 grayscale"
+            iconClassName={isDuet ? "size-3.5 opacity-35 grayscale" : "size-3 opacity-35 grayscale"}
           />
         );
       })}
@@ -564,7 +586,9 @@ function SnoozeMenuButton(props: {
                   aria-label={gt("Snooze thread")}
                   onClick={(event) => event.stopPropagation()}
                   onDoubleClick={(event) => event.stopPropagation()}
-                  className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-badge bg-transparent text-muted-foreground outline-none transition-colors hover:surface-ghost-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  className={cn(
+                    "inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-badge bg-transparent text-muted-foreground outline-none transition-colors hover:surface-ghost-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                  )}
                 />
               }
             />
@@ -807,6 +831,7 @@ function ThreadRenameInput(props: {
 export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowProps) {
   const gt = useGT();
   const messages = useMessages();
+  const isDuet = useDuetShell();
   const {
     isRenaming,
     onCancelRename,
@@ -992,6 +1017,12 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     event.preventDefault();
     onContextMenu(threadRef, { x: event.clientX, y: event.clientY }, contextMenuSourceOf(event));
   };
+  const handleThreadMenuClick = (event: ReactMouseEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const bounds = event.currentTarget.getBoundingClientRect();
+    onContextMenu(threadRef, { x: bounds.right, y: bounds.bottom }, contextMenuSourceOf(event));
+  };
   const handleKeyDown = (event: ReactKeyboardEvent) => {
     if (event.target !== event.currentTarget) return;
     if (
@@ -1101,9 +1132,13 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     isRenaming
       ? "bg-transparent sidebar-rename-ring ring-inset ring-ring"
       : props.isActive
-        ? "bg-sidebar-row-active text-sidebar-foreground light:ring-1 light:ring-inset light:ring-sidebar-border/70"
+        ? isDuet
+          ? "bg-(--duet-row-active) text-sidebar-foreground"
+          : "bg-sidebar-row-active text-sidebar-foreground light:ring-1 light:ring-inset light:ring-sidebar-border/70"
         : isSelected || props.sweepAction !== null
-          ? "surface-sidebar-row-selected text-sidebar-foreground light:ring-1 light:ring-inset light:ring-sidebar-border/70"
+          ? isDuet
+            ? "bg-(--duet-row-active) text-sidebar-foreground"
+            : "surface-sidebar-row-selected text-sidebar-foreground light:ring-1 light:ring-inset light:ring-sidebar-border/70"
           : hasUnsentDraft
             ? cn(draftSurfaceClassName, "text-sidebar-foreground")
             : shouldRecede
@@ -1167,9 +1202,19 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     ) : (
       <span
         ref={isRegeneratingTitle ? observeVisibleAnimation : undefined}
+        data-duet-card-title={
+          isDuet && variant === "card" ? (shouldRecede ? "receded" : "") : undefined
+        }
         className={cn(
-          "min-w-0 flex-1 text-start text-body leading-5 transition-opacity motion-reduce:transition-none",
-          shouldRecede ? "font-normal" : "font-medium",
+          isDuet && variant === "card"
+            ? cn(
+                "min-w-0 flex-1 text-start transition-opacity motion-reduce:transition-none",
+                DUET_CARD_TITLE_TYPE_CLASS,
+              )
+            : isDuet && variant === "slim"
+              ? "min-w-0 flex-1 text-start text-control transition-opacity motion-reduce:transition-none"
+              : "min-w-0 flex-1 text-start text-body leading-5 transition-opacity motion-reduce:transition-none",
+          isDuet && variant === "card" ? null : shouldRecede ? "font-normal" : "font-medium",
           isRegeneratingTitle
             ? "relative truncate text-muted-foreground"
             : variant !== "slim"
@@ -1377,7 +1422,13 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     diff === null &&
     runningTerminalIds.length === 0;
   const metaLine = metaLineEmpty ? null : (
-    <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-meta font-normal">
+    <div
+      data-duet-card-meta={isDuet ? "" : undefined}
+      className={cn(
+        "mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-meta font-normal",
+        isDuet && "mt-0 h-4 text-muted-foreground",
+      )}
+    >
       {checkoutThread.branch ? (
         <>
           <ThreadWorktreeIndicator thread={checkoutThread} />
@@ -1390,7 +1441,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
           <EnvironmentMachineIcon
             aria-hidden
             kind={props.environmentMachine}
-            className="size-3.5 shrink-0 text-icon-muted"
+            className={cn("shrink-0 text-icon-muted", isDuet ? "size-3" : "size-3.5")}
           />
           <span className="min-w-0 flex-1 truncate">{props.environmentLabel}</span>
         </>
@@ -1413,6 +1464,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
         <SidebarProviderStack
           thread={thread}
           providerEntryByInstanceId={props.providerEntryByInstanceId}
+          selected={isSelected}
         />
       </span>
     </div>
@@ -1422,6 +1474,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
       <SidebarProviderStack
         thread={thread}
         providerEntryByInstanceId={props.providerEntryByInstanceId}
+        selected={isSelected}
       />
     </span>
   ) : null;
@@ -1434,6 +1487,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
         {...(fileDropHandlers ?? {})}
         className={cn(
           "list-none [content-visibility:auto] [contain-intrinsic-size:auto_--spacing(9)]",
+          isDuet && "[contain-intrinsic-size:auto_--spacing(7.5)]",
           metaLine !== null && multiline && "[contain-intrinsic-size:auto_--spacing(13.5)]",
           sortable?.isDragging && "relative z-20",
         )}
@@ -1455,7 +1509,9 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                   rowSurfaceClassName,
                   multiline
                     ? "flex flex-col justify-center px-2.5 py-1.5"
-                    : "flex h-9 items-center gap-2.5 px-2.5",
+                    : isDuet
+                      ? "flex h-7.5 items-center gap-2 rounded-lg px-2"
+                      : "flex h-9 items-center gap-2.5 px-2.5",
                   // Lines titles up with the folder name, past its chevron and icon.
                   inFolder && "ps-9",
                 )}
@@ -1504,6 +1560,27 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                     jumpHintLabel && JUMP_HINT_SLOT_CLASS_NAME,
                   )}
                 >
+                  {isDuet &&
+                  (topStatus === "working" ||
+                    topStatus === "preparing" ||
+                    topStatus === "input" ||
+                    topStatus === "request" ||
+                    topStatus === "waiting" ||
+                    isUnread) ? (
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "size-1.5 shrink-0 rounded-full",
+                        topStatus === "working" || topStatus === "preparing"
+                          ? "bg-(--duet-working)"
+                          : topStatus === "input" ||
+                              topStatus === "request" ||
+                              topStatus === "waiting"
+                            ? "bg-(--duet-needs-input-ring)"
+                            : "bg-(--duet-link)",
+                      )}
+                    />
+                  ) : null}
                   <span
                     className={cn(
                       "inline-flex justify-end tabular-nums text-secondary-label",
@@ -1643,7 +1720,9 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
       // that have not rendered yet, so a hint off by a pixel lands it a pixel short per row above.
       className={cn(
         "list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]",
+        isDuet && "[contain-intrinsic-size:auto_74px]",
         metaLineEmpty && "[contain-intrinsic-size:auto_60px]",
+        isDuet && metaLineEmpty && "[contain-intrinsic-size:auto_56px]",
         sortable?.isDragging && "relative z-20",
       )}
     >
@@ -1672,20 +1751,35 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
         >
           <div
             className={cn(
-              "relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)",
-              metaLineEmpty && "h-auto",
+              "relative z-10",
+              isDuet
+                ? cn("flex flex-col gap-0.5 px-2.5 py-2", metaLineEmpty ? "h-[52px]" : "h-[70px]")
+                : cn(
+                    "h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)",
+                    metaLineEmpty && "h-auto",
+                  ),
             )}
           >
-            <div className="flex h-5 min-w-0 items-center gap-1.5">
+            <div className={cn("flex min-w-0 items-center gap-1.5", isDuet ? "h-4" : "h-5")}>
               {draftIndicator}
               {props.project ? (
-                <ProjectFavicon project={props.project} className="size-4 shrink-0" />
+                <ProjectFavicon
+                  project={props.project}
+                  className={cn(
+                    isDuet ? "size-3.5" : "size-4",
+                    "shrink-0 transition-opacity",
+                    isDuet &&
+                      !isSelected &&
+                      "opacity-70 group-focus-within/sidebar-row:opacity-100 group-hover/sidebar-row:opacity-100",
+                  )}
+                />
               ) : null}
               {pinIndicator}
               {props.projectDisplayName ? (
                 <span
                   className={cn(
                     "min-w-0 flex-1 truncate font-normal text-secondary-label text-meta",
+                    isDuet && "text-sidebar-muted-foreground",
                   )}
                 >
                   {props.projectDisplayName}
@@ -1709,6 +1803,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                         ? "pointer-events-auto"
                         : "pointer-events-none group-has-[:focus-visible]/sidebar-status-slot:opacity-0 group-any-hover/sidebar-row:opacity-0",
                       "col-start-1 row-start-1 flex items-center self-center justify-self-end tabular-nums text-dim-foreground",
+                      isDuet && "text-placeholder",
                       snoozeMenuOpen && "pointer-events-none opacity-0",
                     )}
                   >
@@ -1719,6 +1814,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                     ) : (
                       <SidebarStatusLabel
                         environmentId={thread.environmentId}
+                        compact={isDuet}
                         kind={topStatus}
                         label={topStatusLabel}
                         workingStartedAt={
@@ -1731,7 +1827,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                       />
                     )}
                   </span>
-                  {props.settlementSupported || showSnoozeButton || hasUnsentDraft ? (
+                  {props.settlementSupported || showSnoozeButton || hasUnsentDraft || isDuet ? (
                     <span
                       className={cn(
                         // Mouse clicks leave Settle focused; focus-within would pin controls over
@@ -1749,7 +1845,10 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                                 type="button"
                                 aria-label={gt("Discard draft")}
                                 onClick={handleDiscardDraftClick}
-                                className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-badge bg-transparent text-muted-foreground outline-none transition-colors hover:surface-ghost-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                                className={cn(
+                                  "inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-badge bg-transparent text-muted-foreground outline-none transition-colors hover:surface-ghost-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                                  isDuet && "rounded-md",
+                                )}
                               />
                             }
                           >
@@ -1783,10 +1882,29 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                             }
                           >
                             <CheckIcon className="size-3.5" />
-                            <T>Settle</T>
+                            {isDuet ? null : <T>Settle</T>}
                           </TooltipTrigger>
                           <TooltipPopup>
                             <T>Settle thread</T>
+                          </TooltipPopup>
+                        </Tooltip>
+                      ) : null}
+                      {isDuet ? (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <button
+                                type="button"
+                                aria-label={gt("Thread actions")}
+                                onClick={handleThreadMenuClick}
+                                className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-md bg-transparent text-muted-foreground outline-none transition-colors hover:surface-ghost-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                              />
+                            }
+                          >
+                            <EllipsisIcon className="size-3.5" />
+                          </TooltipTrigger>
+                          <TooltipPopup>
+                            <T>Thread actions</T>
                           </TooltipPopup>
                         </Tooltip>
                       ) : null}
@@ -1797,7 +1915,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
               )}
               {props.sweepAction !== null ? dragDestination : null}
             </div>
-            <div className="mt-1 flex min-w-0 items-center gap-1.5">
+            <div className={cn("flex min-w-0 items-center gap-1.5", isDuet ? "h-[18px]" : "mt-1")}>
               {title}
               {isRegeneratingTitle ? (
                 <span role="status" className="sr-only">

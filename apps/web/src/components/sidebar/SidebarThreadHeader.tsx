@@ -26,10 +26,14 @@ export interface SidebarThreadHeaderProps {
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
   onSearchKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => void;
+  onSearchBlur?: () => void;
   isSearching: boolean;
   searchResultCount: number;
   activeSearchResultIndex: number;
   onClearSearch: () => void;
+  /** Renders only the search field, for the Duet header expandable search. */
+  searchOnly?: boolean;
+  searchAutoFocus?: boolean;
 }
 
 export function SidebarThreadHeader({
@@ -43,10 +47,13 @@ export function SidebarThreadHeader({
   searchQuery,
   onSearchQueryChange,
   onSearchKeyDown,
+  onSearchBlur,
   isSearching,
   searchResultCount,
   activeSearchResultIndex,
   onClearSearch,
+  searchOnly = false,
+  searchAutoFocus = false,
 }: SidebarThreadHeaderProps) {
   const gt = useGT();
   const resultsVisible = isSearching && searchResultCount > 0;
@@ -74,6 +81,8 @@ export function SidebarThreadHeader({
           value={searchQuery}
           onChange={(event) => onSearchQueryChange(event.currentTarget.value)}
           onKeyDown={onSearchKeyDown}
+          onBlur={onSearchBlur}
+          autoFocus={searchAutoFocus}
           placeholder={gt("Search", { $context: "search field placeholder" })}
           aria-label={gt("Search threads")}
           role="combobox"
@@ -106,21 +115,23 @@ export function SidebarThreadHeader({
           </InputGroupAddon>
         ) : null}
       </InputGroup>
-      {/* Three 28px controls with 4px gaps (pen s8qVFu). */}
-      <div className="flex shrink-0 items-center gap-1">
-        {hasProjects ? projectScope : null}
-        <SidebarHeaderIconButton label={gt("Add project")} onClick={onNewProject}>
-          <FolderPlusIcon />
-        </SidebarHeaderIconButton>
-        <SidebarHeaderIconButton
-          label={gt("New thread")}
-          tooltip={newThreadLabel}
-          disabled={newThreadDisabled}
-          onClick={onNewThread}
-        >
-          <SquarePenIcon />
-        </SidebarHeaderIconButton>
-      </div>
+      {searchOnly ? null : (
+        /* Three 28px controls with 4px gaps (pen s8qVFu). */
+        <div className="flex shrink-0 items-center gap-1">
+          {hasProjects ? projectScope : null}
+          <SidebarHeaderIconButton label={gt("Add project")} onClick={onNewProject}>
+            <FolderPlusIcon />
+          </SidebarHeaderIconButton>
+          <SidebarHeaderIconButton
+            label={gt("New thread")}
+            tooltip={newThreadLabel}
+            disabled={newThreadDisabled}
+            onClick={onNewThread}
+          >
+            <SquarePenIcon />
+          </SidebarHeaderIconButton>
+        </div>
+      )}
     </div>
   );
 }
@@ -134,7 +145,7 @@ export function SidebarHeaderIconButton({
   ...rest
 }: {
   label: string;
-  size?: "header" | "footer";
+  size?: "header" | "footer" | "label";
   tooltip?: ReactNode;
   className?: string | undefined;
   children?: ReactNode;
@@ -152,7 +163,11 @@ export function SidebarHeaderIconButton({
             aria-label={label}
             data-sidebar-header-control={size === "header" ? "" : undefined}
             {...rest}
-            className={cn("relative shrink-0", size === "footer" ? "size-8" : "size-7", className)}
+            className={cn(
+              "relative shrink-0",
+              size === "footer" ? "size-8" : size === "label" ? "size-6" : "size-7",
+              className,
+            )}
           />
         }
       >

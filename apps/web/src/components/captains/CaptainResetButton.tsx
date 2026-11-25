@@ -7,7 +7,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { T, useGT } from "gt-react";
-import { AlertTriangleIcon, RotateCcwIcon } from "lucide-react";
+import { AlertTriangleIcon } from "lucide-react";
 import { useState } from "react";
 
 import { useQuietThreadProjection } from "../../state/entities";
@@ -58,19 +58,19 @@ function RunningTasksWarning({
   );
 }
 
-export function CaptainResetButton({
+/** Confirms starting a new Captain conversation; mount it only while it is open. */
+export function CaptainResetDialog({
   captain,
   environmentId,
   onReset,
-  compact = false,
+  onClose,
 }: {
   captain: Captain;
   environmentId: EnvironmentId;
   onReset: (threadId: ThreadId) => void;
-  compact?: boolean;
+  onClose: () => void;
 }) {
   const gt = useGT();
-  const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const allowed = useAtomValue(
@@ -95,70 +95,45 @@ export function CaptainResetButton({
     if (result._tag === "Failure") {
       setError(captainCommandError(result, gt("Could not reset conversation.")));
     } else {
-      setOpen(false);
+      onClose();
       onReset(result.value.primaryThreadId);
     }
   };
 
   return (
-    <>
-      <Button
-        size={compact ? "icon-xs" : "sm"}
-        variant={compact ? "ghost" : "secondary"}
-        disabled={!allowed || captain.archivedAt !== null}
-        title={gt("Reset conversation")}
-        aria-label={gt("Reset conversation")}
-        onClick={() => setOpen(true)}
-      >
-        <RotateCcwIcon />
-        {compact ? null : <T>Reset conversation</T>}
-      </Button>
-      {open ? (
-        <AlertDialog
-          open
-          onOpenChange={(next) => {
-            if (!next && !saving) {
-              setError(null);
-              setOpen(false);
-            }
-          }}
-        >
-          <AlertDialogPopup>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                <T>Reset conversation?</T>
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                <T>
-                  A new conversation will keep the Captain’s documents, memories and scheduled
-                  tasks. You can still open the earlier conversation.
-                </T>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <RunningTasksWarning captain={captain} environmentId={environmentId} />
-            {error ? (
-              <p role="alert" className="text-body text-destructive-foreground">
-                {error}
-              </p>
-            ) : null}
-            <AlertDialogFooter>
-              <Button
-                variant="secondary"
-                disabled={saving}
-                onClick={() => {
-                  setError(null);
-                  setOpen(false);
-                }}
-              >
-                <T>Cancel</T>
-              </Button>
-              <Button disabled={saving || !allowed} onClick={() => void submit()}>
-                <T>Reset conversation</T>
-              </Button>
-            </AlertDialogFooter>
-          </AlertDialogPopup>
-        </AlertDialog>
-      ) : null}
-    </>
+    <AlertDialog
+      open
+      onOpenChange={(next) => {
+        if (!next && !saving) onClose();
+      }}
+    >
+      <AlertDialogPopup>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            <T>Reset conversation?</T>
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            <T>
+              A new conversation will keep the Captain’s documents, memories and scheduled tasks.
+              You can still open the earlier conversation.
+            </T>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <RunningTasksWarning captain={captain} environmentId={environmentId} />
+        {error ? (
+          <p role="alert" className="text-body text-destructive-foreground">
+            {error}
+          </p>
+        ) : null}
+        <AlertDialogFooter>
+          <Button variant="secondary" disabled={saving} onClick={onClose}>
+            <T>Cancel</T>
+          </Button>
+          <Button disabled={saving || !allowed} onClick={() => void submit()}>
+            <T>Reset conversation</T>
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogPopup>
+    </AlertDialog>
   );
 }

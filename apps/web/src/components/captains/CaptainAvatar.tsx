@@ -1,236 +1,210 @@
-import {
-  CaptainAvatarPickerColor,
-  CaptainAvatarPickerShape,
-  type CaptainAvatar as Avatar,
-} from "@t3tools/contracts";
+import type { CaptainAvatar as Avatar } from "@t3tools/contracts";
 
-import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { cn } from "../../lib/utils";
-import { captainAvatarEyes, captainAvatarPaths } from "./captainAvatarData";
+import { captainAvatarSizes } from "./captainAvatarData";
+import {
+  captainEmblemOf,
+  captainPaletteOf,
+  DUET_EMBLEM_ORDER,
+  DUET_PALETTE_ORDER,
+  DUET_PALETTE_SWATCH,
+  DUET_PICKER,
+  type DuetEmblem,
+  type DuetPalette,
+} from "./captainPalette";
 import "./CaptainAvatar.css";
-
-const shapeOf = {
-  circle: "circle",
-  cloud: "cloud",
-  diamond: "diamond",
-  // oxlint-disable-next-line t3code/no-sparkles-icon -- Grok Bot shape name, not an icon choice.
-  sparkle: "sparkle",
-  clover: "clover",
-  pebble: "pebble",
-  flower: "flower",
-  drop: "drop",
-  pill: "pill",
-  triangle: "triangle",
-  pentagon: "pentagon",
-  gear: "gear",
-  hexagon: "hexagon",
-  squircle: "diamond",
-  compass: "circle",
-  mountain: "drop",
-  terminal: "diamond",
-  flag: "hexagon",
-} satisfies Record<Avatar["preset"], CaptainAvatarPickerShape>;
-
-const colorOf = {
-  black: "black",
-  brown: "brown",
-  red: "red",
-  tangerine: "tangerine",
-  orange: "orange",
-  green: "green",
-  teal: "teal",
-  blue: "blue",
-  purple: "purple",
-  pink: "pink",
-  gray: "gray",
-  ink: "black",
-  violet: "purple",
-  emerald: "green",
-  amber: "orange",
-  rose: "pink",
-} satisfies Record<Avatar["color"], CaptainAvatarPickerColor>;
-
-const bodyColors = {
-  black: "text-[#111111] dark:text-zinc-100",
-  brown: "text-[#8E5B34]",
-  red: "text-[#FF263C]",
-  tangerine: "text-[#FF6A00]",
-  orange: "text-[#FF9800]",
-  green: "text-[#00C972]",
-  teal: "text-[#00B5A6]",
-  blue: "text-[#1084FE]",
-  purple: "text-[#9159FE]",
-  pink: "text-[#FF2F9A]",
-  gray: "text-[#7A7A7A]",
-} satisfies Record<CaptainAvatarPickerColor, string>;
-
-export const captainAvatarShapes = CaptainAvatarPickerShape.literals;
-export const captainAvatarColors = CaptainAvatarPickerColor.literals;
-
-export const captainAvatarSwatches = {
-  black: "bg-[#111111]",
-  brown: "bg-[#8E5B34]",
-  red: "bg-[#FF263C]",
-  tangerine: "bg-[#FF6A00]",
-  orange: "bg-[#FF9800]",
-  green: "bg-[#00C972]",
-  teal: "bg-[#00B5A6]",
-  blue: "bg-[#1084FE]",
-  purple: "bg-[#9159FE]",
-  pink: "bg-[#FF2F9A]",
-  gray: "bg-[#7A7A7A]",
-} satisfies Record<CaptainAvatarPickerColor, string>;
 
 export type CaptainAvatarState = "archived" | "idle" | "waiting" | "working";
 
-const workingShapeSequence = [
-  "hexagon",
-  "triangle",
-  "circle",
-  "pentagon",
-  "drop",
-  "diamond",
-  "pill",
-] as const satisfies ReadonlyArray<CaptainAvatarPickerShape>;
+/** The 28px bare emblem the channel hero leads with. */
+const heroSize = { frame: "size-7", glyph: "size-7", tile: false } as const;
 
-const orbitDots = [
-  { color: "#FF4D6D", opacity: 0.95, r: 0.11, x: 1.02, y: 0 },
-  { color: "#FFB020", opacity: 0.84, r: 0.085, x: 0.82, y: -0.3 },
-  { color: "#3DDC97", opacity: 0.92, r: 0.1, x: 0.2, y: -0.43 },
-  { color: "#00C2FF", opacity: 0.84, r: 0.085, x: -0.66, y: -0.33 },
-  { color: "#B14CFF", opacity: 0.95, r: 0.11, x: -1.02, y: 0 },
-  { color: "#FF6BD6", opacity: 0.88, r: 0.085, x: -0.38, y: 0.41 },
-] as const;
+const canonicalShapes = DUET_EMBLEM_ORDER.map((emblem) => DUET_PICKER.emblems[emblem]);
+const canonicalColors = DUET_PALETTE_ORDER.map((palette) => DUET_PICKER.palettes[palette]);
 
 export function normalizeCaptainAvatar(avatar: Avatar): Avatar {
   return {
-    preset: shapeOf[avatar.preset],
-    color: colorOf[avatar.color],
+    preset: DUET_PICKER.emblems[captainEmblemOf(avatar)],
+    color: DUET_PICKER.palettes[captainPaletteOf(avatar)],
   };
 }
 
 export function randomCaptainAvatar(): Avatar {
   const pick = <T,>(values: ReadonlyArray<T>) => values[Math.floor(Math.random() * values.length)]!;
-  return { preset: pick(captainAvatarShapes), color: pick(captainAvatarColors) };
+  return normalizeCaptainAvatar({ preset: pick(canonicalShapes), color: pick(canonicalColors) });
+}
+
+function DuetEmblemGlyph({
+  emblem,
+  palette,
+  className,
+}: {
+  emblem: DuetEmblem;
+  palette: DuetPalette;
+  className?: string;
+}) {
+  const swatch = DUET_PALETTE_SWATCH[palette];
+  const ink = `var(--duet-ink, ${swatch.ink})`;
+  const tint = `var(--duet-tint, ${swatch.tint})`;
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={ink}
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn("shrink-0 text-foreground", className)}
+      data-captain-emblem={emblem}
+    >
+      {emblem === "orb" ? (
+        <>
+          <circle cx="12.5" cy="13" r="6.5" fill={ink} stroke="none" />
+          <path
+            d="M3.5 12.6c2.2-2.6 4.4-2.6 6.6 0s4.4 2.6 6.6 0c1.3-1.5 2.6-2.1 3.8-1.8"
+            stroke="currentColor"
+            fill="none"
+          />
+        </>
+      ) : null}
+      {emblem === "sunburst" ? (
+        <>
+          <path
+            d="M12 3v4.5M12 16.5V21M3 12h4.5M16.5 12H21M5.6 5.6l3.2 3.2M15.2 15.2l3.2 3.2M18.4 5.6l-3.2 3.2M8.8 15.2l-3.2 3.2"
+            fill="none"
+          />
+          <circle cx="12" cy="12" r="2" fill={ink} stroke="none" />
+        </>
+      ) : null}
+      {emblem === "twin-arcs" ? (
+        <>
+          <circle cx="12" cy="12" r="8.5" fill={tint} stroke="none" />
+          <path d="M4 17.5a8 8 0 0 1 8-8" fill="none" />
+          <path d="M12 14.5a8 8 0 0 0 8-8" fill="none" />
+        </>
+      ) : null}
+      {emblem === "heart-wave" ? (
+        <>
+          <path
+            d="M12 19.5s-7.5-4.4-7.5-9.7A4.1 4.1 0 0 1 12 7.6a4.1 4.1 0 0 1 7.5 2.2c0 5.3-7.5 9.7-7.5 9.7Z"
+            fill={tint}
+          />
+          <path d="M8.6 12.3c1.1-1.1 2.3-1.1 3.4 0s2.3 1.1 3.4 0" fill="none" />
+        </>
+      ) : null}
+      {emblem === "terminal" ? (
+        <>
+          <rect x="3.5" y="5" width="17" height="14" rx="3.5" fill={tint} />
+          <path d="M7.5 10l2.5 2-2.5 2M12.5 14.25h4" fill="none" />
+        </>
+      ) : null}
+      {emblem === "prism" ? (
+        <>
+          <path d="M12 4.5 20 18.5H4Z" fill={tint} />
+          <path d="M12 4.5v14" fill="none" />
+        </>
+      ) : null}
+      {emblem === "orbit" ? (
+        <>
+          <ellipse cx="12" cy="12" rx="9.5" ry="4" transform="rotate(-30 12 12)" fill="none" />
+          <circle cx="12" cy="12" r="3.25" fill={ink} stroke="none" />
+          <circle cx="19.4" cy="7.6" r="1.3" fill={ink} stroke="none" />
+        </>
+      ) : null}
+      {emblem === "horizon" ? (
+        <>
+          <path d="M6 15.5a6 6 0 0 1 12 0Z" fill={tint} />
+          <path d="M3.5 15.5h17M7 19h10" fill="none" />
+        </>
+      ) : null}
+    </svg>
+  );
+}
+
+/**
+ * The ring a tile wears 3px outside its edge: a turning arc while working, a halo when waiting.
+ * The stroke is sized for the 30px box around a 24px channel tile, where it renders at 1.5px.
+ */
+export type CaptainAvatarHalo = "working" | "needs-input";
+
+function CaptainAvatarHaloRing({ halo }: { halo: CaptainAvatarHalo }) {
+  return (
+    <>
+      {halo === "needs-input" ? <span aria-hidden data-captain-avatar-ping="" /> : null}
+      <svg
+        aria-hidden
+        viewBox="0 0 38 38"
+        fill="none"
+        strokeWidth={1.9}
+        data-captain-avatar-orbit={halo}
+        className="pointer-events-none absolute -inset-0.75"
+      >
+        {halo === "working" ? (
+          <>
+            <circle cx="19" cy="19" r="18.05" stroke="var(--duet-orbit-track)" />
+            <circle
+              cx="19"
+              cy="19"
+              r="18.05"
+              pathLength={360}
+              stroke="var(--duet-ink)"
+              strokeLinecap="round"
+              strokeDasharray="70 290"
+              transform="rotate(-90 19 19)"
+              data-captain-avatar-orbit-arc=""
+            />
+          </>
+        ) : (
+          <circle cx="19" cy="19" r="18.05" stroke="var(--duet-needs-input-ring)" />
+        )}
+      </svg>
+    </>
+  );
 }
 
 export function CaptainAvatar({
   avatar,
   size = "row",
   state = "idle",
+  halo,
   animateOnMount = false,
 }: {
   avatar: Avatar;
-  size?: "picker" | "row" | "header" | "large" | "profile";
+  size?: keyof typeof captainAvatarSizes | "hero";
   state?: CaptainAvatarState;
+  /** Tiles only. */
+  halo?: CaptainAvatarHalo | undefined;
   animateOnMount?: boolean;
 }) {
-  const shape = shapeOf[avatar.preset];
-  const color = colorOf[avatar.color];
-  const [eyeX, eyeY, eyeScale] = captainAvatarEyes[shape];
-  const lookOffset = 0.35 * 0.34 * eyeScale;
-  const gap = 0.36 * eyeScale;
-  const width = 0.15 * eyeScale;
-  const height = 0.4 * eyeScale;
-  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
-  const animateWorking = state === "working" && !reduceMotion;
-  const workingShapes = animateWorking
-    ? [shape, ...workingShapeSequence.filter((candidate) => candidate !== shape), shape]
-    : [];
-  const keyTimes = workingShapes
-    .map((_, index) => (index / Math.max(1, workingShapes.length - 1)).toFixed(3))
-    .join(";");
-  const morphValues = workingShapes.map((candidate) => captainAvatarPaths[candidate]).join(";");
-  const eyeAnchorValues = workingShapes
-    .map((candidate) => {
-      const [candidateX, candidateY, candidateScale] = captainAvatarEyes[candidate];
-      const candidateOffset = 0.35 * 0.34 * candidateScale;
-      return `${candidateX + candidateOffset} ${candidateY - candidateOffset}`;
-    })
-    .join(";");
+  const palette = captainPaletteOf(avatar);
+  const emblem = captainEmblemOf(avatar);
+  const sizeData = size === "hero" ? heroSize : captainAvatarSizes[size];
+  const swatch = DUET_PALETTE_SWATCH[palette];
 
   return (
-    <svg
+    <span
       aria-hidden
-      viewBox="-1.12 -1.12 2.24 2.24"
-      className={cn(
-        "shrink-0 overflow-visible",
-        {
-          picker: "size-5",
-          row: "size-6",
-          header: "size-8",
-          large: "size-10",
-          profile: "size-14",
-        }[size],
-        bodyColors[color],
-        state === "archived" && "opacity-50 grayscale",
-      )}
       data-captain-avatar=""
       data-captain-state={state}
       data-captain-animate-on-mount={animateOnMount ? "true" : undefined}
+      data-duet-palette={palette}
+      data-captain-tile={sizeData.tile ? "" : undefined}
+      className={cn(
+        "relative inline-flex shrink-0 items-center justify-center overflow-visible",
+        sizeData.frame,
+        // oxlint-disable-next-line shadcn/no-arbitrary-values -- the Duet tile radius scales with the tile.
+        sizeData.tile && "rounded-[28%]",
+        state === "archived" && "opacity-50 grayscale",
+      )}
+      style={
+        sizeData.tile
+          ? { backgroundColor: `var(--duet-tile-fill, var(--duet-tint, ${swatch.tint}))` }
+          : undefined
+      }
     >
-      {animateWorking ? <CaptainAvatarOrbit placement="back" /> : null}
-      <path data-captain-avatar-body="" d={captainAvatarPaths[shape]} fill="currentColor">
-        {animateWorking ? (
-          <animate
-            attributeName="d"
-            dur="8s"
-            keyTimes={keyTimes}
-            repeatCount="indefinite"
-            values={morphValues}
-          />
-        ) : null}
-      </path>
-      <g transform={`translate(${eyeX + lookOffset} ${eyeY - lookOffset})`}>
-        {animateWorking ? (
-          <animateTransform
-            attributeName="transform"
-            dur="8s"
-            keyTimes={keyTimes}
-            repeatCount="indefinite"
-            type="translate"
-            values={eyeAnchorValues}
-          />
-        ) : null}
-        <g data-captain-avatar-eyes="">
-          {[-1, 1].map((side) => (
-            <g
-              key={side}
-              data-captain-avatar-eye=""
-              transform={`translate(${(side * gap) / 2} 0) rotate(-18)`}
-            >
-              <rect
-                x={-width / 2}
-                y={-height / 2}
-                width={width}
-                height={height}
-                rx={width / 2}
-                className={color === "black" ? "fill-white dark:fill-background" : "fill-white"}
-              />
-            </g>
-          ))}
-        </g>
-      </g>
-      {animateWorking ? <CaptainAvatarOrbit placement="front" /> : null}
-    </svg>
-  );
-}
-
-function CaptainAvatarOrbit({ placement }: { placement: "back" | "front" }) {
-  return (
-    <g data-captain-avatar-orbit={placement}>
-      {orbitDots
-        .filter((_, index) => (placement === "front" ? index % 2 === 0 : index % 2 === 1))
-        .map((dot) => (
-          <circle
-            key={`${placement}:${dot.color}:${dot.x}:${dot.y}`}
-            cx={dot.x}
-            cy={dot.y}
-            fill={dot.color}
-            opacity={dot.opacity}
-            r={dot.r}
-          />
-        ))}
-    </g>
+      <DuetEmblemGlyph emblem={emblem} palette={palette} className={sizeData.glyph} />
+      {halo && sizeData.tile ? <CaptainAvatarHaloRing halo={halo} /> : null}
+    </span>
   );
 }

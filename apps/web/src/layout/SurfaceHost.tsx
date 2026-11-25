@@ -19,6 +19,7 @@ import { holdSurfaceFocusOrigin } from "../lib/workspaceFocus";
 import { SidebarInset } from "../components/ui/sidebar";
 import { StatusDot } from "../components/ui/status-dot";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useDuetShell } from "../hooks/useDuetShell";
 import { useScrollingWorkspacesEnabled } from "../hooks/useSettings";
 import { cn } from "../lib/utils";
 import {
@@ -286,8 +287,12 @@ export function selectSurfaceMounts(
  * Pane edges land on whole pixels, so borders and text stay crisp at any split.
  * Both panes round the same boundary, so the gap between them stays exact.
  */
-function slotStyle(slot: LayoutPaneSlot, stripPx?: number): React.CSSProperties {
-  const edge = (has: boolean) => (has ? HALF_PANE_GAP : "0px");
+function slotStyle(
+  slot: LayoutPaneSlot,
+  stripPx?: number,
+  halfPaneGap = HALF_PANE_GAP,
+): React.CSSProperties {
+  const edge = (has: boolean) => (has ? halfPaneGap : "0px");
   const at = (fraction: number, offset: string) =>
     `round(calc(${fraction * 100}% + ${offset}), 1px)`;
   const across = (fraction: number, offset: string) =>
@@ -310,11 +315,19 @@ function slotStyle(slot: LayoutPaneSlot, stripPx?: number): React.CSSProperties 
  * `slotStyle` while a resize drag grows the stage each frame: across in whole
  * pixels of the strip, so only the panes that resize or move get new styles.
  */
-function dragSlotStyle(slot: LayoutPaneSlot, stripPx: number): React.CSSProperties {
-  const edge = (has: boolean) => (has ? HALF_PANE_GAP_PX : 0);
+function dragSlotStyle(
+  slot: LayoutPaneSlot,
+  stripPx: number,
+  halfPaneGapPx = HALF_PANE_GAP_PX,
+): React.CSSProperties {
+  const edge = (has: boolean) => (has ? halfPaneGapPx : 0);
   const left = Math.round(slot.rect.left * stripPx + edge(slot.hasLeft));
   const right = Math.round((slot.rect.left + slot.rect.width) * stripPx - edge(slot.hasRight));
-  return { ...slotStyle(slot), left: `${left}px`, width: `${right - left}px` };
+  return {
+    ...slotStyle(slot, undefined, `${halfPaneGapPx}px`),
+    left: `${left}px`,
+    width: `${right - left}px`,
+  };
 }
 
 /** One workspace in the stack a switch moves (see motion/workspaceSwitch.ts). */
@@ -333,8 +346,13 @@ interface StackRow {
  * the row sits `offset` rows (and gaps) down and shifts left by its camera.
  * At rest on a row it lands on exactly the strip's pixels.
  */
-function stackSlotStyle(row: StackRow, slot: LayoutPaneSlot, gap: number): React.CSSProperties {
-  const edge = (has: boolean) => (has ? HALF_PANE_GAP : "0px");
+function stackSlotStyle(
+  row: StackRow,
+  slot: LayoutPaneSlot,
+  gap: number,
+  halfPaneGap = HALF_PANE_GAP,
+): React.CSSProperties {
+  const edge = (has: boolean) => (has ? halfPaneGap : "0px");
   const across = (fraction: number, offset: string) =>
     `round(calc(${fraction * row.stripWidth * 100}% - ${row.camera}px + ${offset}), 1px)`;
   const down = (fraction: number, offset: string) =>
@@ -566,6 +584,9 @@ function useSurfacePlacement(
 ) {
   const overviewPhase = useOverviewPhase();
   const workspaceStack = useWorkspaceStack();
+  const duet = useDuetShell();
+  const halfPaneGap = duet ? "0px" : HALF_PANE_GAP;
+  const halfPaneGapPx = duet ? 0 : HALF_PANE_GAP_PX;
   const viewport = { width: viewportWidth, whenNoRoom };
   const { slots, stripWidth, stripSize, unitWidth, paneCount } = selectShownSlots(
     workspace,
@@ -635,7 +656,7 @@ function useSurfacePlacement(
           if (slot.activeTabId === null) continue;
           byId.set(slot.activeTabId, {
             slot,
-            style: stackSlotStyle(row, slot, workspaceStack.gap),
+            style: stackSlotStyle(row, slot, workspaceStack.gap, halfPaneGap),
           });
         }
       }
@@ -647,7 +668,7 @@ function useSurfacePlacement(
           if (slot.activeTabId === null) continue;
           byId.set(slot.activeTabId, {
             slot,
-            style: overviewSlotStyle(row, slot, stage.gap, HALF_PANE_GAP),
+            style: overviewSlotStyle(row, slot, stage.gap, halfPaneGap),
           });
         }
       }
@@ -655,7 +676,9 @@ function useSurfacePlacement(
     }
     for (const slot of slots) {
       if (slot.activeTabId === null) continue;
-      const style = dragging ? dragSlotStyle(slot, stripWidth * viewportWidth) : slotStyle(slot);
+      const style = dragging
+        ? dragSlotStyle(slot, stripWidth * viewportWidth, halfPaneGapPx)
+        : slotStyle(slot, undefined, halfPaneGap);
       byId.set(slot.activeTabId, { slot, style });
     }
     return byId;
@@ -1901,6 +1924,7 @@ function LayoutChatSurface({
         !visible && "-translate-x-[calc(100%+100vw)] [content-visibility:hidden]",
         !visible && (paneStyle === undefined ? "inset-0" : "top-0 left-0"),
         visible && (split || staged) && "overflow-clip rounded-pane pane-surface",
+        visible && slot?.hasLeft && "duet:border-s duet:border-(--duet-hairline)",
         // A lone pane paints flat before its chat does, not the inset's grain behind it.
         visible && !(split || staged) && "bg-background",
       )}
@@ -2151,6 +2175,7 @@ function LayoutSurfaceTabSurface({
       className={cn(
         "absolute flex min-h-0 min-w-0 flex-col outline-none",
         (split || staged) && "overflow-clip rounded-pane pane-surface",
+        slot?.hasLeft && "duet:border-s duet:border-(--duet-hairline)",
         // Hidden as a chat off screen is (see LayoutChatSurface).
         !slot && "top-0 left-0 -translate-x-[calc(100%+100vw)] [content-visibility:hidden]",
       )}
@@ -2420,6 +2445,7 @@ function LayoutLauncherSurface({
         "absolute flex min-h-0 min-w-0 flex-col",
         closing && "pointer-events-none",
         (split || staged) && "overflow-clip rounded-pane pane-surface",
+        slot.hasLeft && "duet:border-s duet:border-(--duet-hairline)",
       )}
       style={placed.style}
       inert={staged || closing}
@@ -2487,6 +2513,7 @@ function LayoutPageSurface({
         placed === null &&
           "pointer-events-none inset-0 -translate-x-[calc(100%+100vw)] [content-visibility:hidden]",
         (split || staged) && "overflow-clip rounded-pane pane-surface",
+        slot.hasLeft && "duet:border-s duet:border-(--duet-hairline)",
       )}
       style={placed?.style}
       inert={!visible || staged}

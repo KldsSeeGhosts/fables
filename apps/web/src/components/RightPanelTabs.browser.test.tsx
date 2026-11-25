@@ -1,6 +1,6 @@
 import "~/index.css";
 
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 
@@ -8,7 +8,11 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "~/components/ui/in
 import type { RightPanelSurface } from "~/rightPanelStore";
 import { render, stubGlobal } from "../../test/render";
 import { HistorySwipeNavigation } from "./HistorySwipeNavigation";
-import { RightPanelTabs, type RightPanelTabsProps } from "./RightPanelTabs";
+import {
+  RightPanelTabs,
+  shouldShowDuetRightPanelTabs,
+  type RightPanelTabsProps,
+} from "./RightPanelTabs";
 import { subscribePreviewAction } from "./preview/previewActionBus";
 
 const navigateHistory = vi.hoisted(() => vi.fn());
@@ -225,6 +229,33 @@ function releaseThumbButton(
 }
 
 const STAYS_PUT = { focusMoved: false, routerMoved: false };
+
+describe("Duet right panel tab visibility", () => {
+  const captainBrief: RightPanelSurface = { id: "captain-brief", kind: "captain-brief" };
+  const threadSurface = (id: string): RightPanelSurface => ({
+    id: `thread:${id}`,
+    kind: "thread",
+    threadId: ThreadId.make(id),
+  });
+
+  it("hides empty, single-surface, and captain drill-down strips", () => {
+    expect(shouldShowDuetRightPanelTabs([])).toBe(false);
+    expect(shouldShowDuetRightPanelTabs([captainBrief])).toBe(false);
+    expect(shouldShowDuetRightPanelTabs([captainBrief, threadSurface("task-1")])).toBe(false);
+  });
+
+  it("shows the flat strip for multiple threads or non-thread surfaces", () => {
+    expect(
+      shouldShowDuetRightPanelTabs([
+        captainBrief,
+        threadSurface("task-1"),
+        threadSurface("task-2"),
+      ]),
+    ).toBe(true);
+    expect(shouldShowDuetRightPanelTabs([captainBrief, DIFF_SURFACE])).toBe(true);
+    expect(shouldShowDuetRightPanelTabs([DIFF_SURFACE, BROWSER_SURFACE])).toBe(true);
+  });
+});
 
 describe("right panel thumb buttons", () => {
   it("keep the app router still over a surface that is not a browser", async () => {

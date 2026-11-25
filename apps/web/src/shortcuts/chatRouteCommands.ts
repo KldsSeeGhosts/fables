@@ -163,6 +163,7 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
     router.state.location.pathname === "/pull-requests" ||
     router.state.location.pathname === "/issues" ||
     router.state.location.pathname === "/workflows" ||
+    router.state.location.pathname === "/captains" ||
     (router.state.location.pathname === "/" && readProjects().length > 0);
   const layoutCommand =
     (action: () => void, allowRepeat = false): CommandHandler =>

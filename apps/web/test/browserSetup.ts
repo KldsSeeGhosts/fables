@@ -18,5 +18,10 @@ beforeEach(async () => {
   await commands.resetPointer();
 });
 
+// Layout tests measure the stock look; without a stored theme this fork boots into KSG Salon.
+if (window.localStorage.getItem("t3code:theme") === null) {
+  window.localStorage.setItem("t3code:theme", "system");
+}
+
 // The app initializes GT at startup; components using its hooks need the same here.
 initializeI18n(() => {});

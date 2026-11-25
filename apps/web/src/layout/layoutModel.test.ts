@@ -21,6 +21,7 @@ import {
   openLayoutTab,
   placeLayoutContent,
   placeLayoutTabs,
+  replaceFocusedLayoutContent,
   replaceLayoutTabContent,
   resizeLayoutColumnEdge,
   sameLayoutSpan,
@@ -461,6 +462,18 @@ describe("blank workspaces", () => {
     expect(moved.workspaces.map(isBlankLayoutWorkspace)).toEqual([false, false, true]);
   });
 
+  it("restores a split Captains page with its deep link", () => {
+    const content = {
+      kind: "captains",
+      href: "/captains?env=local&captain=maria&view=tasks",
+    } as const;
+    const layout = openLayoutTab(layoutOf([[["A!"]]]), content, { placement: "new-column" });
+    const saved: unknown = JSON.parse(JSON.stringify(layout));
+    const restored = decodePersistedLayoutState(saved);
+    expect(columnsOf(restored)).toEqual([[chatOf("A")], [content]]);
+    expect(selectFocusedTab(restored)?.content).toEqual(content);
+  });
+
   it("loads a layout saved with tabless empty workspaces as blank tabs", () => {
     const saved = JSON.parse(
       JSON.stringify({ ...layoutOf([[["A"]]], [], []), focusedWorkspaceId: "w1" }),
@@ -810,6 +823,22 @@ describe("moveLayoutTabToWorkspace", () => {
     expect(moved.workspaces.map(isBlankLayoutWorkspace)).toEqual([false, false, true]);
     expect(selectFocusedWorkspace(moved)).toBe(moved.workspaces[0]);
     expect(selectFocusedTab(moved)?.content).toBe(second);
+  });
+});
+
+describe("replaceFocusedLayoutContent", () => {
+  it("replaces the focused tab instead of accumulating a sibling", () => {
+    const replaced = replaceFocusedLayoutContent(layoutOf([[["A!"]]]), chatOf("B"));
+
+    expect(shapeOf(replaced)).toEqual([[[["B!"]]]]);
+  });
+
+  it("focuses content already open elsewhere instead of duplicating it", () => {
+    const base = layoutOf([[["A!"], ["B"]]]);
+    const replaced = replaceFocusedLayoutContent(base, chatOf("B"));
+
+    expect(selectFocusedTab(replaced)?.content).toEqual(chatOf("B"));
+    expect(shapeOf(replaced)).toEqual([[[["A"], ["B!"]]]]);
   });
 });
 

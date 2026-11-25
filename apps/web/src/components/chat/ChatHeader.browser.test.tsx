@@ -4,6 +4,31 @@ import { userEvent } from "vite-plus/test/browser";
 
 const persisted = vi.hoisted(() => ({ title: "" }));
 const openMenu = vi.hoisted(() => vi.fn());
+const duetShell = vi.hoisted(() => ({ enabled: false }));
+const captainState = vi.hoisted(() => ({ enabled: false }));
+vi.mock(import("../../hooks/useDuetShell"), () => ({
+  useDuetShell: () => duetShell.enabled,
+}));
+vi.mock(import("../captains/useCaptain"), async (importOriginal) => ({
+  ...(await importOriginal()),
+  useCaptain: ((ref: { threadId: string } | null) =>
+    captainState.enabled && ref?.threadId.startsWith("captain:")
+      ? {
+          id: "maria",
+          primaryThreadId: ref.threadId,
+          earlierThreadIds: [],
+          name: "Maria",
+          role: "Coordinator",
+          instructions: "",
+          avatar: { preset: "compass", color: "violet" },
+          scopedProjectIds: [],
+          reportPolicy: "context",
+          createdAt: "2026-11-24T00:00:00.000Z",
+          updatedAt: "2026-11-24T00:00:00.000Z",
+          archivedAt: null,
+        }
+      : null) as never,
+}));
 vi.mock(import("../../state/session"), async (importOriginal) => ({
   ...(await importOriginal()),
   useEnvironmentScope: () => true,
@@ -131,4 +156,57 @@ it("keeps the Escape that cancels a rename from also reaching window shortcuts",
   await expect.element(input).not.toBeInTheDocument();
   expect(persisted.title).toBe("New thread");
   expect(windowEscapes).toEqual([true]);
+});
+
+it("uses the always-tabless Duet header and keeps the hidden terminal chip", async () => {
+  duetShell.enabled = true;
+  try {
+    await using screen = await render(
+      <ChatHeader
+        activeThreadEnvironmentId={EnvironmentId.make("environment")}
+        activeThreadId={ThreadId.make("thread")}
+        activeThreadTitle="New thread"
+        isServerThread
+        activeProject={null}
+        parentThreadLink={null}
+        onOpenThread={() => {}}
+        rightPanelOpen={false}
+        hiddenTerminal={{ shortcutLabel: null, running: false, onShow: () => {} }}
+      />,
+    );
+
+    await expect
+      .element(screen.getByRole("button", { name: "Thread actions for New thread" }))
+      .toBeVisible();
+    expect(screen.container.querySelector("[data-pane-notch]")).toBeNull();
+    expect(screen.container.querySelector("[data-hidden-terminal-chip]")).not.toBeNull();
+    expect(screen.container.querySelector('[aria-label="Status: Idle"]')).toBeNull();
+  } finally {
+    duetShell.enabled = false;
+  }
+});
+
+it("centers the status orb only for a Duet Captain channel", async () => {
+  duetShell.enabled = true;
+  captainState.enabled = true;
+  try {
+    await using screen = await render(
+      <ChatHeader
+        activeThreadEnvironmentId={EnvironmentId.make("environment")}
+        activeThreadId={ThreadId.make("captain:maria:0")}
+        activeThreadTitle="Maria"
+        isServerThread
+        activeProject={null}
+        parentThreadLink={null}
+        onOpenThread={() => {}}
+        rightPanelOpen={false}
+      />,
+    );
+
+    await expect.element(screen.getByRole("button", { name: "Status: Idle" })).toBeVisible();
+    expect(screen.container.querySelector("[data-pane-notch]")).toBeNull();
+  } finally {
+    duetShell.enabled = false;
+    captainState.enabled = false;
+  }
 });

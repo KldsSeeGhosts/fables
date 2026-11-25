@@ -92,7 +92,9 @@ import {
   type ServerProvider,
   type ScopedThreadRef,
   type ThreadId,
+  isCaptainThreadId,
   ProviderInteractionMode,
+  resolveEnvironmentMachineKind,
   resolveIdleCompaction,
   RuntimeMode,
 } from "@t3tools/contracts";
@@ -206,6 +208,7 @@ import {
 } from "./preview/ThreadPreviewMiniPlayer";
 import { createChatCanvasStore, resolveChatCanvasModel } from "./chat/canvasStore";
 import { usePreviewSession } from "./preview/usePreviewSession";
+import { dispatchPreviewAction } from "./preview/previewActionBus";
 
 import {
   previewMiniPlayerSourceKey,
@@ -309,6 +312,7 @@ import {
 import { useEnvironmentShellHasSnapshot } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
+import { ChatHeroGreeting, ChatHeroStarters } from "./chat/ChatHero";
 import { ExpandedImageDialogHost, openExpandedImagePreview } from "./chat/ExpandedImageDialog";
 import {
   BranchRestoreConfirmHost,
@@ -733,10 +737,6 @@ export default function ChatView(props: ChatViewProps) {
   const branchToolbarRef = useRef<BranchToolbarHandle>(null);
   const threadDetailsPanelRef = useRef<ThreadDetailsPanelHandle>(null);
   const detailsVisibility = useClientSettings(resolveThreadDetailsVisibility);
-  const [composerStashHost, setComposerStashHost] = useState<HTMLDivElement | null>(null);
-  const [composerTrayControlsHost, setComposerTrayControlsHost] = useState<HTMLDivElement | null>(
-    null,
-  );
   const [composerRequestCardHost, setComposerRequestCardHost] = useState<HTMLDivElement | null>(
     null,
   );
@@ -1807,6 +1807,15 @@ export default function ChatView(props: ChatViewProps) {
     backgroundSubmissionPending,
     hasWorktreeSetupCard: worktreeSetup !== null,
   });
+  // An empty started thread, such as a fresh Captain conversation, centers the same hero.
+  const isEmptyThreadHero =
+    isServerThread &&
+    !embedded &&
+    timelineEmpty &&
+    !isWorking &&
+    threadSyncPhase === null &&
+    worktreeSetup === null;
+  const heroLayout = isDraftHeroState || isEmptyThreadHero;
   const {
     transitionGroupRef: draftHeroTransitionGroupRef,
     composerAnchorRef: draftHeroComposerAnchorRef,
@@ -1994,6 +2003,7 @@ export default function ChatView(props: ChatViewProps) {
         );
   const showComposerContextStrip =
     !embedded &&
+    !isServerThread &&
     shouldShowComposerContextStrip({
       isDraftHeroState,
       persistInActiveThreads: true,
@@ -2075,6 +2085,13 @@ export default function ChatView(props: ChatViewProps) {
     scheduleComposerFocusStable();
   };
   const insertArtifactTemplateStable = useStableCallback(insertArtifactTemplate);
+  const pickHeroStarter = (prompt: string) => {
+    const composer = composerRef.current;
+    if (!composer) return;
+    if (composer.readSnapshot().value.trim() === "") composer.insertTextAtEnd(prompt);
+    scheduleComposerFocusStable();
+  };
+  const pickHeroStarterStable = useStableCallback(pickHeroStarter);
   const sendAppMessage = async (text: string) => {
     if (!isServerThread || activeThreadId === null) {
       throw new Error(gt("Messages from apps need a started thread."));
@@ -2179,6 +2196,7 @@ export default function ChatView(props: ChatViewProps) {
         threadRef: activeThreadRef,
         preview: canvasPreview,
         detailsCardInlineOpen: threadPanelInlineOpen,
+        detailsCardFloats: true,
       }).detailsCardMode,
   );
   const workspaceInDetails = !shouldShowComposerWorkspace({
@@ -2190,7 +2208,7 @@ export default function ChatView(props: ChatViewProps) {
     threadDetailsPanelRef.current?.openBranch(threadPanelPresentation);
   });
   const openStartedWorkspaceStable = useStableCallback(() => {
-    if (workspaceInDetails) openWorkspaceDetailsStable();
+    if (workspaceInDetails || isServerThread) openWorkspaceDetailsStable();
     else branchToolbarRef.current?.openBranchPicker();
   });
   const threadPanelOpen = useRightPanelStore((state) =>
@@ -2518,7 +2536,7 @@ export default function ChatView(props: ChatViewProps) {
       '[data-chat-composer-stack="true"]',
     );
     const expandedComposerHeight =
-      isDraftHeroState && stack ? Math.ceil(stack.getBoundingClientRect().height) : nextHeight;
+      heroLayout && stack ? Math.ceil(stack.getBoundingClientRect().height) : nextHeight;
     const mobileCollapsed = Boolean(
       stack?.querySelector('[data-chat-composer-mobile-collapsed="true"]'),
     );
@@ -2579,7 +2597,7 @@ export default function ChatView(props: ChatViewProps) {
 
     updateHeight([]);
     // The hero overlay fills the pane, so the composer's own growth only shows on its stack.
-    const stack = isDraftHeroState
+    const stack = heroLayout
       ? composerOverlayElement.querySelector<HTMLElement>('[data-chat-composer-stack="true"]')
       : null;
     return observeResize(
@@ -2588,7 +2606,7 @@ export default function ChatView(props: ChatViewProps) {
     );
   }, [
     composerOverlayElement,
-    isDraftHeroState,
+    heroLayout,
     publishComposerOverlayHeightStable,
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- The scroll-to-bottom button changes the overlay's height without resizing the observed node first.
     showScrollToBottom,
@@ -3689,12 +3707,67 @@ export default function ChatView(props: ChatViewProps) {
       ? null
       : timelineFooterContent;
 
+  const duetHeaderMachineControl =
+    activeThreadRef !== null && activeEnvironment !== null
+      ? {
+          label: activeEnvironment.label,
+          machine:
+            activeEnvironmentOption?.machine ??
+            resolveEnvironmentMachineKind(activeEnvironment.serverConfig),
+          environmentId: activeThread.environmentId,
+          unavailable: activeEnvironmentUnavailableState !== null,
+          environments: logicalProjectEnvironments,
+          locked: envLocked,
+          ...(canChangeEnvironment ? { onChange: onEnvironmentChangeStable } : {}),
+          autoLabel: autoEnvironmentLabel,
+          ...(draftId &&
+          !envLocked &&
+          canAutoBalanceEnvironments &&
+          loadBalancingSettings.loadBalancingEnabled
+            ? { onAuto: onAutoEnvironmentStable }
+            : {}),
+        }
+      : null;
+  const duetHeaderControls =
+    activeThreadRef === null
+      ? null
+      : {
+          ...(sideChat.available ? { onNew: openNewSideChatStable } : {}),
+          machine: duetHeaderMachineControl,
+          terminal: {
+            label: gt("Terminal"),
+            onClick: hiddenTerminalChip?.onShow ?? toggleTerminalVisibilityStable,
+            active:
+              terminalUiState.terminalOpen ||
+              rightPanelState.surfaces.some((surface) => surface.kind === "terminal"),
+          },
+          browser: browserAvailable
+            ? {
+                label: gt("Browser"),
+                onClick: () => dispatchPreviewAction("toggle-panel"),
+                active: previewPanelOpen,
+                disabled: !canOperatePreview && !previewPanelOpen,
+              }
+            : null,
+          diff:
+            isServerThread && diffAvailable
+              ? {
+                  label: gt("Diff"),
+                  onClick: openChangesFromThreadPanelStable,
+                  active: diffOpen,
+                }
+              : null,
+        };
   const panelToggleControlProps = {
     threadPanelOpen,
     threadPanelPresentation,
     threadPanelPopoverHandle,
     threadPanelShortcutLabel: shortcutLabelForCommand(keybindings, "threadPanel.toggle"),
     onToggleThreadPanel: toggleThreadPanelStable,
+    branchLabel: activeThreadBranch,
+    contextPercent: activeContextWindow?.usedPercentage ?? null,
+    threadRef: activeThreadRef,
+    duetControls: duetHeaderControls,
   } satisfies PanelLayoutControlsProps;
   const panelToggleControls = (
     <PanelLayoutControls
@@ -3794,7 +3867,7 @@ export default function ChatView(props: ChatViewProps) {
             threadRef={activeThreadRef}
             preview={canvasPreview}
             detailsCardTopInset={isThreadFindActive ? THREAD_FIND_BAR_RESERVED_HEIGHT : 0}
-            composerOverlayElement={isDraftHeroState ? null : composerOverlayElement}
+            composerOverlayElement={heroLayout ? null : composerOverlayElement}
             data-chat-workspace-drop-target="true"
             onDragEnter={workspaceFileDropHandlers.onDragEnter}
             onDragOver={workspaceFileDropHandlers.onDragOver}
@@ -3924,7 +3997,7 @@ export default function ChatView(props: ChatViewProps) {
                   onIsAtEndChange={onIsAtEndChangeStable}
                   onViewportAttach={attachTimelineViewport}
                   onFooterGrow={onTimelineFooterGrowStable}
-                  hideEmptyPlaceholder={isDraftHeroState || threadDetailLoading}
+                  hideEmptyPlaceholder={heroLayout || threadDetailLoading}
                   emptyPlaceholderInset={composerReservedHeight}
                   topFadeEnabled
                   {...(threadHistoryControls === undefined
@@ -3968,26 +4041,29 @@ export default function ChatView(props: ChatViewProps) {
               inert={isRevertingCheckpoint}
               data-chat-composer-overlay="true"
               className={
-                isDraftHeroState
-                  ? "pointer-events-none absolute inset-0 z-20 flex flex-col justify-end pt-1.5 [container:draft-hero/size] sm:pt-2"
+                heroLayout
+                  ? "pointer-events-none absolute inset-0 z-20 flex flex-col justify-center pt-1.5 [container:draft-hero/size] sm:pt-2"
                   : "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2"
               }
             >
-              {isDraftHeroState ? (
+              {heroLayout ? (
                 // A short split pane has no room above the composer.
-                <div className="chat-composer-lane flex min-h-0 w-full flex-1 items-center overflow-hidden py-4 [@container_draft-hero_(max-height:440px)]:hidden">
+                <div className="chat-composer-lane flex w-full shrink-0 justify-center pb-7 duet:pb-6 [@container_draft-hero_(max-height:440px)]:hidden">
                   <div
-                    className="pointer-events-auto mx-auto flex max-h-full min-h-0 w-full max-w-(--chat-content-max-width) flex-col items-center gap-1.5"
+                    className="pointer-events-auto mx-auto flex w-full max-w-(--chat-content-max-width) flex-col items-center"
                     style={
                       forceExpandedMobileComposer
                         ? { viewTransitionName: MOBILE_DRAFT_HEADLINE_VIEW_TRANSITION_NAME }
                         : undefined
                     }
                   >
-                    <DraftHeroHeadline
-                      draftId={draftId}
-                      activeProjectRef={activeProjectRef}
-                      activeProjectTitle={activeProject?.title ?? null}
+                    <ChatHeroGreeting
+                      threadRef={isServerThread ? activeThreadRef : null}
+                      projectTitle={
+                        isServerThread || gitProjectIsScratch
+                          ? null
+                          : (activeProject?.title ?? null)
+                      }
                     />
                   </div>
                 </div>
@@ -4180,8 +4256,6 @@ export default function ChatView(props: ChatViewProps) {
                               }
                               threadPullRequests={(activeThreadShell ?? activeThread)?.pullRequests}
                               requestCardHost={composerRequestCardHost}
-                              stashHost={composerStashHost}
-                              trayControlsHost={composerTrayControlsHost}
                               onComposerOverlayHeightChange={publishComposerOverlayHeightStable}
                               promptRef={promptRef}
                               composerImagesRef={composerImagesRef}
@@ -4236,7 +4310,8 @@ export default function ChatView(props: ChatViewProps) {
                           data-terminal-open={terminalUiState.terminalOpen ? "true" : undefined}
                           className="relative z-0"
                         >
-                          {composerMounted && (
+                          {/* A started thread shows its workspace in the header's details popover. */}
+                          {composerMounted && !isServerThread && (
                             <div className="pointer-events-auto">
                               <BranchToolbar
                                 onOpenWorkspaceDetails={
@@ -4284,15 +4359,6 @@ export default function ChatView(props: ChatViewProps) {
                                 }
                                 availableEnvironments={logicalProjectEnvironments}
                                 environmentUnavailable={activeEnvironmentUnavailableState !== null}
-                                afterBranch={
-                                  <div ref={setComposerStashHost} className="flex shrink-0" />
-                                }
-                                trailing={
-                                  <div
-                                    ref={setComposerTrayControlsHost}
-                                    className="ms-auto flex min-w-0 flex-1 justify-end"
-                                  />
-                                }
                               />
                             </div>
                           )}
@@ -4306,6 +4372,23 @@ export default function ChatView(props: ChatViewProps) {
                   </div>
                 </div>
               </div>
+              {heroLayout ? (
+                <div className="chat-composer-lane flex max-h-[45%] min-h-0 w-full shrink flex-col items-center gap-5 overflow-hidden [@container_draft-hero_(max-height:440px)]:hidden">
+                  <div className="pointer-events-auto flex min-h-0 w-full max-w-(--chat-content-max-width) flex-col items-center gap-5">
+                    <ChatHeroStarters
+                      captain={isServerThread && isCaptainThreadId(activeThread.id)}
+                      onPick={pickHeroStarterStable}
+                    />
+                    {isDraftHeroState ? (
+                      <DraftHeroHeadline
+                        draftId={draftId}
+                        activeProjectRef={activeProjectRef}
+                        activeProjectTitle={activeProject?.title ?? null}
+                      />
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             {canOperatePreview && activeThreadRef && activeEnvironmentServerBrowser && !embedded ? (

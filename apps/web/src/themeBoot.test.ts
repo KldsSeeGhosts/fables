@@ -6,6 +6,7 @@ import {
   ENVIRONMENT_THEMES_STORAGE_KEY,
   getDefaultThemeColors,
   getThemeColorsForMode,
+  getThemeDefinition,
   invalidateCustomThemes,
   isKnownThemePreference,
   publishedThemeDefinitions,
@@ -115,7 +116,7 @@ function runtimeResolvedAppearance(
   invalidateCustomThemes();
   try {
     const raw = storage[THEME_STORAGE_KEY] ?? null;
-    const theme = raw !== null && isKnownThemePreference(raw) ? raw : "system";
+    const theme = raw === null ? "ksg-salon" : isKnownThemePreference(raw) ? raw : "system";
     const followRaw = storage[THEME_FOLLOW_SYSTEM_STORAGE_KEY] ?? null;
     const appearanceRaw = storage[THEME_APPEARANCE_MODE_STORAGE_KEY] ?? null;
     const appearanceMode =
@@ -125,7 +126,7 @@ function runtimeResolvedAppearance(
           ? "system"
           : followRaw === "false"
             ? null
-            : theme === "system"
+            : theme === "system" || raw === null
               ? "system"
               : null;
     const followSystem = appearanceMode === "system";
@@ -320,6 +321,7 @@ describe("index.html boot script", () => {
       OCEAN_THEME,
       EMBER_THEME,
       IRIS_THEME,
+      getThemeDefinition("ksg-salon")!,
     ]) {
       expect(theme.appearance).toBe("light");
       for (const mode of ["light", "dark"] as const) {
@@ -405,6 +407,13 @@ describe("index.html boot script", () => {
     expect(boot.bootVariables["--boot-accent"]).toBe(getDefaultThemeColors("dark").accent);
     expect(boot.backgroundColor).toBe(DEFAULT_DARK_SIDEBAR);
     expect(boot.metaContent).toBe(DEFAULT_DARK_SIDEBAR);
+  });
+
+  it("boots into KSG Salon, following the OS, before a theme is chosen", () => {
+    const boot = runBootScript({ storage: {}, prefersDark: false });
+    expect(boot.themeId).toBe("ksg-salon");
+    expect(boot.isDark).toBe(false);
+    expect(runBootScript({ storage: {}, prefersDark: true }).isDark).toBe(true);
   });
 
   it("follows the OS appearance when storage is unavailable", () => {

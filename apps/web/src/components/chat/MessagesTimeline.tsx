@@ -1,7 +1,11 @@
 import { T, useGT, useMessages, Var } from "gt-react";
 import type { SideThreadOpenIntent } from "@t3tools/client-runtime/side-thread";
-import type { ThreadRunSummary } from "@t3tools/client-runtime/state/models";
+import type {
+  EnvironmentThreadShell,
+  ThreadRunSummary,
+} from "@t3tools/client-runtime/state/models";
 import { threadErrorText } from "@t3tools/client-runtime/state/threads";
+import { captainForThread } from "@t3tools/client-runtime/state/captains";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import type { ToolCallDiffTarget } from "../../diffPanelStore";
@@ -73,6 +77,7 @@ import {
   type ServerProviderSkill,
   type RunId,
   ThreadId,
+  isCaptainThreadId,
 } from "@t3tools/contracts";
 import type { ChildThreadApproval } from "@t3tools/client-runtime/state/thread-requests";
 import { deriveTimelineMinimapItems } from "./timelineMinimapItems";
@@ -130,14 +135,7 @@ const EMPTY_CHILD_APPROVALS_BY_THREAD_KEY: ReadonlyMap<
 > = new Map();
 const EMPTY_CHILD_APPROVAL_THREAD_IDS: ReadonlySet<ThreadId> = new Set();
 import { type ChatFileAttachment, type TurnDiffSummary } from "../../types";
-import {
-  ArrowRightIcon,
-  BotIcon,
-  Minimize2Icon,
-  CircleAlertIcon,
-  Clock3Icon,
-  MessageSquareIcon,
-} from "lucide-react";
+import { ArrowRightIcon, BotIcon, Minimize2Icon, CircleAlertIcon, Clock3Icon } from "lucide-react";
 import type { HandoffEndpoints } from "@t3tools/client-runtime/handoff";
 import { Skeleton } from "../ui/skeleton";
 import { ExpandedImagePreview } from "./ExpandedImagePreview";
@@ -193,11 +191,22 @@ import {
 } from "./timelineViewport";
 import { ThreadActivityAnnouncer } from "./ThreadActivityAnnouncer";
 import { formatUpcomingTimestamp } from "../../timestampFormat";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
+import { Text } from "../ui/text";
+import { ChatHeroMark } from "./ChatHero";
 import { DiffStatBlocks } from "./DiffStatLabel";
 import { useNowMinute } from "../../hooks/useNowMinute";
+import { useChildThreadInputs, useQuietThreadShell } from "../../state/entities";
 import { useDeadlinePassed } from "../../hooks/useDeadline";
 import { useClientSettings } from "../../hooks/useSettings";
+import { useDuetShell } from "../../hooks/useDuetShell";
+import { captainPaletteOf } from "../captains/captainPalette";
+import { useCaptains } from "../captains/useCaptain";
+import {
+  duetTaskHeaderByRowId,
+  duetTimestampDividers,
+  formatDuetTimestampDivider,
+} from "./duetStream.logic";
+import { DuetStreamContext, type DuetStreamContextValue } from "./DuetTaskContextHeader";
 
 const NOOP_USE_ARTIFACT_TEMPLATE = () => {};
 const NOOP_OPEN_ATTACHMENT = (_attachment: ChatFileAttachment) => {};
@@ -578,6 +587,23 @@ const ConversationTimeline = memo(function ConversationTimeline({
   }
   const citationThreadRef = parseScopedThreadKey(routeThreadKey);
   const openPullRequest = useOpenPrLink(citationThreadRef ?? undefined);
+  const isDuetShell = useDuetShell();
+  const timelineThreadShell = useQuietThreadShell(citationThreadRef);
+  const parentThreadId = timelineThreadShell?.lineage.parentThreadId ?? null;
+  const captainThreadId =
+    citationThreadRef !== null && isCaptainThreadId(citationThreadRef.threadId)
+      ? citationThreadRef.threadId
+      : parentThreadId !== null && isCaptainThreadId(parentThreadId)
+        ? parentThreadId
+        : null;
+  const captainRef =
+    citationThreadRef !== null && captainThreadId !== null
+      ? scopeThreadRef(citationThreadRef.environmentId, captainThreadId)
+      : null;
+  const captainsQuery = useCaptains(captainRef?.environmentId ?? null);
+  const captain =
+    captainRef === null ? undefined : captainForThread(captainsQuery.data, captainRef.threadId);
+  const captainChildInputs = useChildThreadInputs(captainRef);
   const [minimapStripMap] = useState(() => new Map<string, HTMLSpanElement>());
   // The open history belongs to the prompt that opened it; sending closes it.
   const [workingHistoryKey, setWorkingHistoryKey] = useState<string | null>(null);
@@ -800,6 +826,41 @@ const ConversationTimeline = memo(function ConversationTimeline({
     activeFindEntryId,
     turnWorkFold,
   });
+  const duetChildThreads = captainChildInputs.filter(
+    (thread) =>
+      thread.archivedAt === null &&
+      thread.lineage.relationshipToParent === "subagent" &&
+      thread.lineage.parentThreadId === captainRef?.threadId,
+  );
+  const duetChildThreadIds = new Set(duetChildThreads.map((thread) => thread.id));
+  const duetChildThreadMap = new Map<ThreadId, EnvironmentThreadShell>(
+    duetChildThreads.map((thread) => [thread.id, thread]),
+  );
+  const duetThreadTitles = new Map<string, string>(
+    duetChildThreads.map((thread) => [`${thread.environmentId}\0${thread.id}`, thread.title]),
+  );
+  const duetPalette = captain ? captainPaletteOf(captain.avatar) : null;
+  const duetStream: DuetStreamContextValue = {
+    enabled: isDuetShell,
+    kind: captainRef === null ? "editorial" : "channel",
+    captainRef,
+    palette: duetPalette,
+    timestampDividers:
+      captainRef === null ? new Map<string, string>() : duetTimestampDividers(rows),
+    taskHeaders:
+      captainRef === null
+        ? new Map<string, ThreadId>()
+        : duetTaskHeaderByRowId(rows, captainRef, duetChildThreadIds),
+    childThreads: duetChildThreadMap,
+    threadTitles: duetThreadTitles,
+  };
+  const duetStreamAttributes = {
+    "data-duet-stream": duetStream.kind,
+    ...(duetStream.kind === "channel" && duetPalette !== null
+      ? { "data-duet-palette": duetPalette }
+      : {}),
+  };
+
   const revealFoldRows = (opening: boolean) =>
     setFoldRevealBaseIds(
       opening && !prefersReducedMotion ? new Set(rows.map((row) => row.id)) : null,
@@ -1853,21 +1914,18 @@ const ConversationTimeline = memo(function ConversationTimeline({
         {activityAnnouncer}
         <div
           className="h-full ps-(--chat-lane-inset-start) pe-(--chat-lane-inset-end)"
+          {...duetStreamAttributes}
           style={{ paddingBottom: emptyPlaceholderInset }}
         >
-          <Empty size="compact" className="h-full">
-            <EmptyMedia variant="icon">
-              <MessageSquareIcon />
-            </EmptyMedia>
-            <EmptyHeader>
-              <EmptyTitle>
-                <T>No messages yet</T>
-              </EmptyTitle>
-              <EmptyDescription>
-                <T>Send a message to start the conversation.</T>
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+            <ChatHeroMark />
+            <Text variant="display" render={<h2 />}>
+              <T>Start the conversation</T>
+            </Text>
+            <Text variant="body" tone="muted" render={<p />}>
+              <T>Ask anything, attach files, or pick up where you left off.</T>
+            </Text>
+          </div>
         </div>
       </>
     );
@@ -1888,85 +1946,88 @@ const ConversationTimeline = memo(function ConversationTimeline({
           />
         </Suspense>
       ) : null}
-      <MarkdownFindContext value={findActive}>
-        <TimelineWakeUpsRailInteractionCtx value={wakeUpsRailInteraction}>
-          <TimelineRowActivityCtx value={activityState}>
-            <TimelineApprovalCtx value={approvalState}>
-              <TooltipScrollDismissArea
-                ref={attachTimelineViewportElement}
-                className="relative -mt-[var(--timeline-top-inset,0px)] h-[calc(100%+var(--timeline-top-inset,0px))] min-h-0"
-                data-assistant-citation-viewport="true"
-                data-sidebar-slide-track="end"
-                data-pane-slide-track="lane"
-              >
-                {onCiteAssistantText && citationThreadRef ? (
-                  <AssistantSelectionToolbar
-                    viewport={timelineViewportElement}
-                    threadRef={citationThreadRef}
-                    onCite={onCiteAssistantText}
+      <DuetStreamContext value={duetStream}>
+        <MarkdownFindContext value={findActive}>
+          <TimelineWakeUpsRailInteractionCtx value={wakeUpsRailInteraction}>
+            <TimelineRowActivityCtx value={activityState}>
+              <TimelineApprovalCtx value={approvalState}>
+                <TooltipScrollDismissArea
+                  ref={attachTimelineViewportElement}
+                  className="relative -mt-[var(--timeline-top-inset,0px)] h-[calc(100%+var(--timeline-top-inset,0px))] min-h-0"
+                  {...duetStreamAttributes}
+                  data-assistant-citation-viewport="true"
+                  data-sidebar-slide-track="end"
+                  data-pane-slide-track="lane"
+                >
+                  {onCiteAssistantText && citationThreadRef ? (
+                    <AssistantSelectionToolbar
+                      viewport={timelineViewportElement}
+                      threadRef={citationThreadRef}
+                      onCite={onCiteAssistantText}
+                    />
+                  ) : null}
+                  <LegendList<MessagesTimelineRow>
+                    ref={setTimelineList}
+                    data={rows}
+                    extraData={listExtraData}
+                    keyExtractor={keyExtractor}
+                    getItemType={getItemType}
+                    renderItem={renderItem}
+                    estimatedItemSize={90}
+                    initialScrollAtEnd={
+                      !findActive && citationRequest === null && rememberedPosition?.atEnd !== false
+                    }
+                    // Legend needs a data refresh to mount new pins without a scroll event.
+                    dataVersion={`${readyCitationRequest?.key ?? listIdentityKey}:${alwaysRenderKeys.join(",")}`}
+                    {...(alwaysRender ? { alwaysRender } : {})}
+                    onLoad={handleListLoad}
+                    {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
+                    contentInsetEndAdjustment={anchoredEndSpace ? contentInsetEndAdjustment : 0}
+                    maintainScrollAtEnd={maintainScrollAtEnd}
+                    maintainVisibleContentPosition={
+                      findActive ||
+                      citationPositioning ||
+                      (restoringThreadPosition && rememberedPosition?.atEnd === false)
+                        ? false
+                        : maintainVisibleContentPosition
+                    }
+                    maintainScrollAtEndThreshold={1}
+                    immediateWebShrinks={workingHistoryCollapsing}
+                    onScroll={handleScroll}
+                    onItemSizeChanged={scheduleMinimapRefresh}
+                    onMetricsChange={scheduleMinimapRefresh}
+                    // Keyboard scrolling only moves the focused element; F6 and clicks land here.
+                    tabIndex={-1}
+                    data-workspace-focus-default
+                    className="messages-timeline-scroll scrollbar-gutter-both h-full min-h-0 scroll-pt-[var(--timeline-top-inset,0px)] overflow-x-hidden overscroll-y-contain [overflow-anchor:none]"
+                    ListHeaderComponent={listHeader}
+                    ListFooterComponent={timelineListFooter}
                   />
-                ) : null}
-                <LegendList<MessagesTimelineRow>
-                  ref={setTimelineList}
-                  data={rows}
-                  extraData={listExtraData}
-                  keyExtractor={keyExtractor}
-                  getItemType={getItemType}
-                  renderItem={renderItem}
-                  estimatedItemSize={90}
-                  initialScrollAtEnd={
-                    !findActive && citationRequest === null && rememberedPosition?.atEnd !== false
-                  }
-                  // Legend needs a data refresh to mount new pins without a scroll event.
-                  dataVersion={`${readyCitationRequest?.key ?? listIdentityKey}:${alwaysRenderKeys.join(",")}`}
-                  {...(alwaysRender ? { alwaysRender } : {})}
-                  onLoad={handleListLoad}
-                  {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
-                  contentInsetEndAdjustment={anchoredEndSpace ? contentInsetEndAdjustment : 0}
-                  maintainScrollAtEnd={maintainScrollAtEnd}
-                  maintainVisibleContentPosition={
-                    findActive ||
-                    citationPositioning ||
-                    (restoringThreadPosition && rememberedPosition?.atEnd === false)
-                      ? false
-                      : maintainVisibleContentPosition
-                  }
-                  maintainScrollAtEndThreshold={1}
-                  immediateWebShrinks={workingHistoryCollapsing}
-                  onScroll={handleScroll}
-                  onItemSizeChanged={scheduleMinimapRefresh}
-                  onMetricsChange={scheduleMinimapRefresh}
-                  // Keyboard scrolling only moves the focused element; F6 and clicks land here.
-                  tabIndex={-1}
-                  data-workspace-focus-default
-                  className="messages-timeline-scroll scrollbar-gutter-both h-full min-h-0 scroll-pt-[var(--timeline-top-inset,0px)] overflow-x-hidden overscroll-y-contain [overflow-anchor:none]"
-                  ListHeaderComponent={listHeader}
-                  ListFooterComponent={timelineListFooter}
-                />
-                <TimelineMinimap
-                  items={minimapItems}
-                  hasPersistentGutter={minimapHasPersistentGutter}
-                  hitStripWidth={minimapHitStripWidth}
-                  currentIndex={minimapCurrentIndex}
-                  atEnd={minimapAtEnd}
-                  stripMap={minimapStripMap}
-                  onWheel={forwardMinimapWheel}
-                  onSelect={(item) => {
-                    navigateTimeline();
-                    void listRef.current?.scrollToIndex({
-                      index: item.rowIndex,
-                      animated: !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-                      viewOffset:
-                        TIMELINE_MINIMAP_TARGET_OFFSET +
-                        readTimelineTopInset(listRef.current?.getScrollableNode()),
-                    });
-                  }}
-                />
-              </TooltipScrollDismissArea>
-            </TimelineApprovalCtx>
-          </TimelineRowActivityCtx>
-        </TimelineWakeUpsRailInteractionCtx>
-      </MarkdownFindContext>
+                  <TimelineMinimap
+                    items={minimapItems}
+                    hasPersistentGutter={minimapHasPersistentGutter}
+                    hitStripWidth={minimapHitStripWidth}
+                    currentIndex={minimapCurrentIndex}
+                    atEnd={minimapAtEnd}
+                    stripMap={minimapStripMap}
+                    onWheel={forwardMinimapWheel}
+                    onSelect={(item) => {
+                      navigateTimeline();
+                      void listRef.current?.scrollToIndex({
+                        index: item.rowIndex,
+                        animated: !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+                        viewOffset:
+                          TIMELINE_MINIMAP_TARGET_OFFSET +
+                          readTimelineTopInset(listRef.current?.getScrollableNode()),
+                      });
+                    }}
+                  />
+                </TooltipScrollDismissArea>
+              </TimelineApprovalCtx>
+            </TimelineRowActivityCtx>
+          </TimelineWakeUpsRailInteractionCtx>
+        </MarkdownFindContext>
+      </DuetStreamContext>
     </>
   );
 });
@@ -2074,6 +2135,8 @@ function getItemType(item: MessagesTimelineRow) {
 
 const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: TimelineRow }) {
   const wakeUpsRail = use(TimelineWakeUpsRailCtx).get(row.id);
+  const duetStream = use(DuetStreamContext);
+  const duetTimestamp = duetStream.enabled ? duetStream.timestampDividers.get(row.id) : undefined;
   const isExpandedToolGroup = row.kind === "work" && row.isExpandedToolGroup;
   const isWorkLogEvent =
     row.kind === "event" &&
@@ -2134,6 +2197,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       }
       data-message-role={row.kind === "message" ? row.message.role : undefined}
     >
+      {duetTimestamp !== undefined ? <DuetTimestampDivider createdAt={duetTimestamp} /> : null}
       {wakeUpsRail ? (
         <WakeUpsRail
           foldId={wakeUpsRail.foldId}
@@ -2188,6 +2252,25 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
     </div>
   );
 });
+
+function DuetTimestampDivider({ createdAt }: { createdAt: string }) {
+  const ctx = use(TimelineRowCtx);
+  const messages = useMessages();
+  const nowMinute = useNowMinute();
+  return (
+    <div
+      data-duet-timestamp-divider
+      className="my-6 text-center text-xs leading-none text-(--duet-meta)"
+    >
+      {formatDuetTimestampDivider(
+        createdAt,
+        ctx.timestampFormat,
+        Date.parse(`${nowMinute}Z`),
+        messages,
+      )}
+    </div>
+  );
+}
 
 function WakeUpsRail({
   foldId,

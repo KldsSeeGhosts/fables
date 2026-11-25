@@ -87,6 +87,7 @@ export function resolveChatCanvasModel({
   threadRef,
   preview,
   detailsCardInlineOpen,
+  detailsCardFloats = false,
 }: {
   measurements: ChatCanvasMeasurements;
   detailsCardMeasurement: DetailsCardMeasurement | null;
@@ -94,6 +95,8 @@ export function resolveChatCanvasModel({
   threadRef: ScopedThreadRef | null;
   preview: ChatCanvasPreview | null;
   detailsCardInlineOpen: boolean;
+  /** The card always floats as a header popover, leaving the canvas to the conversation. */
+  detailsCardFloats?: boolean;
 }) {
   const container = { width: measurements.width, height: measurements.height };
   const { findBar } = measurements;
@@ -101,13 +104,15 @@ export function resolveChatCanvasModel({
   const lane = { padding: measurements.padding, minChatWidth: measurements.minChatWidth };
   // The preview avoids where an open inline card would sit, whether or not a
   // preview overlap has pushed the card itself into popover mode.
-  const preferredDetailsCard = resolveThreadDetailsCardLayout({
-    container,
-    narrowestWidth: measurements.narrowestWidth ?? measurements.width,
-    lane,
-    frame: null,
-    topInset: detailsCardTopInset,
-  });
+  const preferredDetailsCard = detailsCardFloats
+    ? null
+    : resolveThreadDetailsCardLayout({
+        container,
+        narrowestWidth: measurements.narrowestWidth ?? measurements.width,
+        lane,
+        frame: null,
+        topInset: detailsCardTopInset,
+      });
   // The canvas outlives thread switches, so a measurement only counts for the
   // thread whose card is shown now.
   const detailsCardMeasured =
@@ -140,14 +145,16 @@ export function resolveChatCanvasModel({
     detailsCard,
     findBar,
   });
-  const detailsCardPlacement = resolveThreadDetailsCardLayout({
-    container,
-    narrowestWidth: measurements.narrowestWidth ?? measurements.width,
-    lane,
-    frame: layout.frame,
-    overlapsDetailsCard: layout.overlapsDetailsCard,
-    topInset: detailsCardTopInset,
-  });
+  const detailsCardPlacement = detailsCardFloats
+    ? null
+    : resolveThreadDetailsCardLayout({
+        container,
+        narrowestWidth: measurements.narrowestWidth ?? measurements.width,
+        lane,
+        frame: layout.frame,
+        overlapsDetailsCard: layout.overlapsDetailsCard,
+        topInset: detailsCardTopInset,
+      });
   const detailsCardMode: ThreadPanelPresentation = detailsCardPlacement ? "inline" : "popover";
   return {
     measurements,

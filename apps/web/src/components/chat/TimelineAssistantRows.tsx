@@ -28,6 +28,14 @@ import { cn } from "~/lib/utils";
 import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../timestampFormat";
 import { readThreadTurnItems } from "../../state/entities";
 import { useV2ItemSupport } from "../../state/v2ItemSupport";
+import {
+  extractDuetDocumentCards,
+  inlineDuetThreadLinks,
+  parseDuetInlineThreadHref,
+} from "./duetStream.logic";
+import { DuetStreamContext, DuetTaskContextHeader } from "./DuetTaskContextHeader";
+import { DuetDocumentCard } from "./DuetDocumentCard";
+import { useRightPanelStore } from "../../rightPanelStore";
 
 export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
@@ -38,13 +46,55 @@ export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind
     row.projectedItem?.item.id,
   );
   const text = liveText ?? row.message.text;
+  const duetStream = use(DuetStreamContext);
+  const duetChannel = duetStream.enabled && duetStream.kind === "channel";
+  const linkedText = duetChannel
+    ? inlineDuetThreadLinks(text, ctx.activeThreadEnvironmentId, duetStream.threadTitles)
+    : text;
+  const extracted = duetChannel
+    ? extractDuetDocumentCards(linkedText)
+    : { text: linkedText, documents: [] };
   const messageText =
-    text || (row.message.streaming || row.suppressEmptyResponse ? "" : gt("(empty response)"));
+    extracted.text ||
+    (row.message.streaming || row.suppressEmptyResponse || extracted.documents.length > 0
+      ? ""
+      : gt("(empty response)"));
   const textRef = useCarriedTextFade(row.message.id, Boolean(row.message.streaming));
+  const taskHeaderId = duetChannel ? duetStream.taskHeaders.get(row.id) : undefined;
+  const openInlineThread = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!duetChannel) return;
+    const target = event.target instanceof Element ? event.target.closest("a") : null;
+    const href = target?.getAttribute("href");
+    if (!href) return;
+    const ref = parseDuetInlineThreadHref(href);
+    if (ref === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (
+      duetStream.captainRef !== null &&
+      ref.environmentId === duetStream.captainRef.environmentId &&
+      duetStream.childThreads.has(ref.threadId)
+    ) {
+      useRightPanelStore.getState().openThread(duetStream.captainRef, ref.threadId);
+    } else {
+      ctx.onOpenThread(ref.threadId, ref.environmentId, "primary");
+    }
+  };
 
   return (
     <>
-      <div className="relative min-w-0 px-1 py-0.5">
+      {taskHeaderId !== undefined && duetStream.captainRef !== null ? (
+        <DuetTaskContextHeader captainRef={duetStream.captainRef} childThreadId={taskHeaderId} />
+      ) : null}
+      <div
+        className={cn(
+          "relative min-w-0",
+          // oxlint-disable-next-line shadcn/no-arbitrary-values -- V3 Duet assistant bubbles use the spec's exact 14px/1.55 copy metrics.
+          duetChannel ? "max-w-[28rem] px-3 py-2 text-sm leading-[1.55]" : "px-1 py-0.5",
+        )}
+        data-assistant-bubble={duetChannel ? "" : undefined}
+        onClickCapture={openInlineThread}
+      >
         <MessageAuthorHeading>T3 Code</MessageAuthorHeading>
         <div ref={textRef} data-thread-find-text="true">
           <AssistantCitationSource
@@ -74,6 +124,19 @@ export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind
             />
           </AssistantCitationSource>
         </div>
+        {extracted.documents.length > 0 ? (
+          <div className="mt-2 flex flex-col gap-2" data-thread-find-ignore>
+            {extracted.documents.map((document) => (
+              <DuetDocumentCard
+                key={document.key}
+                document={document}
+                captainRef={duetStream.captainRef}
+                threadRef={ctx.threadRef}
+                workspaceRoot={ctx.workspaceRoot}
+              />
+            ))}
+          </div>
+        ) : null}
         {!row.showAssistantMeta && row.projectedItem?.item.status === "interrupted" ? (
           <div className="mt-1.5 flex">
             <AssistantStatusBadge status="interrupted" />
@@ -313,6 +376,7 @@ function AssistantReplyButton({ message, itemId }: { message: ChatMessage; itemI
 
 function AssistantStatusBadge({ status }: { status: string }) {
   return (
+    // oxlint-disable-next-line t3code/no-raw-type-classes -- Pre-existing compact interrupted-badge typography.
     <span className="rounded-badge border border-transparent bg-badge-neutral px-1.5 py-0.5 font-mono text-3xs text-muted-foreground">
       {status}
     </span>
@@ -372,10 +436,14 @@ export function HtmlRenderTimelineRow({
   const onFullscreenChange = (fullscreen: boolean) => onAppFullscreenChange(row.id, fullscreen);
 
   if (ctx.renderHtmlRender) {
-    return <div className="min-w-0 px-1">{ctx.renderHtmlRender(row)}</div>;
+    return (
+      <div className="min-w-0 rounded-xl border border-transparent px-1 duet:border-(--duet-hairline)">
+        {ctx.renderHtmlRender(row)}
+      </div>
+    );
   }
   return (
-    <div className="min-w-0 px-1">
+    <div className="min-w-0 rounded-xl border border-transparent px-1 duet:border-(--duet-hairline)">
       <HtmlRenderFrame
         key={row.htmlRender.attachmentId}
         environmentId={ctx.activeThreadEnvironmentId}

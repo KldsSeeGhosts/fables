@@ -1,12 +1,14 @@
 /* Clerk injects its component styles into the clerk layer (clerkAppearance.cssLayerName). */
 @layer theme, base, clerk, components, utilities;
 @import "tailwindcss";
+@import "./themes/ksg-salon.css";
 
 /* Light, black chrome (html.black-chrome) renders [data-chrome-scope] surfaces
    dark inside the light appearance. The chrome selectors sit in :where() so
    the variants keep their original specificity against theme overrides. */
 @custom-variant dark (&:is(.dark, .dark *, :where(.black-chrome [data-chrome-scope], .black-chrome [data-chrome-scope] *)));
 @custom-variant light (&:not(.dark, .dark *):not(:where(.black-chrome [data-chrome-scope], .black-chrome [data-chrome-scope] *)));
+@custom-variant duet (&:where(html[data-theme-id="ksg-salon"] *));
 /* Window Controls Overlay: active when Electron exposes native titlebar control geometry. */
 @custom-variant wco (&:is(.wco, .wco *));
 /* The design system catalog sets data-focus-preview to show a control's focus
@@ -164,6 +166,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
      the prompt role, which fields use, stays at 16px or more so iOS does not
      zoom into a focused field. In rem, so the interface font-size preference
      scales them. */
+  --type-display-lg: 2.25rem;
+  --type-display: 1.75rem;
   --type-title: 1.5rem;
   --type-prompt: max(1rem, 16px);
   --type-label: 0.9375rem;
@@ -179,6 +183,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
 
   @variant sm {
     --workspace-gutter: 1.25rem;
+    --type-display-lg: 2rem;
+    --type-display: 1.625rem;
     --type-title: 1.375rem;
     --type-prompt: 0.875rem;
     --type-label: 0.875rem;
@@ -757,6 +763,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     -apple-system, BlinkMacSystemFont, "Inter Variable", "Segoe UI", system-ui, sans-serif;
   --font-mono:
     ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  /* Hero and page headings; themes may swap in a display face. */
+  --font-display: var(--font-sans);
 }
 
 @theme inline {
@@ -777,6 +785,12 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
      --type-* variables on :root, which step up on phones. Text color is
      separate: pick a text tier (strong, default, muted, dim). Render them
      through <Text>. */
+  --text-display-lg: var(--type-display-lg);
+  --text-display-lg--line-height: 1.15;
+  --text-display-lg--font-weight: 500;
+  --text-display: var(--type-display);
+  --text-display--line-height: 1.2;
+  --text-display--font-weight: 500;
   --text-title: var(--type-title);
   --text-title--line-height: 1.27;
   --text-title--font-weight: 600;
@@ -832,6 +846,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --color-warning-foreground: var(--warning-foreground);
   --color-warning: var(--warning);
   --color-warning-surface: var(--warning-surface);
+  /* The hairline around a request waiting on the user, such as a Captain's approval card. */
+  --color-approval-boundary: color-mix(in srgb, var(--warning) 40%, var(--border));
   --color-error-foreground: var(--error-foreground);
   --color-tool-error-icon: var(--tool-error-icon);
   --color-error: var(--error);
@@ -940,7 +956,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --radius-composer: calc(var(--radius-2xl) - 1px);
   --radius-composer-pill: calc(var(--radius-composer) - 8px);
   --radius-composer-pill-button: calc(var(--radius-composer-pill) - 1px);
-  --radius-thread-details: 20px;
+  --radius-thread-details: var(--thread-details-radius, 20px);
   --radius-project-icon: 9px;
   @keyframes skeleton {
     /* The single loading-bar breath used by every skeleton: one opacity pulse
@@ -3531,7 +3547,7 @@ html[data-theme-id] [data-chat-header] {
 }
 
 html[data-theme-id] [data-chat-header] [data-slot="button"],
-html[data-theme-id] [data-chat-header] [data-slot="menu-trigger"],
+html[data-theme-id] [data-chat-header] [data-slot="menu-trigger"]:not([data-duet-header-icon]),
 html[data-theme-id] [data-chat-header] [data-toolbar-control] {
   --control-icon-color: var(--contrast-toolbar-control-foreground);
   background-color: var(--toolbar-control);
@@ -6553,41 +6569,9 @@ body {
   word-spacing: 0.01px;
 }
 
+/* The actions sit on the toolbar row under the prompt, so the text keeps the full width. */
 .composer-prompt-body {
   grid-template-areas: "attachments" "prompt";
-  --composer-actions-gap: calc(var(--spacing) * 1.5);
-}
-
-.composer-prompt-body .composer-text::before {
-  content: "";
-  float: inline-end;
-  width: calc(var(--composer-actions-width, 100px) + var(--composer-actions-gap));
-  height: 1lh;
-}
-
-/* Past one line the actions drop to the bottom corner, so the text keeps their column clear
-   (the first line's width is unchanged); a float can't follow the last line there. */
-.composer-prompt-body[data-composer-multiline]
-  :is([data-composer-empty="false"] [data-testid="composer-editor"]),
-.composer-prompt-body[data-composer-multiline]
-  [data-composer-placeholder][data-composer-placeholder] {
-  padding-inline-end: calc(
-    var(--composer-actions-width, 100px) + var(--composer-actions-gap) + var(--spacing)
-  );
-}
-
-/* Separate from the rule above: a nested pseudo-element under a selector list compiles to
-   one :is() that every element tries. The repeated attribute keeps the list's specificity. */
-.composer-prompt-body[data-composer-multiline]
-  :is([data-composer-empty="false"] [data-testid="composer-editor"])::before,
-.composer-prompt-body[data-composer-multiline]
-  [data-composer-placeholder][data-composer-placeholder]::before {
-  display: none;
-}
-
-.composer-prompt-body[data-composer-overflow]
-  [data-testid="composer-editor"]::-webkit-scrollbar-track {
-  margin-bottom: calc(var(--composer-actions-height, 2rem) + var(--composer-actions-gap));
 }
 
 /* A suffix that would run under the actions or past the edge stays hidden, as text never wraps for it. */

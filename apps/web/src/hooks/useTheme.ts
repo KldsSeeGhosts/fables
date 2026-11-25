@@ -58,6 +58,8 @@ export const APPEARANCE_CHOICES: ReadonlyArray<{ choice: AppearanceChoice; label
 ];
 
 const STORAGE_KEY = "t3code:theme";
+// This branch boots into KSG Salon, following the OS appearance, until a theme is chosen.
+const UNSET_THEME_DEFAULT: Theme = "ksg-salon";
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
 const DEFAULT_THEME_SNAPSHOT: ThemeSnapshot = {
   theme: "system",
@@ -171,6 +173,7 @@ function readStoredFollowSystem(theme: Theme): boolean {
     const raw = window.localStorage.getItem(THEME_FOLLOW_SYSTEM_STORAGE_KEY);
     if (raw === "true") return true;
     if (raw === "false") return false;
+    if (window.localStorage.getItem(STORAGE_KEY) === null) return true;
   } catch {}
 
   return theme === "system";
@@ -217,6 +220,7 @@ export function readThemePreference(): Theme {
       cause,
     });
   }
+  if (raw === null && isKnownThemePreference(UNSET_THEME_DEFAULT)) return UNSET_THEME_DEFAULT;
   if (raw !== null && isKnownThemePreference(raw)) {
     return canonicalThemePreference(raw);
   }

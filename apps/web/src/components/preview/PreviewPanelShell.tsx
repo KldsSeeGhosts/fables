@@ -33,6 +33,8 @@ interface PreviewPanelShellProps {
   /** Use a distinct key per surface to keep remembered widths independent. */
   widthStorageKey?: string;
   defaultWidth?: number;
+  minWidth?: number;
+  maxWidth?: number;
   onMouseDown?: MouseEventHandler<HTMLDivElement>;
   onMouseUp?: MouseEventHandler<HTMLDivElement>;
   /**
@@ -65,6 +67,8 @@ function ResizablePreviewPanelShell(props: PreviewPanelShellProps) {
     enabled: props.mode === "inline" && !props.maximized,
     widthStorageKey: props.widthStorageKey,
     defaultWidth: props.defaultWidth,
+    minWidth: props.minWidth,
+    maxWidth: props.maxWidth,
   });
   return <PreviewPanelShellFrame {...props} inlineSize={inlineSize} />;
 }
@@ -187,12 +191,14 @@ function PreviewPanelShellFrame(
         pane
           ? cn(
               "[--preview-panel-gap:0px]",
-              open && !maximized && "md:ps-2 md:[--preview-panel-gap:0.5rem]",
+              open &&
+                !maximized &&
+                "md:ps-2 md:[--preview-panel-gap:0.5rem] duet:md:ps-0 duet:md:[--preview-panel-gap:0px]",
             )
           : // A sheet shows its popover surface, the lift the narrow sidebar sheet has.
             cn("[--preview-panel-gap:1px]", props.mode !== "sheet" && "bg-background"),
         isInline ? (maximized ? "flex-1" : "shrink-0") : "w-full",
-        isInline && !pane && !maximized && "border-l border-border",
+        isInline && !pane && !maximized && "border-l border-border duet:border-(--duet-hairline)",
         collapsible &&
           "[[data-panel-animations=true]_&]:transition-[width] [[data-panel-animations=true]_&]:duration-(--panel-animation-duration) [[data-panel-animations=true]_&]:ease-out",
         collapsible && open && "[[data-panel-animations=true]_&]:starting:w-0!",

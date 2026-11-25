@@ -20,7 +20,7 @@ import type {
 import { faviconUrlForOrigin } from "@t3tools/shared/favicon";
 import { surfaceTabTitle } from "../layout/surfaceTabLabels";
 import {
-  CompassIcon,
+  ListChecksIcon,
   FileDiff,
   Files,
   Globe2,
@@ -167,7 +167,7 @@ export function SurfaceIcon({
     case "thread":
       return <SideChatTabIcon environmentId={environmentId} threadId={surface.threadId} />;
     case "captain-brief":
-      return <CompassIcon className="size-3.5 shrink-0" />;
+      return <ListChecksIcon className="size-3.5 shrink-0" />;
     case "linked-thread":
       return <MessagesSquare className="size-3.5 shrink-0" />;
     case "device":

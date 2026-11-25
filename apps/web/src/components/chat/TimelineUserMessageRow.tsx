@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, t3code/no-raw-type-classes -- V3 Duet user bubbles use exact radii and line height inside the themed stream. */
 import { copySnapshot as copySnapshotToClipboard } from "./copySnapshot";
 import { InlineAudioPreview } from "../files/InlineAudioPreview";
 import { filePreviewKind } from "@t3tools/shared/filePreview";
@@ -98,6 +99,7 @@ import { useMediaQuery } from "~/hooks/useMediaQuery";
 import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../timestampFormat";
 import { WorkflowOpeningBlock } from "./WorkflowOpeningBlock";
 import { useTallEnoughToFold } from "./useTallEnoughToFold";
+import { DuetStreamContext } from "./DuetTaskContextHeader";
 import type { MessageResolver } from "~/i18n/messages";
 
 // Drawn inside the media so dark screenshots keep an edge on the dark background.
@@ -533,6 +535,9 @@ const USER_MESSAGE_ATTRIBUTION_CLASS_NAME = "text-2xs text-dim-foreground";
 
 function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
+  const duetStream = use(DuetStreamContext);
+  const duetChannel = duetStream.enabled && duetStream.kind === "channel";
+  const duetEditorial = duetStream.enabled && duetStream.kind === "editorial";
   const gt = useGT();
   const m = useMessages();
   const { onImageExpand, onFileOpen } = ctx;
@@ -1014,14 +1019,25 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
       ) : null}
       <div
         className={cn(
-          "relative min-w-0 max-w-[min(80%,32.5rem)] rounded-pane text-foreground",
-          (mediaAboveText || row.groupedWithPrevious || steerLabelAbove) && "rounded-tr-joined",
-          row.groupedWithNext && "rounded-br-joined",
+          "relative min-w-0 text-foreground",
+          duetChannel
+            ? "max-w-[28rem] rounded-[18px] px-3 py-2 text-sm leading-[1.55]"
+            : cn(
+                "max-w-[min(80%,32.5rem)] rounded-pane",
+                duetEditorial &&
+                  "max-w-[80%] rounded-2xl bg-(--duet-assistant-bubble) px-3.5 py-2.5 text-sm leading-[1.55]",
+              ),
+          !duetChannel &&
+            (mediaAboveText || row.groupedWithPrevious || steerLabelAbove) &&
+            "rounded-tr-joined",
+          !duetChannel && row.groupedWithNext && "rounded-br-joined",
+          duetChannel && (row.groupedWithPrevious || steerLabelAbove) && "rounded-tr-[4px]",
+          duetChannel && row.groupedWithNext && "rounded-br-[4px]",
           BUBBLE_CHIP_CLASS_NAME,
           userMessage.attribution === "guest"
             ? guestBubbleClassName(false)
             : !mediaOnly && !fileCardsOnly && !audioOnly && "surface-bubble",
-          !folded && !mediaOnly && !fileCardsOnly && !audioOnly && "px-3.5 py-2.5",
+          !duetChannel && !folded && !mediaOnly && !fileCardsOnly && !audioOnly && "px-3.5 py-2.5",
           folded && expanded && "w-full",
         )}
         data-user-message-bubble=""

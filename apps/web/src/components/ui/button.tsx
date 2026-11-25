@@ -27,6 +27,8 @@ const buttonVariants = cva(
         "icon-sm":
           "size-8 sm:size-7 [&_svg:not([class*='size-'])]:size-3.5 sm:[&_svg:not([class*='size-'])]:size-3.5",
         "icon-sm-pill": "size-8 rounded-full before:rounded-full sm:size-7",
+        /** A 32px round action, such as the composer's send and stop. */
+        "icon-pill": "size-8 rounded-full before:rounded-full",
         "icon-fixed-xs": "size-6 [&_svg:not([class*='size-'])]:size-3.5",
         "icon-xs":
           "size-7 sm:size-6 not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-4 sm:not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-3.5",
@@ -73,6 +75,9 @@ const buttonVariants = cva(
         "media-navigation":
           "[--control-icon-color:currentColor] absolute top-1/2 z-20 -translate-y-1/2 border-transparent text-white/90 [:hover,[data-pressed]]:bg-white/10 [:hover,[data-pressed]]:text-white focus-visible:outline-white",
         overlay: "border-transparent bg-black/70 text-white/65 [:hover,[data-pressed]]:bg-black/90",
+        // A quiet outlined pill for low-emphasis actions, such as hero suggestions.
+        "quiet-pill":
+          "h-7 rounded-full border-[var(--duet-hairline,var(--border))] bg-transparent px-3 text-[13px] font-normal text-[var(--duet-quiet-pill-foreground,var(--muted-foreground))] before:rounded-full sm:h-7 [:hover,[data-pressed]]:bg-[var(--duet-quiet-pill-hover-fill,var(--muted))] [:hover,[data-pressed]]:text-[var(--duet-quiet-pill-hover-foreground,var(--foreground))]",
         pill: "surface-neutral-pill text-foreground [:hover,[data-pressed]]:surface-raised-hover",
         // Secondary: the raised recipe.
         secondary:
@@ -108,6 +113,14 @@ const contentButtonVariants = cva("outline-none", {
         "flex h-6.5 w-full cursor-pointer items-center gap-2 rounded-row px-2 text-left hover:surface-ghost-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
       "inset-row-multiline":
         "flex min-h-6.5 w-full cursor-pointer items-center gap-2 rounded-row px-2 py-1 text-left hover:surface-ghost-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+      // Duet sidebar rows: an 8px-inset 32px row whose fill marks the open page.
+      "duet-row":
+        "flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md ps-2 pe-2 text-left text-label text-foreground select-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-[current=page]:bg-(--duet-row-active) aria-[current=page]:hover:bg-(--duet-row-active)",
+      // A 36px channel row around a 24px tile; the open channel takes its palette's wash.
+      "duet-channel":
+        "flex h-9 w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg ps-1.5 pe-2.5 text-left text-label text-foreground select-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-[current=page]:bg-(--duet-channel-selected,var(--duet-row-active)) aria-[current=page]:hover:bg-(--duet-channel-selected,var(--duet-row-active))",
+      "duet-row-quiet":
+        "flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md ps-2 pe-2 text-left text-label text-muted-foreground select-none hover:bg-sidebar-row-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
       transport:
         "flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-row text-white hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/70",
       "panel-row":
