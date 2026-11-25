@@ -12,6 +12,7 @@ const HANDOFF_HEADING = "## Handoff from the previous conversation";
 const HANDOFF_HEADING_PATTERN = /^## Handoff from the previous conversation[^\n]*/m;
 const NEXT_SECTION_PATTERN = /\n## /;
 const OMITTED_LINE = "- Additional handoff details were omitted to keep this section short.";
+const OPEN_LOOPS_OMITTED_LINE = "- Additional open loops were omitted to keep this section short.";
 // NOTES.md is freeform; the marker keeps replacement from treating unheaded notes as handoff body.
 const HANDOFF_END_MARKER = "<!-- end captain handoff -->";
 // Only a marker on its own line ends the section; a quoted message that mentions it stays body text.
@@ -60,8 +61,8 @@ const quoteBlock = (text: string, length: number) => {
     .join("\n");
 };
 
-const capSection = (section: string, endMarker: string) => {
-  const footer = endMarker === "" ? OMITTED_LINE : `${OMITTED_LINE}\n\n${endMarker}`;
+const capSection = (section: string, endMarker: string, omittedLine: string) => {
+  const footer = endMarker === "" ? omittedLine : `${omittedLine}\n\n${endMarker}`;
   const budget = CAPTAIN_HANDOFF_MAX_LENGTH - footer.length - 1;
   const lineEnd = section.lastIndexOf("\n", budget);
   const end = lineEnd > 0 ? lineEnd : budget;
@@ -77,10 +78,6 @@ const openLoopParts = (facts: CaptainOpenLoops) => {
     const progress = truncate(firstLine(task.progress ?? ""), 120);
     return `- ${title} [${id}] (${singleLine(task.status)}, follow: ${followId})${progress === "" ? "" : `: ${progress}`}`;
   });
-  if (activeTasks.length > 0) {
-    parts.push(`### Active delegated tasks\n${activeTasks.join("\n")}`);
-  }
-
   const pendingRequests = facts.pendingRequests.map((request) => {
     const kind = request.kind === "user_input" ? "user input" : `${request.kind} approval`;
     const threadId = truncate(singleLine(request.threadId), 120);
@@ -90,6 +87,9 @@ const openLoopParts = (facts: CaptainOpenLoops) => {
   });
   if (pendingRequests.length > 0) {
     parts.push(`### Waiting on the user\n${pendingRequests.join("\n")}`);
+  }
+  if (activeTasks.length > 0) {
+    parts.push(`### Active delegated tasks\n${activeTasks.join("\n")}`);
   }
   return parts;
 };
@@ -101,6 +101,7 @@ const formatLoopSection = (input: {
   readonly lastUserMessage?: string | undefined;
   readonly lastAssistantMessage?: string | undefined;
   readonly scheduledTaskCount?: number | undefined;
+  readonly omittedLine?: string;
 }) => {
   const parts = [input.heading, ...openLoopParts(input.facts)];
   const lastUserMessage = quoteBlock(input.lastUserMessage ?? "", 500);
@@ -126,7 +127,7 @@ const formatLoopSection = (input: {
   if (body.length + suffix.length <= CAPTAIN_HANDOFF_MAX_LENGTH) {
     return `${body}${suffix}`;
   }
-  return capSection(body, endMarker);
+  return capSection(body, endMarker, input.omittedLine ?? OMITTED_LINE);
 };
 
 export const formatCaptainHandoff = (facts: CaptainHandoffFacts) =>
@@ -145,6 +146,7 @@ export const formatCaptainCompactionOpenLoops = (facts: CaptainOpenLoops) =>
     : formatLoopSection({
         heading: "## This conversation was just compacted: open loops",
         facts,
+        omittedLine: OPEN_LOOPS_OMITTED_LINE,
       });
 
 export const splitCaptainHandoffSection = (content: string) => {
