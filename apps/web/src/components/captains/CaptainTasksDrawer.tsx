@@ -380,7 +380,7 @@ export function CaptainTasksDrawer({
           <DrawerHeader title={gt("Tasks")} onClose={onClose} addSurfaceButton={addSurfaceButton} />
         )}
         <DrawerEmpty>
-          {captains.isPending ? (
+          {captains.data == null && captains.error === null ? (
             isDuet ? (
               <T>Loading Duet…</T>
             ) : (

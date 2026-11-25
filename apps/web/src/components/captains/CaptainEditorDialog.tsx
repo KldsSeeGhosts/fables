@@ -455,10 +455,11 @@ function CaptainMemorySection({
   readonly onClose: () => void;
 }) {
   const details = useCaptains(environmentId, captain.id);
-  if (details.isPending || details.data == null) {
+  // captainsLive never completes, so `isPending` stays true after the first snapshot arrives.
+  if (details.data == null) {
     return (
       <p className="text-body text-muted-foreground">
-        <T>Loading memory…</T>
+        {details.error === null ? <T>Loading memory…</T> : <T>Memory could not be loaded.</T>}
       </p>
     );
   }
