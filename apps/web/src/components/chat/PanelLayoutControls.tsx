@@ -181,6 +181,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
 
   if (mobileSidebarSheetMounted) return null;
 
+  const captainScopeCount = captain?.scopedProjectIds.length ?? 0;
   const captainScopedProjects = captain
     ? projects.filter(
         (project) =>
@@ -188,13 +189,15 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
           captain.scopedProjectIds.includes(project.id),
       )
     : [];
-  const scopedProject = captainScopedProjects.length === 1 ? captainScopedProjects[0] : null;
+  const scopedProject = captainScopeCount === 1 ? (captainScopedProjects[0] ?? null) : null;
   const attachedProject = project !== null && !project.isScratch ? project : null;
-  const pillProject = duet ? (attachedProject ?? scopedProject) : null;
+  const pillProject = captain ? scopedProject : duet ? attachedProject : null;
   const captainScopeLabel =
-    captainScopedProjects.length > 1
-      ? gt("{count} projects", { count: captainScopedProjects.length })
-      : gt("No scope");
+    captainScopeCount > 1
+      ? gt("{count} projects", { count: captainScopeCount })
+      : captainScopeCount === 0
+        ? gt("All workspace")
+        : gt("1 project");
   const pillBranchLabel = captain
     ? (pillProject?.title ?? captainScopeLabel)
     : (pillProject?.title ?? branchLabel);
