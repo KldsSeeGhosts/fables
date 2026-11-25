@@ -18,6 +18,7 @@ const HANDOFF_END_MARKER = "<!-- end captain handoff -->";
 const HANDOFF_END_MARKER_LINE = /^<!-- end captain handoff -->$/m;
 
 export interface CaptainHandoffTask {
+  readonly id: string;
   readonly title: string;
   readonly status: string;
   readonly progress?: string | undefined;
@@ -31,10 +32,13 @@ export interface CaptainHandoffRequest {
   readonly detail?: string | undefined;
 }
 
-export interface CaptainHandoffFacts {
-  readonly generatedAt: string;
+export interface CaptainOpenLoops {
   readonly activeTasks: ReadonlyArray<CaptainHandoffTask>;
   readonly pendingRequests: ReadonlyArray<CaptainHandoffRequest>;
+}
+
+export interface CaptainHandoffFacts extends CaptainOpenLoops {
+  readonly generatedAt: string;
   readonly lastUserMessage?: string | undefined;
   readonly lastAssistantMessage?: string | undefined;
   readonly scheduledTaskCount?: number | undefined;
@@ -56,21 +60,22 @@ const quoteBlock = (text: string, length: number) => {
     .join("\n");
 };
 
-const capHandoff = (section: string) => {
-  const budget = CAPTAIN_HANDOFF_MAX_LENGTH - OMITTED_LINE.length - HANDOFF_END_MARKER.length - 3;
+const capSection = (section: string, endMarker: string) => {
+  const footer = endMarker === "" ? OMITTED_LINE : `${OMITTED_LINE}\n\n${endMarker}`;
+  const budget = CAPTAIN_HANDOFF_MAX_LENGTH - footer.length - 1;
   const lineEnd = section.lastIndexOf("\n", budget);
   const end = lineEnd > 0 ? lineEnd : budget;
-  return `${section.slice(0, end).trimEnd()}\n${OMITTED_LINE}\n\n${HANDOFF_END_MARKER}`;
+  return `${section.slice(0, end).trimEnd()}\n${footer}`;
 };
 
-export const formatCaptainHandoff = (facts: CaptainHandoffFacts) => {
-  const parts = [`${HANDOFF_HEADING} (${facts.generatedAt})`];
-
+const openLoopParts = (facts: CaptainOpenLoops) => {
+  const parts: string[] = [];
   const activeTasks = facts.activeTasks.map((task) => {
     const title = truncate(singleLine(task.title) || singleLine(task.followId), 90);
+    const id = truncate(singleLine(task.id), 120);
     const followId = truncate(singleLine(task.followId), 120);
     const progress = truncate(firstLine(task.progress ?? ""), 120);
-    return `- ${title} (${singleLine(task.status)}, follow: ${followId})${progress === "" ? "" : `: ${progress}`}`;
+    return `- ${title} [${id}] (${singleLine(task.status)}, follow: ${followId})${progress === "" ? "" : `: ${progress}`}`;
   });
   if (activeTasks.length > 0) {
     parts.push(`### Active delegated tasks\n${activeTasks.join("\n")}`);
@@ -86,34 +91,65 @@ export const formatCaptainHandoff = (facts: CaptainHandoffFacts) => {
   if (pendingRequests.length > 0) {
     parts.push(`### Waiting on the user\n${pendingRequests.join("\n")}`);
   }
+  return parts;
+};
 
-  const lastUserMessage = quoteBlock(facts.lastUserMessage ?? "", 500);
+const formatLoopSection = (input: {
+  readonly heading: string;
+  readonly facts: CaptainOpenLoops;
+  readonly endMarker?: string;
+  readonly lastUserMessage?: string | undefined;
+  readonly lastAssistantMessage?: string | undefined;
+  readonly scheduledTaskCount?: number | undefined;
+}) => {
+  const parts = [input.heading, ...openLoopParts(input.facts)];
+  const lastUserMessage = quoteBlock(input.lastUserMessage ?? "", 500);
   if (lastUserMessage !== "") {
     parts.push(`### Last user message\n${lastUserMessage}`);
   }
 
-  const lastAssistantMessage = quoteBlock(facts.lastAssistantMessage ?? "", 1_000);
+  const lastAssistantMessage = quoteBlock(input.lastAssistantMessage ?? "", 1_000);
   if (lastAssistantMessage !== "") {
     parts.push(`### Captain's last reply\n${lastAssistantMessage}`);
   }
 
-  const scheduledTaskCount = facts.scheduledTaskCount ?? 0;
+  const scheduledTaskCount = input.scheduledTaskCount ?? 0;
   if (scheduledTaskCount > 0) {
     parts.push(
       `### Scheduled tasks\n- ${scheduledTaskCount} scheduled ${scheduledTaskCount === 1 ? "task" : "tasks"} moved to the new conversation.`,
     );
   }
 
+  const endMarker = input.endMarker ?? "";
+  const suffix = endMarker === "" ? "" : `\n\n${endMarker}`;
   const body = parts.join("\n\n");
-  if (body.length + HANDOFF_END_MARKER.length + 2 <= CAPTAIN_HANDOFF_MAX_LENGTH) {
-    return `${body}\n\n${HANDOFF_END_MARKER}`;
+  if (body.length + suffix.length <= CAPTAIN_HANDOFF_MAX_LENGTH) {
+    return `${body}${suffix}`;
   }
-  return capHandoff(body);
+  return capSection(body, endMarker);
 };
 
-const removeEarlierHandoff = (content: string) => {
+export const formatCaptainHandoff = (facts: CaptainHandoffFacts) =>
+  formatLoopSection({
+    heading: `${HANDOFF_HEADING} (${facts.generatedAt})`,
+    facts,
+    endMarker: HANDOFF_END_MARKER,
+    lastUserMessage: facts.lastUserMessage,
+    lastAssistantMessage: facts.lastAssistantMessage,
+    scheduledTaskCount: facts.scheduledTaskCount,
+  });
+
+export const formatCaptainCompactionOpenLoops = (facts: CaptainOpenLoops) =>
+  facts.activeTasks.length === 0 && facts.pendingRequests.length === 0
+    ? ""
+    : formatLoopSection({
+        heading: "## This conversation was just compacted: open loops",
+        facts,
+      });
+
+export const splitCaptainHandoffSection = (content: string) => {
   const match = HANDOFF_HEADING_PATTERN.exec(content);
-  if (match?.index === undefined) return content;
+  if (match?.index === undefined) return { handoff: "", rest: content };
   const afterHeading = match.index + match[0].length;
   const remainder = content.slice(afterHeading);
   const marker = HANDOFF_END_MARKER_LINE.exec(remainder)?.index ?? -1;
@@ -125,8 +161,13 @@ const removeEarlierHandoff = (content: string) => {
   } else {
     end = nextSection === -1 ? content.length : afterHeading + nextSection + 1;
   }
-  return content.slice(0, match.index) + content.slice(end);
+  return {
+    handoff: content.slice(match.index, end).trimEnd(),
+    rest: content.slice(0, match.index) + content.slice(end),
+  };
 };
+
+const removeEarlierHandoff = (content: string) => splitCaptainHandoffSection(content).rest;
 
 /**
  * Puts the new handoff first and drops any earlier one. The user's own notes are never cut, so a
@@ -141,15 +182,15 @@ export const upsertCaptainHandoffSection = (content: string, section: string) =>
     : { content: rest, included: false };
 };
 
-/** Reads the open loops of a Captain conversation before a reset moves its scheduled tasks. */
-export const prepare = Effect.fn("CaptainHandoff.prepare")(function* (input: {
+/** Reads active crew and unanswered requests across a Captain's current and earlier conversations. */
+export const readOpenLoops = Effect.fn("CaptainHandoff.readOpenLoops")(function* (input: {
   readonly captain: Captain;
-  readonly previousThreadId: ThreadId;
+  readonly threadId: ThreadId;
 }) {
-  const { captain, previousThreadId } = input;
+  const { captain, threadId } = input;
   const sql = yield* SqlClient.SqlClient;
-  // Work started in an earlier conversation can still be running; its handoff line would be lost.
-  const conversationIds = [previousThreadId, ...captain.earlierThreadIds];
+  // Work started in an earlier conversation can still be running; its line would otherwise be lost.
+  const conversationIds = [threadId, ...captain.earlierThreadIds];
 
   const activeTaskRows = yield* sql<{
     readonly id: string;
@@ -200,6 +241,33 @@ export const prepare = Effect.fn("CaptainHandoff.prepare")(function* (input: {
     ORDER BY requests.created_at, requests.runtime_request_id
   `;
 
+  return {
+    activeTasks: activeTaskRows.map((row) => ({
+      id: row.id,
+      title: row.title ?? row.id,
+      status: row.status,
+      progress: row.progress ?? undefined,
+      followId: row.childThreadId ?? row.remoteLabel ?? row.id,
+    })),
+    pendingRequests: pendingRequestRows.map((row) => ({
+      kind: row.kind,
+      threadId: row.threadId,
+      requestId: row.id,
+      detail: row.detail ?? undefined,
+    })),
+  } satisfies CaptainOpenLoops;
+});
+
+/** Reads the open loops of a Captain conversation before a reset moves its scheduled tasks. */
+export const prepare = Effect.fn("CaptainHandoff.prepare")(function* (input: {
+  readonly captain: Captain;
+  readonly previousThreadId: ThreadId;
+}) {
+  const { captain, previousThreadId } = input;
+  const sql = yield* SqlClient.SqlClient;
+  const openLoops = yield* readOpenLoops({ captain, threadId: previousThreadId }).pipe(
+    Effect.provideService(SqlClient.SqlClient, sql),
+  );
   const [lastUserRow] = yield* sql<{ readonly text: string | null }>`
     SELECT substr(json_extract(payload_json, '$.text'), 1, 501) AS text
     FROM orchestration_v2_projection_messages
@@ -218,18 +286,7 @@ export const prepare = Effect.fn("CaptainHandoff.prepare")(function* (input: {
 
   return formatCaptainHandoff({
     generatedAt: DateTime.formatIso(yield* DateTime.now),
-    activeTasks: activeTaskRows.map((row) => ({
-      title: row.title ?? row.id,
-      status: row.status,
-      progress: row.progress ?? undefined,
-      followId: row.childThreadId ?? row.remoteLabel ?? row.id,
-    })),
-    pendingRequests: pendingRequestRows.map((row) => ({
-      kind: row.kind,
-      threadId: row.threadId,
-      requestId: row.id,
-      detail: row.detail ?? undefined,
-    })),
+    ...openLoops,
     lastUserMessage: lastUserRow?.text ?? undefined,
     lastAssistantMessage: lastAssistantRow?.text ?? undefined,
     scheduledTaskCount: scheduledTasks?.count ?? 0,

@@ -15,6 +15,7 @@ describe("formatCaptainHandoff", () => {
       generatedAt,
       activeTasks: [
         {
+          id: "task-1",
           title: "Review the migration",
           status: "running",
           progress: "Checking projection rows\nimplementation detail",
@@ -43,7 +44,7 @@ describe("formatCaptainHandoff", () => {
     expect(section).toBe(
       `## Handoff from the previous conversation (${generatedAt})\n\n` +
         "### Active delegated tasks\n" +
-        "- Review the migration (running, follow: thread:child): Checking projection rows\n\n" +
+        "- Review the migration [task-1] (running, follow: thread:child): Checking projection rows\n\n" +
         "### Waiting on the user\n" +
         "- user input on thread:child: Which migration should ship? [request: request-1]\n" +
         "- command approval on captain:maria:0: Run the test suite [request: request-2]\n\n" +
@@ -84,6 +85,7 @@ describe("formatCaptainHandoff", () => {
     const section = formatCaptainHandoff({
       generatedAt,
       activeTasks: Array.from({ length: 12 }, (_, index) => ({
+        id: `task-${index}`,
         title: `Task ${index} ${"title".repeat(30)}`,
         status: "running",
         progress: "progress".repeat(30),

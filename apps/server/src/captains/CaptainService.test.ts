@@ -52,6 +52,7 @@ const input = {
 
 const fixture = ({ scratchUnavailable = false } = {}) => {
   const launches = new Map<ThreadId, ThreadLaunchInput>();
+  const shellOverrides = new Map<ThreadId, Partial<OrchestrationV2ThreadShell>>();
   let failRebind = false;
   let listInvalidations = 0;
   const dependencies = Layer.mergeAll(
@@ -65,7 +66,14 @@ const fixture = ({ scratchUnavailable = false } = {}) => {
     }),
     Layer.mock(ThreadManagement.ThreadManagementService)({
       getThreadShell: (id) =>
-        Effect.succeed((launches.get(id) as OrchestrationV2ThreadShell | undefined) ?? null),
+        Effect.succeed(
+          launches.has(id)
+            ? ({
+                ...launches.get(id),
+                ...shellOverrides.get(id),
+              } as OrchestrationV2ThreadShell)
+            : null,
+        ),
     }),
     Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
       namedProjectsRoot: "/unused",
@@ -114,6 +122,9 @@ const fixture = ({ scratchUnavailable = false } = {}) => {
       failRebind = false;
     },
     invalidations: () => listInvalidations,
+    overrideShell: (threadId: ThreadId, shell: Partial<OrchestrationV2ThreadShell>) => {
+      shellOverrides.set(threadId, shell);
+    },
   };
 };
 
@@ -270,6 +281,47 @@ it.effect(
     }),
 );
 
+it.effect("refuses reset while a turn runs or a request is pending", () =>
+  Effect.gen(function* () {
+    const f = fixture();
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainService.CaptainService;
+      const runningCaptain = yield* service.create(input);
+      const reset = {
+        captainId: runningCaptain.id,
+        expectedThreadId: runningCaptain.primaryThreadId,
+      };
+      f.overrideShell(runningCaptain.primaryThreadId, {
+        activeRunId: "run:busy" as never,
+        activityRunStatus: "running",
+      });
+      const runningFailure = yield* Effect.flip(service.resetConversation(reset));
+      assert.equal(runningFailure.code, "invalid_request");
+      assert.include(runningFailure.message, "still working");
+
+      const askingCaptain = yield* service.create({
+        ...input,
+        captainId: CaptainId.make("asking"),
+      });
+      f.overrideShell(askingCaptain.primaryThreadId, {
+        pendingRuntimeRequest: {
+          id: "request:approval" as never,
+          kind: "user_input",
+          createdAt: DateTime.makeUnsafe("2026-11-24T12:00:00.000Z"),
+        },
+      });
+      const requestFailure = yield* Effect.flip(
+        service.resetConversation({
+          captainId: askingCaptain.id,
+          expectedThreadId: askingCaptain.primaryThreadId,
+        }),
+      );
+      assert.equal(requestFailure.code, "invalid_request");
+      assert.include(requestFailure.message, "approval or input");
+    }).pipe(Effect.provide(f.layer));
+  }),
+);
+
 it.effect("writes a reset handoff and still resets when the handoff write fails", () =>
   Effect.gen(function* () {
     const f = fixture();
@@ -334,7 +386,7 @@ it.effect("writes a reset handoff and still resets when the handoff write fails"
       assert.include(notes.content, "### Active delegated tasks");
       assert.include(
         notes.content,
-        "- Review the migration (running, follow: thread:child): Checking projection rows",
+        "- Review the migration [task-1] (running, follow: thread:child): Checking projection rows",
       );
       assert.include(notes.content, "### Waiting on the user");
       assert.include(
@@ -352,7 +404,7 @@ it.effect("writes a reset handoff and still resets when the handoff write fails"
       const carried = yield* store.document(again, "NOTES.md");
       assert.include(
         carried.content,
-        "- Review the migration (running, follow: thread:child): Checking projection rows",
+        "- Review the migration [task-1] (running, follow: thread:child): Checking projection rows",
       );
       assert.include(carried.content, "- command approval on thread:child");
       assert.equal(
@@ -506,6 +558,7 @@ it.effect(
       const { layer } = fixture();
       yield* Effect.gen(function* () {
         const service = yield* CaptainService.CaptainService;
+        const sql = yield* SqlClient.SqlClient;
         const captain = yield* service.create({
           ...input,
           scopedProjectIds: [project],
@@ -571,6 +624,38 @@ it.effect(
         const second = yield* readContext(primaryThread, delivery);
         assert.notInclude(second.text, "Always mention this");
         assert.include(second.text, "unchanged since they were last given");
+        const compactingDelivery = { providerThreadId: "compacting-session", usedTokens: 2_000 };
+        const uncompacted = yield* readContext(primaryThread, compactingDelivery);
+        yield* uncompacted.delivered;
+        yield* sql`
+          INSERT INTO orchestration_v2_projection_subagents (
+            subagent_id, thread_id, parent_node_id, provider, origin, status,
+            child_thread_id, started_at, updated_at, payload_json
+          ) VALUES ('open-loop-task', ${captain.primaryThreadId}, 'node', 'codex', 'app_owned', 'running',
+            'thread:open-loop-child', '2026-11-24T10:00:00.000Z', '2026-11-24T10:00:00.000Z',
+            ${JSON.stringify({ title: "Open loop" })})
+        `;
+        yield* sql`
+          UPDATE captains SET earlier_thread_ids = ${JSON.stringify(["captain:maria:legacy"])}
+          WHERE id = ${captain.id}
+        `;
+        yield* sql`
+          INSERT INTO orchestration_v2_projection_subagents (
+            subagent_id, thread_id, parent_node_id, provider, origin, status,
+            child_thread_id, started_at, updated_at, payload_json
+          ) VALUES ('earlier-open-loop-task', 'captain:maria:legacy', 'node', 'codex', 'app_owned', 'waiting',
+            'thread:earlier-open-loop-child', '2026-11-24T10:00:00.000Z', '2026-11-24T10:00:00.000Z',
+            ${JSON.stringify({ title: "Earlier open loop" })})
+        `;
+        const compacted = yield* readContext(primaryThread, {
+          ...compactingDelivery,
+          usedTokens: 900,
+        });
+        assert.include(compacted.text, "conversation was just compacted: open loops");
+        assert.include(compacted.text, "[open-loop-task]");
+        assert.include(compacted.text, "follow: thread:open-loop-child");
+        assert.include(compacted.text, "[earlier-open-loop-task]");
+
         yield* service.updateDocument({
           captainId: captain.id,
           name: "NOTES.md",

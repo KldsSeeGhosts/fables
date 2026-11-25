@@ -165,6 +165,28 @@ const make = Effect.gen(function* () {
     mutations.withPermits(1),
   );
 
+  const requireQuietConversation = Effect.fn("CaptainService.requireQuietConversation")(function* (
+    threadId: ThreadId,
+  ) {
+    const thread = yield* threads
+      .getThreadShell(threadId)
+      .pipe(Effect.catch(CaptainStore.captainUnavailable));
+    if (thread === null) return yield* invalid("The Captain's previous thread could not be found.");
+    if (thread.activeRunId != null || thread.activityRunStatus != null)
+      return yield* invalid(
+        "The Captain is still working. Wait for the current turn to finish before resetting.",
+      );
+    if (
+      thread.pendingRuntimeRequest != null &&
+      thread.pendingRuntimeRequest.kind !== "dynamic_tool_call" &&
+      thread.pendingRuntimeRequest.kind !== "auth_refresh"
+    )
+      return yield* invalid(
+        "The Captain is waiting for approval or input. Answer or dismiss it before resetting.",
+      );
+    return thread;
+  });
+
   const resetConversation = Effect.fn("CaptainService.resetConversation")(
     function* (input: CaptainResetInput) {
       const current = yield* store.requireCaptain(input.captainId);
@@ -178,11 +200,7 @@ const make = Effect.gen(function* () {
       }
       if (current.archivedAt !== null)
         return yield* invalid("Restore the Captain before resetting it.");
-      const previous = yield* threads
-        .getThreadShell(previousId)
-        .pipe(Effect.catch(CaptainStore.captainUnavailable));
-      if (previous === null)
-        return yield* invalid("The Captain's previous thread could not be found.");
+      const previous = yield* requireQuietConversation(previousId);
       // Read before the reset moves scheduled tasks; NOTES.md changes only once the reset commits.
       const handoff = yield* CaptainHandoff.prepare({
         captain: current,
