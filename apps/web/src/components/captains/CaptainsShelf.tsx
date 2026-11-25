@@ -394,7 +394,7 @@ function DuetChannelRow({
           </ThreadHoverCard>
         </ThreadHoverCardPopup>
       </Tooltip>
-      <div className="absolute end-1.5 top-1/2 shrink-0 -translate-y-1/2 opacity-0 transition-opacity duration-120 group-focus-within/captain-row:opacity-100 group-hover/captain-row:opacity-100">
+      <div className="absolute end-1.5 top-[15px] shrink-0 -translate-y-1/2 opacity-0 transition-opacity duration-120 group-focus-within/captain-row:opacity-100 group-hover/captain-row:opacity-100">
         {menu}
       </div>
       {children}
