@@ -59,7 +59,7 @@ function findTreeRow(path: string): HTMLElement | null {
 }
 
 describe("FileBrowserPanel open in browser", () => {
-  it("offers Open in browser for an HTML file and opens it through the local file-manager path", async () => {
+  it("offers Open in default browser for an HTML file and opens it through the local file-manager path", async () => {
     state.openInEditor.mockReset().mockResolvedValue(AsyncResult.success(undefined));
     const environmentId = EnvironmentId.make("env-files");
     await using _screen = await render(
@@ -84,7 +84,7 @@ describe("FileBrowserPanel open in browser", () => {
         button: 2,
       }),
     );
-    const action = page.getByRole("menuitem", { name: "Open in browser", exact: true });
+    const action = page.getByRole("menuitem", { name: "Open in default browser", exact: true });
     await expect.element(action).toBeVisible();
     await userEvent.click(action);
 

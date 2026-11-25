@@ -1908,7 +1908,9 @@ export default function FilePreviewPanel({
                     {canOpenInDefaultBrowser ? (
                       <MenuItem onClick={handleOpenInDefaultBrowser}>
                         <Globe2 aria-hidden />
-                        <T context="verb, opens a file in the default browser">Open in browser</T>
+                        <T context="verb, opens a file in the default browser">
+                          Open in default browser
+                        </T>
                       </MenuItem>
                     ) : null}
                     {canOpenInBrowser ? (

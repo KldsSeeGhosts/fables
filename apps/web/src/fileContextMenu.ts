@@ -78,7 +78,7 @@ function buildFileContextMenuItems(input: {
     items.push({
       id: "open-in-browser",
       label: input.resolve(
-        msg("Open in browser", { $context: "verb, opens a file in the default browser" }),
+        msg("Open in default browser", { $context: "verb, opens a file in the default browser" }),
       ),
       icon: "globe",
     });

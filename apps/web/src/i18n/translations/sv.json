@@ -1345,7 +1345,7 @@
   "67fd3c00f56c013d": "Cannot open {targetPath} because no environment is selected.",
   "f683a9f4ff08d092": "No available editor can open {targetPath} in environment {environmentId}.",
   "a9b663922945a4fa": "This connection cannot open an editor on this environment.",
-  "a449be3f25edbdf6": "Open in browser",
+  "860b40564e75bb75": "Open in default browser",
   "868596d482a1a2bd": "Open",
   "f58caaa68c09fbeb": "Open with",
   "415d9fed5542d278": "Could not open file",
@@ -6486,7 +6486,7 @@
   "50a561aaef2bb096": "Copy contents",
   "ec90f7608f23a2ca": "Full screen",
   "f1663f79f31c0449": "Word wrap",
-  "4735ce8abf6b2e28": "Open in browser",
+  "8f253e83f2dbae2d": "Open in default browser",
   "a932d350590f4fb5": "Open file in preview browser",
   "94e68b57b9d38925": "Read-only connection. Unsaved edits are kept until write access returns.",
   "944f4dc367eea775": [

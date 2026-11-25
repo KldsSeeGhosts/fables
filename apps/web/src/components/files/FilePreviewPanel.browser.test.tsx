@@ -735,7 +735,9 @@ describe("open file in browser", () => {
     await using screen = await render(filePreview("page.html"));
 
     await userEvent.click(screen.getByRole("button", { name: "More file actions" }));
-    await userEvent.click(page.getByRole("menuitem", { name: "Open in browser", exact: true }));
+    await userEvent.click(
+      page.getByRole("menuitem", { name: "Open in default browser", exact: true }),
+    );
 
     await vi.waitFor(() =>
       expect(state.writeFile).toHaveBeenCalledWith({
