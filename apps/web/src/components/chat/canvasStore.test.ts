@@ -45,19 +45,6 @@ describe("chat canvas model", () => {
     expect(resolve(1400, 900)).toBe("popover");
   });
 
-  it("keeps a floating details card in a popover at any width", () => {
-    const model = resolveChatCanvasModel({
-      measurements: measurements(1600),
-      detailsCardMeasurement: null,
-      threadRef,
-      preview: null,
-      detailsCardInlineOpen: true,
-      detailsCardFloats: true,
-    });
-    expect(model.detailsCardMode).toBe("popover");
-    expect(model.preferredDetailsCard).toBeNull();
-  });
-
   it("moves the card into a popover when a preview below it leaves too little height", () => {
     const resolve = (fullContentHeight: number) =>
       resolveChatCanvasModel({

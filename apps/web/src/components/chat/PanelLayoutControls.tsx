@@ -225,7 +225,6 @@ function DuetOverflowMenu({
   terminal,
   browser,
   diff,
-  threadDetails,
   foldUtilityControls,
 }: {
   captain: boolean;
@@ -233,7 +232,6 @@ function DuetOverflowMenu({
   terminal?: DuetHeaderAction | null | undefined;
   browser?: DuetHeaderAction | null | undefined;
   diff?: DuetHeaderAction | null | undefined;
-  threadDetails: DuetHeaderAction;
   foldUtilityControls: boolean;
 }) {
   const gt = useGT();
@@ -273,15 +271,6 @@ function DuetOverflowMenu({
       <MenuPopup align="end" width="wide">
         {captain ? (
           <MenuGroup>
-            <MenuItem
-              disabled={threadDetails.disabled}
-              selected={threadDetails.active === true}
-              closeOnClick
-              onClick={threadDetails.onClick}
-            >
-              <ListFilterIcon className="size-3.5" strokeWidth={1.75} />
-              <T>Thread details</T>
-            </MenuItem>
             {entries.map((entry) => (
               <MenuItem
                 key={entry.key}
@@ -505,13 +494,6 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
         }
       : null;
 
-  const threadDetailsAction: DuetHeaderAction = {
-    label: gt("Thread details"),
-    onClick: onToggleThreadPanel,
-    active: threadPanelOpen,
-    disabled: disabledReason !== null,
-  };
-
   return (
     <div
       ref={rootRef}
@@ -519,7 +501,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
       data-panel-layout-controls
     >
       {/* The workspace menu (pen ZVAPz) is the pane's only top-right control. */}
-      {showThreadPanelControl && (!duet || !captainChannel) ? threadPanelControl : null}
+      {showThreadPanelControl ? threadPanelControl : null}
       {duet && duetControls ? (
         <>
           {captainChannel ? (
@@ -579,7 +561,6 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
             terminal={duetControls.terminal}
             browser={duetControls.browser}
             diff={duetControls.diff}
-            threadDetails={threadDetailsAction}
             foldUtilityControls={foldDuetUtilityControls}
           />
         </>

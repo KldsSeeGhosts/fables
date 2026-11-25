@@ -2199,7 +2199,6 @@ export default function ChatView(props: ChatViewProps) {
         threadRef: activeThreadRef,
         preview: canvasPreview,
         detailsCardInlineOpen: threadPanelInlineOpen,
-        detailsCardFloats: true,
       }).detailsCardMode,
   );
   const workspaceInDetails = !shouldShowComposerWorkspace({

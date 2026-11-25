@@ -14,7 +14,7 @@ const pageTabTitles = {
   issues: msg("Issues", { $context: "sidebar link to the list of issues" }),
   workflows: msg("Workflows"),
   "pull-requests": msg("Pull requests"),
-  captains: msg("Everything", { $context: "the Captains home page" }),
+  captains: msg("Captains"),
 } satisfies Record<LayoutPageContent["kind"], ReturnType<typeof msg>>;
 
 export function layoutPageTabTitle(kind: LayoutPageContent["kind"], resolve: MessageResolver) {

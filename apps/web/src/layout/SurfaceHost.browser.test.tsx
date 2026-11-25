@@ -132,10 +132,10 @@ it("replaces a split launcher with the Captains workspace", async () => {
   useLayoutStore.getState().focusTab(tabs.second.id);
   await using screen = await renderHost({ viewport: 1280 });
   const pane = screen.container.querySelector(`[data-layout-tab-id="${tabs.second.id}"]`)!;
-  const entry = page.elementLocator(pane).getByRole("button", { name: "Everything", exact: true });
+  const entry = page.elementLocator(pane).getByRole("button", { name: "Captains", exact: true });
   await expect.element(entry).toBeVisible();
   (entry.element() as HTMLButtonElement).click();
-  await expect.element(screen.getByRole("heading", { name: "Everything" })).toBeVisible();
+  await expect.element(screen.getByRole("heading", { name: "Captains" })).toBeVisible();
   expect(focusedTabId()).toBe(tabs.second.id);
   expect(screen.router?.state.location.pathname).toBe("/captains");
 });

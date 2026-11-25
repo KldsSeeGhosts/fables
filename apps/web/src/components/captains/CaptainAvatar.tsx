@@ -1,7 +1,7 @@
 import type { CaptainAvatar as Avatar } from "@t3tools/contracts";
 
 import { cn } from "../../lib/utils";
-import { captainAvatarSizes } from "./captainAvatarData";
+import { captainAvatarSizes, captainMascotEyes, captainMascotPaths } from "./captainAvatarData";
 import {
   captainEmblemOf,
   captainPaletteOf,
@@ -16,7 +16,7 @@ import "./CaptainAvatar.css";
 
 export type CaptainAvatarState = "archived" | "idle" | "waiting" | "working";
 
-/** The 28px bare emblem the channel hero leads with. */
+/** The 28px bare mascot the channel hero leads with. */
 const heroSize = { frame: "size-7", glyph: "size-7", tile: false } as const;
 
 const canonicalShapes = DUET_EMBLEM_ORDER.map((emblem) => DUET_PICKER.emblems[emblem]);
@@ -34,7 +34,16 @@ export function randomCaptainAvatar(): Avatar {
   return normalizeCaptainAvatar({ preset: pick(canonicalShapes), color: pick(canonicalColors) });
 }
 
-function DuetEmblemGlyph({
+const MASCOT_VIEW_BOX = "-1.12 -1.12 2.24 2.24";
+
+/** A share of the mascot's box, as a CSS percentage, for a point in its view box. */
+const mascotPercent = (unit: number) => `${(((unit + 1.12) / 2.24) * 100).toFixed(2)}%`;
+
+/**
+ * The Captain's mascot: its emblem's silhouette in the palette ink, with two eyes. Body and eyes
+ * are separate HTML layers so every state animates by transform alone (CaptainAvatar.css).
+ */
+function CaptainMascot({
   emblem,
   palette,
   className,
@@ -43,121 +52,68 @@ function DuetEmblemGlyph({
   palette: DuetPalette;
   className?: string;
 }) {
-  const swatch = DUET_PALETTE_SWATCH[palette];
-  const ink = `var(--duet-ink, ${swatch.ink})`;
-  const tint = `var(--duet-tint, ${swatch.tint})`;
+  const [eyeX, eyeY, eyeScale] = captainMascotEyes[emblem];
+  const look = 0.35 * 0.34 * eyeScale;
+  const centerX = eyeX + look;
+  const centerY = eyeY - look;
+  const gap = 0.36 * eyeScale;
+  const width = 0.15 * eyeScale;
+  const height = 0.4 * eyeScale;
   return (
-    <svg
-      aria-hidden
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={ink}
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={cn("shrink-0 text-foreground", className)}
+    <span
+      data-captain-mascot-body=""
       data-captain-emblem={emblem}
+      className={cn("relative block shrink-0", className)}
     >
-      {emblem === "orb" ? (
-        <>
-          <circle cx="12.5" cy="13" r="6.5" fill={ink} stroke="none" />
-          <path
-            d="M3.5 12.6c2.2-2.6 4.4-2.6 6.6 0s4.4 2.6 6.6 0c1.3-1.5 2.6-2.1 3.8-1.8"
-            stroke="currentColor"
-            fill="none"
-          />
-        </>
-      ) : null}
-      {emblem === "sunburst" ? (
-        <>
-          <path
-            d="M12 3v4.5M12 16.5V21M3 12h4.5M16.5 12H21M5.6 5.6l3.2 3.2M15.2 15.2l3.2 3.2M18.4 5.6l-3.2 3.2M8.8 15.2l-3.2 3.2"
-            fill="none"
-          />
-          <circle cx="12" cy="12" r="2" fill={ink} stroke="none" />
-        </>
-      ) : null}
-      {emblem === "twin-arcs" ? (
-        <>
-          <circle cx="12" cy="12" r="8.5" fill={tint} stroke="none" />
-          <path d="M4 17.5a8 8 0 0 1 8-8" fill="none" />
-          <path d="M12 14.5a8 8 0 0 0 8-8" fill="none" />
-        </>
-      ) : null}
-      {emblem === "heart-wave" ? (
-        <>
-          <path
-            d="M12 19.5s-7.5-4.4-7.5-9.7A4.1 4.1 0 0 1 12 7.6a4.1 4.1 0 0 1 7.5 2.2c0 5.3-7.5 9.7-7.5 9.7Z"
-            fill={tint}
-          />
-          <path d="M8.6 12.3c1.1-1.1 2.3-1.1 3.4 0s2.3 1.1 3.4 0" fill="none" />
-        </>
-      ) : null}
-      {emblem === "terminal" ? (
-        <>
-          <rect x="3.5" y="5" width="17" height="14" rx="3.5" fill={tint} />
-          <path d="M7.5 10l2.5 2-2.5 2M12.5 14.25h4" fill="none" />
-        </>
-      ) : null}
-      {emblem === "prism" ? (
-        <>
-          <path d="M12 4.5 20 18.5H4Z" fill={tint} />
-          <path d="M12 4.5v14" fill="none" />
-        </>
-      ) : null}
-      {emblem === "orbit" ? (
-        <>
-          <ellipse cx="12" cy="12" rx="9.5" ry="4" transform="rotate(-30 12 12)" fill="none" />
-          <circle cx="12" cy="12" r="3.25" fill={ink} stroke="none" />
-          <circle cx="19.4" cy="7.6" r="1.3" fill={ink} stroke="none" />
-        </>
-      ) : null}
-      {emblem === "horizon" ? (
-        <>
-          <path d="M6 15.5a6 6 0 0 1 12 0Z" fill={tint} />
-          <path d="M3.5 15.5h17M7 19h10" fill="none" />
-        </>
-      ) : null}
-    </svg>
+      <svg
+        aria-hidden
+        viewBox={MASCOT_VIEW_BOX}
+        className="absolute inset-0 size-full overflow-visible"
+      >
+        <path
+          d={captainMascotPaths[emblem]}
+          fill={`var(--duet-ink, ${DUET_PALETTE_SWATCH[palette].ink})`}
+        />
+      </svg>
+      <span
+        data-captain-mascot-eyes=""
+        className="absolute inset-0"
+        style={{ transformOrigin: `${mascotPercent(centerX)} ${mascotPercent(centerY)}` }}
+      >
+        <svg aria-hidden viewBox={MASCOT_VIEW_BOX} className="size-full overflow-visible">
+          <g transform={`translate(${centerX} ${centerY})`} fill="var(--duet-mascot-eye, #ffffff)">
+            {[-1, 1].map((side) => (
+              <rect
+                key={side}
+                transform={`translate(${(side * gap) / 2} 0) rotate(-18)`}
+                x={-width / 2}
+                y={-height / 2}
+                width={width}
+                height={height}
+                rx={width / 2}
+              />
+            ))}
+          </g>
+        </svg>
+      </span>
+    </span>
   );
 }
 
-/**
- * The ring a tile wears 3px outside its edge: a turning arc while working, a halo when waiting.
- * The stroke is sized for the 30px box around a 24px channel tile, where it renders at 1.5px.
- */
-export type CaptainAvatarHalo = "working" | "needs-input";
-
-function CaptainAvatarHaloRing({ halo }: { halo: CaptainAvatarHalo }) {
+/** A waiting tile wears a ring 3px outside its edge, sized for the 30px box around a 24px tile. */
+function CaptainAvatarAttentionRing() {
   return (
     <>
-      {halo === "needs-input" ? <span aria-hidden data-captain-avatar-ping="" /> : null}
+      <span aria-hidden data-captain-avatar-ping="" />
       <svg
         aria-hidden
         viewBox="0 0 38 38"
         fill="none"
         strokeWidth={1.9}
-        data-captain-avatar-orbit={halo}
+        data-captain-avatar-ring=""
         className="pointer-events-none absolute -inset-0.75"
       >
-        {halo === "working" ? (
-          <>
-            <circle cx="19" cy="19" r="18.05" stroke="var(--duet-orbit-track)" />
-            <circle
-              cx="19"
-              cy="19"
-              r="18.05"
-              pathLength={360}
-              stroke="var(--duet-ink)"
-              strokeLinecap="round"
-              strokeDasharray="70 290"
-              transform="rotate(-90 19 19)"
-              data-captain-avatar-orbit-arc=""
-            />
-          </>
-        ) : (
-          <circle cx="19" cy="19" r="18.05" stroke="var(--duet-needs-input-ring)" />
-        )}
+        <circle cx="19" cy="19" r="18.05" stroke="var(--duet-needs-input-ring, currentColor)" />
       </svg>
     </>
   );
@@ -167,14 +123,14 @@ export function CaptainAvatar({
   avatar,
   size = "row",
   state = "idle",
-  halo,
+  attention = false,
   animateOnMount = false,
 }: {
   avatar: Avatar;
   size?: keyof typeof captainAvatarSizes | "hero";
   state?: CaptainAvatarState;
-  /** Tiles only. */
-  halo?: CaptainAvatarHalo | undefined;
+  /** Rings a tile while the Captain waits on the user. */
+  attention?: boolean;
   animateOnMount?: boolean;
 }) {
   const palette = captainPaletteOf(avatar);
@@ -203,8 +159,8 @@ export function CaptainAvatar({
           : undefined
       }
     >
-      <DuetEmblemGlyph emblem={emblem} palette={palette} className={sizeData.glyph} />
-      {halo && sizeData.tile ? <CaptainAvatarHaloRing halo={halo} /> : null}
+      <CaptainMascot emblem={emblem} palette={palette} className={sizeData.glyph} />
+      {attention && sizeData.tile ? <CaptainAvatarAttentionRing /> : null}
     </span>
   );
 }
