@@ -1376,6 +1376,13 @@ describe("buildThreadFeed", () => {
       id: TurnItemId.make(name),
       status,
     });
+    const notify = (name: string, second: number): OrchestrationV2TurnItem => ({
+      ...base(name, at(second), second),
+      type: "notification",
+      source: { kind: "background_task" },
+      outcome: "completed",
+      summary: "Task finished",
+    });
     const [user, step, passed, failed, final] = [
       say("user", 1, true),
       say("step", 2),
@@ -1470,6 +1477,23 @@ describe("buildThreadFeed", () => {
       "final",
       "wake",
       "thinking:",
+    ]);
+
+    const segmented = [
+      user,
+      say("a", 2),
+      ran("tool-a", 3, "completed"),
+      say("b", 4),
+      notify("mid-turn", 5),
+      ran("tool-b", 6, "completed"),
+      say("c", 7),
+    ];
+    expect(rows(segmented, "zen", running)).toEqual(["user", "b", "mid-turn", "thinking:c"]);
+    expect(rows(segmented, "zen", { ...running, turnEnded: true })).toEqual([
+      "user",
+      "b",
+      "mid-turn",
+      "c",
     ]);
   });
 });
