@@ -12,6 +12,7 @@ import { cn } from "../../lib/utils";
 import { useRightPanelStore } from "../../rightPanelStore";
 import { useQuietThreadShell } from "../../state/entities";
 import { buildThreadRouteParams } from "../../threadRoutes";
+import { usePanelTabSlots } from "../PanelTabBreadcrumb";
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { useCaptainTaskStatusLabel } from "./CaptainTaskRing";
@@ -50,6 +51,9 @@ export function DuetTaskDrawerHeader({
   const gt = useGT();
   const navigate = useNavigate();
   const { trailingEdge } = useLayoutPane();
+  const panelTabSlots = usePanelTabSlots();
+  const addSurfaceButton =
+    panelTabSlots?.showPanelTabs === true ? null : (panelTabSlots?.addSurfaceButton ?? null);
   const childRef = scopeThreadRef(parentThreadRef.environmentId, childThreadId);
   const shell = useQuietThreadShell(childRef);
   const statusLabel = useCaptainTaskStatusLabel(captainThreadTaskStatus(shell));
@@ -90,37 +94,29 @@ export function DuetTaskDrawerHeader({
             {subtitleParts.join(" · ")}
           </div>
         </div>
-        <Menu>
-          <MenuTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="[-webkit-app-region:no-drag]"
-                aria-label={gt("Thread actions")}
-              >
-                <EllipsisVerticalIcon />
-              </Button>
-            }
-          />
-          <MenuPopup side="bottom" align="end">
-            <MenuItem onClick={openFullThread}>
-              <T>Open full thread</T>
-            </MenuItem>
-            <MenuItem onClick={onClose}>
-              <T>Close panel</T>
-            </MenuItem>
-          </MenuPopup>
-        </Menu>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="[-webkit-app-region:no-drag]"
-          aria-label={gt("Close panel")}
-          onClick={onClose}
-        >
-          <XIcon />
-        </Button>
+        <div className="flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag]">
+          {addSurfaceButton}
+          <Menu>
+            <MenuTrigger
+              render={
+                <Button variant="ghost" size="icon-xs" aria-label={gt("Thread actions")}>
+                  <EllipsisVerticalIcon />
+                </Button>
+              }
+            />
+            <MenuPopup side="bottom" align="end">
+              <MenuItem onClick={openFullThread}>
+                <T>Open full thread</T>
+              </MenuItem>
+              <MenuItem onClick={onClose}>
+                <T>Close panel</T>
+              </MenuItem>
+            </MenuPopup>
+          </Menu>
+          <Button variant="ghost" size="icon-xs" aria-label={gt("Close panel")} onClick={onClose}>
+            <XIcon />
+          </Button>
+        </div>
       </div>
       <div className="flex h-7 shrink-0 items-center justify-end border-b border-(--duet-hairline) px-3">
         <button

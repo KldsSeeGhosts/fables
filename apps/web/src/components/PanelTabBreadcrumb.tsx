@@ -1,14 +1,22 @@
 import { createContext, useContext, useLayoutEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-/** Header action slots shared by terminal and side chat surfaces. */
+/** Header action slots shared by right-panel surfaces. */
 export interface PanelTabSlots {
   readonly breadcrumb: HTMLElement | null;
   readonly actions: HTMLElement | null;
   readonly registerActions: () => () => void;
+  /** False when Duet hides the panel tab bar (e.g. Captain tasks drawer), so the surface keeps its header. */
+  readonly showPanelTabs?: boolean;
+  /** Add-surface menu button for a surface rendering its own header while the tab bar is hidden. */
+  readonly addSurfaceButton?: ReactNode;
 }
 
 export const PanelTabSlotsContext = createContext<PanelTabSlots | null>(null);
+
+export function usePanelTabSlots(): PanelTabSlots | null {
+  return useContext(PanelTabSlotsContext);
+}
 
 /**
  * Whether the surface renders inside a panel tab bar, which then carries its

@@ -802,14 +802,14 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
   const mobileDiff = isMobile && props.mode === "embedded" && focusedSurface?.kind === "diff";
   // A layout pane's tabs sit in its notch (pen JiaZk), like a chat's.
   const notched = props.mode === "embedded" || props.pane === true;
-  const showPanelTabs = !isDuetShell || shouldShowDuetRightPanelTabs(props.surfaces);
+  const hasSiblingLayoutTabs = siblingTabs.before.length > 0 || siblingTabs.after.length > 0;
+  const showPanelTabs =
+    !isDuetShell || hasSiblingLayoutTabs || shouldShowDuetRightPanelTabs(props.surfaces);
   const duetTasksDrawer =
-    isDuetShell && props.surfaces.length === 1 && props.surfaces[0]?.kind === "captain-brief";
-  const tabSlots = {
-    breadcrumb: mobileDiff ? mobileBreadcrumbSlot : null,
-    actions: actionsSlot,
-    registerActions,
-  };
+    isDuetShell &&
+    !hasSiblingLayoutTabs &&
+    props.surfaces.length === 1 &&
+    props.surfaces[0]?.kind === "captain-brief";
   const [addSurfaceMenuOpen, setAddSurfaceMenuOpen] = useState(false);
   const addSurfaceTriggerRef = useRef<HTMLButtonElement>(null);
   const [tabScrollState, setTabScrollState] = useState({
@@ -1161,6 +1161,14 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
         </MenuPopup>
       </Menu>
     ) : null;
+
+  const tabSlots = {
+    breadcrumb: mobileDiff ? mobileBreadcrumbSlot : null,
+    actions: actionsSlot,
+    registerActions,
+    showPanelTabs,
+    addSurfaceButton: showPanelTabs ? null : addSurfaceMenu,
+  };
 
   return (
     <PreviewPanelShell

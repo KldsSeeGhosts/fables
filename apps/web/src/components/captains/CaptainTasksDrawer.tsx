@@ -31,6 +31,7 @@ import { serverEnvironment } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { scheduleLabel } from "../settings/scheduledTasksSettings.logic";
+import { usePanelTabSlots } from "../PanelTabBreadcrumb";
 import { Button } from "../ui/button";
 import { toastManager } from "../ui/toast";
 import {
@@ -321,6 +322,9 @@ export function CaptainTasksDrawer({
 }) {
   const gt = useGT();
   const messages = useMessages();
+  const panelTabSlots = usePanelTabSlots();
+  const hideDrawerHeader = panelTabSlots?.showPanelTabs === true;
+  const addSurfaceButton = hideDrawerHeader ? null : (panelTabSlots?.addSurfaceButton ?? null);
   const timestampFormat = useClientSettings((settings) => settings.timestampFormat);
   const [tab, setTab] = useAtom(captainDrawerTabAtom(threadRef));
   const captains = useCaptains(threadRef.environmentId);
@@ -356,7 +360,9 @@ export function CaptainTasksDrawer({
   if (captain === undefined) {
     return (
       <div className="flex h-full flex-col bg-background dark:bg-[#1f1f1f]">
-        <DrawerHeader title={gt("Tasks")} onClose={onClose} />
+        {hideDrawerHeader ? null : (
+          <DrawerHeader title={gt("Tasks")} onClose={onClose} addSurfaceButton={addSurfaceButton} />
+        )}
         <DrawerEmpty>
           {captains.isPending ? (
             <T>Loading Captain…</T>
@@ -413,14 +419,20 @@ export function CaptainTasksDrawer({
         }
       }}
     >
-      <DrawerHeader
-        title={gt("Tasks in #{channel}", { channel: captain.name })}
-        onClose={onClose}
-      />
+      {hideDrawerHeader ? null : (
+        <DrawerHeader
+          title={gt("Tasks in #{channel}", { channel: captain.name })}
+          onClose={onClose}
+          addSurfaceButton={addSurfaceButton}
+        />
+      )}
       <div
         role="tablist"
         aria-label={gt("Captain task views")}
-        className="mt-1 flex h-[26px] shrink-0 items-center gap-0.5 px-4"
+        className={cn(
+          "flex h-[26px] shrink-0 items-center gap-0.5 px-4",
+          hideDrawerHeader ? "mt-3" : "mt-1",
+        )}
       >
         {(["today", "all", "scheduled", "docs"] as const).map((entry) => (
           <button
@@ -576,30 +588,35 @@ export function CaptainTasksDrawer({
 function DrawerHeader({
   title,
   onClose,
+  addSurfaceButton,
 }: {
   readonly title: string;
   readonly onClose: () => void;
+  readonly addSurfaceButton?: ReactNode;
 }) {
   const gt = useGT();
   const { trailingEdge } = useLayoutPane();
   return (
     <div
       className={cn(
-        "flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center justify-between px-4",
+        "flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center justify-between gap-2 px-4",
         isElectron && "drag-region",
         isElectron && trailingEdge && "wco:pr-(--workspace-native-controls-inset)",
       )}
     >
       <h2 className="min-w-0 truncate text-[13px] font-medium text-foreground">{title}</h2>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        className="size-7 [-webkit-app-region:no-drag]"
-        aria-label={gt("Close tasks")}
-        onClick={onClose}
-      >
-        <XIcon />
-      </Button>
+      <div className="flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
+        {addSurfaceButton}
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="size-7"
+          aria-label={gt("Close tasks")}
+          onClick={onClose}
+        >
+          <XIcon />
+        </Button>
+      </div>
     </div>
   );
 }

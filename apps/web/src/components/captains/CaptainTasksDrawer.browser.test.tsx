@@ -60,6 +60,7 @@ vi.mock(import("../../state/use-orchestration-command"), async (importOriginal) 
   useOrchestrationCommand: () => state.startTurn,
 }));
 
+import { PanelTabSlotsContext } from "../PanelTabBreadcrumb";
 import { CaptainTasksDrawer } from "./CaptainTasksDrawer";
 
 const environmentId = EnvironmentId.make("environment");
@@ -144,4 +145,42 @@ it("queues a quick task as a user turn on the Captain primary thread", async () 
     }),
   });
   await expect.element(input).toHaveValue("");
+});
+
+it("renders the right-panel add-surface button in its header when panel tabs are hidden, and hides the duplicate header when tabs show", async () => {
+  resetState();
+  {
+    await using screen = await render(
+      <PanelTabSlotsContext
+        value={{
+          breadcrumb: null,
+          actions: null,
+          registerActions: () => () => {},
+          showPanelTabs: false,
+          addSurfaceButton: <button type="button">Add panel</button>,
+        }}
+      >
+        <CaptainTasksDrawer threadRef={threadRef} onClose={() => {}} />
+      </PanelTabSlotsContext>,
+    );
+    await expect.element(screen.getByText("Tasks in #Maria")).toBeVisible();
+    await expect.element(screen.getByRole("button", { name: "Add panel" })).toBeVisible();
+  }
+  {
+    await using screen = await render(
+      <PanelTabSlotsContext
+        value={{
+          breadcrumb: null,
+          actions: null,
+          registerActions: () => () => {},
+          showPanelTabs: true,
+          addSurfaceButton: null,
+        }}
+      >
+        <CaptainTasksDrawer threadRef={threadRef} onClose={() => {}} />
+      </PanelTabSlotsContext>,
+    );
+    await expect.element(screen.getByText("Tasks in #Maria")).not.toBeInTheDocument();
+    await expect.element(screen.getByRole("tab", { name: "Recent" })).toBeVisible();
+  }
 });

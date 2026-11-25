@@ -118,8 +118,10 @@ html:root[data-theme-id="ksg-salon"] {
   }
 
   /* Thread details are one raised card that stands off the canvas, with flat sections inside it
-     split by a hairline rather than nested trays. */
+     split by a hairline rather than nested trays. Height hugs content up to the pane's cap. */
   [data-thread-details-panel="inline"] > [data-thread-details-frame] {
+    height: auto !important;
+    max-height: inherit;
     overflow: hidden;
     border: 1px solid var(--duet-panel-border);
     border-radius: 0.75rem;
@@ -160,10 +162,11 @@ html:root[data-theme-id="ksg-salon"] {
     font-size: 12.5px;
   }
 
-  /* Connected pane tabs become a flat strip: no notch shape, ears or rim. */
+  /* Connected pane tabs become a flat strip: no notch shape, ears, rim or vertical shift. */
   @media (width >= 48rem) {
     [data-slot="sidebar"][data-variant="inset"] ~ [data-slot="sidebar-inset"] {
       --pane-header-overlap: 0px;
+      --pane-join-shift: 0px;
 
       [data-chat-header] {
         background-color: var(--background);
