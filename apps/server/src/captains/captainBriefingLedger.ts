@@ -59,7 +59,7 @@ export function makeCaptainBriefingLedger(refreshTurns = CAPTAIN_BRIEFING_REFRES
           sent.delete(sent.keys().next().value!);
         }
       };
-      return { full, commit };
+      return { full, compacted, commit };
     },
   };
 }

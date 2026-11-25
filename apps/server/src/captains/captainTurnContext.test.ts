@@ -44,6 +44,22 @@ describe("formatCaptainBriefing", () => {
     expect(coordinated).toContain("never by your checkout's absolute paths");
   });
 
+  it("keeps a full-size handoff separate from the plan's NOTES.md budget", () => {
+    const handoff = `## Handoff from the previous conversation (2026-11-24T12:00:00.000Z)\n\n${"h".repeat(1_650)}\n\n<!-- end captain handoff -->`;
+    const endOfPlan = "the-end-of-the-plan";
+    const notes = `${handoff}\n\n# Plan\n${"p".repeat(3_000)}\n${endOfPlan}`;
+    const text = formatCaptainBriefing({
+      captain,
+      projects: [],
+      memories: [],
+      agents: "",
+      notes,
+    });
+
+    expect(text).toContain("Conversation handoff:");
+    expect(text).toContain(endOfPlan);
+  });
+
   it("tells the Captain how finished crew reaches it under each report policy", () => {
     const rule = (reportPolicy: Captain["reportPolicy"]) =>
       formatCaptainBriefing({
@@ -156,7 +172,7 @@ describe("formatCaptainContextPressure", () => {
     });
     expect(text).toContain("80% of the way to automatic compaction");
     expect(text).toContain("`captain_document_write`");
-    expect(text).toContain("new conversation");
+    expect(text).not.toContain("new conversation");
   });
 
   it("measures against the window otherwise", () => {

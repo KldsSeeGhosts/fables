@@ -15,6 +15,11 @@ import {
   type CaptainBriefingDelivery,
 } from "./captainBriefingLedger.ts";
 import * as CaptainStore from "./CaptainStore.ts";
+import {
+  formatCaptainCompactionOpenLoops,
+  readOpenLoops,
+  splitCaptainHandoffSection,
+} from "./captainHandoff.ts";
 
 const prefix = (text: string, length: number) =>
   text.length <= length ? text : `${text.slice(0, length)}…`;
@@ -50,6 +55,8 @@ export const formatCaptainBriefing = (input: {
   readonly notes: string;
 }) => {
   const { captain, projects, memories, agents, notes } = input;
+  const handoffSplit = splitCaptainHandoffSection(notes);
+  const notesBody = handoffSplit.rest.trim();
   return [
     `Captain profile: ${captain.name}${captain.role ? ` (${captain.role})` : ""}`,
     captain.instructions && `Instructions:\n${prefix(captain.instructions, 4_000)}`,
@@ -60,7 +67,8 @@ export const formatCaptainBriefing = (input: {
     memories.length > 0 &&
       `Essential memories:\n${memories.map(({ text }) => `- ${prefix(text, 500)}`).join("\n")}`,
     agents && `AGENTS.md:\n${prefix(agents, 2_000)}`,
-    notes && `NOTES.md:\n${prefix(notes, 2_000)}`,
+    handoffSplit.handoff && `Conversation handoff:\n${handoffSplit.handoff}`,
+    notesBody && `NOTES.md:\n${prefix(notesBody, 6_000)}`,
     "Use captain_document_read and captain_memory_search to look up more Captain context.",
   ]
     .filter(Boolean)
@@ -116,10 +124,10 @@ export const formatCaptainCrewRules = (captain: Captain, crew: string) =>
     .filter((part) => part !== "")
     .join("\n\n");
 
-/** Share of the context limit at which a Captain is told to save its state and offer a reset. */
+/** Share of the context limit at which a Captain is told to save its durable state. */
 const CAPTAIN_CONTEXT_PRESSURE_RATIO = 0.75;
 
-// A long-lived coordinator does better with a reset plus NOTES.md than with repeated compaction.
+// Provider compaction owns the context window; NOTES.md is the durable plan that survives it.
 export const formatCaptainContextPressure = (usage: {
   readonly usedTokens: number | null;
   readonly maxTokens: number | null;
@@ -132,7 +140,7 @@ export const formatCaptainContextPressure = (usage: {
   const percent = Math.min(100, Math.round(ratio * 100));
   const measure =
     usage.autoCompactThreshold === null ? "full" : "of the way to automatic compaction";
-  return `Context check: this conversation is ${percent}% ${measure}. Keep NOTES.md current now (plan, open loops, next step) with \`captain_document_write\`. Once the current work wraps up, suggest that the user start a new conversation with you; NOTES.md, memories and running tasks carry over.`;
+  return `Context check: this conversation is ${percent}% ${measure}. Keep NOTES.md current now (plan, open loops, next step) with \`captain_document_write\`; it is the durable plan when the provider compacts this conversation.`;
 };
 
 const unchangedBriefing = (captain: Captain) =>
@@ -258,9 +266,18 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
         notes: notes.content,
       });
       const plan = delivery === undefined ? undefined : briefings.plan(delivery, briefing);
+      const compactionOpenLoops =
+        plan?.compacted === true && Option.isSome(sql)
+          ? formatCaptainCompactionOpenLoops(
+              yield* readOpenLoops({ captain, threadId }).pipe(
+                Effect.provideService(SqlClient.SqlClient, sql.value),
+              ),
+            )
+          : "";
       return {
         text: [
           plan?.full === false ? unchangedBriefing(captain) : briefing,
+          compactionOpenLoops,
           formatCaptainReports(reports, threadId),
           delivery === undefined
             ? ""

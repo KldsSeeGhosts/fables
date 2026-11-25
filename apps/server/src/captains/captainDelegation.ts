@@ -47,3 +47,20 @@ export const makeCaptainCanWake = Effect.gen(function* () {
     Effect.orElseSucceed(() => false),
   );
 });
+
+/** The thread a finishing Captain task may wake: its current conversation, including for earlier ones. */
+export const makeCaptainWakeTarget = Effect.gen(function* () {
+  const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
+
+  return Effect.fn("CaptainService.wakeTarget")(
+    function* (threadId: ThreadId) {
+      if (!isCaptainThreadId(threadId) || Option.isNone(store)) return threadId;
+      const captain = yield* store.value.findByConversation(threadId);
+      if (captain === undefined) return threadId;
+      return captain.archivedAt === null && captain.reportPolicy === "react"
+        ? captain.primaryThreadId
+        : undefined;
+    },
+    Effect.orElseSucceed(() => undefined),
+  );
+});
