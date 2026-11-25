@@ -136,12 +136,15 @@
 }
 
 /* The hero floats over the chat lane rather than reacting to clicks. */
+/* Centred in a 52px row; a shorter row (Windows and Linux title bars) keeps 4px above the
+   orb and lets it hang below the header instead of past the window's top edge. */
 [data-captain-header-hero] {
   position: absolute;
   inset-block: 0;
   z-index: 20;
   display: none;
-  align-items: center;
+  align-items: flex-start;
+  padding-top: max(4px, calc((var(--workspace-topbar-height, 52px) - 2.75rem) / 2));
   left: calc(50% + var(--chat-header-lane-center-offset, 0px));
   pointer-events: none;
   transform: translateX(-50%);
