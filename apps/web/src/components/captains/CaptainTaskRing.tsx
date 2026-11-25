@@ -1,30 +1,30 @@
 /* oxlint-disable shadcn/no-raw-colors, shadcn/no-arbitrary-values -- The V3 Duet spec fixes these exact static status-ring colors. */
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
-import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/shell";
-import { CircleCheck } from "lucide-react";
+import { useGT } from "gt-react";
+import { CircleCheck, CircleSlash, CircleX } from "lucide-react";
 
 import { cn } from "../../lib/utils";
+import type { CaptainTaskStatus } from "./captainTaskStatus.logic";
 
-export type CaptainTaskRingStatus = "needs-input" | "working" | "ready" | "scheduled" | "done";
-
-export function captainTaskRingStatus(
-  thread: Pick<
-    EnvironmentThreadShell,
-    | "hasPendingUserInput"
-    | "hasPendingApprovals"
-    | "pendingSubagentRequest"
-    | "runtime"
-    | "latestRun"
-    | "settledAt"
-  >,
-): CaptainTaskRingStatus {
-  if (thread.hasPendingUserInput || thread.hasPendingApprovals || thread.pendingSubagentRequest) {
-    return "needs-input";
+export function useCaptainTaskStatusLabel(status: CaptainTaskStatus): string {
+  const gt = useGT();
+  switch (status) {
+    case "needs-input":
+      return gt("Needs input", { $context: "delegated task status" });
+    case "working":
+      return gt("Working", { $context: "delegated task status" });
+    case "ready":
+      return gt("Ready for review", { $context: "delegated task status" });
+    case "failed":
+      return gt("Failed", { $context: "delegated task status" });
+    case "stopped":
+      return gt("Stopped", { $context: "delegated task status" });
+    case "scheduled":
+      return gt("Scheduled", { $context: "delegated task status" });
+    case "done":
+      return gt("Done", { $context: "delegated task status" });
+    case "unknown":
+      return gt("Status unavailable", { $context: "delegated task status" });
   }
-  if (threadRuntimeIsActive(thread.runtime)) return "working";
-  if (thread.settledAt !== null) return "done";
-  if (thread.latestRun?.status === "completed") return "ready";
-  return "done";
 }
 
 /** The Duet task state glyph. Every ring is static SVG; scanning never repaints it. */
@@ -32,12 +32,25 @@ export function CaptainTaskRing({
   status,
   className,
 }: {
-  readonly status: CaptainTaskRingStatus;
+  readonly status: CaptainTaskStatus;
   readonly className?: string;
 }) {
   if (status === "done") {
     return (
       <CircleCheck aria-hidden className={cn("size-3.5 shrink-0 text-[#838383]", className)} />
+    );
+  }
+  if (status === "failed") {
+    return (
+      <CircleX
+        aria-hidden
+        className={cn("size-3.5 shrink-0 text-destructive-foreground", className)}
+      />
+    );
+  }
+  if (status === "stopped" || status === "unknown") {
+    return (
+      <CircleSlash aria-hidden className={cn("size-3.5 shrink-0 text-[#838383]", className)} />
     );
   }
   return (

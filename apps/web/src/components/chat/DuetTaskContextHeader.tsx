@@ -1,7 +1,6 @@
 /* oxlint-disable t3code/no-styled-raw-controls, shadcn/no-arbitrary-values, t3code/no-raw-type-classes, t3code/no-dot-separated-text -- the task context row is a semantic jump link with Duet-specific connector geometry, not a shared button control. */
 import { createContext, useContext } from "react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/shell";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import type { ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 import { useGT, T } from "gt-react";
@@ -10,6 +9,8 @@ import { MessageCircle } from "lucide-react";
 import { useRightPanelStore } from "../../rightPanelStore";
 import { useQuietThreadShell } from "../../state/entities";
 import type { DuetPalette } from "../captains/captainPalette";
+import { useCaptainTaskStatusLabel } from "../captains/CaptainTaskRing";
+import { captainThreadTaskStatus } from "../captains/captainTaskStatus.logic";
 import type { DuetStreamKind } from "./duetStream.logic";
 
 export interface DuetStreamContextValue {
@@ -36,17 +37,6 @@ const DUET_STREAM_CONTEXT_DEFAULT: DuetStreamContextValue = {
 
 export const DuetStreamContext = createContext<DuetStreamContextValue>(DUET_STREAM_CONTEXT_DEFAULT);
 
-function taskStatus(
-  shell: EnvironmentThreadShell | null,
-): "needs-input" | "working" | "ready" | "done" {
-  if (shell?.hasPendingUserInput || shell?.hasPendingApprovals || shell?.pendingSubagentRequest) {
-    return "needs-input";
-  }
-  if (threadRuntimeIsActive(shell?.runtime)) return "working";
-  if (shell?.settledAt !== null && shell?.settledAt !== undefined) return "done";
-  return "ready";
-}
-
 /** The curved inline connector that names the Captain task an assistant bubble is speaking about. */
 export function DuetTaskContextHeader({
   captainRef,
@@ -60,15 +50,7 @@ export function DuetTaskContextHeader({
   const childRef = scopeThreadRef(captainRef.environmentId, childThreadId);
   const liveShell = useQuietThreadShell(childRef);
   const shell = liveShell ?? stream.childThreads.get(childThreadId) ?? null;
-  const status = taskStatus(shell);
-  const statusLabel =
-    status === "needs-input"
-      ? gt("Needs input", { $context: "delegated task status" })
-      : status === "working"
-        ? gt("Working", { $context: "delegated task status" })
-        : status === "done"
-          ? gt("Done", { $context: "delegated task status" })
-          : gt("Ready for review", { $context: "delegated task status" });
+  const statusLabel = useCaptainTaskStatusLabel(captainThreadTaskStatus(shell));
   const title = shell?.title.trim() || gt("Task", { $context: "Captain delegated task" });
   return (
     <button
