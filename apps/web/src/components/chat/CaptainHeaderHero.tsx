@@ -1,6 +1,7 @@
 /* oxlint-disable t3code/no-styled-raw-controls -- The Duet hero orb and title menu are bespoke header controls outside shared button variants. */
 import "./DuetHeaderChrome.css";
 
+import { useAtomValue } from "@effect/atom-react";
 import type { Captain, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { T, useGT } from "gt-react";
@@ -8,12 +9,22 @@ import {
   ArchiveIcon,
   ArchiveRestoreIcon,
   ChevronDownIcon,
+  Columns2Icon,
+  CopyXIcon,
+  Layers2Icon,
+  LinkIcon,
+  MaximizeIcon,
   MessageSquarePlusIcon,
   PaletteIcon,
+  PanelBottomIcon,
+  PanelRightIcon,
   PencilIcon,
+  PinIcon,
   Settings2Icon,
   StickyNoteIcon,
   Trash2Icon,
+  XIcon,
+  type LucideIcon,
 } from "lucide-react";
 import {
   useRef,
@@ -24,6 +35,13 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
+import {
+  buildLayoutTabMenuItems,
+  isLayoutTabMenuId,
+  runLayoutTabMenuAction,
+} from "../../layout/PaneTabs";
+import { useLayoutStore } from "../../layout/layoutStore";
+import { primaryServerKeybindingsAtom } from "../../state/server";
 import { textDirection } from "~/textDirection";
 
 import { CaptainAvatar, type CaptainAvatarState } from "../captains/CaptainAvatar";
@@ -42,7 +60,9 @@ import {
   MenuGroup,
   MenuGroupLabel,
   MenuItem,
+  MenuItemLabel,
   MenuPopup,
+  MenuShortcut,
   MenuRadioGroup,
   MenuRadioItem,
   MenuSeparator,
@@ -53,6 +73,38 @@ import {
 } from "../ui/menu";
 import { toastManager } from "../ui/toast";
 import { useDuetThreadStatus } from "./DuetThreadStatus";
+
+const LAYOUT_MENU_ICONS: Record<string, LucideIcon> = {
+  pin: PinIcon,
+  "panel-right": PanelRightIcon,
+  "panel-bottom": PanelBottomIcon,
+  "columns-2": Columns2Icon,
+  "layers-2": Layers2Icon,
+  maximize: MaximizeIcon,
+  link: LinkIcon,
+  x: XIcon,
+  "copy-x": CopyXIcon,
+};
+
+function LayoutMenuItem({
+  item,
+  onAction,
+}: {
+  item: ReturnType<typeof buildLayoutTabMenuItems>[number];
+  onAction: (id: string) => void;
+}) {
+  const Icon = item.icon === undefined ? null : (LAYOUT_MENU_ICONS[item.icon] ?? null);
+  return (
+    <>
+      {item.separatorBefore ? <MenuSeparator /> : null}
+      <MenuItem disabled={item.disabled} onClick={() => onAction(item.id)}>
+        {Icon ? <Icon aria-hidden /> : null}
+        <MenuItemLabel>{item.label}</MenuItemLabel>
+        {item.shortcut ? <MenuShortcut>{item.shortcut}</MenuShortcut> : null}
+      </MenuItem>
+    </>
+  );
+}
 
 function avatarStateFor(archived: boolean, statusState: string): CaptainAvatarState {
   if (archived) return "archived";
@@ -90,11 +142,19 @@ export function CaptainHeaderTitleMenu({
     onDelete: () => void navigate({ to: "/captains" }),
   });
   const labels = useCaptainAvatarLabels();
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  const layout = useLayoutStore((state) => state.layout);
+  const maximizedTabId = useLayoutStore((state) => state.maximizedTabId);
   const [renaming, setRenaming] = useState(false);
   const [resetting, setResetting] = useState(false);
   const renameSettledRef = useRef(false);
   const { current, archived, pending, canUpdate } = profile;
   const avatarState = avatarStateFor(archived, status.state);
+  const layoutItems =
+    layoutTabId == null ? [] : buildLayoutTabMenuItems(layout, layoutTabId, keybindings);
+  const runLayoutAction = (id: string) => {
+    if (layoutTabId != null && isLayoutTabMenuId(id)) runLayoutTabMenuAction(id, layoutTabId);
+  };
   const emblem = captainEmblemOf(current.avatar);
   const palette = captainPaletteOf(current.avatar);
 
@@ -184,6 +244,14 @@ export function CaptainHeaderTitleMenu({
             <ChevronDownIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
           </MenuTrigger>
           <MenuPopup align="start" width="wide">
+            {layoutItems.map((item) => (
+              <LayoutMenuItem
+                key={`${item.id}:${maximizedTabId === layoutTabId}`}
+                item={item}
+                onAction={runLayoutAction}
+              />
+            ))}
+            {layoutItems.length > 0 ? <MenuSeparator /> : null}
             <MenuItem disabled={!canUpdate} onClick={() => profile.edit()}>
               <Settings2Icon aria-hidden />
               <T>Customize Duet</T>
