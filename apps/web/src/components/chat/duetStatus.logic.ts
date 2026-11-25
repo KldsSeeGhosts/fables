@@ -170,7 +170,7 @@ export function resolveDuetActivityStatus(
 
 export const DUET_LIVE_LABEL_HOLD_MS = 1_000;
 export const DUET_LIVE_HIDE_DELAY_MS = 1_500;
-export const DUET_LIVE_FADE_MS = 180;
+export const DUET_LIVE_FADE_MS = 220;
 export const DUET_LIVE_CELEBRATE_MS = 620;
 
 export interface DuetLiveStatusInput {

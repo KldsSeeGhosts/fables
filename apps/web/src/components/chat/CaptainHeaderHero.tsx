@@ -72,8 +72,8 @@ import {
   MenuTrigger,
 } from "../ui/menu";
 import { toastManager } from "../ui/toast";
-import { WorkingStatusShine } from "../WorkingStatusShine";
 import { useDuetThreadStatus } from "./DuetThreadStatus";
+import type { DuetOrbState } from "./duetStatus.logic";
 
 const LAYOUT_MENU_ICONS: Record<string, LucideIcon> = {
   pin: PinIcon,
@@ -369,6 +369,27 @@ export function CaptainHeaderTitleMenu({
   );
 }
 
+function CaptainHeroLivePill({
+  layer,
+  label,
+  state,
+}: {
+  layer: "current" | "outgoing";
+  label: string;
+  state: DuetOrbState;
+}) {
+  return (
+    <span
+      aria-hidden
+      data-captain-hero-live={state}
+      data-captain-hero-live-label={layer}
+      className="absolute top-[calc(100%-10px)] left-1/2 flex h-7 w-max max-w-72 -translate-x-1/2 items-center justify-center overflow-hidden rounded-full border border-(--duet-panel-border,var(--border)) bg-(--duet-panel-fill,var(--background)) px-3 text-body whitespace-nowrap text-foreground shadow-(--duet-panel-shadow,var(--shadow-md))"
+    >
+      <span className="max-w-64 truncate">{label}</span>
+    </span>
+  );
+}
+
 /** A Duet channel's centred creature and stabilized live status pill. */
 export function CaptainHeaderHero({
   captain,
@@ -391,34 +412,22 @@ export function CaptainHeaderHero({
           celebrate={status.celebrating}
         />
         {status.liveVisible ? (
-          <span
-            aria-hidden
-            data-captain-hero-live={status.state}
-            className="absolute top-[calc(100%-10px)] left-1/2 grid h-7 w-max max-w-72 -translate-x-1/2 grid-cols-1 items-center justify-items-center overflow-hidden rounded-full border border-(--duet-panel-border,var(--border)) bg-(--duet-panel-fill,var(--background)) px-3 text-body whitespace-nowrap text-foreground shadow-(--duet-panel-shadow,var(--shadow-md))"
-          >
+          <>
             {status.liveOutgoing ? (
-              <span
+              <CaptainHeroLivePill
                 key={`outgoing-${status.liveOutgoing.label}`}
-                data-captain-hero-live-label="outgoing"
-                className="col-start-1 row-start-1 max-w-64 truncate"
-              >
-                {status.liveOutgoing.label}
-              </span>
+                layer="outgoing"
+                label={status.liveOutgoing.label}
+                state={status.state}
+              />
             ) : null}
-            <span
+            <CaptainHeroLivePill
               key={`current-${status.liveLabel}`}
-              data-captain-hero-live-label="current"
-              className="col-start-1 row-start-1 max-w-64 truncate"
-            >
-              {status.state === "working" ? (
-                <WorkingStatusShine className="text-(--duet-working-text)">
-                  {status.liveLabel}
-                </WorkingStatusShine>
-              ) : (
-                status.liveLabel
-              )}
-            </span>
-          </span>
+              layer="current"
+              label={status.liveLabel}
+              state={status.state}
+            />
+          </>
         ) : null}
         <span aria-live="polite" className="sr-only">
           {status.liveLabel}
