@@ -41,6 +41,7 @@ describe("formatCaptainBriefing", () => {
     expect(coordinated).toContain('`delegate_task` and `isolation: "worktree"`');
     expect(coordinated).toContain("`captain_document_write`");
     expect(coordinated).toContain("pass `repositories` with the ones the child edits");
+    expect(coordinated).toContain("never by your checkout's absolute paths");
   });
 
   it("tells the Captain how finished crew reaches it under each report policy", () => {
@@ -116,6 +117,7 @@ describe("formatCaptainCrewRules", () => {
   it("always includes the built-in crew rules", () => {
     const formatted = formatCaptainCrewRules(captain, "");
     expect(formatted).toContain("keep a progress note in your worktree");
+    expect(formatted).toContain("use the matching folder in yours");
     expect(formatted).toContain("done-check from your brief passes");
     expect(formatted).not.toContain("CREW.md:");
   });

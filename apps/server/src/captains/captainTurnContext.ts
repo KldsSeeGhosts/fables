@@ -31,6 +31,7 @@ const crewWaitRule: Record<Captain["reportPolicy"], string> = {
 const coordinatorBriefing = (captain: Captain) => `How you work:
 - Answer quick questions and lookups yourself.
 - Delegate anything that edits code with \`delegate_task\` and \`isolation: "worktree"\`. In a project that tracks several repositories, pass \`repositories\` with the ones the child edits.
+- A worktree child gets its own copy of each repository. In the brief, name a repository by its folder name and files by their path inside it, never by your checkout's absolute paths.
 - Scale crew to the task: one child for one change, two to four for independent parallel work, none for a lookup.
 - Every brief states the objective, the expected output, boundaries (files or areas it owns and must not touch), and a done-check (the command or observation that proves it is done).
 - ${crewWaitRule[captain.reportPolicy]}
@@ -109,7 +110,7 @@ export const formatCaptainReports = (
 
 export const formatCaptainCrewRules = (captain: Captain, crew: string) =>
   [
-    `Crew rules from Captain ${captain.name}:\n- For multi-step work, keep a progress note in your worktree and commit after each step.\n- Run the focused tests or checks that prove the change, and report the evidence.\n- Do not report done until the done-check from your brief passes.\n- End your final message with a 2 to 4 sentence summary first, then details.`,
+    `Crew rules from Captain ${captain.name}:\n- Work only in your own working directory and the folders listed with it. If the brief gives a path in another checkout, use the matching folder in yours.\n- For multi-step work, keep a progress note in your worktree and commit after each step.\n- Run the focused tests or checks that prove the change, and report the evidence.\n- Do not report done until the done-check from your brief passes.\n- End your final message with a 2 to 4 sentence summary first, then details.`,
     crew.trim() === "" ? "" : `CREW.md:\n${prefix(crew, 2_000)}`,
   ]
     .filter((part) => part !== "")
