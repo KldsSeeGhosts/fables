@@ -19,6 +19,7 @@ import { serverEnvironment } from "../../state/server";
 import { useEnvironmentScope, useEnvironmentScopeDenied } from "../../state/session";
 import { useMarkdownPreviewStyles } from "../files/FileMarkdownPreview";
 import { CaptainOrb } from "./CaptainOrb";
+import { useDuetShell } from "./useDuetShell";
 
 export type CaptainBriefParams = {
   readonly environmentId: string;
@@ -42,6 +43,7 @@ export function CaptainBriefSheet({ route }: StaticScreenProps<CaptainBriefParam
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const gt = useGT();
+  const isDuet = useDuetShell();
   const markdownStyle = useMarkdownPreviewStyles().nativeTextStyle;
   const environmentId = EnvironmentId.make(route.params.environmentId);
   const captainId = CaptainId.make(route.params.captainId);
@@ -57,11 +59,15 @@ export function CaptainBriefSheet({ route }: StaticScreenProps<CaptainBriefParam
   const digestNew =
     captainDigestNewSection(digest) ?? captainDigestMarkdownExcerpt(digest).markdown;
   const unavailable = readDenied
-    ? gt("You cannot read Captains in this environment.")
+    ? isDuet
+      ? gt("You cannot read Duets in this environment.")
+      : gt("You cannot read Captains in this environment.")
     : live.error !== null && live.data === null
       ? live.error
       : live.data !== null && captain === undefined
-        ? gt("This Captain no longer exists.")
+        ? isDuet
+          ? gt("This Duet no longer exists.")
+          : gt("This Captain no longer exists.")
         : null;
   const memories = (live.data?.memories ?? []).filter(
     (memory) => memory.captainId === captainId && memory.essential,
