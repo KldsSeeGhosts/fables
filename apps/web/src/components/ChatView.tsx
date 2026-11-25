@@ -381,6 +381,7 @@ import { useProactivePanels } from "../hooks/useProactivePanels";
 import { useIncrementalTimelineEntries } from "../hooks/useIncrementalTimelineEntries";
 import type { ComposerBannerStackItem } from "./chat/ComposerBannerStack";
 import { modelFallbackBannerItem } from "./chat/ComposerUsageLimits";
+import { CaptainContextResetNotice } from "./captains/CaptainContextResetNotice";
 import { ComposerSurface } from "./chat/ComposerSurface";
 import { resolveThreadSyncPhase } from "../threadSync";
 import { hasAvailableCompactionProvider } from "./chat/compaction.logic";
@@ -4055,6 +4056,11 @@ export default function ChatView(props: ChatViewProps) {
                     }
                   >
                     <ComposerSurface.Shell contextRow={showComposerContextStrip}>
+                      <CaptainContextResetNotice
+                        threadRef={isServerThread ? activeThreadRef : null}
+                        usedPercentage={activeContextWindow?.usedPercentage ?? null}
+                        onOpenThread={onOpenRelatedThreadStable}
+                      />
                       <div
                         ref={setComposerRequestCardHost}
                         data-chat-composer-request-host="true"
