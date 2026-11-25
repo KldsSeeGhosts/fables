@@ -19,6 +19,10 @@ html:root[data-theme-id="ksg-salon"] {
   --duet-quiet-pill-foreground: #555555;
   --duet-quiet-pill-hover-fill: #f5f5f5;
   --duet-quiet-pill-hover-foreground: #242424;
+  --duet-working-text: #b85a3c;
+  --duet-needs-input-text: #8f6a26;
+  --duet-attention-pill-fill: #f3e6c8;
+  --duet-attention-pill-foreground: #74561d;
   --composer-fill: #ffffff;
   --composer-shadow: none;
   --radius: 0.625rem;
@@ -48,6 +52,10 @@ html:root[data-theme-id="ksg-salon"] {
     --duet-quiet-pill-foreground: #a3a3a3;
     --duet-quiet-pill-hover-fill: #252525;
     --duet-quiet-pill-hover-foreground: #e3e3e3;
+    --duet-working-text: #e8957a;
+    --duet-needs-input-text: #e3b866;
+    --duet-attention-pill-fill: #4a3c22;
+    --duet-attention-pill-foreground: #f0cf8e;
   }
 
   [data-pane-cut],
@@ -103,6 +111,19 @@ html:root[data-theme-id="ksg-salon"] {
 
   [data-duet-card-title="receded"] {
     font-weight: 400;
+  }
+
+  [data-duet-channel-meta],
+  [data-duet-channel-stat] {
+    font-weight: 400;
+  }
+
+  [data-duet-attention-pill] {
+    font-size: 0.65625rem;
+    line-height: 1rem;
+    font-weight: 600;
+    background-color: var(--duet-attention-pill-fill);
+    color: var(--duet-attention-pill-foreground);
   }
 
   [data-duet-card-meta] > [role="img"]:first-child svg {
@@ -291,6 +312,10 @@ html:root[data-theme-id="ksg-salon"] {
 
   [data-duet-palette] {
     --duet-bubble-fg: #1f1f1f;
+    --duet-channel-selected: color-mix(in srgb, var(--duet-ink-base) 8%, #ffffff);
+    --duet-channel-branch-active: color-mix(in srgb, var(--duet-ink-base) 45%, #e5e5e5);
+    --duet-channel-tile-ring: color-mix(in srgb, var(--duet-ink-base) 14%, transparent);
+    --duet-orbit-track: color-mix(in srgb, var(--duet-ink) 14%, transparent);
   }
 
   [data-duet-palette="terracotta"] {
@@ -355,6 +380,46 @@ html:root[data-theme-id="ksg-salon"] {
       --duet-tint: color-mix(in srgb, var(--duet-ink-base) 22%, #1f1f1f);
       --duet-bubble: color-mix(in srgb, var(--duet-ink-base) 26%, #252525);
       --duet-bubble-fg: #ececec;
+      --duet-channel-selected: color-mix(in srgb, var(--duet-ink-base) 22%, #303030);
+      --duet-channel-branch-active: color-mix(in srgb, var(--duet-ink) 50%, #333333);
+      --duet-channel-tile-ring: color-mix(in srgb, var(--duet-ink) 22%, transparent);
+      --duet-orbit-track: color-mix(in srgb, var(--duet-ink) 24%, transparent);
+    }
+  }
+
+  /* Channel card tiles step from tint to bubble while the card is pointed at or focused. */
+  [data-duet-channel-card] [data-captain-tile] {
+    box-shadow: inset 0 0 0 1px var(--duet-channel-tile-ring);
+    transition: background-color 120ms ease-out;
+  }
+
+  [data-duet-channel-card]:is(:hover, :focus-within) [data-captain-tile] {
+    --duet-tile-fill: var(--duet-bubble);
+  }
+
+  /* The working arc turns by transform only; the ping plays twice when input is first needed. */
+  [data-captain-avatar-orbit="working"] {
+    animation: duet-orbit-spin 1.4s linear infinite;
+  }
+
+  [data-captain-avatar-ping] {
+    position: absolute;
+    inset: -3px;
+    border-radius: 9999px;
+    box-shadow: inset 0 0 0 1.5px var(--duet-needs-input-ring);
+    opacity: 0;
+    pointer-events: none;
+    animation: duet-attention-ping 600ms ease-out 2;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-captain-avatar-orbit="working"],
+    [data-captain-avatar-ping] {
+      animation: none;
+    }
+
+    [data-captain-avatar-orbit-arc] {
+      stroke-dasharray: 270 90;
     }
   }
 
@@ -420,6 +485,24 @@ html:root[data-theme-id="ksg-salon"] {
     [data-duet-task-highlight="true"] {
       animation: none;
     }
+  }
+}
+
+@keyframes duet-orbit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes duet-attention-ping {
+  from {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.15);
   }
 }
 

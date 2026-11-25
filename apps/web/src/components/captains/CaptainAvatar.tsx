@@ -122,15 +122,56 @@ function DuetEmblemGlyph({
   );
 }
 
+/** The ring a tile wears 3px outside its edge: a turning arc while working, a halo when waiting. */
+export type CaptainAvatarHalo = "working" | "needs-input";
+
+function CaptainAvatarHaloRing({ halo }: { halo: CaptainAvatarHalo }) {
+  return (
+    <>
+      {halo === "needs-input" ? <span aria-hidden data-captain-avatar-ping="" /> : null}
+      <svg
+        aria-hidden
+        viewBox="0 0 38 38"
+        fill="none"
+        strokeWidth={1.5}
+        data-captain-avatar-orbit={halo}
+        className="pointer-events-none absolute -inset-0.75"
+      >
+        {halo === "working" ? (
+          <>
+            <circle cx="19" cy="19" r="18.25" stroke="var(--duet-orbit-track)" />
+            <circle
+              cx="19"
+              cy="19"
+              r="18.25"
+              pathLength={360}
+              stroke="var(--duet-ink)"
+              strokeLinecap="round"
+              strokeDasharray="70 290"
+              transform="rotate(-90 19 19)"
+              data-captain-avatar-orbit-arc=""
+            />
+          </>
+        ) : (
+          <circle cx="19" cy="19" r="18.25" stroke="var(--duet-needs-input-ring)" />
+        )}
+      </svg>
+    </>
+  );
+}
+
 export function CaptainAvatar({
   avatar,
   size = "row",
   state = "idle",
+  halo,
   animateOnMount = false,
 }: {
   avatar: Avatar;
   size?: keyof typeof captainAvatarSizes | "hero";
   state?: CaptainAvatarState;
+  /** Tiles only. */
+  halo?: CaptainAvatarHalo | undefined;
   animateOnMount?: boolean;
 }) {
   const palette = captainPaletteOf(avatar);
@@ -145,16 +186,22 @@ export function CaptainAvatar({
       data-captain-state={state}
       data-captain-animate-on-mount={animateOnMount ? "true" : undefined}
       data-duet-palette={palette}
+      data-captain-tile={sizeData.tile ? "" : undefined}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center overflow-visible",
+        "relative inline-flex shrink-0 items-center justify-center overflow-visible",
         sizeData.frame,
         // oxlint-disable-next-line shadcn/no-arbitrary-values -- the Duet tile radius scales with the tile.
         sizeData.tile && "rounded-[28%]",
         state === "archived" && "opacity-50 grayscale",
       )}
-      style={sizeData.tile ? { backgroundColor: `var(--duet-tint, ${swatch.tint})` } : undefined}
+      style={
+        sizeData.tile
+          ? { backgroundColor: `var(--duet-tile-fill, var(--duet-tint, ${swatch.tint}))` }
+          : undefined
+      }
     >
       <DuetEmblemGlyph emblem={emblem} palette={palette} className={sizeData.glyph} />
+      {halo && sizeData.tile ? <CaptainAvatarHaloRing halo={halo} /> : null}
     </span>
   );
 }

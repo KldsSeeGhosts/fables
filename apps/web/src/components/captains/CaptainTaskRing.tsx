@@ -3,6 +3,8 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/model
 import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/shell";
 import { CircleCheck } from "lucide-react";
 
+import { cn } from "../../lib/utils";
+
 export type CaptainTaskRingStatus = "needs-input" | "working" | "ready" | "scheduled" | "done";
 
 export function captainTaskRingStatus(
@@ -26,12 +28,20 @@ export function captainTaskRingStatus(
 }
 
 /** The Duet task state glyph. Every ring is static SVG; scanning never repaints it. */
-export function CaptainTaskRing({ status }: { readonly status: CaptainTaskRingStatus }) {
+export function CaptainTaskRing({
+  status,
+  className,
+}: {
+  readonly status: CaptainTaskRingStatus;
+  readonly className?: string;
+}) {
   if (status === "done") {
-    return <CircleCheck aria-hidden className="size-3.5 shrink-0 text-[#838383]" />;
+    return (
+      <CircleCheck aria-hidden className={cn("size-3.5 shrink-0 text-[#838383]", className)} />
+    );
   }
   return (
-    <svg aria-hidden viewBox="0 0 14 14" className="size-3.5 shrink-0" fill="none">
+    <svg aria-hidden viewBox="0 0 14 14" className={cn("size-3.5 shrink-0", className)} fill="none">
       {status === "needs-input" ? (
         <>
           <circle cx="7" cy="7" r="5.5" stroke="#a98546" strokeWidth="1.5" />

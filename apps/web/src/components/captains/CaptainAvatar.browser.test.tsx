@@ -40,3 +40,19 @@ it("renders the hero size as a bare 28px emblem without a tile", async () => {
   expect(avatar?.className).not.toContain("rounded");
   expect(avatar?.style.backgroundColor).toBe("");
 });
+
+it("draws a status halo only around a tile", async () => {
+  await using screen = await render(
+    <>
+      <CaptainAvatar avatar={{ preset: "drop", color: "purple" }} size="large" halo="working" />
+      <CaptainAvatar avatar={{ preset: "drop", color: "purple" }} halo="needs-input" />
+    </>,
+  );
+  const [tile, row] = screen.container.querySelectorAll("[data-captain-avatar]");
+
+  expect(
+    tile?.querySelector("[data-captain-avatar-orbit]")?.getAttribute("data-captain-avatar-orbit"),
+  ).toBe("working");
+  expect(tile?.querySelector("[data-captain-avatar-orbit-arc]")).not.toBeNull();
+  expect(row?.querySelector("[data-captain-avatar-orbit]")).toBeNull();
+});

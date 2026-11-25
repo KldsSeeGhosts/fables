@@ -116,6 +116,9 @@ const contentButtonVariants = cva("outline-none", {
       // Duet sidebar rows: an 8px-inset 32px row whose fill marks the open page.
       "duet-row":
         "flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md ps-2 pe-2 text-left text-label text-foreground select-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-[current=page]:bg-(--duet-row-active) aria-[current=page]:hover:bg-(--duet-row-active)",
+      // A 56px two-line channel card; the open channel takes its palette's wash.
+      "duet-channel":
+        "flex h-14 w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg py-2.5 ps-2 pe-2.5 text-left text-foreground select-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-[current=page]:bg-(--duet-channel-selected,var(--duet-row-active)) aria-[current=page]:hover:bg-(--duet-channel-selected,var(--duet-row-active))",
       "duet-row-quiet":
         "flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md ps-2 pe-2 text-left text-label text-muted-foreground select-none hover:bg-sidebar-row-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
       transport:
