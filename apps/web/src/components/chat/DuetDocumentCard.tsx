@@ -3,7 +3,6 @@ import type { ScopedThreadRef } from "@t3tools/contracts";
 import { useGT } from "gt-react";
 import { FileText } from "lucide-react";
 
-import { openCaptainTasks } from "../captains/captainBriefTab";
 import { useRightPanelStore } from "../../rightPanelStore";
 import { Button } from "../ui/button";
 import type { DuetDocumentReference } from "./duetStream.logic";
@@ -19,7 +18,7 @@ function filePanelPath(href: string, workspaceRoot: string | undefined): string 
 /** A standalone document reference in a Captain channel reply. */
 export function DuetDocumentCard({
   document,
-  captainRef,
+  captainRef: _captainRef,
   threadRef,
   workspaceRoot,
 }: {
@@ -30,10 +29,6 @@ export function DuetDocumentCard({
 }) {
   const gt = useGT();
   const open = () => {
-    if (document.captainDocumentName !== null && captainRef !== null) {
-      openCaptainTasks(captainRef, "docs");
-      return;
-    }
     if (document.href !== null && threadRef !== null) {
       useRightPanelStore
         .getState()

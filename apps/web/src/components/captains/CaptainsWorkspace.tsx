@@ -9,7 +9,6 @@ import { workspaceAreaProps } from "../../lib/workspaceFocus";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { SettingsPaneHeader, SettingsTabNotch } from "../settings/SettingsTabNotch";
 import { SidebarInset } from "../ui/sidebar";
-import { openCaptainTasks } from "./captainBriefTab";
 import { CaptainEditorDialog } from "./CaptainEditorDialog";
 import { CaptainsInbox } from "./CaptainsInbox";
 import { useCaptainDestinations, useCaptainsDirectory } from "./captainsDirectory";
@@ -23,9 +22,8 @@ export function CaptainsWorkspace() {
   const { destinations, destination } = useCaptainDestinations(usePrimaryEnvironmentId());
   const [creating, setCreating] = useState(false);
   const openThread = useOpenCaptainThread();
-  const openCaptain = (environmentId: EnvironmentId, captain: Captain, view: "chat" | "make") => {
+  const openCaptain = (environmentId: EnvironmentId, captain: Captain, _view: "chat" | "make") => {
     const threadRef = scopeThreadRef(environmentId, captain.primaryThreadId);
-    if (view === "make") openCaptainTasks(threadRef, "docs");
     openThread(threadRef);
   };
 

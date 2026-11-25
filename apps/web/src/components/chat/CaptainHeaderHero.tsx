@@ -29,7 +29,6 @@ import { textDirection } from "~/textDirection";
 import { CaptainAvatar, type CaptainAvatarState } from "../captains/CaptainAvatar";
 import { useCaptainAvatarLabels } from "../captains/captainAvatarLabels";
 import { CaptainProfileDialogs, useCaptainProfile } from "../captains/CaptainBriefPanel";
-import { captainBriefTabAtom, openCaptainTasks } from "../captains/captainBriefTab";
 import {
   captainEmblemOf,
   captainPaletteOf,
@@ -38,7 +37,6 @@ import {
   DUET_PICKER,
 } from "../captains/captainPalette";
 import { CaptainResetDialog } from "../captains/CaptainResetButton";
-import { appAtomRegistry } from "../../rpc/atomRegistry";
 import {
   Menu,
   MenuGroup,
@@ -103,10 +101,7 @@ export function CaptainHeaderTitleMenu({
     const error = await profile.save({ avatar });
     if (error !== null) toastManager.add({ type: "error", title: error });
   };
-  const openInstructions = () => {
-    appAtomRegistry.set(captainBriefTabAtom(threadRef), "docs");
-    openCaptainTasks(threadRef, "docs");
-  };
+  const openMemory = () => profile.edit("memory");
   const commitRename = async (value: string) => {
     renameSettledRef.current = true;
     setRenaming(false);
@@ -185,9 +180,9 @@ export function CaptainHeaderTitleMenu({
               <PencilIcon aria-hidden />
               <T>Rename</T>
             </MenuItem>
-            <MenuItem onClick={openInstructions}>
+            <MenuItem onClick={openMemory}>
               <StickyNoteIcon aria-hidden />
-              <T>Instructions</T>
+              <T>Memory</T>
             </MenuItem>
             <MenuSub>
               <MenuSubTrigger disabled={!canUpdate || pending}>

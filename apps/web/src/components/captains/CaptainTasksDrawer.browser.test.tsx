@@ -38,6 +38,7 @@ vi.mock(import("../../state/entities"), async (importOriginal) => ({
   useChildThreadInputs: (() => state.children) as never,
   useProjects: (() => []) as never,
   useQuietThreadProjection: (() => null) as never,
+  useThreadShells: (() => state.children) as never,
   useQuietThreadShell: ((ref: { threadId: ThreadId }) =>
     ref.threadId === state.parent?.id
       ? state.parent
@@ -117,11 +118,10 @@ it("shows Captain tasks with their status and workspace detail", async () => {
 
   await expect.element(screen.getByText("Tasks in #Maria")).toBeVisible();
   await expect
-    .element(screen.getByRole("tab", { name: "Recent" }))
+    .element(screen.getByRole("tab", { name: "Today" }))
     .toHaveAttribute("aria-selected", "true");
   await expect.element(screen.getByRole("tab", { name: "All" })).toBeVisible();
   await expect.element(screen.getByRole("tab", { name: "Scheduled" })).toBeVisible();
-  await expect.element(screen.getByRole("tab", { name: "Docs" })).toBeVisible();
   await expect.element(screen.getByText("Fix checkout")).toBeVisible();
   await expect.element(screen.getByText("Needs input")).toBeVisible();
   await expect.element(screen.getByText("fix/checkout")).toBeVisible();
@@ -181,6 +181,6 @@ it("renders the right-panel add-surface button in its header when panel tabs are
       </PanelTabSlotsContext>,
     );
     await expect.element(screen.getByText("Tasks in #Maria")).not.toBeInTheDocument();
-    await expect.element(screen.getByRole("tab", { name: "Recent" })).toBeVisible();
+    await expect.element(screen.getByRole("tab", { name: "Today" })).toBeVisible();
   }
 });

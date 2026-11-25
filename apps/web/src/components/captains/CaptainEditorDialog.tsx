@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   CaptainId,
   clampManagedRuntimeMode,
@@ -44,7 +45,11 @@ import {
 import { CaptainReportPolicyPicker } from "./CaptainReportPolicyPicker";
 import { CaptainScope } from "./CaptainScope";
 import type { CaptainProfileSection } from "./CaptainBriefPanel";
-import { captainCommandError } from "./useCaptain";
+import { CaptainDocuments } from "./CaptainDocuments";
+import { CaptainEarlierConversations } from "./CaptainEarlierConversations";
+import { CaptainMemories } from "./CaptainMemories";
+import { captainCommandError, useCaptains } from "./useCaptain";
+import { useRightPanelStore } from "../../rightPanelStore";
 
 type Destination = { readonly id: EnvironmentId; readonly label: string };
 
@@ -52,7 +57,7 @@ export function CaptainEditorDialog({
   destination,
   destinations,
   captain,
-  initialSection: _initialSection = "profile",
+  initialSection = "profile",
   onClose,
   onSave,
 }: {
@@ -79,6 +84,7 @@ export function CaptainEditorDialog({
   const [scopedProjectIds, setScope] = useState<ReadonlyArray<ProjectId>>(
     captain?.scopedProjectIds ?? [],
   );
+  const [section, setSection] = useState<CaptainProfileSection>(initialSection);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const config = useAtomValue(serverEnvironment.configValueAtom(environmentId));
@@ -161,13 +167,7 @@ export function CaptainEditorDialog({
       }}
     >
       <DialogPopup className="sm:max-w-lg">
-        <form
-          className="flex min-h-0 flex-col"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void save();
-          }}
-        >
+        <div className="flex min-h-0 flex-col">
           <DialogHeader>
             <DialogTitle>
               {captain === undefined ? (
@@ -193,221 +193,323 @@ export function CaptainEditorDialog({
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
-            {showEnvironment ? (
-              <div className="grid gap-1.5">
-                <label htmlFor={`${fieldId}-environment`} className="text-label">
-                  <T>Environment</T>
-                </label>
-                <Select
-                  value={environmentId}
-                  items={destinations.map(({ id, label }) => ({ value: id, label }))}
-                  onValueChange={(value) => {
-                    if (value === null) return;
-                    setEnvironmentId(value);
-                    setScope([]);
-                  }}
-                  disabled={saving}
-                >
-                  <SelectTrigger id={`${fieldId}-environment`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    {destinations.map(({ id, label }) => (
-                      <SelectItem key={id} value={id}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
-              </div>
-            ) : null}
-            <div className="flex items-start gap-3">
-              <div className="flex size-16 shrink-0 items-center justify-center">
-                <CaptainAvatar
-                  key={`${avatar.preset}:${avatar.color}`}
-                  avatar={avatar}
-                  size="profile"
-                  animateOnMount
-                />
-              </div>
-              <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
-                <div className="grid min-w-0 gap-1.5">
-                  <label htmlFor={`${fieldId}-name`} className="text-label">
-                    <T>Name</T>
-                  </label>
-                  <Input
-                    id={`${fieldId}-name`}
-                    required
-                    autoFocus
-                    maxLength={80}
-                    placeholder={gt("e.g. Atlas")}
-                    value={name}
-                    disabled={saving}
-                    onChange={(event) => setName(event.target.value)}
-                  />
-                </div>
-                <div className="grid min-w-0 gap-1.5">
-                  <label htmlFor={`${fieldId}-role`} className="text-label">
-                    <T>Role</T>{" "}
-                    <span className="text-muted-foreground">
-                      <T>(optional)</T>
-                    </span>
-                  </label>
-                  <Input
-                    id={`${fieldId}-role`}
-                    maxLength={120}
-                    placeholder={gt("e.g. Release manager")}
-                    value={role}
-                    disabled={saving}
-                    onChange={(event) => setRole(event.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="grid gap-3">
-              <div className="grid gap-1.5">
-                <span className="text-label">{isDuet ? <T>Creature</T> : <T>Emblem</T>}</span>
-                <ToggleGroup
-                  aria-label={gt("Avatar emblem")}
-                  variant="default"
-                  size="compact"
-                  detached
-                  className="flex w-full flex-wrap"
-                  value={[avatar.preset]}
-                  disabled={saving}
-                  onValueChange={(value) => {
-                    const emblem = DUET_EMBLEM_ORDER.find(
-                      (entry) => DUET_PICKER.emblems[entry] === value[0],
-                    );
-                    if (emblem) {
-                      setAvatar((current) => ({
-                        ...current,
-                        preset: DUET_PICKER.emblems[emblem],
-                      }));
-                    }
-                  }}
-                >
-                  {DUET_EMBLEM_ORDER.map((emblem) => (
-                    <Toggle
-                      key={emblem}
-                      value={DUET_PICKER.emblems[emblem]}
-                      aria-label={emblemLabels[emblem]}
-                      title={emblemLabels[emblem]}
-                    >
-                      <CaptainAvatar
-                        avatar={{ preset: DUET_PICKER.emblems[emblem], color: avatar.color }}
-                        size="picker"
-                      />
-                    </Toggle>
-                  ))}
-                </ToggleGroup>
-              </div>
-              <div className="grid gap-1.5">
-                <span className="text-label">
-                  <T>Color</T>
-                </span>
-                <ToggleGroup
-                  aria-label={gt("Avatar color")}
-                  variant="default"
-                  size="compact"
-                  detached
-                  className="flex w-full flex-wrap"
-                  value={[avatar.color]}
-                  disabled={saving}
-                  onValueChange={(value) => {
-                    const palette = DUET_PALETTE_ORDER.find(
-                      (entry) => DUET_PICKER.palettes[entry] === value[0],
-                    );
-                    if (palette) {
-                      setAvatar((current) => ({
-                        ...current,
-                        color: DUET_PICKER.palettes[palette],
-                      }));
-                    }
-                  }}
-                >
-                  {DUET_PALETTE_ORDER.map((palette) => (
-                    <Toggle
-                      key={palette}
-                      value={DUET_PICKER.palettes[palette]}
-                      aria-label={paletteLabels[palette]}
-                      title={paletteLabels[palette]}
-                    >
-                      <span
-                        aria-hidden
-                        className="size-3.5 rounded-full ring-1 ring-border"
-                        style={{ backgroundColor: DUET_PALETTE_SWATCH[palette].ink }}
-                      />
-                    </Toggle>
-                  ))}
-                </ToggleGroup>
-              </div>
-            </div>
-            <div className="grid gap-1.5">
-              <label htmlFor={`${fieldId}-instructions`} className="text-label">
-                <T>Instructions</T>
-              </label>
-              <Textarea
-                id={`${fieldId}-instructions`}
-                rows={5}
-                maxLength={16_000}
-                placeholder={
-                  isDuet
-                    ? gt(
-                        "What this Duet is responsible for, how it should work, and when to check in with you.",
-                      )
-                    : gt(
-                        "What this Captain is responsible for, how it should work, and when to check in with you.",
-                      )
+            {captain !== undefined ? (
+              <ToggleGroup
+                aria-label={
+                  isDuet ? gt("Duet customization section") : gt("Captain customization section")
                 }
-                value={instructions}
-                disabled={saving}
-                onChange={(event) => setInstructions(event.target.value)}
+                value={[section]}
+                onValueChange={(value) => {
+                  if (value[0] === "profile" || value[0] === "memory") setSection(value[0]);
+                }}
+              >
+                <Toggle value="profile">
+                  <T>Profile</T>
+                </Toggle>
+                <Toggle value="memory">
+                  <T>Memory</T>
+                </Toggle>
+              </ToggleGroup>
+            ) : null}
+            {section === "memory" && captain !== undefined ? (
+              <CaptainMemorySection
+                captain={captain}
+                environmentId={environmentId}
+                onClose={onClose}
               />
-            </div>
-            <CaptainScope
-              projects={projects}
-              selected={scopedProjectIds}
-              disabled={saving}
-              onChange={setScope}
-            />
-            {captain === undefined ? (
-              <div className="grid gap-2">
-                <span id={`${fieldId}-report-policy`} className="text-label">
-                  <T>When a delegated task finishes</T>
-                </span>
-                <CaptainReportPolicyPicker
-                  labelledBy={`${fieldId}-report-policy`}
-                  value={reportPolicy}
+            ) : null}
+            <div style={{ display: section === "profile" ? "contents" : "none" }}>
+              {showEnvironment ? (
+                <div className="grid gap-1.5">
+                  <label htmlFor={`${fieldId}-environment`} className="text-label">
+                    <T>Environment</T>
+                  </label>
+                  <Select
+                    value={environmentId}
+                    items={destinations.map(({ id, label }) => ({ value: id, label }))}
+                    onValueChange={(value) => {
+                      if (value === null) return;
+                      setEnvironmentId(value);
+                      setScope([]);
+                    }}
+                    disabled={saving}
+                  >
+                    <SelectTrigger id={`${fieldId}-environment`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      {destinations.map(({ id, label }) => (
+                        <SelectItem key={id} value={id}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                </div>
+              ) : null}
+              <div className="flex items-start gap-3">
+                <div className="flex size-16 shrink-0 items-center justify-center">
+                  <CaptainAvatar
+                    key={`${avatar.preset}:${avatar.color}`}
+                    avatar={avatar}
+                    size="profile"
+                    animateOnMount
+                  />
+                </div>
+                <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
+                  <div className="grid min-w-0 gap-1.5">
+                    <label htmlFor={`${fieldId}-name`} className="text-label">
+                      <T>Name</T>
+                    </label>
+                    <Input
+                      id={`${fieldId}-name`}
+                      required
+                      autoFocus
+                      maxLength={80}
+                      placeholder={gt("e.g. Atlas")}
+                      value={name}
+                      disabled={saving}
+                      onChange={(event) => setName(event.target.value)}
+                    />
+                  </div>
+                  <div className="grid min-w-0 gap-1.5">
+                    <label htmlFor={`${fieldId}-role`} className="text-label">
+                      <T>Role</T>{" "}
+                      <span className="text-muted-foreground">
+                        <T>(optional)</T>
+                      </span>
+                    </label>
+                    <Input
+                      id={`${fieldId}-role`}
+                      maxLength={120}
+                      placeholder={gt("e.g. Release manager")}
+                      value={role}
+                      disabled={saving}
+                      onChange={(event) => setRole(event.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="grid gap-3">
+                <div className="grid gap-1.5">
+                  <span className="text-label">{isDuet ? <T>Creature</T> : <T>Emblem</T>}</span>
+                  <ToggleGroup
+                    aria-label={gt("Avatar emblem")}
+                    variant="default"
+                    size="compact"
+                    detached
+                    className="flex w-full flex-wrap"
+                    value={[avatar.preset]}
+                    disabled={saving}
+                    onValueChange={(value) => {
+                      const emblem = DUET_EMBLEM_ORDER.find(
+                        (entry) => DUET_PICKER.emblems[entry] === value[0],
+                      );
+                      if (emblem) {
+                        setAvatar((current) => ({
+                          ...current,
+                          preset: DUET_PICKER.emblems[emblem],
+                        }));
+                      }
+                    }}
+                  >
+                    {DUET_EMBLEM_ORDER.map((emblem) => (
+                      <Toggle
+                        key={emblem}
+                        value={DUET_PICKER.emblems[emblem]}
+                        aria-label={emblemLabels[emblem]}
+                        title={emblemLabels[emblem]}
+                      >
+                        <CaptainAvatar
+                          avatar={{ preset: DUET_PICKER.emblems[emblem], color: avatar.color }}
+                          size="picker"
+                        />
+                      </Toggle>
+                    ))}
+                  </ToggleGroup>
+                </div>
+                <div className="grid gap-1.5">
+                  <span className="text-label">
+                    <T>Color</T>
+                  </span>
+                  <ToggleGroup
+                    aria-label={gt("Avatar color")}
+                    variant="default"
+                    size="compact"
+                    detached
+                    className="flex w-full flex-wrap"
+                    value={[avatar.color]}
+                    disabled={saving}
+                    onValueChange={(value) => {
+                      const palette = DUET_PALETTE_ORDER.find(
+                        (entry) => DUET_PICKER.palettes[entry] === value[0],
+                      );
+                      if (palette) {
+                        setAvatar((current) => ({
+                          ...current,
+                          color: DUET_PICKER.palettes[palette],
+                        }));
+                      }
+                    }}
+                  >
+                    {DUET_PALETTE_ORDER.map((palette) => (
+                      <Toggle
+                        key={palette}
+                        value={DUET_PICKER.palettes[palette]}
+                        aria-label={paletteLabels[palette]}
+                        title={paletteLabels[palette]}
+                      >
+                        <span
+                          aria-hidden
+                          className="size-3.5 rounded-full ring-1 ring-border"
+                          style={{ backgroundColor: DUET_PALETTE_SWATCH[palette].ink }}
+                        />
+                      </Toggle>
+                    ))}
+                  </ToggleGroup>
+                </div>
+              </div>
+              <div className="grid gap-1.5">
+                <label htmlFor={`${fieldId}-instructions`} className="text-label">
+                  <T>Instructions</T>
+                </label>
+                <Textarea
+                  id={`${fieldId}-instructions`}
+                  rows={5}
+                  maxLength={16_000}
+                  placeholder={
+                    isDuet
+                      ? gt(
+                          "What this Duet is responsible for, how it should work, and when to check in with you.",
+                        )
+                      : gt(
+                          "What this Captain is responsible for, how it should work, and when to check in with you.",
+                        )
+                  }
+                  value={instructions}
                   disabled={saving}
-                  onChange={setReportPolicy}
+                  onChange={(event) => setInstructions(event.target.value)}
                 />
               </div>
-            ) : null}
-            {error !== null ? (
-              <p role="alert" className="text-body text-destructive-foreground">
-                {error}
-              </p>
-            ) : null}
+              <CaptainScope
+                projects={projects}
+                selected={scopedProjectIds}
+                disabled={saving}
+                onChange={setScope}
+              />
+              {captain === undefined ? (
+                <div className="grid gap-2">
+                  <span id={`${fieldId}-report-policy`} className="text-label">
+                    <T>When a delegated task finishes</T>
+                  </span>
+                  <CaptainReportPolicyPicker
+                    labelledBy={`${fieldId}-report-policy`}
+                    value={reportPolicy}
+                    disabled={saving}
+                    onChange={setReportPolicy}
+                  />
+                </div>
+              ) : null}
+              {error !== null ? (
+                <p role="alert" className="text-body text-destructive-foreground">
+                  {error}
+                </p>
+              ) : null}
+            </div>
           </DialogPanel>
           <DialogFooter>
             <Button type="button" variant="secondary" disabled={saving} onClick={onClose}>
-              <T>Cancel</T>
+              {section === "memory" ? <T>Close</T> : <T>Cancel</T>}
             </Button>
-            <Button type="submit" disabled={saving || !canSave || !name.trim()}>
-              {captain === undefined ? (
-                isDuet ? (
-                  <T>Create Duet</T>
+            {section === "profile" ? (
+              <Button
+                type="button"
+                disabled={saving || !canSave || !name.trim()}
+                onClick={() => void save()}
+              >
+                {captain === undefined ? (
+                  isDuet ? (
+                    <T>Create Duet</T>
+                  ) : (
+                    <T>Create Captain</T>
+                  )
                 ) : (
-                  <T>Create Captain</T>
-                )
-              ) : (
-                <T>Save changes</T>
-              )}
-            </Button>
+                  <T>Save changes</T>
+                )}
+              </Button>
+            ) : null}
           </DialogFooter>
-        </form>
+        </div>
       </DialogPopup>
     </Dialog>
+  );
+}
+
+function CaptainMemorySection({
+  captain,
+  environmentId,
+  onClose,
+}: {
+  readonly captain: Captain;
+  readonly environmentId: EnvironmentId;
+  readonly onClose: () => void;
+}) {
+  const details = useCaptains(environmentId, captain.id);
+  if (details.isPending || details.data == null) {
+    return (
+      <p className="text-body text-muted-foreground">
+        <T>Loading memory…</T>
+      </p>
+    );
+  }
+  return (
+    <div className="grid gap-5">
+      <p className="text-body text-muted-foreground">
+        <T>
+          Memory tells this Duet what to carry into new conversations. Documents shape its work,
+          memories are facts it can recall, and earlier conversations are read-only history.
+        </T>
+      </p>
+      <section className="grid gap-2">
+        <h3 className="text-label">
+          <T>Documents</T>
+        </h3>
+        <CaptainDocuments
+          details={{ captain, documents: details.data.documents }}
+          environmentId={environmentId}
+        />
+      </section>
+      <section className="grid gap-2">
+        <h3 className="text-label">
+          <T>Memories</T>
+        </h3>
+        <CaptainMemories
+          captainId={captain.id}
+          environmentId={environmentId}
+          memories={details.data.memories}
+        />
+      </section>
+      <section className="grid gap-2">
+        <h3 className="text-label">
+          <T>Earlier conversations</T>
+        </h3>
+        {captain.earlierThreadIds.length === 0 ? (
+          <p className="text-meta text-muted-foreground">
+            <T>No earlier conversations yet.</T>
+          </p>
+        ) : (
+          <CaptainEarlierConversations
+            captain={captain}
+            environmentId={environmentId}
+            onOpen={(threadId) => {
+              useRightPanelStore
+                .getState()
+                .openThread(scopeThreadRef(environmentId, captain.primaryThreadId), threadId);
+              onClose();
+            }}
+          />
+        )}
+      </section>
+    </div>
   );
 }

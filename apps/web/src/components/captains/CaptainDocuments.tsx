@@ -1,192 +1,189 @@
-import { useAtomValue } from "@effect/atom-react";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import {
-  CaptainDocumentName,
-  CaptainError,
-  type Captain,
-  type CaptainDocument,
-  type EnvironmentId,
-} from "@t3tools/contracts";
-import * as Schema from "effect/Schema";
-import { T, useGT, Var } from "gt-react";
+import type { CaptainDocumentName, CaptainId, EnvironmentId } from "@t3tools/contracts";
+import { T, useGT } from "gt-react";
+import { ArrowLeftIcon, FileTextIcon } from "lucide-react";
 import { useState } from "react";
 
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { Button } from "../ui/button";
+import { Button, ContentButton } from "../ui/button";
 import { Textarea } from "../ui/textarea";
-import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { captainCommandError } from "./useCaptain";
 
-const isCaptainError = Schema.is(CaptainError);
+type CaptainDocumentDetails = {
+  readonly captain: { readonly id: CaptainId };
+  readonly documents: ReadonlyArray<{
+    readonly name: CaptainDocumentName;
+    readonly content: string;
+    readonly revision: number;
+  }>;
+};
 
-type Edit = { readonly content: string; readonly revision: number };
+const DOCUMENT_NAMES: ReadonlyArray<CaptainDocumentName> = [
+  "AGENTS.md",
+  "NOTES.md",
+  "CREW.md",
+  "DIGEST.md",
+];
 
-export function CaptainDocuments({
-  captain,
-  environmentId,
-  documents,
-  refresh,
-  selected,
-  onSelect,
+function useDocumentCopy(name: CaptainDocumentName): string {
+  const gt = useGT();
+  switch (name) {
+    case "AGENTS.md":
+      return gt("Working instructions the Duet receives at the start of each conversation.");
+    case "NOTES.md":
+      return gt("Long-term notes the Duet receives at the start of each conversation.");
+    case "CREW.md":
+      return gt("Rules passed to every task this Duet delegates.");
+    case "DIGEST.md":
+      return gt("A running summary written by the morning brief.");
+  }
+}
+
+function DocumentRow({
+  name,
+  empty,
+  onOpen,
 }: {
-  captain: Captain;
-  environmentId: EnvironmentId;
-  documents: ReadonlyArray<CaptainDocument>;
-  refresh: () => void;
-  /** Lets a caller pick the open document, as the Make view's cards do. */
-  selected?: CaptainDocumentName;
-  onSelect?: (name: CaptainDocumentName) => void;
+  readonly name: CaptainDocumentName;
+  readonly empty: boolean;
+  readonly onOpen: () => void;
 }) {
   const gt = useGT();
-  const [ownName, setOwnName] = useState<CaptainDocumentName>("NOTES.md");
-  const name = selected ?? ownName;
-  const setName = onSelect ?? setOwnName;
-  const [edits, setEdits] = useState<Partial<Record<CaptainDocumentName, Edit>>>({});
-  const [saved, setSaved] = useState<Partial<Record<CaptainDocumentName, CaptainDocument>>>({});
-  const [serverConflict, setServerConflict] = useState<CaptainDocumentName | null>(null);
-  const [error, setError] = useState<{ name: CaptainDocumentName; text: string } | null>(null);
-  const [saving, setSaving] = useState(false);
-  const allowed = useAtomValue(
-    serverEnvironment.updateCaptainDocument.permissionAtom(environmentId),
+  const copy = useDocumentCopy(name);
+  return (
+    <ContentButton
+      variant="inset-row-multiline"
+      className="h-auto min-h-12 items-start"
+      onClick={onOpen}
+    >
+      <FileTextIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-label text-foreground">{name}</span>
+        <span className="block text-meta text-muted-foreground">{copy}</span>
+      </span>
+      <span className="shrink-0 text-meta text-muted-foreground">
+        {empty ? gt("Empty") : gt("Edit")}
+      </span>
+    </ContentButton>
   );
-  const update = useAtomCommand(serverEnvironment.updateCaptainDocument, { reportFailure: false });
-  const live = documents.find(
-    (document) => document.name === name && document.captainId === captain.id,
-  );
-  const justSaved = saved[name];
-  const current = justSaved && justSaved.revision > (live?.revision ?? 0) ? justSaved : live;
-  const currentRevision = current?.revision ?? 0;
-  const currentContent = current?.content ?? "";
-  const edit = edits[name];
-  const conflict =
-    edit !== undefined && (edit.revision < currentRevision || serverConflict === name);
-  const canReconcile = edit !== undefined && edit.revision < currentRevision;
+}
 
-  const clearEdit = (documentName: CaptainDocumentName) =>
-    setEdits((previous) => ({ ...previous, [documentName]: undefined }));
+function DocumentEditor({
+  details,
+  environmentId,
+  name,
+  onBack,
+}: {
+  readonly details: CaptainDocumentDetails;
+  readonly environmentId: EnvironmentId;
+  readonly name: CaptainDocumentName;
+  readonly onBack: () => void;
+}) {
+  const gt = useGT();
+  const document = details.documents.find((entry) => entry.name === name) ?? {
+    name,
+    content: "",
+    revision: 0,
+  };
+  const [content, setContent] = useState(document.content);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const update = useAtomCommand(serverEnvironment.updateCaptainDocument, { reportFailure: false });
+  const copy = useDocumentCopy(name);
+
   const save = async () => {
-    if (!allowed || edit === undefined || saving || conflict) return;
-    setError(null);
     setSaving(true);
+    setError(null);
     const result = await update({
       environmentId,
       input: {
-        captainId: captain.id,
+        captainId: details.captain.id,
         name,
-        content: edit.content,
-        expectedRevision: edit.revision,
+        content,
+        expectedRevision: document.revision,
       },
     });
     setSaving(false);
     if (result._tag === "Failure") {
-      const failure = squashAtomCommandFailure(result);
-      if (isCaptainError(failure) && failure.code === "conflict") {
-        setServerConflict(name);
-        refresh();
-      } else {
-        setError({ name, text: captainCommandError(result, gt("Could not save document.")) });
-      }
+      setError(captainCommandError(result, gt("Could not save the document.")));
       return;
     }
-    setSaved((previous) => ({ ...previous, [name]: result.value }));
-    clearEdit(name);
+    onBack();
   };
 
   return (
-    <section className="space-y-3">
-      <div className="overflow-x-auto">
-        <ToggleGroup
-          aria-label={gt("Captain documents")}
-          value={[name]}
-          onValueChange={(value) => {
-            const selected = CaptainDocumentName.literals.find((entry) => entry === value[0]);
-            if (selected !== undefined) setName(selected);
-          }}
+    <div className="grid gap-3">
+      <div className="flex items-start gap-2">
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={gt("Back to documents")}
+          onClick={onBack}
         >
-          {CaptainDocumentName.literals.map((documentName) => (
-            <Toggle value={documentName} key={documentName}>
-              {documentName}
-            </Toggle>
-          ))}
-        </ToggleGroup>
+          <ArrowLeftIcon />
+        </Button>
+        <div className="min-w-0">
+          <h4 className="text-label text-foreground">{name}</h4>
+          <p className="text-meta text-muted-foreground">{copy}</p>
+        </div>
       </div>
       <Textarea
         aria-label={name}
-        rows={12}
-        maxLength={64_000}
-        spellCheck={false}
-        readOnly={!allowed || saving}
-        value={edit?.content ?? currentContent}
-        onChange={(event) => {
-          const content = event.target.value;
-          setEdits({ ...edits, [name]: { content, revision: edit?.revision ?? currentRevision } });
-        }}
+        rows={10}
+        value={content}
+        disabled={saving}
+        onChange={(event) => setContent(event.target.value)}
       />
-      <p className="text-meta text-muted-foreground">
-        <T>
-          Server revision <Var>{currentRevision}</Var>
-        </T>
-      </p>
-      {conflict ? (
-        <div className="space-y-2 rounded-md border border-warning/40 p-3">
-          <p role="alert" className="text-body">
-            <T>The server has a newer revision. Your draft is still here.</T>
-          </p>
-          {canReconcile ? (
-            <>
-              <details className="text-body">
-                <summary className="cursor-pointer">
-                  <T>View server copy</T>
-                </summary>
-                <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words text-meta">
-                  {currentContent}
-                </pre>
-              </details>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    clearEdit(name);
-                    setServerConflict(null);
-                  }}
-                >
-                  <T>Use server copy</T>
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    setEdits({ ...edits, [name]: { ...edit, revision: currentRevision } });
-                    setServerConflict(null);
-                  }}
-                >
-                  <T>Keep my draft</T>
-                </Button>
-              </div>
-            </>
-          ) : (
-            <Button size="sm" variant="secondary" onClick={refresh}>
-              <T>Refresh revision</T>
-            </Button>
-          )}
-        </div>
-      ) : null}
-      {error?.name === name ? (
-        <p role="alert" className="text-body text-destructive-foreground">
-          {error.text}
+      {error ? (
+        <p role="alert" className="text-meta text-destructive-foreground">
+          {error}
         </p>
       ) : null}
-      <Button
-        size="sm"
-        onClick={() => void save()}
-        disabled={
-          !allowed || saving || conflict || edit === undefined || edit.content === currentContent
-        }
-      >
-        <T>Save document</T>
-      </Button>
-    </section>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" disabled={saving} onClick={onBack}>
+          <T>Cancel</T>
+        </Button>
+        <Button type="button" disabled={saving} onClick={() => void save()}>
+          <T>Save document</T>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** The Captain's document list; choosing one replaces the list with that document's editor. */
+export function CaptainDocuments({
+  details,
+  environmentId,
+}: {
+  readonly details: CaptainDocumentDetails;
+  readonly environmentId: EnvironmentId;
+}) {
+  const [editing, setEditing] = useState<CaptainDocumentName | null>(null);
+  if (editing !== null) {
+    return (
+      <DocumentEditor
+        key={editing}
+        details={details}
+        environmentId={environmentId}
+        name={editing}
+        onBack={() => setEditing(null)}
+      />
+    );
+  }
+  return (
+    <div className="grid gap-1">
+      {DOCUMENT_NAMES.map((name) => (
+        <DocumentRow
+          key={name}
+          name={name}
+          empty={
+            (details.documents.find((document) => document.name === name)?.content.trim() ?? "") ===
+            ""
+          }
+          onOpen={() => setEditing(name)}
+        />
+      ))}
+    </div>
   );
 }

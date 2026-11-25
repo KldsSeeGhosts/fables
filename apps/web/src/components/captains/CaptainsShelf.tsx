@@ -307,7 +307,7 @@ function CaptainShelfRow({
   const isDuet = useDuetShell();
   const threadRef = scopeThreadRef(environmentId, captain.primaryThreadId);
   const openView = (tab: CaptainDrawerTab) => {
-    appAtomRegistry.set(captainBriefTabAtom(threadRef), tab === "docs" ? "docs" : "brief");
+    appAtomRegistry.set(captainBriefTabAtom(threadRef), "brief");
     openCaptainTasks(threadRef, tab);
     onOpen(threadRef);
   };
@@ -343,8 +343,8 @@ function CaptainShelfRow({
         <MenuItem onClick={() => openView("today")}>
           <T>Open Tasks</T>
         </MenuItem>
-        <MenuItem onClick={() => openView("docs")}>
-          <T>Open Docs</T>
+        <MenuItem onClick={() => profile.edit("memory")}>
+          <T>Memory</T>
         </MenuItem>
         <MenuSeparator />
         <MenuItem disabled={!canUpdate} onClick={() => profile.edit()}>
