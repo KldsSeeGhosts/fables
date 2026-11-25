@@ -291,11 +291,12 @@ function isClaudeEnvTruthy(value: string | undefined): boolean {
   return value !== undefined && ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
 
-function claudeAutoCompactThreshold(autoCompactWindow: string, maxTokens: number | null) {
-  const windowTokens = Number(autoCompactWindow);
-  return windowTokens > 0 && (maxTokens === null || windowTokens < maxTokens)
-    ? { autoCompactThreshold: windowTokens - CLAUDE_AUTO_COMPACT_RESERVE_TOKENS }
-    : {};
+function claudeAutoCompactThreshold(autoCompactWindow: string | null, maxTokens: number | null) {
+  if (autoCompactWindow === null || maxTokens === null) return {};
+  const customWindowTokens = autoCompactWindow === "" ? null : Number(autoCompactWindow);
+  const threshold =
+    Math.min(customWindowTokens ?? maxTokens, maxTokens) - CLAUDE_AUTO_COMPACT_RESERVE_TOKENS;
+  return threshold > 0 ? { autoCompactThreshold: threshold } : {};
 }
 
 function optionalClaudeUsageTokenCount(value: unknown): number | undefined {
@@ -326,7 +327,7 @@ export function claudeProviderTurnTokenUsage(
   },
   maxTokens: number | null,
   updatedAt: string,
-  autoCompactWindow = "",
+  autoCompactWindow: string | null = "",
   requestedAt?: DateTime.Utc,
 ) {
   const inputTokens = claudeMessageInputTokens(usage);
@@ -5377,7 +5378,7 @@ interface ActiveClaudeTurnContext {
   unansweredRequestWatch?: Fiber.Fiber<unknown> | undefined;
   readonly queryPolicy: ClaudeRuntimeQueryPolicy;
   readonly input: ProviderAdapter.ProviderAdapterV2TurnInput;
-  readonly autoCompactWindow: string;
+  readonly autoCompactWindow: string | null;
   readonly nativeThreadId: string;
   readonly nativeTurnId: string;
   nativeMessageCursor: string | null;
@@ -6153,7 +6154,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
     // With auto-compaction off Claude never compacts, so there is no threshold to report.
     for (const name of ["DISABLE_COMPACT", "DISABLE_AUTO_COMPACT"]) {
       const value = yield* resolveClaudeEnv(cwd, launchArgSettings, name);
-      if (isClaudeEnvTruthy(value)) return "";
+      if (isClaudeEnvTruthy(value)) return null;
     }
     const launchEnabled = launchArgSettings?.autoCompactEnabled;
     let autoCompactEnabled = typeof launchEnabled === "boolean" ? launchEnabled : undefined;
@@ -6167,7 +6168,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
         autoCompactEnabled = settings.autoCompactEnabled;
       }
     }
-    if (autoCompactEnabled === false) return "";
+    if (autoCompactEnabled === false) return null;
     if (adapterOptions.settings.autoCompactWindow !== "")
       return adapterOptions.settings.autoCompactWindow;
     const validWindow = (value: unknown) => {
