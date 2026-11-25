@@ -50,7 +50,7 @@ export function CaptainMorningBriefControl({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const shownTime = time ?? scheduledTime ?? DEFAULT_BRIEF_TIME;
-  const shownEnabled = enabled ?? task?.enabled ?? true;
+  const shownEnabled = enabled ?? task?.enabled ?? false;
   const canSave = morningBrief.canSave && thread !== undefined && captain.archivedAt === null;
 
   const save = async () => {

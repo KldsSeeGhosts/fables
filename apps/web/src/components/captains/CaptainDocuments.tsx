@@ -136,6 +136,7 @@ function DocumentEditor({
           variant="ghost"
           size="icon-xs"
           aria-label={gt("Back to documents")}
+          disabled={saving}
           onClick={onBack}
         >
           <ArrowLeftIcon />
