@@ -5,6 +5,7 @@ export const captainAvatarSizes = {
   row: { frame: "size-4", disc: false },
   header: { frame: "size-[18px]", disc: false },
   channel: { frame: "size-[18px]", disc: false },
+  sidebar: { frame: "size-7", disc: false },
   picker: { frame: "size-5", disc: false },
   orb: { frame: "size-7", disc: true },
   hero: { frame: "size-11", disc: true },

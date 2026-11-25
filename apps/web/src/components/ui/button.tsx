@@ -113,9 +113,9 @@ const contentButtonVariants = cva("outline-none", {
         "flex h-6.5 w-full cursor-pointer items-center gap-2 rounded-row px-2 text-left hover:surface-ghost-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
       "inset-row-multiline":
         "flex min-h-6.5 w-full cursor-pointer items-center gap-2 rounded-row px-2 py-1 text-left hover:surface-ghost-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-      // A 32px borderless channel row; the open channel takes the same quiet fill as a thread.
+      // A 48px borderless channel row; the open channel takes the same quiet fill as a thread.
       "duet-channel":
-        "flex h-8 w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg px-2 text-left text-label text-foreground select-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-[current=page]:bg-(--duet-row-active) aria-[current=page]:hover:bg-(--duet-row-active)",
+        "flex h-12 w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg px-2 text-left text-label text-foreground select-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-[current=page]:bg-(--duet-row-active) aria-[current=page]:hover:bg-(--duet-row-active)",
       transport:
         "flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-row text-white hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/70",
       "panel-row":
