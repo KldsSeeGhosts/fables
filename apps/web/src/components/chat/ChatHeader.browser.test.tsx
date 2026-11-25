@@ -10,6 +10,7 @@ const openMenu = vi.hoisted(() => vi.fn());
 const duetShell = vi.hoisted(() => ({ enabled: false }));
 const captainState = vi.hoisted(() => ({ enabled: false }));
 const workingThreads = vi.hoisted(() => new Set<string>());
+const reasoningThreads = vi.hoisted(() => new Set<string>());
 vi.mock(import("../../hooks/useDuetShell"), () => ({
   useDuetShell: () => duetShell.enabled,
 }));
@@ -34,19 +35,32 @@ vi.mock(import("../captains/useCaptain"), async (importOriginal) => ({
         }
       : null) as never,
 }));
-vi.mock(import("../../state/entities"), async (importOriginal) => ({
-  ...(await importOriginal()),
-  useQuietThreadShell: ((ref: { threadId: string } | null) =>
-    ref !== null && workingThreads.has(ref.threadId)
-      ? {
-          hasPendingApprovals: false,
-          hasPendingUserInput: false,
-          pendingSubagentRequest: null,
-          pendingBackgroundTasks: [{ kind: "command" }],
-          runtime: { status: "running" },
-        }
-      : null) as never,
-}));
+vi.mock(import("../../state/entities"), async (importOriginal) => {
+  const { makeStreamingWorkTimelineFixture, makeThreadProjectionFixture } =
+    await import("../../test-fixtures");
+  return {
+    ...(await importOriginal()),
+    useQuietThreadShell: ((ref: { threadId: string } | null) =>
+      ref !== null && workingThreads.has(ref.threadId)
+        ? {
+            hasPendingApprovals: false,
+            hasPendingUserInput: false,
+            pendingSubagentRequest: null,
+            pendingBackgroundTasks: [{ kind: "command" }],
+            runtime: { status: "running" },
+          }
+        : null) as never,
+    useQuietThreadProjection: ((ref: { threadId: string } | null) =>
+      ref !== null && reasoningThreads.has(ref.threadId)
+        ? {
+            projection: {
+              ...makeThreadProjectionFixture(),
+              visibleTurnItems: makeStreamingWorkTimelineFixture("reasoning").visibleTurnItems,
+            },
+          }
+        : null) as never,
+  };
+});
 vi.mock(import("../../state/session"), async (importOriginal) => ({
   ...(await importOriginal()),
   useEnvironmentScope: () => true,
@@ -64,7 +78,7 @@ vi.mock(import("~/hooks/useThreadActionMenu"), () => ({
   useThreadActionMenu: () => ({ openMenu, closeMenu: () => {} }),
 }));
 
-import { render, stubGlobal } from "../../../test/render";
+import { act, fakeTimers, render, stubGlobal } from "../../../test/render";
 import { showLayoutTabMenu } from "../../layout/PaneTabs";
 import { LayoutPaneContext, useLayoutPane } from "../../layout/layoutPaneContext";
 import { createLayoutState, findLayoutTab } from "../../layout/layoutModel";
@@ -89,6 +103,23 @@ function header(title: string) {
       />
       <div tabIndex={0}>Outside rename</div>
     </>
+  );
+}
+
+function duetHeader(threadId: string, title: string) {
+  return (
+    <div className="flex h-12 w-[900px]">
+      <ChatHeader
+        activeThreadEnvironmentId={EnvironmentId.make("environment")}
+        activeThreadId={ThreadId.make(threadId)}
+        activeThreadTitle={title}
+        isServerThread
+        activeProject={null}
+        parentThreadLink={null}
+        onOpenThread={() => {}}
+        rightPanelOpen={false}
+      />
+    </div>
   );
 }
 
@@ -380,23 +411,55 @@ it("includes layout tab actions in a split Duet title menu", async () => {
   }
 });
 
+it("cross-fades the outgoing and current live status pills at their own widths", async () => {
+  duetShell.enabled = true;
+  captainState.enabled = true;
+  workingThreads.clear();
+  workingThreads.add("captain:maria:0");
+  reasoningThreads.clear();
+  try {
+    using _timers = fakeTimers();
+    vi.setSystemTime(0);
+    await using screen = await render(duetHeader("captain:maria:0", "Maria"));
+    const hero = screen.container.querySelector<HTMLElement>("[data-captain-header-hero]")!;
+    const pill = (layer: "current" | "outgoing") =>
+      hero.querySelector<HTMLElement>(`[data-captain-hero-live-label="${layer}"]`);
+
+    expect(pill("outgoing")).toBeNull();
+    expect(pill("current")?.textContent).toBe("Running a command");
+    expect(hero.querySelector(".working-status-shine")).toBeNull();
+
+    reasoningThreads.add("captain:maria:0");
+    vi.setSystemTime(1_000);
+    await screen.rerender(duetHeader("captain:maria:0", "Maria"));
+
+    const outgoing = pill("outgoing");
+    const current = pill("current");
+    expect(hero.querySelectorAll("[data-captain-hero-live]")).toHaveLength(2);
+    expect(outgoing?.textContent).toBe("Running a command");
+    expect(current?.textContent).toBe("Thinking");
+    expect(outgoing?.getBoundingClientRect().width).toBeGreaterThan(
+      current?.getBoundingClientRect().width ?? 0,
+    );
+
+    await act(() => vi.advanceTimersByTimeAsync(220));
+
+    expect(hero.querySelectorAll("[data-captain-hero-live]")).toHaveLength(1);
+    expect(pill("outgoing")).toBeNull();
+    expect(pill("current")?.textContent).toBe("Thinking");
+  } finally {
+    duetShell.enabled = false;
+    captainState.enabled = false;
+    workingThreads.clear();
+    reasoningThreads.clear();
+  }
+});
+
 it("resets a Duet's live status when switching to another Duet", async () => {
   duetShell.enabled = true;
   captainState.enabled = true;
   workingThreads.clear();
   workingThreads.add("captain:maria:0");
-  const duetHeader = (threadId: string, title: string) => (
-    <ChatHeader
-      activeThreadEnvironmentId={EnvironmentId.make("environment")}
-      activeThreadId={ThreadId.make(threadId)}
-      activeThreadTitle={title}
-      isServerThread
-      activeProject={null}
-      parentThreadLink={null}
-      onOpenThread={() => {}}
-      rightPanelOpen={false}
-    />
-  );
   try {
     await using screen = await render(duetHeader("captain:maria:0", "Maria"));
     await vi.waitFor(() => {
@@ -405,7 +468,8 @@ it("resets a Duet's live status when switching to another Duet", async () => {
       );
     });
     const current = screen.container.querySelector('[data-captain-hero-live-label="current"]');
-    expect(current?.querySelector(".working-status-shine")?.textContent).toBe("Running a command");
+    expect(current?.textContent).toBe("Running a command");
+    expect(current?.querySelector(".working-status-shine")).toBeNull();
 
     await screen.rerender(duetHeader("captain:james:0", "James"));
 
