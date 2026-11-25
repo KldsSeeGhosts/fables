@@ -17,7 +17,11 @@ import type { ThreadPreviewState } from "../../previewStateStore";
 import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-actions";
 import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
 import { useStableCallback } from "../../hooks/useStableCallback";
-import { type ScopedThreadRef, type PreviewSessionSnapshot } from "@t3tools/contracts";
+import {
+  isCaptainThreadId,
+  type ScopedThreadRef,
+  type PreviewSessionSnapshot,
+} from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { sideThreadComposer, sideThreadKindOf } from "@t3tools/client-runtime/side-thread";
 import { readThreadShell } from "../../state/entities";
@@ -298,6 +302,11 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
   // opens Diff, or Files for a draft that cannot show a diff yet.
   const openSidePaneDefault = (): boolean => {
     if (!activeThreadRef) return false;
+    // A Captain channel's side pane is its Tasks drawer.
+    if (isCaptainThreadId(activeThreadRef.threadId)) {
+      useRightPanelStore.getState().open(activeThreadRef, "captain-brief");
+      return true;
+    }
     const opensOn = getLayoutBehavior().sidePaneOpensOn;
     if ((opensOn === "diff" || opensOn === "last-used") && isServerThread && diffAvailable)
       return (addDiffSurface(), true);
@@ -378,8 +387,9 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
   const toggleSidePane = () => {
     if (activeThreadRef !== null) toggleThreadSidePane(activeThreadRef, openSidePaneDefaultStable);
   };
+  const toggleSidePaneStable = useStableCallback(toggleSidePane);
   const shortcuts = {
-    "rightPanel.toggle": () => toggleSidePane(),
+    "rightPanel.toggle": () => toggleSidePaneStable(),
     "threadPanel.toggle": () => toggleThreadPanel(),
     "diff.toggle": () => onToggleDiff(),
     "pullRequests.toggle": () => onTogglePullRequests(),
@@ -401,6 +411,7 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
     moveRightPanelSurfaceStable,
     onOpenToolDiffStable,
     openChangesFromThreadPanelStable,
+    toggleSidePaneStable,
     toggleThreadPanelStable,
   };
 }

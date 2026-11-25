@@ -194,6 +194,7 @@ function HiddenTerminalPill({
 /** Tabless Duet title. It keeps tab drag/rename affordances while looking like a simple title. */
 export function DuetHeaderTitle({
   captain,
+  hideTitle = false,
   project,
   title,
   layoutTabId,
@@ -213,6 +214,8 @@ export function DuetHeaderTitle({
   onRenameKeyDown,
 }: {
   captain: Captain | null | undefined;
+  /** The centred Captain hero names the channel, so only the pane's tabs stay at the start. */
+  hideTitle?: boolean;
   project: EnvironmentProject | null;
   title: string;
   layoutTabId: string | null | undefined;
@@ -276,16 +279,18 @@ export function DuetHeaderTitle({
         </div>
       ) : (
         <>
-          <TitleButton
-            captain={captain}
-            project={project}
-            title={title}
-            layoutTabId={layoutTabId}
-            onPointerDown={onPointerDown}
-            onAuxClick={onAuxClick}
-            onDoubleClick={onDoubleClick}
-            onClick={onClick}
-          />
+          {hideTitle ? null : (
+            <TitleButton
+              captain={captain}
+              project={project}
+              title={title}
+              layoutTabId={layoutTabId}
+              onPointerDown={onPointerDown}
+              onAuxClick={onAuxClick}
+              onDoubleClick={onDoubleClick}
+              onClick={onClick}
+            />
+          )}
           <DuetPaneTabsMenu before={siblingTabs.before} after={siblingTabs.after} />
         </>
       )}

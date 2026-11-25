@@ -2,7 +2,7 @@ import { CaptainAvatar } from "./CaptainAvatar";
 import { expect, it } from "vite-plus/test";
 import { render } from "../../../test/render";
 
-it("draws the emblem's mascot in its palette with eyes on their own layer", async () => {
+it("draws the emblem's creature in its palette with the line on its own layer", async () => {
   await using screen = await render(
     <CaptainAvatar avatar={{ preset: "drop", color: "purple" }} state="working" />,
   );
@@ -10,12 +10,16 @@ it("draws the emblem's mascot in its palette with eyes on their own layer", asyn
 
   expect(avatar?.getAttribute("data-captain-state")).toBe("working");
   expect(avatar?.getAttribute("data-duet-palette")).toBe("plum");
-  expect(avatar?.querySelector("[data-captain-emblem]")?.getAttribute("data-captain-emblem")).toBe(
-    "heart-wave",
+  expect(
+    avatar?.querySelector("[data-captain-creature]")?.getAttribute("data-captain-creature"),
+  ).toBe("heart-wave");
+  expect(avatar?.querySelector("[data-captain-creature-body] path")?.getAttribute("fill")).toBe(
+    "#7e4fae",
   );
-  const eyes = avatar?.querySelector("[data-captain-mascot-eyes]");
-  expect(eyes?.tagName).toBe("SPAN");
-  expect(eyes?.querySelectorAll("rect")).toHaveLength(2);
+  const line = avatar?.querySelector("[data-captain-creature-line-window]");
+  expect(line?.tagName).toBe("SPAN");
+  expect(line?.querySelector("[data-captain-creature-line]")).not.toBeNull();
+  expect(avatar?.querySelector("[data-captain-mascot-eyes]")).toBeNull();
   expect(avatar?.querySelector("animate")).toBeNull();
 });
 
@@ -23,14 +27,17 @@ it("moves only by transform, and not at all under reduced motion", async () => {
   await using screen = await render(
     <CaptainAvatar avatar={{ preset: "circle", color: "blue" }} state="working" />,
   );
-  const body = screen.container.querySelector<HTMLElement>("[data-captain-mascot-body]")!;
+  const line = screen.container.querySelector<SVGElement>("[data-captain-creature-line]")!;
+  const body = screen.container.querySelector<HTMLElement>("[data-captain-creature-body]")!;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  expect(getComputedStyle(body).animationName).toBe(reduced ? "none" : "captain-mascot-work");
+  expect(getComputedStyle(line).animationName).toBe(reduced ? "none" : "captain-creature-roll");
+  expect(getComputedStyle(body).animationName).toBe(reduced ? "none" : "captain-creature-breathe");
   const keyframes = [...document.styleSheets]
     .flatMap((sheet) => [...sheet.cssRules])
     .filter(
       (rule): rule is CSSKeyframesRule =>
-        rule instanceof CSSKeyframesRule && rule.name.startsWith("captain-mascot-"),
+        rule instanceof CSSKeyframesRule &&
+        (rule.name.startsWith("captain-creature-") || rule.name.startsWith("captain-avatar-")),
     );
   expect(keyframes.length).toBeGreaterThan(0);
   for (const rule of keyframes) {
@@ -41,6 +48,18 @@ it("moves only by transform, and not at all under reduced motion", async () => {
   }
 });
 
+it("stays still while idle", async () => {
+  await using screen = await render(
+    <CaptainAvatar avatar={{ preset: "circle", color: "blue" }} state="idle" />,
+  );
+  const line = screen.container.querySelector<SVGElement>("[data-captain-creature-line]")!;
+  const body = screen.container.querySelector<HTMLElement>("[data-captain-creature-body]")!;
+
+  expect(getComputedStyle(line).animationName).toBe("none");
+  expect(getComputedStyle(body).animationName).toBe("none");
+  expect(getComputedStyle(body).willChange).toBe("auto");
+});
+
 it("uses the one-shot mount animation only when requested", async () => {
   await using screen = await render(
     <CaptainAvatar avatar={{ preset: "triangle", color: "blue" }} animateOnMount />,
@@ -48,36 +67,24 @@ it("uses the one-shot mount animation only when requested", async () => {
   const avatar = screen.container.querySelector("[data-captain-avatar]");
 
   expect(avatar?.getAttribute("data-captain-animate-on-mount")).toBe("true");
-  expect(avatar?.querySelector("[data-captain-emblem]")?.getAttribute("data-captain-emblem")).toBe(
-    "prism",
-  );
+  expect(
+    avatar?.querySelector("[data-captain-creature]")?.getAttribute("data-captain-creature"),
+  ).toBe("prism");
 });
 
-it("renders the hero size as a bare 28px mascot without a tile", async () => {
-  await using screen = await render(
-    <CaptainAvatar avatar={{ preset: "triangle", color: "blue" }} size="hero" />,
-  );
-  const avatar = screen.container.querySelector<HTMLElement>("[data-captain-avatar]");
-
-  expect(avatar?.classList.contains("size-7")).toBe(true);
-  expect(avatar?.querySelector("[data-captain-mascot-body]")?.classList.contains("size-7")).toBe(
-    true,
-  );
-  expect(avatar?.className).not.toContain("rounded");
-  expect(avatar?.style.backgroundColor).toBe("");
-});
-
-it("rings only a tile that needs attention", async () => {
+it("sits the header orb on the Duet disc and draws sidebar rows bare", async () => {
   await using screen = await render(
     <>
-      <CaptainAvatar avatar={{ preset: "drop", color: "purple" }} size="channel" attention />
-      <CaptainAvatar avatar={{ preset: "drop", color: "purple" }} attention />
+      <CaptainAvatar avatar={{ preset: "triangle", color: "blue" }} size="orb" />
+      <CaptainAvatar avatar={{ preset: "triangle", color: "blue" }} size="channel" />
     </>,
   );
-  const [tile, row] = screen.container.querySelectorAll("[data-captain-avatar]");
+  const [orb, channel] = screen.container.querySelectorAll<HTMLElement>("[data-captain-avatar]");
 
-  expect(tile?.querySelector("[data-captain-avatar-ring]")).not.toBeNull();
-  expect(tile?.hasAttribute("data-captain-tile")).toBe(true);
-  expect(tile?.classList.contains("size-6")).toBe(true);
-  expect(row?.querySelector("[data-captain-avatar-ring]")).toBeNull();
+  expect(orb?.hasAttribute("data-captain-disc")).toBe(true);
+  expect(orb?.querySelector("[data-captain-creature-stage]")).not.toBeNull();
+  expect(getComputedStyle(orb!).backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
+  expect(channel?.hasAttribute("data-captain-disc")).toBe(false);
+  expect(getComputedStyle(channel!).backgroundColor).toBe("rgba(0, 0, 0, 0)");
+  expect(getComputedStyle(channel!).boxShadow).toBe("none");
 });

@@ -50,7 +50,6 @@ import {
   CircleDashedIcon,
   CircleDotDashedIcon,
   ClockIcon,
-  EllipsisIcon,
   FolderGit2Icon,
   GitBranchIcon,
   MessageCircleQuestionIcon,
@@ -1017,12 +1016,6 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     event.preventDefault();
     onContextMenu(threadRef, { x: event.clientX, y: event.clientY }, contextMenuSourceOf(event));
   };
-  const handleThreadMenuClick = (event: ReactMouseEvent<HTMLElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const bounds = event.currentTarget.getBoundingClientRect();
-    onContextMenu(threadRef, { x: bounds.right, y: bounds.bottom }, contextMenuSourceOf(event));
-  };
   const handleKeyDown = (event: ReactKeyboardEvent) => {
     if (event.target !== event.currentTarget) return;
     if (
@@ -1827,7 +1820,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                       />
                     )}
                   </span>
-                  {props.settlementSupported || showSnoozeButton || hasUnsentDraft || isDuet ? (
+                  {props.settlementSupported || showSnoozeButton || hasUnsentDraft ? (
                     <span
                       className={cn(
                         // Mouse clicks leave Settle focused; focus-within would pin controls over
@@ -1886,25 +1879,6 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                           </TooltipTrigger>
                           <TooltipPopup>
                             <T>Settle thread</T>
-                          </TooltipPopup>
-                        </Tooltip>
-                      ) : null}
-                      {isDuet ? (
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <button
-                                type="button"
-                                aria-label={gt("Thread actions")}
-                                onClick={handleThreadMenuClick}
-                                className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-md bg-transparent text-muted-foreground outline-none transition-colors hover:surface-ghost-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                              />
-                            }
-                          >
-                            <EllipsisIcon className="size-3.5" />
-                          </TooltipTrigger>
-                          <TooltipPopup>
-                            <T>Thread actions</T>
                           </TooltipPopup>
                         </Tooltip>
                       ) : null}

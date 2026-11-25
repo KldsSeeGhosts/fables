@@ -94,7 +94,6 @@ import {
   type ThreadId,
   isCaptainThreadId,
   ProviderInteractionMode,
-  resolveEnvironmentMachineKind,
   resolveIdleCompaction,
   RuntimeMode,
 } from "@t3tools/contracts";
@@ -208,7 +207,6 @@ import {
 } from "./preview/ThreadPreviewMiniPlayer";
 import { createChatCanvasStore, resolveChatCanvasModel } from "./chat/canvasStore";
 import { usePreviewSession } from "./preview/usePreviewSession";
-import { dispatchPreviewAction } from "./preview/previewActionBus";
 
 import {
   previewMiniPlayerSourceKey,
@@ -2643,6 +2641,7 @@ export default function ChatView(props: ChatViewProps) {
   const {
     onOpenToolDiffStable,
     openChangesFromThreadPanelStable,
+    toggleSidePaneStable,
     toggleThreadPanelStable,
     shortcuts: rightPanelShortcuts,
   } = useRightPanelActions({
@@ -3709,57 +3708,6 @@ export default function ChatView(props: ChatViewProps) {
       ? null
       : timelineFooterContent;
 
-  const duetHeaderMachineControl =
-    activeThreadRef !== null && activeEnvironment !== null
-      ? {
-          label: activeEnvironment.label,
-          machine:
-            activeEnvironmentOption?.machine ??
-            resolveEnvironmentMachineKind(activeEnvironment.serverConfig),
-          environmentId: activeThread.environmentId,
-          unavailable: activeEnvironmentUnavailableState !== null,
-          environments: logicalProjectEnvironments,
-          locked: envLocked,
-          ...(canChangeEnvironment ? { onChange: onEnvironmentChangeStable } : {}),
-          autoLabel: autoEnvironmentLabel,
-          ...(draftId &&
-          !envLocked &&
-          canAutoBalanceEnvironments &&
-          loadBalancingSettings.loadBalancingEnabled
-            ? { onAuto: onAutoEnvironmentStable }
-            : {}),
-        }
-      : null;
-  const duetHeaderControls =
-    activeThreadRef === null
-      ? null
-      : {
-          ...(sideChat.available ? { onNew: openNewSideChatStable } : {}),
-          machine: duetHeaderMachineControl,
-          terminal: {
-            label: gt("Terminal"),
-            onClick: hiddenTerminalChip?.onShow ?? toggleTerminalVisibilityStable,
-            active:
-              terminalUiState.terminalOpen ||
-              rightPanelState.surfaces.some((surface) => surface.kind === "terminal"),
-          },
-          browser: browserAvailable
-            ? {
-                label: gt("Browser"),
-                onClick: () => dispatchPreviewAction("toggle-panel"),
-                active: previewPanelOpen,
-                disabled: !canOperatePreview && !previewPanelOpen,
-              }
-            : null,
-          diff:
-            isServerThread && diffAvailable
-              ? {
-                  label: gt("Diff"),
-                  onClick: openChangesFromThreadPanelStable,
-                  active: diffOpen,
-                }
-              : null,
-        };
   const panelToggleControlProps = {
     threadPanelOpen,
     threadPanelPresentation,
@@ -3769,7 +3717,11 @@ export default function ChatView(props: ChatViewProps) {
     branchLabel: activeThreadBranch,
     contextPercent: activeContextWindow?.usedPercentage ?? null,
     threadRef: activeThreadRef,
-    duetControls: duetHeaderControls,
+    rightPanel: {
+      open: rightPanelOpen,
+      shortcutLabel: shortcutLabelForCommand(keybindings, "rightPanel.toggle"),
+      onToggle: toggleSidePaneStable,
+    },
   } satisfies PanelLayoutControlsProps;
   const panelToggleControls = (
     <PanelLayoutControls

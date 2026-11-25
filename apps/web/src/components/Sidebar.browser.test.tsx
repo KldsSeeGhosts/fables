@@ -40,6 +40,8 @@ vi.mock(import("../state/olderSettledShelf"), async (original) => {
   const actual = await original();
   return { ...actual, useOlderSettledShelf: vi.fn(actual.useOlderSettledShelf) };
 });
+const duetShell = vi.hoisted(() => ({ enabled: false }));
+vi.mock(import("../hooks/useDuetShell"), () => ({ useDuetShell: () => duetShell.enabled }));
 vi.mock("../state/entities", { spy: true });
 vi.mock("../state/environments", { spy: true });
 vi.mock("../hooks/useHandleNewThread", { spy: true });
@@ -522,6 +524,49 @@ describe("sidebar thread menu", () => {
     await userEvent.click(row, { button: "right" });
     await vi.waitFor(() => expect(show).toHaveBeenCalledTimes(2));
     expect(show.mock.lastCall?.[2]).toBe("mouse");
+  });
+});
+
+describe("sidebar Duet thread row", () => {
+  it("leaves thread actions to the context menu, with no three-dot button", async () => {
+    duetShell.enabled = true;
+    try {
+      const activeProject = project("active");
+      const thread = threadShell(activeProject.id, 0);
+      const threadRef = { environmentId: activeProject.environmentId, threadId: thread.id };
+      const show = vi.fn().mockResolvedValue(null);
+      vi.mocked(readLocalApi).mockReturnValue({ contextMenu: { show } } as unknown as LocalApi);
+      vi.mocked(useProjects).mockReturnValue([activeProject]);
+      vi.mocked(useQuietThreadShells).mockReturnValue([thread]);
+      vi.mocked(useThreadRouteTarget).mockReturnValue({ kind: "server", threadRef });
+      vi.mocked(useHandleNewThread).mockReturnValue({
+        activeDraftThread: null,
+        activeThread: null,
+        defaultProjectRef: {
+          environmentId: activeProject.environmentId,
+          projectId: activeProject.id,
+        },
+        defaultProjectFallbackReady: true,
+        handleNewThread: vi.fn().mockResolvedValue(null),
+        routeDraftId: null,
+        routeThreadRef: threadRef,
+      });
+      await using screen = await render(
+        <SidebarProvider>
+          <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+        </SidebarProvider>,
+      );
+      const row = screen.getByText("Thread 0").first();
+      await expect.element(row).toBeInTheDocument();
+      await userEvent.hover(row);
+      const rowElement = row.element().closest<HTMLElement>("[data-sidebar-row]")!;
+      expect(rowElement.querySelector('[aria-label="Thread actions"]')).toBeNull();
+
+      await userEvent.click(row, { button: "right" });
+      await vi.waitFor(() => expect(show).toHaveBeenCalledOnce());
+    } finally {
+      duetShell.enabled = false;
+    }
   });
 });
 

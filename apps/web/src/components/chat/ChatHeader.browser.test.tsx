@@ -186,28 +186,62 @@ it("uses the always-tabless Duet header and keeps the hidden terminal chip", asy
   }
 });
 
-it("keeps the Duet Captain channel header tabless without duplicating the status orb", async () => {
+it("centres a Duet Captain channel's creature, name and Captain menu instead of a start title", async () => {
   duetShell.enabled = true;
   captainState.enabled = true;
+  openMenu.mockClear();
   try {
     await using screen = await render(
-      <ChatHeader
-        activeThreadEnvironmentId={EnvironmentId.make("environment")}
-        activeThreadId={ThreadId.make("captain:maria:0")}
-        activeThreadTitle="Maria"
-        isServerThread
-        activeProject={null}
-        parentThreadLink={null}
-        onOpenThread={() => {}}
-        rightPanelOpen={false}
-      />,
+      <header data-chat-header className="relative flex h-12 w-[900px]">
+        <ChatHeader
+          activeThreadEnvironmentId={EnvironmentId.make("environment")}
+          activeThreadId={ThreadId.make("captain:maria:0")}
+          activeThreadTitle="Maria"
+          isServerThread
+          activeProject={null}
+          parentThreadLink={null}
+          onOpenThread={() => {}}
+          rightPanelOpen={false}
+        />
+      </header>,
     );
 
-    await expect
-      .element(screen.getByRole("button", { name: "Thread actions for Maria" }))
-      .toBeVisible();
-    expect(screen.container.querySelector('[aria-label="Status: Idle"]')).toBeNull();
+    const orb = screen.getByRole("button", { name: "Status: Idle" });
+    await expect.element(orb).toBeVisible();
+    expect(screen.container.querySelector('[aria-label="Thread actions for Maria"]')).toBeNull();
     expect(screen.container.querySelector("[data-pane-notch]")).toBeNull();
+    expect(screen.container.querySelector("[data-captain-hero-live]")).toBeNull();
+
+    const hero = screen.container.querySelector<HTMLElement>("[data-captain-header-hero]")!;
+    const avatar = hero.querySelector("[data-captain-avatar]")!;
+    expect(avatar.getAttribute("data-duet-palette")).toBe("plum");
+    expect(avatar.hasAttribute("data-captain-disc")).toBe(true);
+    const headerBox = screen.container.querySelector("header")!.getBoundingClientRect();
+    const heroBox = hero.getBoundingClientRect();
+    expect(
+      Math.abs(heroBox.left + heroBox.width / 2 - (headerBox.left + headerBox.width / 2)),
+    ).toBeLessThan(1);
+
+    await userEvent.click(screen.getByRole("button", { name: "Captain menu for Maria" }));
+    await vi.waitFor(() => {
+      const items = Array.from(
+        document.body.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+      ).map((element) => element.textContent);
+      expect(items).toEqual(
+        expect.arrayContaining([
+          "Customize Captain",
+          "Rename",
+          "Instructions",
+          "Change icon",
+          "New conversation",
+          "Archive",
+        ]),
+      );
+    });
+    await userEvent.keyboard("{Escape}");
+
+    await userEvent.click(orb, { button: "right" });
+    expect(openMenu).toHaveBeenCalledOnce();
   } finally {
     duetShell.enabled = false;
     captainState.enabled = false;

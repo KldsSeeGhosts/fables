@@ -106,18 +106,21 @@ it("lists Captains as plain rows under one Captains section, without tree chrome
   await expect.element(row).toBeVisible();
   const item = row.element().closest("li")!;
   expect(getComputedStyle(item, "::before").content).toBe("none");
-  expect(screen.container.querySelector("[data-captain-tile]")).not.toBeNull();
+  expect(getComputedStyle(row.element()).boxShadow).toBe("none");
+  const avatar = row.element().querySelector<HTMLElement>("[data-captain-avatar]")!;
+  expect(avatar.hasAttribute("data-captain-disc")).toBe(false);
+  expect(getComputedStyle(avatar).backgroundColor).toBe("rgba(0, 0, 0, 0)");
 });
 
-it("shows an idle channel's mascot and name, with its details on hover", async () => {
+it("shows an idle channel's creature and name, with its details on hover", async () => {
   await using screen = await renderList({});
   const row = screen.getByRole("button", { name: "Maria, Ready, All workspace, Coordinator" });
   await expect.element(row).toBeVisible();
   expect(row.element().textContent).toBe("Maria");
   const avatar = row.element().querySelector("[data-captain-avatar]");
   expect(avatar?.getAttribute("data-captain-state")).toBe("idle");
-  expect(avatar?.querySelector("[data-captain-mascot-eyes]")).not.toBeNull();
-  expect(screen.container.querySelector("[data-captain-avatar-ring]")).toBeNull();
+  expect(avatar?.querySelector("[data-captain-creature-line]")).not.toBeNull();
+  expect(avatar?.querySelector("[data-captain-mascot-eyes]")).toBeNull();
   expect(screen.container.querySelector("[data-duet-live]")).toBeNull();
 
   await userEvent.hover(row);
@@ -127,7 +130,7 @@ it("shows an idle channel's mascot and name, with its details on hover", async (
   await expect.element(page.getByText("Ready", { exact: true })).toBeVisible();
 });
 
-it("animates a working mascot and counts running tasks without naming them in the row", async () => {
+it("animates a working creature and counts running tasks without naming them in the row", async () => {
   await using screen = await renderList({ working: true, children: [child] });
   const row = screen.getByRole("button", { name: "Maria, Working, 1 running, Fix the login flow" });
   await expect.element(row).toBeVisible();
@@ -136,23 +139,23 @@ it("animates a working mascot and counts running tasks without naming them in th
   expect(avatar.getAttribute("data-captain-state")).toBe("working");
   const motion = (selector: string) =>
     getComputedStyle(avatar.querySelector(selector)!).animationName;
-  expect(motion("[data-captain-mascot-body]")).toBe("captain-mascot-work");
-  expect(motion("[data-captain-mascot-eyes]")).toBe("captain-mascot-scan");
-  expect(screen.container.querySelector("[data-captain-avatar-ring]")).toBeNull();
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  expect(motion("[data-captain-creature-body]")).toBe(
+    reduced ? "none" : "captain-creature-breathe",
+  );
+  expect(motion("[data-captain-creature-line]")).toBe(reduced ? "none" : "captain-creature-roll");
 
   await userEvent.hover(row);
   await expect.element(page.getByText("Fix the login flow", { exact: true })).toBeVisible();
 });
 
-it("gives needs input precedence over working with a ring and a warm dot", async () => {
+it("gives needs input precedence over working with a warm dot", async () => {
   const waiting = { ...child, hasPendingUserInput: true };
   await using screen = await renderList({ attention: 1, working: true, children: [waiting] });
   const row = screen.getByRole("button", { name: "Maria, Needs input, Fix the login flow" });
   await expect.element(row).toBeVisible();
   expect(row.element().textContent).toBe("Maria");
   expect(screen.container.querySelector('[data-captain-state="waiting"]')).not.toBeNull();
-  expect(screen.container.querySelector("[data-captain-avatar-ring]")).not.toBeNull();
-  expect(screen.container.querySelector("[data-captain-avatar-ping]")).not.toBeNull();
   expect(
     row.element().querySelector('[data-duet-live="needs-input"]')?.getAttribute("aria-label"),
   ).toBe("1 request");
@@ -173,7 +176,6 @@ it("recedes an archived channel without live status", async () => {
   await expect.element(row).toBeVisible();
   expect(row.element().textContent).toBe("Maria");
   expect(screen.container.querySelector('[data-captain-state="archived"]')).not.toBeNull();
-  expect(screen.container.querySelector("[data-captain-avatar-ring]")).toBeNull();
   expect(screen.container.querySelector("[data-duet-live]")).toBeNull();
 });
 

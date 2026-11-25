@@ -32,14 +32,13 @@ import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
+import { useCaptainAvatarLabels } from "./captainAvatarLabels";
 import { CaptainAvatar, normalizeCaptainAvatar, randomCaptainAvatar } from "./CaptainAvatar";
 import {
   DUET_EMBLEM_ORDER,
   DUET_PALETTE_ORDER,
   DUET_PALETTE_SWATCH,
   DUET_PICKER,
-  type DuetEmblem,
-  type DuetPalette,
 } from "./captainPalette";
 import { CaptainReportPolicyPicker } from "./CaptainReportPolicyPicker";
 import { CaptainScope } from "./CaptainScope";
@@ -83,26 +82,7 @@ export function CaptainEditorDialog({
   const update = useAtomCommand(serverEnvironment.updateCaptain, { reportFailure: false });
   const projects = useProjects().filter((project) => project.environmentId === environmentId);
   const canSave = captain === undefined ? canCreate : canUpdate;
-  const emblemLabels: Record<DuetEmblem, string> = {
-    orb: gt("Orb", { $context: "Captain avatar emblem" }),
-    sunburst: gt("Sunburst", { $context: "Captain avatar emblem" }),
-    "twin-arcs": gt("Twin arcs", { $context: "Captain avatar emblem" }),
-    "heart-wave": gt("Heart wave", { $context: "Captain avatar emblem" }),
-    terminal: gt("Terminal", { $context: "Captain avatar emblem" }),
-    prism: gt("Prism", { $context: "Captain avatar emblem" }),
-    orbit: gt("Orbit", { $context: "Captain avatar emblem" }),
-    horizon: gt("Horizon", { $context: "Captain avatar emblem" }),
-  };
-  const paletteLabels: Record<DuetPalette, string> = {
-    terracotta: gt("Terracotta", { $context: "color" }),
-    rose: gt("Rose", { $context: "color" }),
-    cobalt: gt("Cobalt", { $context: "color" }),
-    sage: gt("Sage", { $context: "color" }),
-    ochre: gt("Ochre", { $context: "color" }),
-    plum: gt("Plum", { $context: "color" }),
-    coral: gt("Coral", { $context: "color" }),
-    slate: gt("Slate", { $context: "color" }),
-  };
+  const { emblems: emblemLabels, palettes: paletteLabels } = useCaptainAvatarLabels();
 
   const save = async () => {
     if (!canSave || saving || !name.trim()) return;
@@ -211,7 +191,7 @@ export function CaptainEditorDialog({
               </div>
             ) : null}
             <div className="flex items-start gap-3">
-              <div className="flex size-16 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/45">
+              <div className="flex size-16 shrink-0 items-center justify-center">
                 <CaptainAvatar
                   key={`${avatar.preset}:${avatar.color}`}
                   avatar={avatar}

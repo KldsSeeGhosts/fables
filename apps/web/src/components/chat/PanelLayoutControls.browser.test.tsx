@@ -32,36 +32,18 @@ vi.mock(import("../captains/useCaptain"), async (importOriginal) => ({
 vi.mock(import("../../state/entities"), async (importOriginal) => ({
   ...(await importOriginal()),
   useProjects: () => [],
-  useQuietThreadShell: () => null,
-}));
-
-vi.mock(import("../../state/environments"), async (importOriginal) => ({
-  ...(await importOriginal()),
-  useEnvironment: () => null,
-  usePrimaryEnvironmentId: () => EnvironmentId.make("environment"),
 }));
 
 import { PanelLayoutControls } from "./PanelLayoutControls";
 
 const environmentId = EnvironmentId.make("environment");
-const machine = {
-  label: "This Mac",
-  machine: "desktop" as const,
-  environmentId,
-  unavailable: false,
-  environments: [
-    {
-      environmentId,
-      projectId: null,
-      label: "This Mac",
-      isPrimary: true,
-      machine: "desktop" as const,
-    },
-  ],
-  locked: false,
-};
 
-function controls(props: { threadId?: string; onToggleThreadPanel?: () => void }) {
+function controls(props: {
+  threadId?: string;
+  rightPanelOpen?: boolean;
+  onToggleThreadPanel?: () => void;
+  onToggleRightPanel?: () => void;
+}) {
   const threadId = props.threadId ?? "thread";
   return (
     <PanelLayoutControls
@@ -72,68 +54,48 @@ function controls(props: { threadId?: string; onToggleThreadPanel?: () => void }
       branchLabel="main"
       contextPercent={42}
       threadRef={{ environmentId, threadId: ThreadId.make(threadId) }}
-      duetControls={{
-        onNew: () => {},
-        machine,
-        terminal: { label: "Terminal", onClick: () => {} },
-        browser: { label: "Browser", onClick: () => {} },
-        diff: { label: "Diff", onClick: () => {} },
+      rightPanel={{
+        open: props.rightPanelOpen ?? false,
+        shortcutLabel: null,
+        onToggle: props.onToggleRightPanel ?? (() => {}),
       }}
     />
   );
 }
 
-it("keeps machine selection in the coding thread overflow menu", async () => {
-  await using screen = await render(controls({}));
+it("keeps a coding thread's top right to the details pill and the right panel toggle", async () => {
+  const onToggleRightPanel = vi.fn();
+  await using screen = await render(controls({ onToggleRightPanel }));
 
-  await expect.element(screen.getByRole("button", { name: "New side chat" })).toBeVisible();
-  await expect.element(screen.getByRole("button", { name: "Terminal" })).toBeVisible();
-  await expect.element(screen.getByRole("button", { name: "Browser" })).toBeVisible();
-  await expect.element(screen.getByRole("button", { name: "Diff" })).toBeVisible();
-  expect(screen.container.querySelector('[aria-label="Choose machine"]')).toBeNull();
+  const buttons = Array.from(screen.container.querySelectorAll("button")).map((button) =>
+    button.getAttribute("aria-label"),
+  );
+  expect(buttons).toEqual(["Toggle thread details panel", "Toggle right panel"]);
+  await expect
+    .element(screen.getByRole("button", { name: "Toggle thread details panel" }))
+    .toHaveTextContent("main");
 
-  await userEvent.click(screen.getByRole("button", { name: "More header actions" }));
-  await vi.waitFor(() => expect(document.body.textContent).toContain("Run on"));
+  const toggle = screen.getByRole("button", { name: "Toggle right panel" });
+  await expect.element(toggle).toHaveAttribute("aria-pressed", "false");
+  await userEvent.click(toggle);
+  expect(onToggleRightPanel).toHaveBeenCalledOnce();
 });
 
-it("folds coding utility controls into overflow below 720px", async () => {
-  await using screen = await render(
-    <header data-chat-header style={{ width: "500px" }}>
-      {controls({})}
-    </header>,
-  );
-
-  await vi.waitFor(() =>
-    expect(screen.container.querySelector('[aria-label="Terminal"]')).toBeNull(),
-  );
-  await userEvent.click(screen.getByRole("button", { name: "More header actions" }));
-  await vi.waitFor(() => {
-    const items = Array.from(document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')).map(
-      (element) => element.textContent,
-    );
-    expect(items).toContain("Terminal");
-    expect(items).toContain("Browser");
-    expect(items).toContain("Diff");
-  });
-});
-
-it("keeps a Captain header to the orb, details, Tasks and one overflow menu", async () => {
+it("shows a Captain's scope on the pill and the same two controls", async () => {
   const onToggleThreadPanel = vi.fn();
-  await using screen = await render(controls({ threadId: "captain:maria:0", onToggleThreadPanel }));
+  await using screen = await render(
+    controls({ threadId: "captain:maria:0", rightPanelOpen: true, onToggleThreadPanel }),
+  );
 
-  await expect.element(screen.getByRole("button", { name: "Tasks" })).toBeVisible();
-  await expect.element(screen.getByRole("button", { name: /^Status:/ })).toBeVisible();
-  expect(screen.container.querySelector('[aria-label="New conversation"]')).toBeNull();
-  expect(screen.container.querySelector('[aria-label="Choose machine"]')).toBeNull();
-  expect(screen.container.querySelector('[aria-label="Terminal"]')).toBeNull();
-
-  await userEvent.click(screen.getByRole("button", { name: "More header actions" }));
-  await vi.waitFor(() => {
-    const text = document.body.textContent ?? "";
-    expect(text).toContain("Run on");
-    expect(text).toContain("Terminal");
-  });
-  await userEvent.keyboard("{Escape}");
+  await expect
+    .element(screen.getByRole("button", { name: "Toggle thread details panel" }))
+    .toHaveTextContent("No scope");
+  await expect
+    .element(screen.getByRole("button", { name: "Toggle right panel" }))
+    .toHaveAttribute("aria-pressed", "true");
+  expect(screen.container.querySelector('[aria-label^="Status:"]')).toBeNull();
+  expect(screen.container.querySelector('[aria-label="Tasks"]')).toBeNull();
+  expect(screen.container.querySelector('[aria-label="More header actions"]')).toBeNull();
 
   await userEvent.click(screen.getByRole("button", { name: "Toggle thread details panel" }));
   expect(onToggleThreadPanel).toHaveBeenCalledOnce();

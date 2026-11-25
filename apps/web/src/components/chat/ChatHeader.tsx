@@ -73,6 +73,7 @@ import {
 import { useProject, useQuietThreadShell } from "../../state/entities";
 import { useLayoutStore } from "../../layout/layoutStore";
 import { useDuetShell } from "../../hooks/useDuetShell";
+import { CaptainHeaderHero } from "./CaptainHeaderHero";
 import { DuetHeaderTitle, type HiddenTerminalChip } from "./DuetHeaderTitle";
 export type { HiddenTerminalChip } from "./DuetHeaderTitle";
 
@@ -359,8 +360,18 @@ export const ChatHeader = memo(function ChatHeader({
     );
   const tabless = duet;
   const openCaptainThread = (threadId: ThreadId) => onOpenThread(threadId);
+  // Duet centres a Captain channel's identity in the header, so the title at the start steps aside.
+  const captainHero = duet && isServerThread && captain != null;
   return (
     <div className="flex min-w-0 flex-1 self-stretch">
+      {captainHero ? (
+        <CaptainHeaderHero
+          captain={captain}
+          threadRef={activeThreadRef}
+          onOpenThread={openCaptainThread}
+          onContextMenu={handleHeaderContextMenu}
+        />
+      ) : null}
       <div
         className={cn(
           "relative flex min-w-0 flex-1 items-center self-stretch",
@@ -373,6 +384,7 @@ export const ChatHeader = memo(function ChatHeader({
           <>
             <DuetHeaderTitle
               captain={captain}
+              hideTitle={captainHero}
               project={activeProject}
               title={displayTitle}
               layoutTabId={layoutTabId}

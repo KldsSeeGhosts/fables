@@ -84,8 +84,9 @@ type CaptainActivity = {
 };
 
 /**
- * A Duet channel is one line: its mascot tile and name. Live state is drawn on the tile and in a
- * dot at the end; everything else waits in the hover card.
+ * A Duet channel is one borderless line: the Captain's creature and name. The creature moves while
+ * the Captain works, a dot at the end counts what waits on you, and everything else waits in the
+ * hover card.
  */
 function DuetChannelRow({
   captain,
@@ -174,7 +175,6 @@ function DuetChannelRow({
             avatar={captain.avatar}
             size="channel"
             state={archived ? "archived" : waiting ? "waiting" : busy ? "working" : "idle"}
-            attention={waiting}
           />
           <span className={cn("min-w-0 flex-1 truncate", archived && "text-muted-foreground")}>
             {name}

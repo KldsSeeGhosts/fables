@@ -316,17 +316,23 @@ export function useCaptainProfile({
   const archived = current.archivedAt !== null;
 
   const save = async (changes: {
+    name?: Captain["name"];
+    avatar?: Captain["avatar"];
     scopedProjectIds?: Captain["scopedProjectIds"];
     reportPolicy?: Captain["reportPolicy"];
   }) => {
-    if (!canUpdate || pending) return;
+    if (!canUpdate || pending) return null;
     setPending(true);
     setError(null);
     const result = await update({ environmentId, input: { captainId: captain.id, ...changes } });
     setPending(false);
-    if (result._tag === "Failure")
-      setError(captainCommandError(result, gt("Could not update Captain.")));
-    else setApplied(result.value);
+    if (result._tag === "Failure") {
+      const message = captainCommandError(result, gt("Could not update Captain."));
+      setError(message);
+      return message;
+    }
+    setApplied(result.value);
+    return null;
   };
 
   const changeArchive = async () => {
@@ -386,7 +392,7 @@ export function useCaptainProfile({
   };
 }
 
-type CaptainProfile = ReturnType<typeof useCaptainProfile>;
+export type CaptainProfile = ReturnType<typeof useCaptainProfile>;
 
 /** The edit and delete dialogs that `useCaptainProfile` opens. */
 export function CaptainProfileDialogs({ profile }: { profile: CaptainProfile }) {

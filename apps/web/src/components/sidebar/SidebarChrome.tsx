@@ -1,8 +1,6 @@
 import {
   ArrowLeftIcon,
   ChartNoAxesColumnIcon,
-  EllipsisIcon,
-  MonitorIcon,
   MoonIcon,
   SearchIcon,
   SettingsIcon,
@@ -19,18 +17,14 @@ import { useTheme } from "../../hooks/useTheme";
 import { useDuetShell } from "../../hooks/useDuetShell";
 import { cn } from "../../lib/utils";
 import { observeResize } from "../../lib/observeResize";
-import {
-  useConnectedEnvironmentIds,
-  useIssuesSupported,
-  usePullRequestsSupported,
-} from "../../state/environments";
+import { useIssuesSupported, usePullRequestsSupported } from "../../state/environments";
 import {
   resolveEnvironmentIdentificationPillLabel,
   useSidebarStageBackdropVariant,
   SidebarStageBackdrop,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
-import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
+import { TooltipProvider } from "../ui/tooltip";
 import { Badge } from "../ui/badge";
 import { T3Wordmark } from "../T3Wordmark";
 import {
@@ -43,7 +37,6 @@ import {
 } from "../ui/sidebar";
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
 import { beginLayoutContentDrag } from "../../layout/layoutDrag";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Button } from "../ui/button";
 import { useOpenLayoutPage } from "../../layout/pageNavigation";
 import { IssueGlyph } from "../issue/issuePresentation";
@@ -353,40 +346,19 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 
 const DuetSidebarUtilityMenu = memo(function DuetSidebarUtilityMenu() {
   const navigate = useNavigate();
+  const navigateToMainApp = useNavigateToMainApp();
   const openLayoutPage = useOpenLayoutPage();
   const gt = useGT();
   const { isMobile, setOpenMobile } = useSidebar();
-  const connectedCount = useConnectedEnvironmentIds().length;
+  const isOnUtilityPage = useLocation({
+    select: (location) => isSidebarUtilityPage(location.pathname),
+  });
   const pullRequestsSupported = usePullRequestsSupported();
   const issuesSupported = useIssuesSupported();
   const workflowsReachable = useWorkflowEnvironmentIds().length > 0;
   const { resolvedTheme, setAppearanceChoice } = useTheme();
   const closeMobileSidebar = () => {
     if (isMobile) setOpenMobile(false);
-  };
-  const openSettings = () => {
-    closeMobileSidebar();
-    void navigate({ to: "/settings", search: { pane: undefined } });
-  };
-  const openLinkedEnvironments = () => {
-    closeMobileSidebar();
-    void navigate({ to: "/settings/connections" });
-  };
-  const openPullRequests = () => {
-    closeMobileSidebar();
-    void openLayoutPage("pull-requests");
-  };
-  const openIssues = () => {
-    closeMobileSidebar();
-    void openLayoutPage("issues");
-  };
-  const openWorkflows = () => {
-    closeMobileSidebar();
-    void openLayoutPage("workflows");
-  };
-  const openUsage = () => {
-    closeMobileSidebar();
-    void navigate({ to: "/usage" });
   };
   const dark = resolvedTheme === "dark";
   return (
@@ -397,67 +369,71 @@ const DuetSidebarUtilityMenu = memo(function DuetSidebarUtilityMenu() {
         <SidebarUpdatePill />
       </ul>
       <div data-duet-sidebar-footer="" className="flex h-12 items-center gap-0.5 px-2">
+        {isOnUtilityPage ? (
+          <SidebarUtilityItem
+            size="header"
+            icon={<ArrowLeftIcon className="size-4" />}
+            label={gt("Back")}
+            onClick={() => {
+              closeMobileSidebar();
+              void navigateToMainApp();
+            }}
+          />
+        ) : null}
         <SidebarUtilityItem
           size="header"
           icon={<SettingsIcon className="size-4" />}
           label={gt("Settings")}
-          onClick={openSettings}
+          onClick={() => {
+            closeMobileSidebar();
+            void navigate({ to: "/settings", search: { pane: undefined } });
+          }}
         />
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="compact"
-                aria-label={gt("Linked environments")}
-                onClick={openLinkedEnvironments}
-              />
-            }
-          >
-            <MonitorIcon className="size-4" />
-            <span className="text-meta tabular-nums text-sidebar-muted-foreground">
-              {connectedCount}
-            </span>
-          </TooltipTrigger>
-          <TooltipPopup side="top">{gt("Linked environments")}</TooltipPopup>
-        </Tooltip>
-        <Menu>
-          <MenuTrigger
-            render={<Button size="icon-sm" variant="ghost" />}
-            aria-label={gt("Sidebar actions")}
-          >
-            <EllipsisIcon className="size-4" />
-          </MenuTrigger>
-          <MenuPopup align="start" side="top">
-            {pullRequestsSupported ? (
-              <MenuItem
-                onClick={openPullRequests}
-                onPointerDown={(event) => beginLayoutContentDrag(event, { kind: "pull-requests" })}
-              >
-                <T>Pull requests</T>
-              </MenuItem>
-            ) : null}
-            {issuesSupported ? (
-              <MenuItem
-                onClick={openIssues}
-                onPointerDown={(event) => beginLayoutContentDrag(event, { kind: "issues" })}
-              >
-                <T>Issues</T>
-              </MenuItem>
-            ) : null}
-            {workflowsReachable ? (
-              <MenuItem
-                onClick={openWorkflows}
-                onPointerDown={(event) => beginLayoutContentDrag(event, { kind: "workflows" })}
-              >
-                <T>Workflows</T>
-              </MenuItem>
-            ) : null}
-            <MenuItem onClick={openUsage}>
-              <T>Usage</T>
-            </MenuItem>
-          </MenuPopup>
-        </Menu>
+        {pullRequestsSupported ? (
+          <SidebarUtilityItem
+            size="header"
+            icon={<PullRequestGlyph.pullRequest className="size-4" />}
+            label={gt("Pull requests")}
+            onClick={() => {
+              closeMobileSidebar();
+              void openLayoutPage("pull-requests");
+            }}
+            onPointerDown={(event) => beginLayoutContentDrag(event, { kind: "pull-requests" })}
+          />
+        ) : null}
+        {issuesSupported ? (
+          <SidebarUtilityItem
+            size="header"
+            icon={<IssueGlyph.issue className="size-4" />}
+            label={gt("Issues", { $context: "sidebar link to the list of issues" })}
+            onClick={() => {
+              closeMobileSidebar();
+              void openLayoutPage("issues");
+            }}
+            onPointerDown={(event) => beginLayoutContentDrag(event, { kind: "issues" })}
+          />
+        ) : null}
+        {workflowsReachable ? (
+          <SidebarUtilityItem
+            size="header"
+            icon={<WorkflowIcon className="size-4" />}
+            label={gt("Workflows")}
+            onClick={() => {
+              closeMobileSidebar();
+              void openLayoutPage("workflows");
+            }}
+            onPointerDown={(event) => beginLayoutContentDrag(event, { kind: "workflows" })}
+          />
+        ) : null}
+        <SidebarUtilityItem
+          size="header"
+          icon={<ChartNoAxesColumnIcon className="size-4" />}
+          label={gt("Usage")}
+          onClick={() => {
+            closeMobileSidebar();
+            void navigate({ to: "/usage" });
+          }}
+        />
         <span className="flex-1" />
         <SidebarUtilityItem
           size="header"

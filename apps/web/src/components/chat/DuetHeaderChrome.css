@@ -1,0 +1,129 @@
+@custom-variant dark (&:is(.dark, .dark *, :where(.black-chrome [data-chrome-scope], .black-chrome [data-chrome-scope] *)));
+@custom-variant light (&:not(.dark, .dark *):not(:where(.black-chrome [data-chrome-scope], .black-chrome [data-chrome-scope] *)));
+
+/* Duet header chrome: the tabless title, icon buttons, centred Captain hero and resize lines. */
+[data-duet-header-title] {
+  border-radius: 6px;
+}
+
+@variant light {
+  [data-duet-header-title]:hover {
+    background: #f0f0f0;
+  }
+}
+
+@variant dark {
+  [data-duet-header-title]:hover {
+    background: #2c2c2c;
+  }
+}
+
+[data-captain-hero-name] {
+  background: transparent;
+}
+
+@variant light {
+  [data-captain-hero-name]:hover,
+  [data-captain-hero-name][data-popup-open] {
+    background: #f0f0f0;
+  }
+}
+
+@variant dark {
+  [data-captain-hero-name]:hover,
+  [data-captain-hero-name][data-popup-open] {
+    background: #2c2c2c;
+  }
+}
+
+/* The hero orb lifts under the pointer and gives under a press, by transform only. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-captain-hero-orb] > [data-captain-avatar] {
+    transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  [data-captain-hero-orb]:is(:hover, [data-popup-open]) > [data-captain-avatar] {
+    transform: scale(1.07);
+  }
+
+  [data-captain-hero-orb]:active > [data-captain-avatar] {
+    transform: scale(0.95);
+  }
+}
+
+[data-duet-header-icon] {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  outline: none;
+  background: transparent;
+}
+
+[data-duet-header-icon]:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+[data-duet-header-icon]:disabled {
+  opacity: 0.45;
+}
+
+@variant light {
+  [data-duet-header-icon] {
+    color: #5c5c5c;
+  }
+
+  [data-duet-header-icon]:hover {
+    background: #f0f0f0;
+  }
+
+  [data-duet-header-icon][data-pressed],
+  [data-duet-header-icon][aria-pressed="true"],
+  [data-duet-header-icon][aria-expanded="true"],
+  [data-duet-header-icon][data-popup-open] {
+    background: #e5e5e5;
+    color: var(--foreground);
+  }
+}
+
+@variant dark {
+  [data-duet-header-icon] {
+    color: #b4b4b4;
+  }
+
+  [data-duet-header-icon]:hover {
+    background: #2a2a2a;
+  }
+
+  [data-duet-header-icon][data-pressed],
+  [data-duet-header-icon][aria-pressed="true"],
+  [data-duet-header-icon][aria-expanded="true"],
+  [data-duet-header-icon][data-popup-open] {
+    background: #333333;
+    color: var(--foreground);
+  }
+}
+
+[data-duet-resize-line] {
+  background: transparent;
+}
+
+@variant light {
+  .group:hover [data-duet-resize-line],
+  .group:active [data-duet-resize-line],
+  .group/resize-column:hover [data-duet-resize-line],
+  [data-duet-resize-line][data-active] {
+    background: #d4d4d4;
+  }
+}
+
+@variant dark {
+  .group:hover [data-duet-resize-line],
+  .group:active [data-duet-resize-line],
+  .group/resize-column:hover [data-duet-resize-line],
+  [data-duet-resize-line][data-active] {
+    background: #3a3a3a;
+  }
+}
