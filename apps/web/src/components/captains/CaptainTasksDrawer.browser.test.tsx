@@ -251,6 +251,7 @@ it("shows a finished local task's result image and never shows one while it is w
       <CaptainTasksDrawer threadRef={threadRef} onClose={() => {}} />,
     );
     await expect.element(screen.getByText("Fix checkout")).toBeVisible();
+    await expect.element(screen.getByText("Ready for you")).toBeVisible();
 
     const row = screen.getByRole("button", { name: /Fix checkout/ }).query();
     expect(row?.querySelectorAll("img")).toHaveLength(1);
@@ -270,6 +271,7 @@ it("shows a finished local task's result image and never shows one while it is w
       <CaptainTasksDrawer threadRef={threadRef} onClose={() => {}} />,
     );
     await expect.element(screen.getByText("Fix checkout")).toBeVisible();
+    await expect.element(screen.getByText("Working")).toBeVisible();
 
     const row = screen.getByRole("button", { name: /Fix checkout/ }).query();
     expect(row?.querySelectorAll("img")).toHaveLength(0);
