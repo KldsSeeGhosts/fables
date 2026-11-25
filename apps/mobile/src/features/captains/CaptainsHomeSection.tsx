@@ -10,6 +10,7 @@ import { cn } from "../../lib/cn";
 import { useHomeRouteVisible } from "../home/home-route-visibility";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { CaptainOrb } from "./CaptainOrb";
+import { orderCaptainHomeRows } from "./captainHomeOrder";
 import { captainShells, captainShellsByConversation } from "./captainShellIndex";
 import { useCaptainsDirectory } from "./useCaptainsDirectory";
 import { useDuetShell } from "./useDuetShell";
@@ -30,16 +31,18 @@ export function CaptainsHomeSection(props: {
   });
   if (props.hidden || environments.every(({ captains }) => captains.length === 0)) return null;
   const byConversation = captainShellsByConversation(shells);
-  const rows = environments.flatMap((environment) =>
-    environment.captains.map((captain) => {
-      const own = captainShells(byConversation, environment.environmentId, captain);
-      return {
-        environment,
-        captain,
-        own,
-        activity: captainThreadActivity(environment.environmentId, captain, own),
-      };
-    }),
+  const rows = orderCaptainHomeRows(
+    environments.flatMap((environment) =>
+      environment.captains.map((captain) => {
+        const own = captainShells(byConversation, environment.environmentId, captain);
+        return {
+          environment,
+          captain,
+          own,
+          activity: captainThreadActivity(environment.environmentId, captain, own),
+        };
+      }),
+    ),
   );
   const waiting = captainInboxItems(
     environments,
