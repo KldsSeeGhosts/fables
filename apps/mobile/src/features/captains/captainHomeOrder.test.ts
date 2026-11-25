@@ -5,7 +5,7 @@ import { orderCaptainHomeRows } from "./captainHomeOrder";
 
 const environmentId = EnvironmentId.make("home");
 const row = (id: string, archivedAt: string | null = null) => ({
-  environmentId,
+  environment: { environmentId },
   captain: { id: CaptainId.make(id), archivedAt },
 });
 

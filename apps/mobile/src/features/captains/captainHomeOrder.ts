@@ -7,13 +7,13 @@ const homeRowKey = (environmentId: EnvironmentId, captain: Pick<Captain, "id">) 
 /** Mobile has no device order, so it uses the shared ordering desktop starts from. */
 export function orderCaptainHomeRows<
   T extends {
-    readonly environmentId: EnvironmentId;
+    readonly environment: { readonly environmentId: EnvironmentId };
     readonly captain: Pick<Captain, "id" | "archivedAt">;
   },
 >(rows: ReadonlyArray<T>): Array<T> {
   return orderDuets(
     rows.map((row) => ({
-      key: homeRowKey(row.environmentId, row.captain),
+      key: homeRowKey(row.environment.environmentId, row.captain),
       archived: row.captain.archivedAt !== null,
       row,
     })),
