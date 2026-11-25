@@ -1,0 +1,103 @@
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
+import { CaptainId, EnvironmentId, ThreadId, type Captain } from "@t3tools/contracts";
+import { describe, expect, it } from "vite-plus/test";
+
+import { captainTaskGroups } from "./captainTaskList";
+
+const environmentId = EnvironmentId.make("home");
+const nowMs = Date.parse("2026-11-25T12:00:00.000Z");
+
+const captain = (id: string, archivedAt: string | null = null): Captain => ({
+  id: CaptainId.make(id),
+  name: id,
+  role: "",
+  instructions: "",
+  avatar: { preset: "circle", color: "blue" },
+  scopedProjectIds: [],
+  reportPolicy: "react",
+  coordinatorOnly: false,
+  primaryThreadId: ThreadId.make(`captain:${id}:1`),
+  earlierThreadIds: [ThreadId.make(`captain:${id}:0`)],
+  createdAt: "2026-11-01T00:00:00.000Z",
+  updatedAt: "2026-11-01T00:00:00.000Z",
+  archivedAt,
+});
+
+const task = (
+  id: string,
+  parent: ThreadId,
+  overrides: Partial<EnvironmentThreadShell> = {},
+): EnvironmentThreadShell =>
+  ({
+    environmentId,
+    id: ThreadId.make(id),
+    title: id,
+    branch: null,
+    archivedAt: null,
+    deletedAt: null,
+    settledAt: null,
+    createdAt: "2026-11-25T11:00:00.000Z",
+    updatedAt: "2026-11-25T11:00:00.000Z",
+    hasPendingUserInput: false,
+    hasPendingApprovals: false,
+    pendingSubagentRequest: null,
+    runtime: null,
+    latestRun: null,
+    lineage: { rootThreadId: parent, parentThreadId: parent, relationshipToParent: "subagent" },
+    ...overrides,
+  }) as EnvironmentThreadShell;
+
+describe("captainTaskGroups", () => {
+  const maria = captain("maria");
+  const ada = captain("ada");
+  const shells = [
+    task("old-done", maria.primaryThreadId, {
+      settledAt: "2026-11-20T09:00:00.000Z",
+      updatedAt: "2026-11-20T09:00:00.000Z",
+    }),
+    task("question", maria.earlierThreadIds[0]!, {
+      hasPendingUserInput: true,
+      updatedAt: "2026-11-01T09:00:00.000Z",
+    }),
+    task("fresh-done", maria.primaryThreadId, { settledAt: "2026-11-25T10:00:00.000Z" }),
+    task("not-a-captain", ThreadId.make("thread-elsewhere")),
+  ];
+
+  it("keeps open work and the last day's outcomes for today, the waiting task first", () => {
+    const groups = captainTaskGroups({
+      environments: [{ environmentId, captains: [maria, ada] }],
+      shells,
+      range: "today",
+      nowMs,
+    });
+    expect(groups.map(({ captain }) => captain.id)).toEqual(["maria"]);
+    expect(groups[0]!.rows.map(({ thread }) => thread.id)).toEqual(["question", "fresh-done"]);
+    expect(groups[0]!.rows[0]!.status).toBe("needs-input");
+  });
+
+  it("lists every delegated task for all", () => {
+    const groups = captainTaskGroups({
+      environments: [{ environmentId, captains: [maria] }],
+      shells,
+      range: "all",
+      nowMs,
+    });
+    expect(groups[0]!.rows.map(({ thread }) => thread.id)).toEqual([
+      "question",
+      "fresh-done",
+      "old-done",
+    ]);
+  });
+
+  it("narrows to one Captain and skips archived Captains", () => {
+    const archived = captain("gone", "2026-11-24T00:00:00.000Z");
+    const groups = captainTaskGroups({
+      environments: [{ environmentId, captains: [maria, archived] }],
+      shells: [...shells, task("orphan", archived.primaryThreadId)],
+      range: "all",
+      nowMs,
+      captainId: "gone",
+    });
+    expect(groups).toEqual([]);
+  });
+});

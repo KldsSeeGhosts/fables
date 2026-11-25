@@ -1,4 +1,4 @@
-import type { DuetEmblem } from "./captainPalette";
+import type { DuetEmblem } from "@t3tools/client-runtime/state/captain-palette";
 
 /** `disc` sizes sit the creature on the Duet orb's subtle disc; the rest draw it bare. */
 export const captainAvatarSizes = {

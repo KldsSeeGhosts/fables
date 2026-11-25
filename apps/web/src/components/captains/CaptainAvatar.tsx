@@ -12,7 +12,7 @@ import {
   DUET_PICKER,
   type DuetEmblem,
   type DuetPalette,
-} from "./captainPalette";
+} from "@t3tools/client-runtime/state/captain-palette";
 import "./CaptainAvatar.css";
 
 export type CaptainAvatarState = "archived" | "idle" | "waiting" | "working";

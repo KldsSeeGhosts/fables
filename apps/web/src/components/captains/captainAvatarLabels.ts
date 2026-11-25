@@ -1,6 +1,6 @@
 import { useGT } from "gt-react";
 
-import type { DuetEmblem, DuetPalette } from "./captainPalette";
+import type { DuetEmblem, DuetPalette } from "@t3tools/client-runtime/state/captain-palette";
 
 /** Names for the Captain icon picker's creatures and colours. */
 export function useCaptainAvatarLabels(): {

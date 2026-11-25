@@ -42,7 +42,7 @@ import {
   DUET_PALETTE_ORDER,
   DUET_PALETTE_SWATCH,
   DUET_PICKER,
-} from "./captainPalette";
+} from "@t3tools/client-runtime/state/captain-palette";
 import { CaptainReportPolicyPicker } from "./CaptainReportPolicyPicker";
 import { CaptainScope } from "./CaptainScope";
 import type { CaptainProfileSection } from "./CaptainBriefPanel";

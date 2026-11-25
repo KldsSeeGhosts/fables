@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-sparkles-icon -- tests cover the stored avatar schema literal for the sunburst emblem. */
 import { expect, it } from "vite-plus/test";
 
 import {
@@ -6,7 +5,7 @@ import {
   captainPaletteOf,
   DUET_PALETTE_SWATCH,
   DUET_PICKER,
-} from "./captainPalette";
+} from "./captainPalette.ts";
 
 it("maps legacy presets and colors onto the Duet system", () => {
   expect(captainEmblemOf({ preset: "compass", color: "violet" })).toBe("orb");

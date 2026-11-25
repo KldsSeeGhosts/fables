@@ -1,5 +1,5 @@
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
-import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/shell";
+import type { EnvironmentThreadShell } from "./models.ts";
+import { threadRuntimeIsActive } from "./shell.ts";
 import { isOrchestrationV2WorkActive, type OrchestrationV2Subagent } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 

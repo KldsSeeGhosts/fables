@@ -1,6 +1,6 @@
 import { expect, it } from "vite-plus/test";
 
-import { moveDuet, orderDuets } from "./duetOrder.logic";
+import { moveDuet, orderDuets } from "./duetOrder.ts";
 
 const entry = (key: string, archived = false) => ({ key, archived });
 const keys = (entries: ReadonlyArray<{ key: string }>) => entries.map(({ key }) => key);
