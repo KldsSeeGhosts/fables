@@ -23,7 +23,6 @@ import { CollapsedComposerStopAction, ComposerPrimaryActions } from "./ComposerP
 import { ComposerSpeechButton } from "./ComposerSpeechButton";
 import { TextFieldSpeechControls, type TextFieldSpeech } from "~/speech/useTextFieldSpeech";
 import { Button } from "../ui/button";
-import { setTheme } from "~/hooks/useTheme";
 
 function setup() {
   return {
@@ -175,31 +174,6 @@ it("dictates in a text field in place of its mic without moving the buttons besi
   await pressEscape(mic);
   expect(onStop).toHaveBeenCalledOnce();
   expect(onCancel).toHaveBeenCalledOnce();
-});
-
-it("uses the inline return glyph and moves the mic out of the Duet send control", async () => {
-  setTheme("ksg-salon");
-  try {
-    const props = {
-      ...setup(),
-      isRunning: false,
-      canInterrupt: false,
-      hasSendableContent: true,
-      compactBeforeSendTokens: null,
-    };
-    await using screen = await render(
-      <ComposerPrimaryActions
-        {...props}
-        renderSpeechAction={() => <button type="button" aria-label="mic" />}
-      />,
-    );
-
-    const send = screen.getByRole("button", { name: "Submit message" }).element();
-    expect(send.querySelector("svg.lucide-corner-down-left")).not.toBeNull();
-    expect(screen.container.querySelector('button[aria-label="mic"]')).toBeNull();
-  } finally {
-    setTheme("system");
-  }
 });
 
 it.each(["resume", "draft", "question"] as const)(

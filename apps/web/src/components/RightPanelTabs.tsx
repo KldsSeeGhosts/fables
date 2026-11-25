@@ -758,7 +758,9 @@ const PANE_BODY_SURFACE_CLASS: Partial<Record<RightPanelSurface["kind"], string>
 };
 
 export function shouldShowDuetRightPanelTabs(surfaces: readonly RightPanelSurface[]): boolean {
-  if (surfaces.length <= 1) return false;
+  if (surfaces.length === 0) return false;
+  const hasCaptainBrief = surfaces.some((surface) => surface.kind === "captain-brief");
+  if (!hasCaptainBrief) return true;
   const threadSurfaceCount = surfaces.filter((surface) => surface.kind === "thread").length;
   const onlyBriefAndThreadSurfaces = surfaces.every(
     (surface) => surface.kind === "captain-brief" || surface.kind === "thread",
@@ -777,7 +779,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
   const tabListRef = useRef<HTMLDivElement>(null);
   // Embedded, this is one surface's tab in the layout: it drags like any tab
   // and its pane's other tabs sit around it in the notch.
-  const { tabId: layoutPaneTabId, leadingEdge } = useLayoutPane();
+  const { tabId: layoutPaneTabId, leadingEdge, trailingEdge } = useLayoutPane();
   const layoutTabId = props.mode === "embedded" ? layoutPaneTabId : null;
   const siblingTabs = useLayoutPaneSiblingTabs();
   const pageTab = useLayoutStore((state) =>
@@ -1213,8 +1215,9 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                 )
               : "pl-2",
             !notched && (props.mode === "inline" && !props.layoutControls ? "pr-28" : "pr-3"),
-            ownsDesktopTitleBar && "drag-region",
-            ownsDesktopTitleBar && "wco:pr-(--workspace-native-controls-inset)",
+            (ownsDesktopTitleBar || (isElectron && notched && trailingEdge)) && "drag-region",
+            (ownsDesktopTitleBar || (isElectron && notched && trailingEdge)) &&
+              "wco:pr-(--workspace-native-controls-inset)",
             props.mode === "inline" && props.maximized && COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
             // The leading embedded pane shares the mobile row with the shell toggle.
             notched && leadingEdge && COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,

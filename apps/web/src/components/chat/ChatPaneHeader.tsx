@@ -58,7 +58,7 @@ export function chatPaneHeaderClassName({
   return cn(
     // Keep tab menus above the timeline. Ease the collapsed-sidebar inset with the sidebar so the
     // tab moves with its pane.
-    "relative z-10 bg-background md:pl-0 duet:h-13 duet:min-h-13 duet:border-b-0 duet:bg-background @container/duet-header",
+    "relative z-10 bg-background md:pl-0 duet:border-b-0 duet:bg-background @container/duet-header",
     COLLAPSED_SIDEBAR_INSET_EASE_CLASS,
     isElectron
       ? cn(
@@ -90,12 +90,13 @@ export function ChatPaneHeaderControls({
   marksHost?: boolean;
   children: ReactNode;
 }) {
-  const { split } = useLayoutPane();
+  const { split, trailingEdge } = useLayoutPane();
   return (
     <div
       ref={measureRef}
       className={cn(
-        "pointer-events-none z-50 flex h-[var(--workspace-topbar-height)] items-center gap-1 md:pe-(--workspace-pane-local-controls-right) [-webkit-app-region:no-drag]",
+        "pointer-events-none z-50 flex h-[var(--workspace-topbar-height)] items-center gap-1 [-webkit-app-region:no-drag]",
+        trailingEdge ? "md:pe-(--workspace-pane-local-controls-right)" : "md:pe-2",
         // Several panes each carry their own cluster at their own top-right.
         split || local
           ? "absolute top-[var(--workspace-pane-local-controls-top)] right-[var(--workspace-pane-local-controls-right)] md:top-0 md:right-0"

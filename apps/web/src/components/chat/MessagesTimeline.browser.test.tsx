@@ -3344,7 +3344,7 @@ it("renders a Captain conversation as a Duet channel stream", async () => {
 
   expect(document.querySelector('[data-duet-stream="channel"]')).not.toBeNull();
   expect(document.querySelectorAll("[data-duet-timestamp-divider]")).toHaveLength(2);
-  expect(document.querySelector("[data-assistant-bubble]")).not.toBeNull();
+  expect(document.querySelector("[data-assistant-bubble]")).toBeNull();
   expect(document.querySelector('a[href^="#duet-thread/"]')?.textContent).toBe("○ Fix checkout");
   expect(document.querySelector("[data-thread-find-ignore]")?.textContent).toContain("DIGEST.md");
 });

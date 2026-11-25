@@ -238,13 +238,15 @@ describe("Duet right panel tab visibility", () => {
     threadId: ThreadId.make(id),
   });
 
-  it("hides empty, single-surface, and captain drill-down strips", () => {
+  it("hides empty and captain-only Tasks drawer strips", () => {
     expect(shouldShowDuetRightPanelTabs([])).toBe(false);
     expect(shouldShowDuetRightPanelTabs([captainBrief])).toBe(false);
     expect(shouldShowDuetRightPanelTabs([captainBrief, threadSurface("task-1")])).toBe(false);
   });
 
-  it("shows the flat strip for multiple threads or non-thread surfaces", () => {
+  it("shows the flat strip for single tool surfaces, multiple threads, or mixed surfaces", () => {
+    expect(shouldShowDuetRightPanelTabs([BROWSER_SURFACE])).toBe(true);
+    expect(shouldShowDuetRightPanelTabs([DIFF_SURFACE])).toBe(true);
     expect(
       shouldShowDuetRightPanelTabs([
         captainBrief,
