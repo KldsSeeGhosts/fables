@@ -4058,7 +4058,7 @@ export default function ChatView(props: ChatViewProps) {
                     <ComposerSurface.Shell contextRow={showComposerContextStrip}>
                       <CaptainContextResetNotice
                         threadRef={isServerThread ? activeThreadRef : null}
-                        usedPercentage={activeContextWindow?.usedPercentage ?? null}
+                        contextWindow={activeContextWindow ?? null}
                         onOpenThread={onOpenRelatedThreadStable}
                       />
                       <div
