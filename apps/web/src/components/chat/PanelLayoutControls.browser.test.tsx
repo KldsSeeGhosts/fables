@@ -40,15 +40,15 @@ const environmentId = EnvironmentId.make("environment");
 
 function controls(props: {
   threadId?: string;
+  threadPanelOpen?: boolean;
   rightPanelOpen?: boolean;
   onToggleThreadPanel?: () => void;
   onToggleRightPanel?: () => void;
-  withDuetControls?: boolean;
 }) {
   const threadId = props.threadId ?? "thread";
   return (
     <PanelLayoutControls
-      threadPanelOpen={false}
+      threadPanelOpen={props.threadPanelOpen ?? false}
       threadPanelPresentation="inline"
       threadPanelShortcutLabel={null}
       onToggleThreadPanel={props.onToggleThreadPanel ?? (() => {})}
@@ -60,34 +60,22 @@ function controls(props: {
         shortcutLabel: null,
         onToggle: props.onToggleRightPanel ?? (() => {}),
       }}
-      duetControls={
-        props.withDuetControls
-          ? {
-              terminal: { label: "Terminal", onClick: () => {} },
-              browser: { label: "Browser", onClick: () => {} },
-              diff: { label: "Diff", onClick: () => {} },
-            }
-          : null
-      }
     />
   );
 }
 
-it("keeps a coding thread's top right to the details pill, right panel toggle, and overflow actions", async () => {
+it("keeps a coding thread's top right to the details pill and right panel toggle", async () => {
   const onToggleRightPanel = vi.fn();
-  await using screen = await render(controls({ onToggleRightPanel, withDuetControls: true }));
+  await using screen = await render(controls({ onToggleRightPanel }));
 
   const buttons = Array.from(screen.container.querySelectorAll("button")).map((button) =>
     button.getAttribute("aria-label"),
   );
-  expect(buttons).toEqual([
-    "Toggle thread details panel",
-    "Toggle right panel",
-    "More header actions",
-  ]);
+  expect(buttons).toEqual(["Toggle thread details panel", "Toggle right panel"]);
   await expect
     .element(screen.getByRole("button", { name: "Toggle thread details panel" }))
-    .toHaveTextContent("main");
+    .toHaveTextContent("environment/main");
+  expect(screen.container.querySelector('[aria-label="More header actions"]')).toBeNull();
 
   const toggle = screen.getByRole("button", { name: "Toggle right panel" });
   await expect.element(toggle).toHaveAttribute("aria-pressed", "false");
@@ -95,27 +83,32 @@ it("keeps a coding thread's top right to the details pill, right panel toggle, a
   expect(onToggleRightPanel).toHaveBeenCalledOnce();
 });
 
-it("shows a Duet's scope on the pill and exposes KSG quick actions in the overflow menu", async () => {
+it("shows a Duet's machine and scope on the pill", async () => {
   const onToggleThreadPanel = vi.fn();
   await using screen = await render(
     controls({
       threadId: "captain:maria:0",
       rightPanelOpen: true,
       onToggleThreadPanel,
-      withDuetControls: true,
     }),
   );
 
-  await expect
-    .element(screen.getByRole("button", { name: "Toggle thread details panel" }))
-    .toHaveTextContent("No scope");
+  const pill = screen.getByRole("button", { name: "Toggle thread details panel" });
+  await expect.element(pill).toHaveTextContent("environment/No scope");
   await expect
     .element(screen.getByRole("button", { name: "Toggle right panel" }))
     .toHaveAttribute("aria-pressed", "true");
   expect(screen.container.querySelector('[aria-label^="Status:"]')).toBeNull();
-  expect(screen.container.querySelector('[aria-label="Tasks"]')).toBeNull();
-  await expect.element(screen.getByRole("button", { name: "More header actions" })).toBeVisible();
+  expect(screen.container.querySelector('[aria-label="More header actions"]')).toBeNull();
 
-  await userEvent.click(screen.getByRole("button", { name: "Toggle thread details panel" }));
+  await userEvent.click(pill);
   expect(onToggleThreadPanel).toHaveBeenCalledOnce();
+});
+
+it("shows the context ring only while the details card is collapsed", async () => {
+  await using collapsed = await render(controls({ threadPanelOpen: false }));
+  expect(collapsed.container.querySelector("[data-context-ring]")).not.toBeNull();
+
+  await using open = await render(controls({ threadPanelOpen: true }));
+  expect(open.container.querySelector("[data-context-ring]")).toBeNull();
 });

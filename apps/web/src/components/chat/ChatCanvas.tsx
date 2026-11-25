@@ -5,6 +5,8 @@ import type { ChatCanvasPreview } from "./chatCanvasLayout";
 import { chatCanvasDrawnKey, resolveChatCanvasModel, type ChatCanvasStore } from "./canvasStore";
 import { selectThreadPanelOpen, useRightPanelStore } from "../../rightPanelStore";
 import { observeResize } from "../../lib/observeResize";
+import { useDuetShell } from "../../hooks/useDuetShell";
+import { DUET_THREAD_DETAILS_CARD_MARGINS } from "./threadDetailsCardLayout";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 
 const PANELS = '[data-slot="sidebar-gap"], [data-preview-panel-mode="inline"]';
@@ -62,6 +64,7 @@ export function ChatCanvas({
   composerOverlayElement: HTMLElement | null;
   detailsCardTopInset?: number;
 }) {
+  const duet = useDuetShell();
   const elementRef = useRef<HTMLDivElement | null>(null);
   const widthProbeRef = useRef<HTMLDivElement | null>(null);
   const [timelineElement, registerTimeline] = useState<HTMLElement | null>(null);
@@ -83,6 +86,7 @@ export function ChatCanvas({
         threadRef,
         preview,
         detailsCardInlineOpen,
+        detailsCardMargins: duet ? DUET_THREAD_DETAILS_CARD_MARGINS : undefined,
       }),
     (a, b) => chatCanvasDrawnKey(a) === chatCanvasDrawnKey(b),
   );

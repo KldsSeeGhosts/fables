@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { resolveChatCanvasLayout, type ChatCanvasPreview } from "./chatCanvasLayout";
 import { resizePreviewMiniPlayer } from "../preview/previewMiniPlayerLayout";
 import {
+  DUET_THREAD_DETAILS_CARD_MARGINS,
   THREAD_DETAILS_CARD_GAP,
   resolveThreadDetailsCardDensity,
   resolveThreadDetailsCardLayout,
@@ -372,5 +373,25 @@ describe("workspace card beside chat", () => {
     expect(place(1344, 1124)).toMatchObject({ x: 1344 - 272 - THREAD_DETAILS_CARD_GAP });
     // A window resize mid-animation leaves the sampled ends wider than the canvas.
     expect(place(900, 1344)).toBeNull();
+  });
+
+  it("uses Duet margins to align the card with the header controls", () => {
+    const card = resolveThreadDetailsCardLayout({
+      container: { width: 1200, height: 900 },
+      lane: { padding: 48, minChatWidth: 640 },
+      frame: null,
+      margins: DUET_THREAD_DETAILS_CARD_MARGINS,
+    });
+
+    expect(card).toMatchObject({ x: 920, right: 8, width: 272, y: -4 });
+    expect(
+      resolveThreadDetailsCardLayout({
+        container: { width: 1200, height: 900 },
+        lane: { padding: 48, minChatWidth: 640 },
+        frame: null,
+        topInset: 40,
+        margins: DUET_THREAD_DETAILS_CARD_MARGINS,
+      }),
+    ).toMatchObject({ y: 48 });
   });
 });

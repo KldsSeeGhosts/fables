@@ -363,17 +363,14 @@ export const ChatHeader = memo(function ChatHeader({
   // Duet keeps the animated orb centred while placing the Duet title menu at the header start.
   const captainHero = duet && isServerThread && captain != null;
   return (
-    <div className="flex min-w-0 flex-1 self-stretch">
-      {captainHero ? (
-        <CaptainHeaderHero
-          captain={captain}
-          threadRef={activeThreadRef}
-          onContextMenu={handleHeaderContextMenu}
-        />
-      ) : null}
+    <div
+      className="flex min-w-0 flex-1 self-stretch"
+      data-captain-header-root={captainHero ? "" : undefined}
+    >
+      {captainHero ? <CaptainHeaderHero captain={captain} threadRef={activeThreadRef} /> : null}
       <div
         className={cn(
-          "relative flex min-w-0 flex-1 items-center self-stretch",
+          "flex min-w-0 flex-1 items-center self-stretch",
           trailingInset == null && (rightPanelOpen ? "pr-10" : "pr-24"),
         )}
         style={trailingInset == null ? undefined : { paddingInlineEnd: trailingInset }}
