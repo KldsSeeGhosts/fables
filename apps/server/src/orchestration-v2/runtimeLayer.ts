@@ -357,6 +357,7 @@ const layerCaptainProvided = CaptainService.layer.pipe(
       layerThreadLaunchProvided,
       layerManagedProjectFoldersProvided,
       layerScheduledTaskProvided,
+      ThreadCommandExecutor.layer,
     ).pipe(Layer.provideMerge(layerProjectService)),
   ),
 );
