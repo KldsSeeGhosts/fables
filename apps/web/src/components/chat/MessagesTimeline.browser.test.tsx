@@ -3348,3 +3348,37 @@ it("renders a Captain conversation as a Duet channel stream", async () => {
   expect(document.querySelector('a[href^="#duet-thread/"]')?.textContent).toBe("○ Fix checkout");
   expect(document.querySelector("[data-thread-find-ignore]")?.textContent).toContain("DIGEST.md");
 });
+
+it("uses the Duet visibility for Captain threads and the main setting for ordinary threads", async () => {
+  setup();
+  environmentQuery.data = { captains: [], documents: [], memories: [] };
+  __setClientSettingsForTests({
+    ...DEFAULT_CLIENT_SETTINGS,
+    toolCallVisibility: "showAll",
+    duetToolCallVisibility: "zen",
+  });
+  onTestFinished(() => __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS));
+  const entries = [
+    message("Please run the tests", {}, "visibility-prompt"),
+    work("visibility-tool-command", {
+      label: "Ran command",
+      tone: "tool",
+      itemType: "command_execution",
+      command: "npm test",
+      detail: "passed",
+    }),
+    message("Done", { role: "assistant" }, "visibility-answer"),
+  ];
+
+  await using captain = await renderTimeline(entries, {
+    routeThreadKey: "environment-local:captain:maria:0",
+  });
+  await expect.element(captain.getByText("Please run the tests", { exact: true })).toBeVisible();
+  expect(captain.text()).not.toContain("Worked for");
+  await captain.unmount();
+
+  await using ordinary = await renderTimeline(entries, {
+    routeThreadKey: "environment-local:thread-ordinary",
+  });
+  await expect.element(ordinary.getByText(/Worked for/)).toBeVisible();
+});

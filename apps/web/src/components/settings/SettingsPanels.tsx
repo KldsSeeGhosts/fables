@@ -26,6 +26,7 @@ import {
   type QuitConfirmationMode,
   SidebarProjectSortOrder,
   ScreenReaderAnnouncements,
+  DuetToolCallVisibility,
   ToolCallVisibility,
 } from "@t3tools/contracts/settings";
 import {
@@ -80,6 +81,7 @@ import {
 import { useTextGenerationTargets } from "../../textGenerators";
 import { ensureLocalApi, readLocalApi } from "../../localApi";
 import { isMacPlatform } from "../../lib/utils";
+import { useDuetShell } from "../../hooks/useDuetShell";
 import {
   useEnvironmentProviders,
   useEnvironments,
@@ -602,6 +604,9 @@ function useSettingsRestore(onRestored?: () => void) {
     ...(settings.toolCallVisibility !== DEFAULT_UNIFIED_SETTINGS.toolCallVisibility
       ? [gt("Tool calls in chat")]
       : []),
+    ...(settings.duetToolCallVisibility !== DEFAULT_UNIFIED_SETTINGS.duetToolCallVisibility
+      ? [gt("Tool calls in Captains and Duets")]
+      : []),
     ...(settings.screenReaderAnnouncements !== DEFAULT_UNIFIED_SETTINGS.screenReaderAnnouncements
       ? [gt("Screen reader announcements")]
       : []),
@@ -737,6 +742,7 @@ function useSettingsRestore(onRestored?: () => void) {
       followUpBehavior: DEFAULT_UNIFIED_SETTINGS.followUpBehavior,
       sideThreadOpenTarget: DEFAULT_UNIFIED_SETTINGS.sideThreadOpenTarget,
       toolCallVisibility: DEFAULT_UNIFIED_SETTINGS.toolCallVisibility,
+      duetToolCallVisibility: DEFAULT_UNIFIED_SETTINGS.duetToolCallVisibility,
       screenReaderAnnouncements: DEFAULT_UNIFIED_SETTINGS.screenReaderAnnouncements,
       screenReaderWindowTitle: DEFAULT_UNIFIED_SETTINGS.screenReaderWindowTitle,
       environmentIdentificationMode: DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode,
@@ -1504,10 +1510,6 @@ export function ChatSettingsPanel() {
         />
       </SettingsSection>
 
-      <SettingsSection id="activity" title={gt("Activity")}>
-        <ToolCallVisibilityRow />
-      </SettingsSection>
-
       <SettingsSection id="screen-reader" title={gt("Screen reader")}>
         <ScreenReaderAnnouncementsRow />
         <ScreenReaderWindowTitleRow />
@@ -1524,6 +1526,12 @@ const TOOL_CALL_VISIBILITY_LABELS: Record<ToolCallVisibility, string> = {
 };
 
 const isToolCallVisibility = Schema.is(ToolCallVisibility);
+const isDuetToolCallVisibility = Schema.is(DuetToolCallVisibility);
+
+const DUET_TOOL_CALL_VISIBILITY_LABELS: Record<DuetToolCallVisibility, string> = {
+  inherit: msg("Same as other threads", { $context: "tool call visibility setting" }),
+  ...TOOL_CALL_VISIBILITY_LABELS,
+};
 
 function ToolCallVisibilityRow() {
   const messages = useMessages();
@@ -1569,6 +1577,81 @@ function ToolCallVisibilityRow() {
         </Select>
       }
     />
+  );
+}
+
+function DuetToolCallVisibilityRow() {
+  const messages = useMessages();
+  const setting = useSearchableSetting();
+  const gt = useGT();
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  const isDuetShell = useDuetShell();
+  const title = isDuetShell
+    ? gt("In Duets", { $context: "tool call visibility setting" })
+    : gt("In Captains", { $context: "tool call visibility setting" });
+  return (
+    <SettingsRow
+      {...setting("duet-tool-call-visibility")}
+      title={title}
+      description={
+        isDuetShell
+          ? gt(
+              "Choose a different tool-call view for a Duet's current and earlier conversations. Crew and subagent threads keep the main setting.",
+            )
+          : gt(
+              "Choose a different tool-call view for a Captain's current and earlier conversations. Crew and subagent threads keep the main setting.",
+            )
+      }
+      resetAction={
+        settings.duetToolCallVisibility !== DEFAULT_UNIFIED_SETTINGS.duetToolCallVisibility ? (
+          <SettingResetButton
+            ariaLabel={
+              isDuetShell
+                ? gt("Reset tool calls in Duets to default")
+                : gt("Reset tool calls in Captains to default")
+            }
+            onClick={() =>
+              updateSettings({
+                duetToolCallVisibility: DEFAULT_UNIFIED_SETTINGS.duetToolCallVisibility,
+              })
+            }
+          />
+        ) : null
+      }
+      control={
+        <Select
+          value={settings.duetToolCallVisibility}
+          onValueChange={(value) => {
+            if (isDuetToolCallVisibility(value)) {
+              updateSettings({ duetToolCallVisibility: value });
+            }
+          }}
+        >
+          <SelectTrigger size="sm" className="w-full sm:w-52" aria-label={title}>
+            <SelectValue>
+              {messages(DUET_TOOL_CALL_VISIBILITY_LABELS[settings.duetToolCallVisibility])}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectPopup align="end" alignItemWithTrigger={false}>
+            {DuetToolCallVisibility.literals.map((value) => (
+              <SelectItem key={value} value={value}>
+                {messages(DUET_TOOL_CALL_VISIBILITY_LABELS[value])}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+      }
+    />
+  );
+}
+
+export function ToolCallVisibilitySettingsRows() {
+  return (
+    <>
+      <ToolCallVisibilityRow />
+      <DuetToolCallVisibilityRow />
+    </>
   );
 }
 

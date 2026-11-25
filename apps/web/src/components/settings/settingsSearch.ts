@@ -620,10 +620,20 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "tool-call-visibility",
     title: msg("Tool calls in chat"),
-    to: "/settings/chat",
+    to: "/settings/appearance",
     searchTerms: [
       msg(
         "hide tool calls commands edits searches work log activity quiet chat zen final answers only",
+      ),
+    ],
+  },
+  {
+    id: "duet-tool-call-visibility",
+    title: msg("Tool calls in Captains and Duets"),
+    to: "/settings/appearance",
+    searchTerms: [
+      msg(
+        "in captains in duets same as other threads inherit override hide tool calls zen final answers only",
       ),
     ],
   },

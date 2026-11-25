@@ -1,5 +1,6 @@
 import { T, useGT, useMessages, Var } from "gt-react";
 import type { SideThreadOpenIntent } from "@t3tools/client-runtime/side-thread";
+import { resolveThreadToolCallVisibility } from "@t3tools/client-runtime/tool-call-visibility";
 import type {
   EnvironmentThreadShell,
   ThreadRunSummary,
@@ -706,10 +707,19 @@ const ConversationTimeline = memo(function ConversationTimeline({
       return next;
     });
   };
-  const preferredToolCallVisibility = useClientSettings((settings) => settings.toolCallVisibility);
+  const mainToolCallVisibility = useClientSettings((settings) => settings.toolCallVisibility);
+  const duetToolCallVisibility = useClientSettings((settings) => settings.duetToolCallVisibility);
   const screenReaderAnnouncements = useClientSettings(
     (settings) => settings.screenReaderAnnouncements,
   );
+  const preferredToolCallVisibility =
+    citationThreadRef === null
+      ? mainToolCallVisibility
+      : resolveThreadToolCallVisibility({
+          threadId: citationThreadRef.threadId,
+          toolCallVisibility: mainToolCallVisibility,
+          duetToolCallVisibility,
+        });
   const toolCallVisibility =
     findActive && preferredToolCallVisibility === "zen" ? "hideAll" : preferredToolCallVisibility;
   const turnWorkFold = useClientSettings((settings) => settings.turnWorkFoldEnabled);
