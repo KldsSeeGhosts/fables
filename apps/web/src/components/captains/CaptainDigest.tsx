@@ -5,6 +5,7 @@ import { SunriseIcon } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
 import { useId, useState, type ReactNode } from "react";
 
+import { useDuetShell } from "../../hooks/useDuetShell";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import ChatMarkdown from "../ChatMarkdown";
@@ -81,6 +82,7 @@ export function CaptainMorningBriefControl({
   task: ScheduledTask | undefined;
 }) {
   const gt = useGT();
+  const isDuet = useDuetShell();
   const timeId = useId();
   const morningBrief = useCaptainMorningBrief(environmentId);
   const canRun = useAtomValue(serverEnvironment.runScheduledTaskNow.permissionAtom(environmentId));
@@ -141,7 +143,11 @@ export function CaptainMorningBriefControl({
             <T>Morning brief</T>
           </Text>
           <Text variant="meta" tone="muted" render={<p />}>
-            <T>Every day, the Captain updates DIGEST.md in its current conversation.</T>
+            {isDuet ? (
+              <T>Every day, this Duet updates DIGEST.md in its current conversation.</T>
+            ) : (
+              <T>Every day, the Captain updates DIGEST.md in its current conversation.</T>
+            )}
           </Text>
           <label htmlFor={timeId} className="flex items-center justify-between gap-3">
             <Text variant="body">

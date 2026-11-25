@@ -73,7 +73,7 @@ import {
 import { useProject, useQuietThreadShell } from "../../state/entities";
 import { useLayoutStore } from "../../layout/layoutStore";
 import { useDuetShell } from "../../hooks/useDuetShell";
-import { CaptainHeaderHero } from "./CaptainHeaderHero";
+import { CaptainHeaderHero, CaptainHeaderTitleMenu } from "./CaptainHeaderHero";
 import { DuetHeaderTitle, type HiddenTerminalChip } from "./DuetHeaderTitle";
 export type { HiddenTerminalChip } from "./DuetHeaderTitle";
 
@@ -360,7 +360,7 @@ export const ChatHeader = memo(function ChatHeader({
     );
   const tabless = duet;
   const openCaptainThread = (threadId: ThreadId) => onOpenThread(threadId);
-  // Duet centres a Captain channel's identity in the header, so the title at the start steps aside.
+  // Duet keeps the animated orb centred while placing the Duet title menu at the header start.
   const captainHero = duet && isServerThread && captain != null;
   return (
     <div className="flex min-w-0 flex-1 self-stretch">
@@ -368,7 +368,6 @@ export const ChatHeader = memo(function ChatHeader({
         <CaptainHeaderHero
           captain={captain}
           threadRef={activeThreadRef}
-          onOpenThread={openCaptainThread}
           onContextMenu={handleHeaderContextMenu}
         />
       ) : null}
@@ -384,7 +383,19 @@ export const ChatHeader = memo(function ChatHeader({
           <>
             <DuetHeaderTitle
               captain={captain}
-              hideTitle={captainHero}
+              customTitle={
+                captainHero ? (
+                  <CaptainHeaderTitleMenu
+                    captain={captain}
+                    threadRef={activeThreadRef}
+                    layoutTabId={layoutTabId}
+                    onOpenThread={openCaptainThread}
+                    onPointerDown={handleTabPointerDown}
+                    onAuxClick={handleTabAuxClick}
+                    onContextMenu={handleHeaderContextMenu}
+                  />
+                ) : null
+              }
               project={activeProject}
               title={displayTitle}
               layoutTabId={layoutTabId}

@@ -29,7 +29,8 @@ html:root[data-theme-id="ksg-salon"] {
   --workspace-pane-inset-top: 0px;
   --workspace-pane-inset: 0px;
   --workspace-sidebar-edge-inset: 0px;
-  /* The header's last control ends 12px inside the pane, on the docked details card's edge. */
+  --workspace-controls-left: 0.5rem;
+  /* The header's last control ends 12px inside the pane, on the docked details column's edge. */
   --workspace-pane-controls-right: calc(var(--workspace-controls-edge-right) + 0.75rem);
   --duet-panel-fill: #f9f9f9;
   --duet-panel-border: #e6e6e6;
@@ -117,18 +118,7 @@ html:root[data-theme-id="ksg-salon"] {
     height: 12px;
   }
 
-  /* Thread details are one raised card that stands off the canvas, with flat sections inside it
-     split by a hairline rather than nested trays. Height hugs content up to the pane's cap. */
-  [data-thread-details-panel="inline"] > [data-thread-details-frame] {
-    height: auto !important;
-    max-height: inherit;
-    overflow: hidden;
-    border: 1px solid var(--duet-panel-border);
-    border-radius: 0.75rem;
-    background: var(--duet-panel-fill);
-    box-shadow: var(--duet-panel-shadow);
-  }
-
+  /* Thread details read as one flat docked column: no outer card box, sections split by a hairline. */
   [data-thread-details-panel="popover"] {
     background: var(--duet-panel-fill);
   }
@@ -140,7 +130,6 @@ html:root[data-theme-id="ksg-salon"] {
     --composer-fill: transparent;
     --composer-shadow: none;
     gap: 0;
-    padding-block: 0.25rem;
   }
 
   .thread-details-stack > [data-thread-details-card] {
@@ -148,7 +137,7 @@ html:root[data-theme-id="ksg-salon"] {
   }
 
   .thread-details-stack > [data-thread-details-card] ~ [data-thread-details-card] {
-    border-block-start: 1px solid var(--duet-panel-border);
+    border-block-start: 1px solid var(--duet-hairline);
     padding-block-start: 0.375rem;
     margin-block-start: 0.375rem;
   }

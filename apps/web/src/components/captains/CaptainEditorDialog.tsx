@@ -13,6 +13,7 @@ import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { useGT, T } from "gt-react";
 import { useId, useState } from "react";
 
+import { useDuetShell } from "../../hooks/useDuetShell";
 import { resolveProjectDefaultProviderModelSelection } from "../../providerInstances";
 import { useProjects } from "../../state/entities";
 import { randomUUID } from "../../lib/utils";
@@ -60,6 +61,7 @@ export function CaptainEditorDialog({
   onSave: (environmentId: EnvironmentId, captain: Captain) => void;
 }) {
   const gt = useGT();
+  const isDuet = useDuetShell();
   const fieldId = useId();
   const [environmentId, setEnvironmentId] = useState(destination.id);
   const [captainId] = useState(() => CaptainId.make(randomUUID()));
@@ -127,9 +129,18 @@ export function CaptainEditorDialog({
     })();
     setSaving(false);
     if (result === null) {
-      setError(gt("Configure a model on this environment before creating a Captain."));
+      setError(
+        isDuet
+          ? gt("Configure a model on this environment before creating a Duet.")
+          : gt("Configure a model on this environment before creating a Captain."),
+      );
     } else if (result._tag === "Failure") {
-      setError(captainCommandError(result, gt("Could not save Captain.")));
+      setError(
+        captainCommandError(
+          result,
+          isDuet ? gt("Could not save Duet.") : gt("Could not save Captain."),
+        ),
+      );
     } else {
       onSave(environmentId, result.value);
     }
@@ -155,10 +166,26 @@ export function CaptainEditorDialog({
         >
           <DialogHeader>
             <DialogTitle>
-              {captain === undefined ? <T>New Captain</T> : <T>Edit Captain</T>}
+              {captain === undefined ? (
+                isDuet ? (
+                  <T>New Duet</T>
+                ) : (
+                  <T>New Captain</T>
+                )
+              ) : isDuet ? (
+                <T>Edit Duet</T>
+              ) : (
+                <T>Edit Captain</T>
+              )}
             </DialogTitle>
             <DialogDescription>
-              <T>A Captain keeps its own conversation, memories, and documents across sessions.</T>
+              {isDuet ? (
+                <T>A Duet keeps its own conversation, memories, and documents across sessions.</T>
+              ) : (
+                <T>
+                  A Captain keeps its own conversation, memories, and documents across sessions.
+                </T>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
@@ -235,9 +262,7 @@ export function CaptainEditorDialog({
             </div>
             <div className="grid gap-3">
               <div className="grid gap-1.5">
-                <span className="text-label">
-                  <T>Emblem</T>
-                </span>
+                <span className="text-label">{isDuet ? <T>Creature</T> : <T>Emblem</T>}</span>
                 <ToggleGroup
                   aria-label={gt("Avatar emblem")}
                   variant="default"
@@ -322,9 +347,15 @@ export function CaptainEditorDialog({
                 id={`${fieldId}-instructions`}
                 rows={5}
                 maxLength={16_000}
-                placeholder={gt(
-                  "What this Captain is responsible for, how it should work, and when to check in with you.",
-                )}
+                placeholder={
+                  isDuet
+                    ? gt(
+                        "What this Duet is responsible for, how it should work, and when to check in with you.",
+                      )
+                    : gt(
+                        "What this Captain is responsible for, how it should work, and when to check in with you.",
+                      )
+                }
                 value={instructions}
                 disabled={saving}
                 onChange={(event) => setInstructions(event.target.value)}
@@ -360,7 +391,15 @@ export function CaptainEditorDialog({
               <T>Cancel</T>
             </Button>
             <Button type="submit" disabled={saving || !canSave || !name.trim()}>
-              {captain === undefined ? <T>Create Captain</T> : <T>Save changes</T>}
+              {captain === undefined ? (
+                isDuet ? (
+                  <T>Create Duet</T>
+                ) : (
+                  <T>Create Captain</T>
+                )
+              ) : (
+                <T>Save changes</T>
+              )}
             </Button>
           </DialogFooter>
         </form>

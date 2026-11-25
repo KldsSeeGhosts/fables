@@ -3936,7 +3936,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               <li
                                 key="threads-label"
                                 data-testid="sidebar-threads-label"
-                                className="group/threads-label mt-1 flex h-7 list-none items-center justify-between px-2"
+                                className="group/threads-label mt-1 flex h-7 list-none items-center justify-between ps-2 pe-1"
                               >
                                 <span className="text-meta text-sidebar-muted-foreground">
                                   {gt("Threads", { $context: "sidebar section" })}

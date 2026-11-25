@@ -43,6 +43,7 @@ function controls(props: {
   rightPanelOpen?: boolean;
   onToggleThreadPanel?: () => void;
   onToggleRightPanel?: () => void;
+  withDuetControls?: boolean;
 }) {
   const threadId = props.threadId ?? "thread";
   return (
@@ -59,18 +60,31 @@ function controls(props: {
         shortcutLabel: null,
         onToggle: props.onToggleRightPanel ?? (() => {}),
       }}
+      duetControls={
+        props.withDuetControls
+          ? {
+              terminal: { label: "Terminal", onClick: () => {} },
+              browser: { label: "Browser", onClick: () => {} },
+              diff: { label: "Diff", onClick: () => {} },
+            }
+          : null
+      }
     />
   );
 }
 
-it("keeps a coding thread's top right to the details pill and the right panel toggle", async () => {
+it("keeps a coding thread's top right to the details pill, right panel toggle, and overflow actions", async () => {
   const onToggleRightPanel = vi.fn();
-  await using screen = await render(controls({ onToggleRightPanel }));
+  await using screen = await render(controls({ onToggleRightPanel, withDuetControls: true }));
 
   const buttons = Array.from(screen.container.querySelectorAll("button")).map((button) =>
     button.getAttribute("aria-label"),
   );
-  expect(buttons).toEqual(["Toggle thread details panel", "Toggle right panel"]);
+  expect(buttons).toEqual([
+    "Toggle thread details panel",
+    "Toggle right panel",
+    "More header actions",
+  ]);
   await expect
     .element(screen.getByRole("button", { name: "Toggle thread details panel" }))
     .toHaveTextContent("main");
@@ -81,10 +95,15 @@ it("keeps a coding thread's top right to the details pill and the right panel to
   expect(onToggleRightPanel).toHaveBeenCalledOnce();
 });
 
-it("shows a Captain's scope on the pill and the same two controls", async () => {
+it("shows a Duet's scope on the pill and exposes KSG quick actions in the overflow menu", async () => {
   const onToggleThreadPanel = vi.fn();
   await using screen = await render(
-    controls({ threadId: "captain:maria:0", rightPanelOpen: true, onToggleThreadPanel }),
+    controls({
+      threadId: "captain:maria:0",
+      rightPanelOpen: true,
+      onToggleThreadPanel,
+      withDuetControls: true,
+    }),
   );
 
   await expect
@@ -95,7 +114,7 @@ it("shows a Captain's scope on the pill and the same two controls", async () => 
     .toHaveAttribute("aria-pressed", "true");
   expect(screen.container.querySelector('[aria-label^="Status:"]')).toBeNull();
   expect(screen.container.querySelector('[aria-label="Tasks"]')).toBeNull();
-  expect(screen.container.querySelector('[aria-label="More header actions"]')).toBeNull();
+  await expect.element(screen.getByRole("button", { name: "More header actions" })).toBeVisible();
 
   await userEvent.click(screen.getByRole("button", { name: "Toggle thread details panel" }));
   expect(onToggleThreadPanel).toHaveBeenCalledOnce();

@@ -2,12 +2,13 @@
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import type { Captain, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { T, useGT } from "gt-react";
-import { ChevronDownIcon, SquareTerminal, XIcon } from "lucide-react";
+import { ChevronDownIcon, LayersIcon, SquareTerminal, XIcon } from "lucide-react";
 import type {
   FocusEvent as ReactFocusEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
+  ReactNode,
 } from "react";
 
 import { type LayoutTab, THREAD_TERMINAL_SURFACE_ID } from "../../layout/layoutModel";
@@ -110,9 +111,11 @@ function PaneTabMenuItem({ tab }: { tab: LayoutTab }) {
 function DuetPaneTabsMenu({
   before,
   after,
+  compactIcon = false,
 }: {
   before: readonly LayoutTab[];
   after: readonly LayoutTab[];
+  compactIcon?: boolean;
 }) {
   const gt = useGT();
   const tabs = [...before, ...after];
@@ -127,7 +130,11 @@ function DuetPaneTabsMenu({
             data-thread-title-chevron
             className="flex size-5 shrink-0 items-center justify-center rounded-badge text-muted-foreground outline-none [-webkit-app-region:no-drag] hover:surface-ghost-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
-            <ChevronDownIcon aria-hidden className="size-3" />
+            {compactIcon ? (
+              <LayersIcon aria-hidden className="size-3.5" />
+            ) : (
+              <ChevronDownIcon aria-hidden className="size-3" />
+            )}
           </button>
         }
       />
@@ -194,7 +201,7 @@ function HiddenTerminalPill({
 /** Tabless Duet title. It keeps tab drag/rename affordances while looking like a simple title. */
 export function DuetHeaderTitle({
   captain,
-  hideTitle = false,
+  customTitle = null,
   project,
   title,
   layoutTabId,
@@ -214,8 +221,8 @@ export function DuetHeaderTitle({
   onRenameKeyDown,
 }: {
   captain: Captain | null | undefined;
-  /** The centred Captain hero names the channel, so only the pane's tabs stay at the start. */
-  hideTitle?: boolean;
+  /** Optional custom title trigger (e.g. a Duet channel's top-left identity menu). */
+  customTitle?: ReactNode;
   project: EnvironmentProject | null;
   title: string;
   layoutTabId: string | null | undefined;
@@ -279,7 +286,7 @@ export function DuetHeaderTitle({
         </div>
       ) : (
         <>
-          {hideTitle ? null : (
+          {customTitle ?? (
             <TitleButton
               captain={captain}
               project={project}
@@ -291,7 +298,11 @@ export function DuetHeaderTitle({
               onClick={onClick}
             />
           )}
-          <DuetPaneTabsMenu before={siblingTabs.before} after={siblingTabs.after} />
+          <DuetPaneTabsMenu
+            before={siblingTabs.before}
+            after={siblingTabs.after}
+            compactIcon={customTitle !== null}
+          />
         </>
       )}
       {hiddenTerminal ? (

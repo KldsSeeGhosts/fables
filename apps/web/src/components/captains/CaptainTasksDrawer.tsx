@@ -15,6 +15,7 @@ import { CalendarClockIcon, XIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { isElectron } from "../../env";
+import { useDuetShell } from "../../hooks/useDuetShell";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { useLayoutPane } from "../../layout/layoutPaneContext";
 import { cn } from "../../lib/utils";
@@ -321,6 +322,7 @@ export function CaptainTasksDrawer({
   readonly onClose: () => void;
 }) {
   const gt = useGT();
+  const isDuet = useDuetShell();
   const messages = useMessages();
   const panelTabSlots = usePanelTabSlots();
   const hideDrawerHeader = panelTabSlots?.showPanelTabs === true;
@@ -365,7 +367,13 @@ export function CaptainTasksDrawer({
         )}
         <DrawerEmpty>
           {captains.isPending ? (
-            <T>Loading Captain…</T>
+            isDuet ? (
+              <T>Loading Duet…</T>
+            ) : (
+              <T>Loading Captain…</T>
+            )
+          ) : isDuet ? (
+            <T>This conversation has no Duet profile.</T>
           ) : (
             <T>This conversation has no Captain profile.</T>
           )}
@@ -428,7 +436,7 @@ export function CaptainTasksDrawer({
       )}
       <div
         role="tablist"
-        aria-label={gt("Captain task views")}
+        aria-label={isDuet ? gt("Duet task views") : gt("Captain task views")}
         className={cn(
           "flex h-[26px] shrink-0 items-center gap-0.5 px-4",
           hideDrawerHeader ? "mt-3" : "mt-1",
@@ -536,7 +544,9 @@ export function CaptainTasksDrawer({
         ) : null}
         {tab === "docs" ? (
           details.data === null ? (
-            <DrawerEmpty>{details.error ?? <T>Loading Captain…</T>}</DrawerEmpty>
+            <DrawerEmpty>
+              {details.error ?? (isDuet ? <T>Loading Duet…</T> : <T>Loading Captain…</T>)}
+            </DrawerEmpty>
           ) : (
             <div className="flex flex-col gap-6 pb-4">
               <CaptainDigest

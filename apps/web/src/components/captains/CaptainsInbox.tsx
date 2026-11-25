@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { useDuetShell } from "../../hooks/useDuetShell";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { useTimeOfDayGreeting } from "../chat/ChatHero";
 import { Badge } from "../ui/badge";
@@ -79,6 +80,7 @@ function CaptainInboxCard({
   onReview: (threadRef: ScopedThreadRef) => void;
 }) {
   const gt = useGT();
+  const isDuet = useDuetShell();
   const [icon, label] =
     item.kind === "approval"
       ? [<ShieldAlertIcon key="icon" />, gt("Approval requested")]
@@ -107,7 +109,9 @@ function CaptainInboxCard({
       <ApprovalBoundaryCard.Title>{item.title}</ApprovalBoundaryCard.Title>
       {item.isChild ? (
         <ApprovalBoundaryCard.Detail>
-          {gt("Delegated by {name}", { name: captain?.name ?? gt("a Captain") })}
+          {gt("Delegated by {name}", {
+            name: captain?.name ?? (isDuet ? gt("a Duet") : gt("a Captain")),
+          })}
         </ApprovalBoundaryCard.Detail>
       ) : null}
       <ApprovalBoundaryCard.Actions>
@@ -134,7 +138,7 @@ function DigestCard({
   const details = useCaptains(environmentId, captain.id);
   const preview = captainDigestPreview(captainDocument(details.data, captain.id, "DIGEST.md"));
   return (
-    <li className="min-w-0">
+    <li className="grid min-w-0">
       <ContentButton
         variant="selection-card"
         aria-label={gt("Open {name}'s brief", { name: captain.name })}
@@ -184,6 +188,7 @@ export function CaptainsInbox({
   onCreate?: (() => void) | undefined;
 }) {
   const gt = useGT();
+  const isDuet = useDuetShell();
   const locale = useLocale();
   const now = new Date(`${useNowMinute()}Z`);
   const hello = useTimeOfDayGreeting();
@@ -244,7 +249,7 @@ export function CaptainsInbox({
         {onCreate ? (
           <Button variant="secondary" size="sm" onClick={onCreate}>
             <PlusIcon aria-hidden />
-            <T>New Captain</T>
+            {isDuet ? <T>New Duet</T> : <T>New Captain</T>}
           </Button>
         ) : null}
       </header>
@@ -321,7 +326,11 @@ export function CaptainsInbox({
           </ul>
         ) : (
           <Text variant="body" tone="muted" render={<p />}>
-            <T>Create a Captain to delegate work and get a daily brief.</T>
+            {isDuet ? (
+              <T>Create a Duet to delegate work and get a daily brief.</T>
+            ) : (
+              <T>Create a Captain to delegate work and get a daily brief.</T>
+            )}
           </Text>
         )}
       </DuetSection>

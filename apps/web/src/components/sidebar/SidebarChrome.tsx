@@ -130,10 +130,10 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
     // Fixed controls sit over it; the inset content starts 4px under the row (pen s8qVFu).
     <div
       className={cn(
-        "@container/sidebar-header relative flex h-(--workspace-chrome-row-height) shrink-0 flex-row items-center gap-2 pr-3 md:px-0",
+        "@container/sidebar-header relative flex h-(--workspace-chrome-row-height) shrink-0 flex-row items-center gap-2",
+        isDuet ? "pr-2.5 md:pl-0 md:pr-2.5" : "pr-3 md:px-0",
         "md:group-data-[variant=inset]:-ms-(--workspace-sidebar-edge-inset) md:group-data-[variant=inset]:mb-[calc(--spacing(1)-var(--sidebar-content-inset))]",
         isElectron && "drag-region",
-        isDuet && "pr-2",
       )}
     >
       {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
@@ -149,7 +149,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         <div className="relative z-10 flex min-w-0 flex-1 items-center">
           <div
             aria-hidden
-            className="hidden w-[calc(var(--workspace-controls-left)+var(--workspace-titlebar-control-size)-2px)] shrink-0 md:block"
+            className="hidden w-[calc(var(--workspace-controls-left)+var(--workspace-titlebar-control-size)+4px)] shrink-0 md:block"
           />
           <div data-duet-wordmark="" className={DUET_WORDMARK_CLASS_NAME}>
             {/* oxlint-disable-next-line t3code/no-untranslated-copy -- product wordmark */}
@@ -368,7 +368,7 @@ const DuetSidebarUtilityMenu = memo(function DuetSidebarUtilityMenu() {
         <SidebarUpstreamUpdatePill />
         <SidebarUpdatePill />
       </ul>
-      <div data-duet-sidebar-footer="" className="flex h-12 items-center gap-0.5 px-2">
+      <div data-duet-sidebar-footer="" className="flex h-12 items-center gap-0.5 px-2.5">
         {isOnUtilityPage ? (
           <SidebarUtilityItem
             size="header"

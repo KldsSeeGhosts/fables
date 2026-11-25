@@ -460,22 +460,24 @@ export function CaptainShelfList({
   onCreate?: (() => void) | undefined;
 }) {
   const gt = useGT();
+  const isDuet = useDuetShell();
   const attention =
     attentionTotal ??
     rows.reduce(
       (count, row) => count + Number(row.captain.archivedAt === null && row.attention > 0),
       0,
     );
-  const attentionLabel = gt(
-    "{count, plural, one {{count} Captain needs input} other {{count} Captains need input}}",
-    { count: attention },
-  );
+  const attentionLabel = isDuet
+    ? gt("{count, plural, one {{count} Duet needs input} other {{count} Duets need input}}", {
+        count: attention,
+      })
+    : gt("{count, plural, one {{count} Captain needs input} other {{count} Captains need input}}", {
+        count: attention,
+      });
 
   const heading = (
     <>
-      <span className="truncate">
-        <T>Captains</T>
-      </span>
+      <span className="truncate">{isDuet ? <T>Duets</T> : <T>Captains</T>}</span>
       {attention > 0 ? (
         <DuetLiveCount tone="needs-input" count={attention} label={attentionLabel} />
       ) : null}
@@ -486,7 +488,7 @@ export function CaptainShelfList({
     <li className="mb-1 list-none">
       <div
         data-sidebar-row="shelf:captains"
-        className="group/captains-label mt-1 flex h-7 items-center justify-between gap-1 px-2"
+        className="group/captains-label mt-1 flex h-7 items-center justify-between gap-1 ps-2 pe-1"
       >
         {onOpenOverview ? (
           <button
@@ -505,7 +507,11 @@ export function CaptainShelfList({
         )}
         {onCreate ? (
           <span className="flex items-center opacity-60 focus-within:opacity-100 group-hover/captains-label:opacity-100">
-            <SidebarHeaderIconButton size="label" label={gt("New Captain")} onClick={onCreate}>
+            <SidebarHeaderIconButton
+              size="label"
+              label={isDuet ? gt("New Duet") : gt("New Captain")}
+              onClick={onCreate}
+            >
               <PlusIcon />
             </SidebarHeaderIconButton>
           </span>

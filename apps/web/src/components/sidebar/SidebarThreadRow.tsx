@@ -1746,7 +1746,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
             className={cn(
               "relative z-10",
               isDuet
-                ? cn("flex flex-col gap-0.5 px-2.5 py-2", metaLineEmpty ? "h-[52px]" : "h-[70px]")
+                ? cn("flex flex-col gap-0.5 px-2 py-2", metaLineEmpty ? "h-[52px]" : "h-[70px]")
                 : cn(
                     "h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)",
                     metaLineEmpty && "h-auto",

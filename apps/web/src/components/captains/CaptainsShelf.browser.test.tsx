@@ -98,10 +98,10 @@ function renderList(row: Partial<Parameters<typeof CaptainShelfList>[0]["rows"][
   );
 }
 
-it("lists Captains as plain rows under one Captains section, without tree chrome", async () => {
+it("lists Duets as plain rows under one Duets section, without tree chrome", async () => {
   await using screen = await renderList({});
   const header = screen.container.querySelector('[data-sidebar-row="shelf:captains"]');
-  expect(header?.textContent).toBe("Captains");
+  expect(header?.textContent).toBe("Duets");
   const row = screen.getByRole("button", { name: "Maria, Ready, All workspace, Coordinator" });
   await expect.element(row).toBeVisible();
   const item = row.element().closest("li")!;
@@ -163,7 +163,7 @@ it("gives needs input precedence over working with a warm dot", async () => {
     screen.container
       .querySelector('[data-sidebar-row="shelf:captains"] [data-duet-live="needs-input"]')
       ?.getAttribute("aria-label"),
-  ).toBe("1 Captain needs input");
+  ).toBe("1 Duet needs input");
 });
 
 it("recedes an archived channel without live status", async () => {
@@ -179,7 +179,7 @@ it("recedes an archived channel without live status", async () => {
   expect(screen.container.querySelector("[data-duet-live]")).toBeNull();
 });
 
-it("opens the Captains page from the section label, which counts Captains needing input", async () => {
+it("opens the Duets page from the section label, which counts Duets needing input", async () => {
   const onOpenOverview = vi.fn();
   await using screen = await render(
     <ul>
@@ -191,9 +191,9 @@ it("opens the Captains page from the section label, which counts Captains needin
       />
     </ul>,
   );
-  await expect.element(screen.getByLabelText("1 Captain needs input")).toHaveTextContent("1");
+  await expect.element(screen.getByLabelText("1 Duet needs input")).toHaveTextContent("1");
   const link = screen.container.querySelector<HTMLElement>("[data-captains-overview-link]")!;
-  expect(link.textContent).toBe("Captains1");
+  expect(link.textContent).toBe("Duets1");
   await userEvent.click(link);
   expect(onOpenOverview).toHaveBeenCalledOnce();
 });

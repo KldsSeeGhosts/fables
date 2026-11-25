@@ -2,6 +2,7 @@ import type { ProjectId } from "@t3tools/contracts";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { T, Var } from "gt-react";
 
+import { useDuetShell } from "../../hooks/useDuetShell";
 import { Checkbox } from "../ui/checkbox";
 
 export function CaptainScope({
@@ -15,6 +16,7 @@ export function CaptainScope({
   disabled: boolean;
   onChange: (projectIds: ReadonlyArray<ProjectId>) => void;
 }) {
+  const isDuet = useDuetShell();
   const available = projects.filter(
     (project) =>
       !project.isScratch && (project.archivedAt === null || selected.includes(project.id)),
@@ -32,7 +34,13 @@ export function CaptainScope({
       </legend>
       <p className="text-meta text-muted-foreground">
         {selected.length === 0 ? (
-          <T>Not limited to any project. The Captain works in a scratch folder.</T>
+          isDuet ? (
+            <T>Not limited to any project. This Duet works in a scratch folder.</T>
+          ) : (
+            <T>Not limited to any project. The Captain works in a scratch folder.</T>
+          )
+        ) : isDuet ? (
+          <T>This Duet can delegate work only to the selected projects.</T>
         ) : (
           <T>The Captain can delegate work only to the selected projects.</T>
         )}

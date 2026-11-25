@@ -186,7 +186,7 @@ it("uses the always-tabless Duet header and keeps the hidden terminal chip", asy
   }
 });
 
-it("centres a Duet Captain channel's creature, name and Captain menu instead of a start title", async () => {
+it("keeps a Duet channel's title menu at the header start and centres only the animated orb", async () => {
   duetShell.enabled = true;
   captainState.enabled = true;
   openMenu.mockClear();
@@ -222,14 +222,20 @@ it("centres a Duet Captain channel's creature, name and Captain menu instead of 
       Math.abs(heroBox.left + heroBox.width / 2 - (headerBox.left + headerBox.width / 2)),
     ).toBeLessThan(1);
 
-    await userEvent.click(screen.getByRole("button", { name: "Captain menu for Maria" }));
+    const menuButton = screen.getByRole("button", { name: "Duet menu for Maria" });
+    await expect.element(menuButton).toBeVisible();
+    const menuBox = menuButton.element().getBoundingClientRect();
+    expect(menuBox.left - headerBox.left).toBeLessThan(40);
+    expect(hero.contains(menuButton.element())).toBe(false);
+
+    await userEvent.click(menuButton);
     await vi.waitFor(() => {
       const items = Array.from(
         document.body.querySelectorAll<HTMLElement>('[role="menuitem"]'),
       ).map((element) => element.textContent);
       expect(items).toEqual(
         expect.arrayContaining([
-          "Customize Captain",
+          "Customize Duet",
           "Rename",
           "Instructions",
           "Change icon",

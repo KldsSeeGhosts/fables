@@ -758,14 +758,7 @@ const PANE_BODY_SURFACE_CLASS: Partial<Record<RightPanelSurface["kind"], string>
 };
 
 export function shouldShowDuetRightPanelTabs(surfaces: readonly RightPanelSurface[]): boolean {
-  if (surfaces.length === 0) return false;
-  const hasCaptainBrief = surfaces.some((surface) => surface.kind === "captain-brief");
-  if (!hasCaptainBrief) return true;
-  const threadSurfaceCount = surfaces.filter((surface) => surface.kind === "thread").length;
-  const onlyBriefAndThreadSurfaces = surfaces.every(
-    (surface) => surface.kind === "captain-brief" || surface.kind === "thread",
-  );
-  return !onlyBriefAndThreadSurfaces || threadSurfaceCount > 1;
+  return surfaces.length > 0;
 }
 
 export function RightPanelTabs(props: RightPanelTabsProps) {
@@ -1195,7 +1188,6 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       {...(props.defaultWidth !== undefined || duetTasksDrawer
         ? { defaultWidth: props.defaultWidth ?? 360 }
         : {})}
-      {...(duetTasksDrawer ? { minWidth: 320, maxWidth: 480 } : {})}
       {...(props.pane ? { pane: true } : {})}
       {...(props.inlineSize ? { inlineSize: props.inlineSize } : {})}
       onMouseDown={preventThumbButtonFocus}

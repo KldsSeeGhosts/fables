@@ -17,7 +17,12 @@ const pageTabTitles = {
   captains: msg("Captains"),
 } satisfies Record<LayoutPageContent["kind"], ReturnType<typeof msg>>;
 
-export function layoutPageTabTitle(kind: LayoutPageContent["kind"], resolve: MessageResolver) {
+export function layoutPageTabTitle(
+  kind: LayoutPageContent["kind"],
+  resolve: MessageResolver,
+  options?: { readonly duet?: boolean },
+) {
+  if (kind === "captains" && options?.duet) return resolve(msg("Duets"));
   return resolve(pageTabTitles[kind]);
 }
 

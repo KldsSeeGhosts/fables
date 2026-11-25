@@ -10,6 +10,7 @@ import { T, useGT } from "gt-react";
 import { AlertTriangleIcon } from "lucide-react";
 import { useState } from "react";
 
+import { useDuetShell } from "../../hooks/useDuetShell";
 import { useQuietThreadProjection } from "../../state/entities";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -71,6 +72,7 @@ export function CaptainResetDialog({
   onClose: () => void;
 }) {
   const gt = useGT();
+  const isDuet = useDuetShell();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const allowed = useAtomValue(
@@ -113,10 +115,17 @@ export function CaptainResetDialog({
             <T>Reset conversation?</T>
           </AlertDialogTitle>
           <AlertDialogDescription>
-            <T>
-              A new conversation will keep the Captain’s documents, memories and scheduled tasks.
-              You can still open the earlier conversation.
-            </T>
+            {isDuet ? (
+              <T>
+                A new conversation will keep this Duet’s documents, memories and scheduled tasks.
+                You can still open the earlier conversation.
+              </T>
+            ) : (
+              <T>
+                A new conversation will keep the Captain’s documents, memories and scheduled tasks.
+                You can still open the earlier conversation.
+              </T>
+            )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <RunningTasksWarning captain={captain} environmentId={environmentId} />
