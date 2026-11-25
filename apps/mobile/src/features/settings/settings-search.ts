@@ -46,6 +46,9 @@ const SETTINGS_SEARCH_TERMS = {
     msg("work log", { $context: "settings search keyword" }),
     msg("zen", { $context: "settings search keyword" }),
     msg("final answers only", { $context: "settings search keyword" }),
+    msg("in captains", { $context: "settings search keyword" }),
+    msg("in duets", { $context: "settings search keyword" }),
+    msg("same as other threads", { $context: "settings search keyword" }),
   ],
   SettingsNavigation: [
     msg("tabs", { $context: "settings search keyword" }),

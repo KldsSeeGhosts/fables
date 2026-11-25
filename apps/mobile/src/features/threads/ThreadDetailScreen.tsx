@@ -225,6 +225,7 @@ import { useThreadQueuedCount } from "./ThreadQueueControl";
 import { ThreadGuestShareBar } from "./ThreadGuestShareBar";
 import { ThreadSideChatsRow } from "./ThreadSideChatsRow";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
+import { resolveThreadToolCallVisibility } from "@t3tools/client-runtime/tool-call-visibility";
 import { resolveThreadFeedSubmissionAnchor } from "./thread-feed-scroll-position";
 import { useOpenLinkedThread } from "./useOpenLinkedThread";
 import { useGlobalVoiceInput } from "../voice-input/VoiceInputProvider";
@@ -520,9 +521,12 @@ function ThreadDetailBody(
   });
   const composerError = useAtomValue(threadComposerErrorsAtom)[selectedThreadKey]?.message ?? null;
   const preferences = useAtomValue(mobilePreferencesAtom);
-  const toolCallVisibility = AsyncResult.isSuccess(preferences)
-    ? (preferences.value.toolCallVisibility ?? "showAll")
-    : "showAll";
+  const preferencesValue = AsyncResult.isSuccess(preferences) ? preferences.value : null;
+  const toolCallVisibility = resolveThreadToolCallVisibility({
+    threadId: props.selectedThread.id,
+    toolCallVisibility: preferencesValue?.toolCallVisibility ?? "showAll",
+    duetToolCallVisibility: preferencesValue?.duetToolCallVisibility,
+  });
   const queuedCount = useThreadQueuedCount(props.selectedThreadDetailRef);
   const turnSubagents = useThreadTurnSubagents(props.selectedThreadDetailRef);
   const agentsSegment = resolveSubagentPillSegment(turnSubagents, messages);
