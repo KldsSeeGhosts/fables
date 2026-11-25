@@ -652,6 +652,38 @@ it.live("starts each repository from the base branch where it has one", () =>
   ),
 );
 
+it.live("uses the project commit only for the project repository", () =>
+  withState((state) =>
+    Effect.gen(function* () {
+      const { run, repository } = yield* fixture;
+      const project = yield* repository("app");
+      const website = yield* repository("website");
+      state.workspaceRoot = project;
+      state.trackedFolders = tracked(website);
+      yield* run(project, "commit", "--allow-empty", "-m", "Parent work");
+      const parentCommit = yield* run(project, "rev-parse", "HEAD");
+      const websiteCommit = yield* run(website, "rev-parse", "HEAD");
+      assert.notEqual(parentCommit, websiteCommit);
+
+      const taskFolders = yield* TaskFolders.TaskFolders;
+      const plan = yield* taskFolders.plan({ projectId });
+      const { taskFolder } = yield* taskFolders.create({
+        plan: plan!,
+        branch: "delegated",
+        projectStart: { refName: parentCommit, baseRefName: parentCommit },
+        baseBranch: parentCommit,
+        startFromOrigin: false,
+      });
+
+      assert.equal(yield* run(taskFolder.projectPath, "rev-parse", "HEAD"), parentCommit);
+      assert.equal(
+        yield* run(taskFolder.repositories[0]!.worktreePath, "rev-parse", "HEAD"),
+        websiteCommit,
+      );
+    }),
+  ),
+);
+
 it.live("gives every repository one branch name when one of them already has it", () =>
   withState((state) =>
     Effect.gen(function* () {
