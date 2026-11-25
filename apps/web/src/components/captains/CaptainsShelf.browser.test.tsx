@@ -154,8 +154,13 @@ it("gives needs input precedence over working with a ring and a warm dot", async
   expect(screen.container.querySelector("[data-captain-avatar-ring]")).not.toBeNull();
   expect(screen.container.querySelector("[data-captain-avatar-ping]")).not.toBeNull();
   expect(
-    screen.container.querySelector('[data-duet-live="needs-input"]')?.getAttribute("aria-label"),
+    row.element().querySelector('[data-duet-live="needs-input"]')?.getAttribute("aria-label"),
   ).toBe("1 request");
+  expect(
+    screen.container
+      .querySelector('[data-sidebar-row="shelf:captains"] [data-duet-live="needs-input"]')
+      ?.getAttribute("aria-label"),
+  ).toBe("1 Captain needs input");
 });
 
 it("recedes an archived channel without live status", async () => {
