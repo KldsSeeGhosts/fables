@@ -1,5 +1,6 @@
 import {
   CommandId,
+  isCaptainThreadId,
   MessageId,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
   type ProjectId,
@@ -52,6 +53,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
+import * as CaptainStore from "../captains/CaptainStore.ts";
 import * as Metrics from "../observability/Metrics.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import { OrchestratorDispatchError } from "../orchestration-v2/Orchestrator.ts";
@@ -327,6 +329,7 @@ function iso(value: DateTime.DateTime): string {
 const RUN_OUTCOME_WAIT_MS = 24 * 60 * 60 * 1_000;
 const HELD_OCCURRENCE_ERROR =
   "A previous occurrence is held in the thread queue. Resume or remove it to run this task again.";
+const ARCHIVED_DUET_ERROR = "The Duet is archived.";
 const UNSUCCESSFUL_RUN_ERRORS = {
   failed: "The run failed.",
   interrupted: "The run was stopped.",
@@ -499,6 +502,7 @@ export const layer = Layer.effect(
     const secretRequests = yield* SecretRequests.SecretRequests;
     const scheduler = yield* Scheduler.Scheduler;
     const readWebhookOrigin = yield* ScheduledTaskWebhookOrigin;
+    const captainStore = yield* Effect.serviceOption(CaptainStore.CaptainStore);
     const managedPolicy = yield* ManagedPolicy.ManagedPolicy;
     const webhookPolicyOrganization = ManagedPolicy.deniedBy(managedPolicy, "webhookTasks");
     // Existing webhook tasks stay stored but report why they do not run.
@@ -890,6 +894,15 @@ export const layer = Layer.effect(
           : null;
     });
 
+    const destinationIsArchivedDuet = Effect.fn("ScheduledTaskService.destinationIsArchivedDuet")(
+      function* (threadId: ThreadId) {
+        if (Option.isNone(captainStore) || !isCaptainThreadId(threadId)) return false;
+        const lookup = yield* Effect.result(captainStore.value.findByConversation(threadId));
+        if (Result.isFailure(lookup)) return true;
+        return lookup.success?.archivedAt != null;
+      },
+    );
+
     // The run already started the thread, so a failed write only costs the binding.
     // A thread deleted before the binding landed already ran its task cleanup, so apply that
     // cleanup here; a later deletion finds the binding. An unconfirmed lookup keeps the binding.
@@ -1020,6 +1033,19 @@ export const layer = Layer.effect(
             DateTime.toEpochMillis(parsedNextRunAt.value) > DateTime.toEpochMillis(startedAt))
         ) {
           return { task: active, threadId: null, dispatchFailed: false };
+        }
+        if (
+          active.threadId !== null &&
+          (yield* destinationIsArchivedDuet(ThreadId.make(active.threadId)))
+        ) {
+          if (trigger === "scheduled") {
+            yield* rescheduleMissedRun(active, startedAt, "Duet archived", ARCHIVED_DUET_ERROR);
+            return { task: active, threadId: null, dispatchFailed: false };
+          }
+          if (webhook !== undefined) {
+            return yield* new WebhookDeliverySkipped({ reason: ARCHIVED_DUET_ERROR });
+          }
+          return yield* taskError(ARCHIVED_DUET_ERROR, { taskId: active.id });
         }
         // A thread that stays busy would otherwise collect one copy of the
         // prompt per interval. A failed read falls through to the normal send.
