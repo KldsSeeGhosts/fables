@@ -449,7 +449,7 @@ function CaptainShelfRow({
         </MenuItem>
         <MenuSeparator />
         <MenuItem disabled={!canUpdate} onClick={() => profile.edit()}>
-          <T>Edit Captain</T>
+          {isDuet ? <T>Customize Duet</T> : <T>Edit Captain</T>}
         </MenuItem>
         {isDuet && onMove ? (
           <>
@@ -465,13 +465,23 @@ function CaptainShelfRow({
           disabled={pending || !profile.canArchive}
           onClick={() => void profile.changeArchive()}
         >
-          {archived ? <T>Restore Captain</T> : <T>Archive Captain</T>}
+          {isDuet ? (
+            archived ? (
+              <T>Restore</T>
+            ) : (
+              <T>Archive</T>
+            )
+          ) : archived ? (
+            <T>Restore Captain</T>
+          ) : (
+            <T>Archive Captain</T>
+          )}
         </MenuItem>
         {profile.canDelete ? (
           <>
             <MenuSeparator />
             <MenuItem variant="destructive" disabled={pending} onClick={profile.requestDelete}>
-              <T>Delete Captain</T>
+              {isDuet ? <T>Delete</T> : <T>Delete Captain</T>}
             </MenuItem>
           </>
         ) : null}
