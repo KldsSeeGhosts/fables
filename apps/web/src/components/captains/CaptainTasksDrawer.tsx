@@ -57,6 +57,7 @@ import { formatRelativeElapsed } from "../../timestampFormat";
 import { scheduleLabel } from "../settings/scheduledTasksSettings.logic";
 import { usePanelTabSlots } from "../PanelTabBreadcrumb";
 import { ProjectFavicon } from "../ProjectFavicon";
+import { WorkingStatusShine } from "../WorkingStatusShine";
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
 import { toastManager } from "../ui/toast";
@@ -210,7 +211,13 @@ function TaskCardLayout({
           <span className="shrink-0 text-[12px] leading-4 text-(--duet-meta)">{elapsed}</span>
         </span>
         <span className="mt-0.5 block truncate pl-5.5 text-[12.5px] leading-4.5 duet:pl-[26px]">
-          <span style={{ color: statusColor[status] }}>{statusLabel}</span>
+          <span style={{ color: statusColor[status] }}>
+            {status === "working" ? (
+              <WorkingStatusShine>{statusLabel}</WorkingStatusShine>
+            ) : (
+              statusLabel
+            )}
+          </span>
           {detail ? <span className="text-muted-foreground"> · {detail}</span> : null}
         </span>
         {meta ? (

@@ -300,6 +300,8 @@ it("resets a Duet's live status when switching to another Duet", async () => {
         "Running a command",
       );
     });
+    const current = screen.container.querySelector('[data-captain-hero-live-label="current"]');
+    expect(current?.querySelector(".working-status-shine")?.textContent).toBe("Running a command");
 
     await screen.rerender(duetHeader("captain:james:0", "James"));
 

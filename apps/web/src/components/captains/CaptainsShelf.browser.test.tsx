@@ -1,3 +1,5 @@
+import "~/index.css";
+
 import { scopeThreadShell } from "@t3tools/client-runtime/state/models";
 import {
   CaptainId,
@@ -228,6 +230,17 @@ it("shows a working status on the first line and the project with one live task 
     reduced ? "none" : "captain-creature-breathe",
   );
   expect(motion("[data-captain-creature-line]")).toBe(reduced ? "none" : "captain-creature-roll");
+  const shine = lines?.[0]?.querySelector(".working-status-shine");
+  if (!(shine instanceof HTMLElement)) throw new Error("Working shine element missing");
+  expect(shine.textContent).toBe("Working");
+  const shineStyle = getComputedStyle(shine);
+  expect(shineStyle.animationName).toBe(reduced ? "none" : "live-tool-shine");
+  if (!reduced) {
+    expect(shineStyle.backgroundImage).toContain("linear-gradient");
+    await vi.waitFor(() => {
+      expect(getComputedStyle(shine).animationPlayState).toBe("running");
+    });
+  }
 
   await userEvent.hover(row);
   await expect.element(page.getByText("Fix the login flow", { exact: true })).toBeVisible();
