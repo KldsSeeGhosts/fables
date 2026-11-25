@@ -193,7 +193,7 @@ function TaskCardLayout({
   readonly title: string;
   readonly elapsed: string;
   readonly detail: string | null;
-  readonly preview?: CaptainTaskPreviewProps;
+  readonly preview?: CaptainTaskPreviewProps | undefined;
   readonly meta?: ReactNode;
   readonly onOpen: () => void;
 }) {
