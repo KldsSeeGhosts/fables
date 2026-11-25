@@ -40,6 +40,7 @@ describe("formatCaptainBriefing", () => {
     expect(coordinated).toContain("How you work:");
     expect(coordinated).toContain('`delegate_task` and `isolation: "worktree"`');
     expect(coordinated).toContain("`captain_document_write`");
+    expect(coordinated).toContain("pass `repositories` with the ones the child edits");
   });
 
   it("tells the Captain how finished crew reaches it under each report policy", () => {

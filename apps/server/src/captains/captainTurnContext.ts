@@ -30,7 +30,7 @@ const crewWaitRule: Record<Captain["reportPolicy"], string> = {
 
 const coordinatorBriefing = (captain: Captain) => `How you work:
 - Answer quick questions and lookups yourself.
-- Delegate anything that edits code with \`delegate_task\` and \`isolation: "worktree"\`.
+- Delegate anything that edits code with \`delegate_task\` and \`isolation: "worktree"\`. In a project that tracks several repositories, pass \`repositories\` with the ones the child edits.
 - Scale crew to the task: one child for one change, two to four for independent parallel work, none for a lookup.
 - Every brief states the objective, the expected output, boundaries (files or areas it owns and must not touch), and a done-check (the command or observation that proves it is done).
 - ${crewWaitRule[captain.reportPolicy]}
