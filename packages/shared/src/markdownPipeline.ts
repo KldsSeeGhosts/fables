@@ -15,6 +15,7 @@ import remarkRehype from "remark-rehype";
 import { find, html } from "property-information";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
+import type { Schema } from "hast-util-sanitize";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import { remarkGithubAlerts } from "./markdownGithubAlerts.ts";
@@ -206,13 +207,31 @@ function rehypeRawWhenPresent(this: Processor) {
     needsHtmlParser(tree, TOP_SCOPE) ? transform(tree, file) : undefined;
 }
 
-export const CHAT_MARKDOWN_REHYPE_PLUGINS: PluggableList = [
+const chatMarkdownRehypePlugins = (sanitizeSchema: Schema): PluggableList => [
   rehypePreserveBareAnchorPlaceholders,
   rehypeRawWhenPresent,
   rehypePreserveImageSourceMeta,
   rehypeNormalizeLocalEditorLinks,
-  [rehypeSanitize, CHAT_MARKDOWN_SANITIZE_SCHEMA],
+  [rehypeSanitize, sanitizeSchema],
 ];
+
+export const CHAT_MARKDOWN_REHYPE_PLUGINS: PluggableList = chatMarkdownRehypePlugins(
+  CHAT_MARKDOWN_SANITIZE_SCHEMA,
+);
+
+const IMAGE_SOURCE_DATA_URL_SRC_PROTOCOLS = [
+  ...(CHAT_MARKDOWN_SANITIZE_SCHEMA.protocols?.src ?? []),
+  "data",
+];
+const IMAGE_SOURCE_DATA_URL_REHYPE_PLUGINS = chatMarkdownRehypePlugins({
+  ...CHAT_MARKDOWN_SANITIZE_SCHEMA,
+  protocols: {
+    ...CHAT_MARKDOWN_SANITIZE_SCHEMA.protocols,
+    src: IMAGE_SOURCE_DATA_URL_SRC_PROTOCOLS,
+    dataDarkSrc: IMAGE_SOURCE_DATA_URL_SRC_PROTOCOLS,
+    dataLightSrc: IMAGE_SOURCE_DATA_URL_SRC_PROTOCOLS,
+  },
+});
 
 const isImageNode = (node: PhrasingContent | undefined): boolean =>
   node?.type === "image" ||
@@ -677,11 +696,17 @@ export function remarkAssistantInsights(this: Processor) {
   };
 }
 
-const imageSourceProcessor = unified()
-  .use(remarkParse)
-  .use(CHAT_MARKDOWN_REMARK_PLUGINS)
-  .use(remarkRehype, { allowDangerousHtml: true })
-  .use(CHAT_MARKDOWN_REHYPE_PLUGINS);
+const createImageSourceProcessor = (rehypePlugins: PluggableList) =>
+  unified()
+    .use(remarkParse)
+    .use(CHAT_MARKDOWN_REMARK_PLUGINS)
+    .use(remarkRehype, { allowDangerousHtml: true })
+    .use(rehypePlugins);
+
+const imageSourceProcessor = createImageSourceProcessor(CHAT_MARKDOWN_REHYPE_PLUGINS);
+const imageSourceDataUrlProcessor = createImageSourceProcessor(
+  IMAGE_SOURCE_DATA_URL_REHYPE_PLUGINS,
+);
 
 interface ImageSourceNode {
   readonly type: string;
@@ -690,28 +715,40 @@ interface ImageSourceNode {
   readonly children?: ReadonlyArray<ImageSourceNode>;
 }
 
+const collectableImageSource = (source: string, includeDataImageUrls: boolean) =>
+  !/^data:/i.test(source) || (includeDataImageUrls && /^data:image\//i.test(source));
+
 /**
  * Collect the fallback and every theme variant so images are available to all viewers.
+ * Data images stay excluded by default because the chat renderer strips them.
  */
-export function chatMarkdownImageSources(markdown: string): Array<string> {
+export function chatMarkdownImageSources(
+  markdown: string,
+  options?: { readonly includeDataImageUrls?: boolean },
+): Array<string> {
+  const includeDataImageUrls = options?.includeDataImageUrls === true;
+  const processor = includeDataImageUrls ? imageSourceDataUrlProcessor : imageSourceProcessor;
   const sources: Array<string> = [];
+  const collect = (source: ReturnType<typeof chatMarkdownImageSource>) => {
+    if (source && collectableImageSource(source.classifiedSrc, includeDataImageUrls)) {
+      sources.push(source.classifiedSrc);
+    }
+  };
   const visit = (node: ImageSourceNode) => {
     if (node.type === "element" && node.tagName === "img") {
       const properties = node.properties;
-      const fallback = chatMarkdownImageSource(properties);
-      if (fallback) sources.push(fallback.classifiedSrc);
+      collect(chatMarkdownImageSource(properties));
       for (const [theme, variant] of [
         ["dark", properties?.dataDarkSrc],
         ["light", properties?.dataLightSrc],
       ] as const) {
         if (typeof variant !== "string") continue;
-        const source = chatMarkdownImageSource(properties, theme);
-        if (source) sources.push(source.classifiedSrc);
+        collect(chatMarkdownImageSource(properties, theme));
       }
     }
     node.children?.forEach(visit);
   };
-  visit(imageSourceProcessor.runSync(imageSourceProcessor.parse(markdown)) as ImageSourceNode);
+  visit(processor.runSync(processor.parse(markdown)) as ImageSourceNode);
   return sources;
 }
 
