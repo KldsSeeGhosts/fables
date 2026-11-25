@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-dot-separated-text -- The Duet schedule row uses the requested compact "Morning brief · time" label. */
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import type { Captain, CaptainDocument, EnvironmentId, ScheduledTask } from "@t3tools/contracts";
 import { T, useGT } from "gt-react";
@@ -74,19 +73,36 @@ export function CaptainMorningBriefControl({
   };
 
   const dirty = time !== null || enabled !== null;
-  const timeLabel = new Date(`2024-01-01T${shownTime}:00`).toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
   return (
     <div className="rounded-lg border border-(--duet-hairline) px-3 py-2.5">
       <div className="flex min-w-0 items-center gap-3">
         <SunriseIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <Text variant="label" truncate render={<div />}>
-            {gt("Morning brief · {time}", { time: timeLabel })}
+            <T>Morning brief</T>
           </Text>
-          <Text variant="meta" tone="muted" render={<div />}>
+        </div>
+        <Switch
+          aria-label={gt("Enable morning brief")}
+          checked={shownEnabled}
+          disabled={!canSave || pending}
+          onCheckedChange={(checked) => setEnabled(checked)}
+        />
+      </div>
+      <div className="mt-2 flex min-w-0 items-center gap-2 ps-7">
+        <Input
+          id={timeId}
+          aria-label={gt("Morning brief time")}
+          type="time"
+          nativeInput
+          size="sm"
+          className="w-32 shrink-0"
+          disabled={!canSave || pending}
+          value={shownTime}
+          onChange={(event) => setTime(event.target.value)}
+        />
+        <div className="min-w-0">
+          <Text variant="meta" tone="muted" truncate render={<div />}>
             {isDuet ? (
               <T>Updates DIGEST.md each day.</T>
             ) : (
@@ -94,23 +110,6 @@ export function CaptainMorningBriefControl({
             )}
           </Text>
         </div>
-        <Input
-          id={timeId}
-          aria-label={gt("Morning brief time")}
-          type="time"
-          nativeInput
-          size="sm"
-          className="w-28"
-          disabled={!canSave || pending}
-          value={shownTime}
-          onChange={(event) => setTime(event.target.value)}
-        />
-        <Switch
-          aria-label={gt("Enable morning brief")}
-          checked={shownEnabled}
-          disabled={!canSave || pending}
-          onCheckedChange={(checked) => setEnabled(checked)}
-        />
       </div>
       {dirty ? (
         <div className="mt-2 flex justify-end">
