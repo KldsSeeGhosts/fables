@@ -8,12 +8,16 @@ import {
   ProviderInstanceId,
   ThreadId,
   type Captain,
+  type ContextMenuItem,
+  type ContextMenuSource,
+  type LocalApi,
   type OrchestrationV2ThreadShell,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 import { act, render } from "../../../test/render";
+import { readLocalApi } from "../../localApi";
 import { useProjects } from "../../state/entities";
 
 vi.mock(import("../../hooks/useTheme"), async (original) => {
@@ -21,6 +25,7 @@ vi.mock(import("../../hooks/useTheme"), async (original) => {
   return { ...actual, useTheme: () => ({ ...actual.useTheme(), theme: "ksg-salon" }) };
 });
 vi.mock(import("../../hooks/useNowMinute"), () => ({ useNowMinute: () => "2026-11-24T10:00" }));
+vi.mock("../../localApi", { spy: true });
 vi.mock("../../state/entities", { spy: true });
 
 import { CaptainShelfList } from "./CaptainsShelf";
@@ -129,40 +134,54 @@ function renderList(
   );
 }
 
+function stubContextMenu() {
+  const show = vi
+    .fn<
+      (
+        items: readonly ContextMenuItem<string>[],
+        position?: { x: number; y: number },
+        source?: ContextMenuSource,
+      ) => Promise<string | null>
+    >()
+    .mockResolvedValue(null);
+  vi.mocked(readLocalApi).mockReturnValue({ contextMenu: { show } } as unknown as LocalApi);
+  return show;
+}
+
 function rowOrder(container: HTMLElement) {
   return Array.from(container.querySelectorAll("[data-duet-channel-card]")).map(
     (row) => row.textContent ?? "",
   );
 }
 
-const pointerEvent = (type: string, x: number, y: number) =>
+const pointerEvent = (type: string, x: number, y: number, button = 0) =>
   new PointerEvent(type, {
     bubbles: true,
     cancelable: true,
     pointerId: 1,
     isPrimary: true,
-    button: 0,
-    buttons: type === "pointerup" ? 0 : 1,
+    button,
+    buttons: type === "pointerup" ? 0 : button === 2 ? 2 : 1,
     clientX: x,
     clientY: y,
   });
 
-async function pointerDrag(start: HTMLElement, distance?: number) {
+async function pointerDrag(start: HTMLElement, distance?: number, button = 0) {
   const bounds = start.getBoundingClientRect();
   const rowHeight = start.closest("[data-duet-channel-card]")?.getBoundingClientRect().height;
   const dragDistance = distance ?? rowHeight ?? bounds.height;
   const x = bounds.x + 24;
   const y = bounds.y + 24;
   await act(() => {
-    start.dispatchEvent(pointerEvent("pointerdown", x, y));
+    start.dispatchEvent(pointerEvent("pointerdown", x, y, button));
   });
   for (const offset of [dragDistance, dragDistance + 2]) {
     await act(() => {
-      document.dispatchEvent(pointerEvent("pointermove", x, y + offset));
+      document.dispatchEvent(pointerEvent("pointermove", x, y + offset, button));
     });
   }
   await act(() => {
-    document.dispatchEvent(pointerEvent("pointerup", x, y + dragDistance + 2));
+    document.dispatchEvent(pointerEvent("pointerup", x, y + dragDistance + 2, button));
   });
 }
 
@@ -200,7 +219,7 @@ it("shows an idle channel's scope and compact activity time, with its details on
   await expect.element(page.getByText("Ready", { exact: true })).toBeVisible();
 });
 
-it("shows a working status on the first line and the project with one live task on the second", async () => {
+it("shows a working status on the first line and the scoped project on the second", async () => {
   const project = {
     id: ProjectId.make("project"),
     environmentId,
@@ -218,7 +237,8 @@ it("shows a working status on the first line and the project with one live task 
   await expect.element(row).toBeVisible();
   const lines = row.element().querySelector(":scope > span.grid")?.children;
   expect(lines?.[0]?.textContent).toContain("Working");
-  expect(lines?.[1]?.textContent).toContain("Fix the login flow");
+  expect(lines?.[1]?.textContent).toContain("KSG Code");
+  expect(lines?.[1]?.textContent).not.toContain("Fix the login flow");
   expect(lines?.[1]?.textContent).not.toContain("Working");
   expect(lines?.[1]?.querySelector('[data-slot="project-monogram"]')).not.toBeNull();
   const avatar = row.element().querySelector("[data-captain-avatar]")!;
@@ -251,7 +271,7 @@ it("gives needs input precedence over working with an amber count", async () => 
   await using screen = await renderList({ attention: 1, working: true, children: [waiting] });
   const row = screen.getByRole("button", { name: "Maria, Needs input, Fix the login flow" });
   await expect.element(row).toBeVisible();
-  expect(row.element().textContent).toBe("Maria1Fix the login flow");
+  expect(row.element().textContent).toBe("Maria1All workspace");
   expect(screen.container.querySelector('[data-captain-state="waiting"]')).not.toBeNull();
   expect(
     row.element().querySelector('[data-duet-live="needs-input"]')?.getAttribute("aria-label"),
@@ -263,14 +283,14 @@ it("gives needs input precedence over working with an amber count", async () => 
   ).toBe("1 Duet needs input");
 });
 
-it("keeps line two filled when the Duet itself works or waits without its crew", async () => {
-  const secondLine = (row: Element) =>
-    row.querySelector(":scope > span.grid")?.children[1]?.textContent;
+it("line two shows the scope in every state", async () => {
+  const secondLine = (row: Element) => row.querySelector(":scope > span.grid")?.children[1];
   {
     await using screen = await renderList({ working: true });
     const row = screen.getByRole("button", { name: /^Maria, Working/ });
     await expect.element(row).toBeVisible();
-    expect(secondLine(row.element())).toBe("All workspace");
+    expect(secondLine(row.element())?.textContent).toBe("All workspace");
+    expect(secondLine(row.element())?.className).toContain("text-muted-foreground");
   }
   {
     await using screen = await renderList({
@@ -279,7 +299,8 @@ it("keeps line two filled when the Duet itself works or waits without its crew",
     });
     const row = screen.getByRole("button", { name: /^Maria, Needs input/ });
     await expect.element(row).toBeVisible();
-    expect(secondLine(row.element())).toBe("Needs input");
+    expect(secondLine(row.element())?.textContent).toBe("All workspace");
+    expect(secondLine(row.element())?.className).toContain("text-muted-foreground");
   }
 });
 
@@ -376,23 +397,23 @@ it("drags Duets into a device order that later renders use", async () => {
   });
 });
 
-it("does not start a drag when the pointer starts on a row action", async () => {
+it("does not start a drag from a right-click", async () => {
   const ada = captainNamed("ada", "Ada");
   const rows = [
     { environmentId, captain: ada, attention: 0, working: false },
     { environmentId, captain, attention: 0, working: false },
   ];
   await using screen = await renderList({}, { rows });
-  const action = screen.getByRole("button", { name: "Actions for Ada" }).element() as HTMLElement;
+  const row = screen.getByRole("button", { name: /^Ada,/ }).element() as HTMLElement;
 
-  const rowHeight = action.closest("[data-duet-channel-card]")!.getBoundingClientRect().height;
-  await pointerDrag(action, rowHeight);
+  const rowHeight = row.closest("[data-duet-channel-card]")!.getBoundingClientRect().height;
+  await pointerDrag(row, rowHeight, 2);
 
   expect(window.localStorage.getItem(duetOrderStorageKey)).toBeNull();
   expect(rowOrder(screen.container).map((text) => text.startsWith("Ada"))).toEqual([true, false]);
 });
 
-it("moves Duets from the row menu and persists the order", async () => {
+it("moves Duets from the row context menu and persists the order", async () => {
   const ada = captainNamed("ada", "Ada");
   const archived = {
     ...captainNamed("renata", "Renata"),
@@ -403,17 +424,20 @@ it("moves Duets from the row menu and persists the order", async () => {
     { environmentId, captain, attention: 0, working: false },
     { environmentId, captain: archived, attention: 0, working: false },
   ];
+  const show = stubContextMenu();
+  show.mockResolvedValueOnce("move-down");
   await using screen = await renderList({}, { rows });
-  const openActions = async (name: string) => {
-    await userEvent.click(screen.getByRole("button", { name: `Actions for ${name}` }));
+  const openMenu = async (name: string, callCount: number) => {
+    await userEvent.click(screen.getByRole("button", { name: new RegExp(`^${name},`) }), {
+      button: "right",
+    });
+    await vi.waitFor(() => expect(show).toHaveBeenCalledTimes(callCount));
+    return show.mock.lastCall?.[0] ?? [];
   };
-  const moveUp = () => page.getByRole("menuitem", { name: "Move up", exact: true });
-  const moveDown = () => page.getByRole("menuitem", { name: "Move down", exact: true });
 
-  await openActions("Ada");
-  await expect.element(moveUp()).toHaveAttribute("aria-disabled", "true");
-  await expect.element(moveDown()).not.toHaveAttribute("aria-disabled", "true");
-  await userEvent.click(moveDown());
+  let items = await openMenu("Ada", 1);
+  expect(items.find((item) => item.id === "move-up")?.disabled).toBe(true);
+  expect(items.find((item) => item.id === "move-down")?.disabled).toBe(false);
 
   const expectedOrder = [
     `${environmentId}:maria`,
@@ -431,12 +455,64 @@ it("moves Duets from the row menu and persists the order", async () => {
     ]);
   });
 
-  await openActions("Ada");
-  await expect.element(moveUp()).not.toHaveAttribute("aria-disabled", "true");
-  await expect.element(moveDown()).toHaveAttribute("aria-disabled", "true");
-  await userEvent.keyboard("{Escape}");
+  items = await openMenu("Ada", 2);
+  expect(items.find((item) => item.id === "move-up")?.disabled).toBe(false);
+  expect(items.find((item) => item.id === "move-down")?.disabled).toBe(true);
 
-  await openActions("Renata");
-  await expect.element(moveUp()).toHaveAttribute("aria-disabled", "true");
-  await expect.element(moveDown()).toHaveAttribute("aria-disabled", "true");
+  items = await openMenu("Renata", 3);
+  expect(items.find((item) => item.id === "move-up")?.disabled).toBe(true);
+  expect(items.find((item) => item.id === "move-down")?.disabled).toBe(true);
+});
+
+it("right-clicking a Duet row offers reorder actions and Restore for an archived Duet", async () => {
+  const archived = {
+    ...captainNamed("renata", "Renata"),
+    archivedAt: DateTime.formatIso(now),
+  };
+  const rows = [
+    { environmentId, captain, attention: 0, working: false },
+    { environmentId, captain: archived, attention: 0, working: false },
+  ];
+  const show = stubContextMenu();
+  await using screen = await renderList({}, { rows });
+
+  await userEvent.click(screen.getByRole("button", { name: /^Maria,/ }), { button: "right" });
+  await vi.waitFor(() => expect(show).toHaveBeenCalledTimes(1));
+  const items = show.mock.lastCall?.[0] ?? [];
+  expect(items.map((item) => item.id)).toEqual([
+    "open-tasks",
+    "memory",
+    "customize",
+    "move-up",
+    "move-down",
+    "archive",
+    "delete",
+  ]);
+  expect(items.find((item) => item.id === "archive")?.label).toBe("Archive");
+  expect(items.find((item) => item.id === "customize")?.separatorBefore).toBe(true);
+  expect(items.find((item) => item.id === "delete")).toMatchObject({
+    destructive: true,
+    separatorBefore: true,
+  });
+  expect(show.mock.lastCall?.[2]).toBe("mouse");
+
+  await userEvent.click(screen.getByRole("button", { name: /^Renata,/ }), { button: "right" });
+  await vi.waitFor(() => expect(show).toHaveBeenCalledTimes(2));
+  const archivedItems = show.mock.lastCall?.[0] ?? [];
+  expect(archivedItems.find((item) => item.id === "move-up")).toBeDefined();
+  expect(archivedItems.find((item) => item.id === "move-down")).toBeDefined();
+  expect(archivedItems.find((item) => item.id === "archive")?.label).toBe("Restore");
+});
+
+it("opens the Duet row menu from the keyboard without a three-dot button", async () => {
+  const show = stubContextMenu();
+  await using screen = await renderList({});
+  expect(screen.container.querySelector('[aria-label="Actions for Maria"]')).toBeNull();
+  const row = screen.getByRole("button", { name: /^Maria,/ });
+
+  row.element().focus();
+  await userEvent.keyboard("{Shift>}{F10}{/Shift}");
+
+  await vi.waitFor(() => expect(show).toHaveBeenCalledOnce());
+  expect(show.mock.lastCall?.[2]).toBe("keyboard");
 });
