@@ -14,7 +14,15 @@ test("the comment round-trips its state", () => {
   const body = render(state, run);
   assert.deepEqual(readState(body), state);
   assert.match(body, /Client unavailable/);
-  assert.match(body, /groupId=8e413a0a/);
+  assert.match(
+    body,
+    /appScheme=ksg-code&projectId=0db5bfe2-75db-4fa0-a957-e2ef19fac1d8&groupId=8e413a0a/,
+  );
+  assert.ok(
+    body.includes(
+      "https://expo.dev/projects/0db5bfe2-75db-4fa0-a957-e2ef19fac1d8/updates/8e413a0a",
+    ),
+  );
   assert.match(body, /groupId=ios-group/);
   assert.match(body, /\[Install\]\(https:\/\/expo.dev\/ios\)/);
   assert.equal(readState("🚀 Expo continuous deployment is ready!"), null);
