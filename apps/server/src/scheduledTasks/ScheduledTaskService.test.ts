@@ -11,6 +11,7 @@ import {
   ScheduledTaskId,
   type ScheduledTaskUpsertInput,
   SecretRef,
+  TextGenerationError,
   ThreadId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -425,27 +426,35 @@ it.effect("thread cleanup notifies subscribers and a finishing run cannot recrea
 
 it.effect("dispatches morning briefs to the generator while ordinary tasks start turns", () =>
   Effect.gen(function* () {
+    const beforeBrief = DateTime.makeZonedUnsafe("2026-11-02T07:59:55Z", {
+      timeZone: DateTime.zoneMakeLocal(),
+      adjustForTimeZone: true,
+    });
+    yield* TestClock.setTime(DateTime.toEpochMillis(beforeBrief));
     const briefCalls: Array<{
       readonly threadId: ThreadId;
       readonly projectId?: ProjectId | undefined;
     }> = [];
     let launches = 0;
     let sends = 0;
+    let briefFailure: TextGenerationError | undefined;
     const layer = ScheduledTaskService.layer.pipe(
       Layer.provide(
         Layer.mergeAll(
           ManagedPolicy.layerTest(),
           Layer.mock(CaptainBriefService.CaptainBriefService)({
             generateForThread: (input) =>
-              Effect.sync(() => {
+              Effect.suspend(() => {
                 briefCalls.push(input);
-                return {
-                  captainId: "captain",
-                  name: "DIGEST.md",
-                  content: "## New",
-                  revision: 1,
-                  updatedAt: "2026-09-09T12:00:00.000Z",
-                } as never;
+                return briefFailure === undefined
+                  ? Effect.succeed({
+                      captainId: "captain",
+                      name: "DIGEST.md",
+                      content: "## New",
+                      revision: 1,
+                      updatedAt: "2026-09-09T12:00:00.000Z",
+                    } as never)
+                  : Effect.fail(briefFailure);
               }),
           }),
           Layer.mock(ThreadLaunchService.ThreadLaunchService)({
@@ -516,8 +525,13 @@ it.effect("dispatches morning briefs to the generator while ordinary tasks start
         runtimeMode: "full-access",
         interactionMode: "default",
       });
-      yield* service.runNow({ id: brief.task.id });
-      yield* service.runNow({ id: ordinary.task.id });
+      const completed = yield* service.subscribeList().pipe(
+        Stream.filter(({ tasks }) => tasks.every((task) => task.lastRunStatus === "succeeded")),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+      yield* TestClock.adjust("5 seconds");
+      assert.isTrue(Option.isSome(yield* Fiber.join(completed)));
       assert.deepEqual(briefCalls, [
         { threadId: duetThread, projectId: ProjectId.make("project:test") },
       ]);
@@ -526,6 +540,13 @@ it.effect("dispatches morning briefs to the generator while ordinary tasks start
       const tasks = (yield* service.list()).tasks;
       assert.equal(tasks.find((task) => task.id === brief.task.id)?.lastRunStatus, "succeeded");
       assert.equal(tasks.find((task) => task.id === ordinary.task.id)?.lastRunStatus, "succeeded");
+      briefFailure = new TextGenerationError({
+        operation: "generateBriefText",
+        detail: "No text generation provider is available.",
+      });
+      const failed = yield* service.runNow({ id: brief.task.id });
+      assert.equal(failed.task.lastRunStatus, "failed");
+      assert.equal(failed.task.lastRunError, briefFailure.message);
     }).pipe(Effect.provide(layer));
   }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
 );

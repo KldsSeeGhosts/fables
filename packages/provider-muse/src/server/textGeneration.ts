@@ -24,13 +24,13 @@ import { museModelCapabilities, resolveMuseReasoningEffort } from "./modelCatalo
 import { isMuseUsageLimitFailure } from "./usageLimits.ts";
 import type { ProviderTextGeneration } from "@t3tools/provider-core/server/textGeneration";
 import {
-  BriefTextGenerationOutput,
   generatedThreadTitle,
   investigationUnsupported,
   TranscriptionPostProcessingOutput,
 } from "@t3tools/provider-core/server/textGenerationOperations";
 import {
   buildBranchNamePrompt,
+  buildBriefTextPrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
@@ -398,8 +398,7 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
   )(function* (input) {
     return yield* runMuseJson({
       operation: "generateBriefText",
-      prompt: input.prompt,
-      outputSchema: BriefTextGenerationOutput,
+      ...buildBriefTextPrompt(input.prompt),
       modelSelection: input.modelSelection,
     });
   });

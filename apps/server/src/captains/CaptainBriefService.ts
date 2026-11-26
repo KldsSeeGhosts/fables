@@ -97,7 +97,7 @@ const briefPrompt = (input: {
   readonly activity: string;
 }) => `Write the next "## New" section of ${input.captain.name}'s DIGEST.md morning brief.
 
-Return only the markdown body for that section. Do not include the "## New" heading, a code fence, or commentary. Write no more than 8 bullets, with one line per item that needs the user's attention or decision. Use plain language. Cover progress, open work, blockers, and decisions that need the user. Use the existing digest for continuity, but write a fresh current section rather than copying stale items forward.
+The brief should contain up to 8 Markdown bullets, one line per item that needs the user's attention or decision. Leave out the "## New" heading, code fences, and commentary. Use plain language. Cover progress, open work, blockers, and decisions that need the user. Use the existing digest for continuity. If nothing needs attention, leave the brief empty.
 
 ## NOTES.md
 ${excerpt(input.notes.trim(), BRIEF_DOCUMENT_CONTEXT_LIMIT) || "(empty)"}

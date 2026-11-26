@@ -347,12 +347,14 @@ it("runs an existing morning brief from the Scheduled tab", async () => {
     type: "fixed_time",
     timeOfDay: "08:00",
   });
-  state.scheduledTasks = [brief];
+  const lastRunError = "No text generation provider is available.";
+  state.scheduledTasks = [{ ...brief, lastRunStatus: "failed", lastRunError }];
   await using screen = await render(
     <CaptainTasksDrawer threadRef={threadRef} onClose={() => {}} />,
   );
 
   await userEvent.click(screen.getByRole("tab", { name: "Scheduled" }));
+  await expect.element(screen.getByRole("alert")).toHaveTextContent(lastRunError);
   await userEvent.click(screen.getByRole("button", { name: "Run now" }));
 
   await vi.waitFor(() =>

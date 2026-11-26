@@ -9,6 +9,13 @@ import type { TextGenerationPolicy } from "@t3tools/provider-core/server/textGen
 
 const EARLIER_CONTENT_TRUNCATION_MARKER = "[Earlier content truncated]\n\n";
 
+export function buildBriefTextPrompt(prompt: string) {
+  return {
+    prompt: `${prompt}\n\nReturn a JSON object with one string field, "text", containing the Markdown body.`,
+    outputSchema: Schema.Struct({ text: Schema.String }),
+  };
+}
+
 function policyInstruction(
   instruction: string | undefined,
   heading = "Additional instructions:",
