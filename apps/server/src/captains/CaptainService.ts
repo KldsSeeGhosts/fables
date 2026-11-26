@@ -27,6 +27,7 @@ import * as ProjectService from "../project/ProjectService.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as CaptainHandoff from "./captainHandoff.ts";
 import * as CaptainStore from "./CaptainStore.ts";
+import { hasActiveCaptainCrew } from "./captainRollover.ts";
 
 const invalid = (message: string) => new CaptainError({ code: "invalid_request", message });
 const timestamp = Effect.map(DateTime.now, DateTime.formatIso);
@@ -37,10 +38,6 @@ const RESET_BLOCKING_RUN_STATUSES = [
   "starting",
   "running",
 ] as const satisfies ReadonlyArray<OrchestrationV2Run["status"]>;
-
-// Waiting means the provider turn already ended; unanswered input stays answerable after reset.
-const runBlocksReset = (run: Pick<OrchestrationV2Run, "status">) =>
-  (RESET_BLOCKING_RUN_STATUSES as ReadonlyArray<OrchestrationV2Run["status"]>).includes(run.status);
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -126,6 +123,7 @@ const make = Effect.gen(function* () {
         scopedProjectIds,
         primaryThreadId,
         earlierThreadIds: [],
+        earlierThreadEndReasons: [],
         createdAt: now,
         updatedAt: now,
         archivedAt: null,
@@ -181,18 +179,31 @@ const make = Effect.gen(function* () {
 
   const requireQuietConversation = Effect.fn("CaptainService.requireQuietConversation")(function* (
     threadId: ThreadId,
+    waitForCrew: boolean,
   ) {
     const shell = yield* threads
       .getThreadShell(threadId)
       .pipe(Effect.catch(CaptainStore.captainUnavailable));
     if (shell === null) return yield* invalid("The Captain's previous thread could not be found.");
     const records = yield* threads
-      .getThreadRecords(threadId, ["runs"])
+      .getThreadRecords(threadId, ["runs", "subagents"], {
+        runStatuses: RESET_BLOCKING_RUN_STATUSES,
+        ...(waitForCrew ? { omitSettledSubagents: true } : { subagentIds: [] }),
+      })
       .pipe(Effect.catch(CaptainStore.captainUnavailable));
-    if (records.runs.some(runBlocksReset))
+    if (
+      records.runs.some((run) =>
+        (RESET_BLOCKING_RUN_STATUSES as ReadonlyArray<OrchestrationV2Run["status"]>).includes(
+          run.status,
+        ),
+      )
+    )
       return yield* invalid(
         "The Captain is still working. Stop or wait for the current turn before resetting.",
       );
+    if (waitForCrew && hasActiveCaptainCrew(records.subagents)) {
+      return yield* invalid("The Captain still has active delegated tasks.");
+    }
     return records.thread;
   });
 
@@ -216,11 +227,15 @@ const make = Effect.gen(function* () {
       const { captain, handoff } = yield* threadCommands.withLock(
         previousId,
         Effect.gen(function* () {
-          const previous = yield* requireQuietConversation(previousId);
+          const previous = yield* requireQuietConversation(
+            previousId,
+            input.reason === "threshold",
+          );
           // Read before the reset moves scheduled tasks; NOTES.md changes only once the reset commits.
           const handoff = yield* CaptainHandoff.prepare({
             captain: current,
             previousThreadId: previousId,
+            resetReason: input.reason ?? "manual",
           }).pipe(
             Effect.provideService(SqlClient.SqlClient, sql),
             Effect.asSome,
@@ -242,6 +257,10 @@ const make = Effect.gen(function* () {
                   ...current,
                   primaryThreadId,
                   earlierThreadIds: [previousId, ...current.earlierThreadIds],
+                  earlierThreadEndReasons: [
+                    input.reason ?? "manual",
+                    ...(current.earlierThreadEndReasons ?? []),
+                  ],
                   updatedAt: yield* timestamp,
                 });
               }),

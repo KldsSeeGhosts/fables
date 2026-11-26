@@ -145,6 +145,13 @@ export type TimelineEntry = (
     }
   | {
       readonly id: string;
+      readonly kind: "conversation-divider";
+      readonly createdAt: string;
+      readonly label: string;
+      readonly detail?: string;
+    }
+  | {
+      readonly id: string;
       readonly kind: "work";
       readonly createdAt: string;
       readonly entry: WorkLogEntry;

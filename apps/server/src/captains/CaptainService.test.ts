@@ -261,7 +261,11 @@ it.effect(
         yield* service.update({ captainId: captain.id, reportPolicy: "react" });
         const beforeReset = yield* store.find(captain.id);
         assert.isTrue(yield* canWake(captain.primaryThreadId));
-        const reset = { captainId: captain.id, expectedThreadId: captain.primaryThreadId };
+        const reset = {
+          captainId: captain.id,
+          expectedThreadId: captain.primaryThreadId,
+          reason: "context_overflow" as const,
+        };
         f.failReset();
         assert.equal((yield* Effect.flip(service.resetConversation(reset))).code, "unavailable");
         assert.deepStrictEqual(yield* store.find(captain.id), beforeReset);
@@ -279,6 +283,9 @@ it.effect(
         assert.isFalse(yield* canWake(captain.primaryThreadId));
         assert.isTrue(yield* canWake(next.primaryThreadId));
         assert.deepStrictEqual(next.earlierThreadIds, [captain.primaryThreadId]);
+        assert.deepStrictEqual((yield* store.requireCaptain(captain.id)).earlierThreadEndReasons, [
+          "context_overflow",
+        ]);
         assert.equal(f.launches.get(next.primaryThreadId)?.projectId, project);
         assert.equal(f.launches.get(next.primaryThreadId)?.creationSource, "mcp");
         assert.deepStrictEqual(

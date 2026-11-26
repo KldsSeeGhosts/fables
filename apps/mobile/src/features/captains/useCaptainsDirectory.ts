@@ -1,5 +1,9 @@
 import { useAtomValue } from "@effect/atom-react";
-import { captainConversationKeys, captainForThread } from "@t3tools/client-runtime/state/captains";
+import {
+  captainConversationKeys,
+  captainForEarlierConversation,
+  captainForThread,
+} from "@t3tools/client-runtime/state/captains";
 import {
   AuthOrchestrationReadScope,
   isCaptainThreadId,
@@ -105,15 +109,29 @@ export function useCaptainConversationKeys(): string {
 }
 
 /** The active Captain a thread is the conversation of, or null for every other thread. */
-export function useCaptainOfThread(environmentId: EnvironmentId | null, threadId: ThreadId | null) {
+function useThreadCaptains(environmentId: EnvironmentId | null, threadId: ThreadId | null) {
   const isCaptain = environmentId !== null && threadId !== null && isCaptainThreadId(threadId);
   const config = useEnvironmentServerConfig(isCaptain ? environmentId : null);
   const canRead = useEnvironmentScope(isCaptain ? environmentId : null, AuthOrchestrationReadScope);
-  const query = useEnvironmentQuery(
+  return useEnvironmentQuery(
     isCaptain && canRead && config?.environment.capabilities.captains === true
       ? serverEnvironment.captainsLive({ environmentId, input: {} })
       : null,
   );
+}
+
+export function useCaptainOfThread(environmentId: EnvironmentId | null, threadId: ThreadId | null) {
+  const query = useThreadCaptains(environmentId, threadId);
   const captain = threadId === null ? undefined : captainForThread(query.data, threadId);
   return captain === undefined || captain.archivedAt !== null ? null : captain;
+}
+
+export function useCaptainPrimaryReplacement(
+  environmentId: EnvironmentId | null,
+  threadId: ThreadId | null,
+) {
+  const query = useThreadCaptains(environmentId, threadId);
+  return threadId === null
+    ? undefined
+    : captainForEarlierConversation(query.data, threadId)?.primaryThreadId;
 }

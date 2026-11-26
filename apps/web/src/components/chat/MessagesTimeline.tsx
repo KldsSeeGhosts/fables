@@ -136,7 +136,14 @@ const EMPTY_CHILD_APPROVALS_BY_THREAD_KEY: ReadonlyMap<
 > = new Map();
 const EMPTY_CHILD_APPROVAL_THREAD_IDS: ReadonlySet<ThreadId> = new Set();
 import { type ChatFileAttachment, type TurnDiffSummary } from "../../types";
-import { ArrowRightIcon, BotIcon, Minimize2Icon, CircleAlertIcon, Clock3Icon } from "lucide-react";
+import {
+  ArrowRightIcon,
+  BotIcon,
+  HistoryIcon,
+  Minimize2Icon,
+  CircleAlertIcon,
+  Clock3Icon,
+} from "lucide-react";
 import type { HandoffEndpoints } from "@t3tools/client-runtime/handoff";
 import { Skeleton } from "../ui/skeleton";
 import { ExpandedImagePreview } from "./ExpandedImagePreview";
@@ -289,6 +296,8 @@ export interface MessagesTimelineHistoryControls {
   readonly loading: boolean;
   readonly error: string | null;
   readonly onLoadEarlier: (throughEntryId?: string) => void;
+  readonly label?: string;
+  readonly loadingLabel?: string;
 }
 
 interface MessagesTimelineProps {
@@ -2055,13 +2064,15 @@ function TimelineHistoryControl(props: MessagesTimelineHistoryControls) {
           <button
             type="button"
             disabled={props.loading}
-            aria-label={gt("Load earlier turns")}
+            aria-label={props.label ?? gt("Load earlier turns")}
             onClick={() => props.onLoadEarlier()}
             className="flex w-full cursor-pointer items-center gap-3 py-1.5 text-dim-foreground text-xs hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default"
           >
             <span aria-hidden="true" className="h-px flex-1 bg-border/70" />
             <span className="shrink-0">
-              {props.loading ? gt("Loading earlier turns…") : gt("Load earlier turns")}
+              {props.loading
+                ? (props.loadingLabel ?? gt("Loading earlier turns…"))
+                : (props.label ?? gt("Load earlier turns"))}
             </span>
             <span aria-hidden="true" className="h-px flex-1 bg-border/70" />
           </button>
@@ -2245,6 +2256,9 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       {row.kind === "background-activity" ? <BackgroundActivityTimelineRow row={row} /> : null}
       {row.kind === "attempt-fold" ? <AttemptFoldTimelineRow row={row} /> : null}
       {row.kind === "context-compaction" ? <ContextCompactionTimelineRow row={row} /> : null}
+      {row.kind === "conversation-divider" ? (
+        <TimelineSystemDivider label={row.label} detail={row.detail ?? null} icon={HistoryIcon} />
+      ) : null}
       {row.kind === "message" && row.message.role === "user" && command === null ? (
         <UserMessageRow row={row} />
       ) : null}

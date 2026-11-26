@@ -19,6 +19,14 @@ import { threadRuntimeIsActive, type EnvironmentThreadShell } from "./models.ts"
 export const captainForThread = (snapshot: CaptainSnapshot | null, threadId: ThreadId) =>
   snapshot?.captains.find((captain) => captain.primaryThreadId === threadId);
 
+export const captainForEarlierConversation = (
+  snapshot: CaptainSnapshot | null,
+  threadId: ThreadId,
+) =>
+  snapshot?.captains.find(
+    (captain) => captain.archivedAt === null && captain.earlierThreadIds.includes(threadId),
+  );
+
 export const captainChildIsActive = (thread: EnvironmentThreadShell) =>
   threadRuntimeIsActive(thread.runtime) ||
   thread.hasPendingUserInput ||

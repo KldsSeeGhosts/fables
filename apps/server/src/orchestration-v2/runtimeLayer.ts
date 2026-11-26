@@ -64,6 +64,7 @@ import * as ThreadLaunchService from "./ThreadLaunchService.ts";
 import * as ThreadForkService from "./ThreadForkService.ts";
 import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
 import * as CaptainService from "../captains/CaptainService.ts";
+import * as CaptainRolloverWorker from "./CaptainRolloverWorker.ts";
 import * as CaptainStore from "../captains/CaptainStore.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
@@ -361,6 +362,17 @@ const layerCaptainProvided = CaptainService.layer.pipe(
     ).pipe(Layer.provideMerge(layerProjectService)),
   ),
 );
+const layerCaptainRolloverWorkerProvided = CaptainRolloverWorker.layer.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      layerEventSink,
+      layerCaptainProvided,
+      CaptainStore.layer,
+      layerThreadManagementProvided,
+    ),
+  ),
+);
+
 const layerScratchThreadPromotionProvided = ScratchThreadPromotion.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
@@ -457,6 +469,7 @@ export const layerProduction = Layer.mergeAll(
   layerScheduledTaskProvided,
   layerWorkflowsProvided,
   layerCaptainProvided,
+  layerCaptainRolloverWorkerProvided,
   CaptainStore.layer,
   layerScratchThreadPromotionProvided,
   layerSecretRequestsProvided,
