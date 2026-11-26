@@ -10,7 +10,11 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { ScreenContent } from "../../components/ui/ScreenContent";
 import { SheetHeader } from "../../components/ui/SheetHeader";
 import { CAPTAIN_INBOX_KIND_LABELS } from "./captainLabels";
+import { duetInboxGroups } from "./captainInbox";
 import { CaptainOrb } from "./CaptainOrb";
+import { DuetCreature } from "./DuetCreature";
+import { useDuetShell } from "./useDuetShell";
+import { useDuetTokens } from "./useDuetTokens";
 import { CaptainEnvironmentNotices, useOpenThreadFromSheet } from "./captainSheetSupport";
 import { useCaptainsDirectory } from "./useCaptainsDirectory";
 
@@ -26,8 +30,12 @@ export function CaptainsInboxSheet() {
   const insets = useSafeAreaInsets();
   const gt = useGT();
   const m = useMessages();
+  const isDuet = useDuetShell();
+  const tokens = useDuetTokens();
   const { environments, shells } = useCaptainsDirectory();
-  const items = captainInboxItems(environments, shells);
+  const allItems = captainInboxItems(environments, shells);
+  const duetGroups = isDuet ? duetInboxGroups(allItems) : [];
+  const items = isDuet ? duetGroups.flatMap((group) => group.items) : allItems;
   const captainOf = (item: CaptainInboxItem) =>
     environments
       .find(({ environmentId }) => environmentId === item.environmentId)
@@ -39,7 +47,17 @@ export function CaptainsInboxSheet() {
   const settled = environments.every(({ status }) => status === "ready");
   return (
     <View collapsable={false} className="flex-1 bg-sheet">
-      <SheetHeader title={gt("Inbox")} onClose={() => navigation.goBack()} />
+      <SheetHeader
+        title={gt("Inbox")}
+        subtitle={
+          isDuet && items.length > 0
+            ? gt("{count, plural, =1 {1 waits on you} other {{count} wait on you}}", {
+                count: items.length,
+              })
+            : undefined
+        }
+        onClose={() => navigation.goBack()}
+      />
       <ScreenContent>
         <ScrollView
           nestedScrollEnabled
@@ -55,6 +73,88 @@ export function CaptainsInboxSheet() {
                 {gt("Nothing waits on you.")}
               </Text>
             ) : null
+          ) : isDuet ? (
+            duetGroups.map((group) => {
+              const captain = captainOf(group.items[0]!);
+              return (
+                <View key={group.key} className="-mx-2 pb-2">
+                  {captain ? (
+                    <View className="flex-row items-center gap-[7px] px-4 pb-1 pt-3.5">
+                      <DuetCreature captain={captain} size={18} />
+                      <Text
+                        className="font-t3-medium"
+                        style={{ fontSize: 13, color: tokens.muted }}
+                      >
+                        {captain.name}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {group.items.map((item, index) => {
+                    const kind = m(CAPTAIN_INBOX_KIND_LABELS[item.kind]);
+                    const from = captain
+                      ? item.isChild
+                        ? gt("Crew of {name}", { name: captain.name })
+                        : captain.name
+                      : null;
+                    return (
+                      <Pressable
+                        key={`${item.kind}:${item.threadRef.environmentId}:${item.threadRef.threadId}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={[kind, item.title, from].filter(Boolean).join(", ")}
+                        accessibilityHint={gt("Opens the thread to answer it")}
+                        onPress={() => open(item)}
+                        className="min-h-16 flex-row items-start gap-3 py-[11px] pl-4 pr-2.5"
+                        style={({ pressed }) => ({
+                          backgroundColor: pressed ? tokens.row : undefined,
+                        })}
+                      >
+                        {index === 0 ? null : (
+                          <View
+                            className="absolute right-0 top-0 h-px"
+                            style={{ left: 56, backgroundColor: tokens.hairline }}
+                          />
+                        )}
+                        <View
+                          className="h-7 w-7 items-center justify-center rounded-lg"
+                          style={{ backgroundColor: tokens.bubble }}
+                        >
+                          <SymbolView
+                            name={KIND_ICON[item.kind]}
+                            size={15}
+                            tintColor={tokens.needsInput}
+                          />
+                        </View>
+                        <View className="min-w-0 flex-1">
+                          <Text
+                            className="font-t3-medium"
+                            style={{ fontSize: 12, lineHeight: 16, color: tokens.needsInputText }}
+                          >
+                            {kind}
+                          </Text>
+                          <Text
+                            className="font-t3-medium"
+                            style={{ fontSize: 15, lineHeight: 20, color: tokens.foreground }}
+                            numberOfLines={1}
+                          >
+                            {item.title}
+                          </Text>
+                          <Text
+                            style={{ fontSize: 13, lineHeight: 18, color: tokens.meta }}
+                            numberOfLines={1}
+                          >
+                            {from ? `${from} · ` : null}
+                            <RelativeTime timestamp={item.updatedAt} />
+                          </Text>
+                        </View>
+                        <View className="self-center">
+                          <SymbolView name="chevron.right" size={14} tintColor={tokens.icon} />
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              );
+            })
           ) : (
             items.map((item) => {
               const captain = captainOf(item);

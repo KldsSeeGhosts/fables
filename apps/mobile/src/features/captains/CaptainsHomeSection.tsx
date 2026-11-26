@@ -13,6 +13,7 @@ import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspace
 import { CaptainOrb } from "./CaptainOrb";
 import { orderCaptainHomeRows } from "./captainHomeOrder";
 import { captainShells, captainShellsByConversation } from "./captainShellIndex";
+import { duetInboxGroups } from "./captainInbox";
 import { DuetHomeSection } from "./DuetHomeSection";
 import { useCaptainsDirectory } from "./useCaptainsDirectory";
 import { useDuetShell } from "./useDuetShell";
@@ -48,21 +49,22 @@ export function CaptainsHomeSection(props: {
       }),
     ),
   );
-  const waiting = captainInboxItems(
+  const inbox = captainInboxItems(
     environments,
     rows.flatMap(({ own }) => own),
-  ).length;
+  );
   if (isDuet) {
     return (
       <DuetHomeSection
         rows={rows}
-        waiting={waiting}
+        waiting={duetInboxGroups(inbox).reduce((count, group) => count + group.items.length, 0)}
         showsEnvironment={showsEnvironment}
         projects={props.projects}
         selectedThreadKey={props.selectedThreadKey}
       />
     );
   }
+  const waiting = inbox.length;
   return (
     <View className="gap-1 px-2 pb-3 pt-2">
       <View className="flex-row items-center gap-2 px-2 pb-1">
