@@ -171,6 +171,9 @@ export default mergeConfig(
       },
     },
     test: {
+      env: {
+        T3CODE_HONCHO_CONFIG: "disabled",
+      },
       // Parallel sqlite/git/worktree/orchestration tests introduce load-sensitive flakes.
       fileParallelism: false,
       sequence: { sequencer: WeightedShardSequencer },
