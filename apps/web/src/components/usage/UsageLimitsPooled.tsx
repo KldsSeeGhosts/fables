@@ -1,6 +1,7 @@
 import {
   CHATGPT_USAGE_URL,
   collectCpaAccountGroups,
+  collectHttpQuotaSources,
   collectLimitAccounts,
   collectLimitPools,
   displayLimitWindows,
@@ -12,7 +13,7 @@ import {
   remainingPercent,
   type ResetCreditChoice,
 } from "@t3tools/shared/usageLimits";
-import { T, useGT, useMessages, Var } from "gt-react";
+import { T, Var, useGT, useMessages } from "gt-react";
 import type { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import { normalizeProviderAccentColor } from "@t3tools/client-runtime/state/provider-instance-display";
 import {
@@ -76,7 +77,7 @@ function AccountChip({ email }: { readonly email: string }) {
     <span
       role="img"
       aria-label={gt("Account {initials}", { initials: accountInitials(email) })}
-      className="inline-flex size-4 shrink-0 items-center justify-center rounded-full text-3xs leading-none font-semibold"
+      className="inline-flex size-4 shrink-0 items-center justify-center rounded-full text-3xs leading-none text-label"
       style={{ backgroundColor: `oklch(0.85 0.08 ${hue})`, color: `oklch(0.35 0.1 ${hue})` }}
     >
       {accountInitials(email)}
@@ -172,9 +173,9 @@ function SegmentPopover({
       ? resetCreditChoices(account.limits.resetCredits, account.redeem.input, now, true, m)
       : [];
   return (
-    <div className="flex w-72 max-w-[calc(100vw-3rem)] flex-col gap-2.5 text-xs">
+    <div className="flex w-72 max-w-[calc(100vw-3rem)] flex-col gap-2.5 text-meta">
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+        <span className="flex items-center gap-2 text-body  text-foreground">
           <AccountAvatar account={account} />
           <span className="truncate">
             {account.displayName ?? providerClients.get(account.driver)?.label ?? account.driver}
@@ -352,8 +353,8 @@ function RedeemableSegment({
       />
       {/* The popover closed before the confirm, so progress and the outcome need a home outside it. */}
       {redeem.busy || redeem.status ? (
-        <span role="status" className="col-span-full text-xs text-muted-foreground">
-          <AccountName account={props.account} className="font-medium text-foreground" />{" "}
+        <span role="status" className="col-span-full text-meta text-muted-foreground">
+          <AccountName account={props.account} className=" text-foreground" />{" "}
           {redeem.busy ? gt("Using reset credit…") : redeem.status}
         </span>
       ) : null}
@@ -452,33 +453,28 @@ function SegmentTriggers({
         ) : null}
         <span
           aria-hidden
-          className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-md text-3xs leading-none font-semibold text-foreground/80 tabular-nums @2xl/pool:hidden"
+          className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-md text-3xs leading-none text-label text-foreground/80 tabular-nums @2xl/pool:hidden"
         >
           {index}
         </span>
-        <div className="relative hidden h-full min-w-0 items-center gap-1.5 overflow-hidden rounded-md px-2 text-xs @2xl/pool:flex">
+        <div className="relative hidden h-full min-w-0 items-center gap-1.5 overflow-hidden rounded-md px-2 text-meta @2xl/pool:flex">
           {showAccountName ? (
-            <AccountName
-              account={account}
-              className="min-w-0 truncate font-medium text-foreground"
-            />
+            <AccountName account={account} className="min-w-0 truncate  text-foreground" />
           ) : (
-            <span className="min-w-0 truncate font-medium text-foreground">
+            <span className="min-w-0 truncate  text-foreground">
               {providerClients.get(account.driver)?.label ?? String(account.driver)}
             </span>
           )}
           {/* A single-account bar repeats the headline percentage. */}
           {showAccountName ? (
-            <span className="shrink-0 font-semibold text-foreground tabular-nums">
-              {remaining}%
-            </span>
+            <span className="shrink-0 text-label text-foreground tabular-nums">{remaining}%</span>
           ) : null}
           {resetsIn || credits ? (
             <span className="ms-auto flex min-w-0 items-center gap-1.5 overflow-hidden rounded-sm bg-background/85 px-1.5 py-0.5 text-2xs whitespace-nowrap text-foreground tabular-nums">
               {refillIn ?? ""}
               {credits ? (
                 <>
-                  <span aria-hidden className="inline-flex items-center gap-0.5 font-semibold">
+                  <span aria-hidden className="inline-flex items-center gap-0.5 text-label">
                     <TicketIcon className="size-3" aria-hidden />
                     {credits}
                   </span>
@@ -519,7 +515,7 @@ function LegendRow({
       render={<Button variant="ghost" size="compact" />}
       className="min-w-0 @2xl/pool:hidden"
     >
-      <span className="relative inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-3xs leading-none font-semibold text-foreground/80 tabular-nums">
+      <span className="relative inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-3xs leading-none text-label text-foreground/80 tabular-nums">
         <span
           aria-hidden
           className="absolute inset-0 rounded-sm opacity-35"
@@ -528,15 +524,15 @@ function LegendRow({
         <span className="sr-only">{`${gt("Segment")} `}</span>
         <span className="relative">{index}</span>
       </span>
-      <AccountName account={account} className="min-w-0 truncate font-medium text-foreground" />
-      <span className="shrink-0 font-semibold text-foreground tabular-nums">{remaining}%</span>
+      <AccountName account={account} className="min-w-0 truncate  text-foreground" />
+      <span className="shrink-0 text-label text-foreground tabular-nums">{remaining}%</span>
       <span className="ms-auto flex shrink-0 items-center gap-1.5 text-2xs text-muted-foreground tabular-nums">
         {resetsIn ?? ""}
         {credits ? (
           <>
             <span
               aria-hidden
-              className="inline-flex items-center gap-0.5 font-semibold text-foreground"
+              className="inline-flex items-center gap-0.5 text-label text-foreground"
             >
               <TicketIcon className="size-3" aria-hidden />
               {credits}
@@ -626,7 +622,7 @@ function PoolWindowCard({
           <span className="text-label text-foreground">{label ?? pool.label}</span>
         ) : null}
         <span className="flex items-baseline gap-2">
-          <span className="text-3xl font-semibold text-foreground tabular-nums">
+          <span className="text-3xl text-label text-foreground tabular-nums">
             {pool.remainingPercent}%
           </span>
           <span className="inline-flex items-center gap-2 text-body text-muted-foreground">
@@ -637,9 +633,9 @@ function PoolWindowCard({
           </span>
         </span>
         {nextRefill ? (
-          <span className="flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
+          <span className="flex items-center gap-1 text-meta text-muted-foreground tabular-nums">
             <RotateCwIcon className="size-3 text-foreground" aria-hidden />
-            <span className="font-semibold text-foreground">+{nextRefill.restoresPercent}%</span>
+            <span className="text-label text-foreground">+{nextRefill.restoresPercent}%</span>
             {nextRefill.at <= now
               ? gt("now", { $context: "a usage refill happens now" })
               : gt("in {duration}", {
@@ -651,7 +647,7 @@ function PoolWindowCard({
       </div>
       <PoolBar pool={pool} color={color} now={now} />
       {description ? (
-        <p className="text-xs text-muted-foreground md:col-span-2">{description}</p>
+        <p className="text-meta text-muted-foreground md:col-span-2">{description}</p>
       ) : null}
     </div>
   );
@@ -678,7 +674,7 @@ function PoolSection({ pool, now }: { readonly pool: LimitPool; readonly now: nu
         />
         {label}
         {pool.accounts.length > 1 ? (
-          <span className="text-xs font-normal text-dim-foreground">
+          <span className="text-meta font-normal text-dim-foreground">
             <T>
               <Var>{pool.accounts.length}</Var> accounts, pooled
             </T>
@@ -717,6 +713,7 @@ export function UsageLimitsPooled({
   const [segmentPopover] = useState(() => PopoverCreateHandle<SegmentPayload>());
   const segmentPopoverActions = useRef<PopoverPrimitive.Root.Actions | null>(null);
   const pools = collectLimitPools(collectLimitAccounts(presentations), now);
+  const quotaSources = collectHttpQuotaSources(presentations);
   const notices = collectLimitNotices(presentations, m);
   const externalLinks = collectExternalUsageLinks(presentations, m);
   const cpaGroups = collectCpaAccountGroups(presentations);
@@ -759,6 +756,33 @@ export function UsageLimitsPooled({
         }
       </Popover>
       <CpaAccounts groups={cpaGroups} now={now} />
+      {quotaSources.map((source) => (
+        <section key={source.key} className="space-y-3 rounded-xl border p-4">
+          <h2 className="text-body ">{source.label}</h2>
+          {source.quotaAccounts?.map((account) => (
+            <div key={account.id} className="space-y-1">
+              <h3 className="text-body ">{account.label}</h3>
+              {account.windows.map((window) => {
+                const reset = formatResetsIn(window, now, m);
+                return (
+                  <div
+                    key={window.id}
+                    className="flex justify-between gap-3 text-body text-muted-foreground"
+                  >
+                    <span>{window.label}</span>
+                    <span className="flex gap-2">
+                      <span>
+                        {gt("{remaining}% left", { remaining: remainingPercent(window) })}
+                      </span>
+                      {reset ? <span>{reset}</span> : null}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </section>
+      ))}
       {externalLinks.map((link) => (
         <section
           key={link.url}
@@ -769,7 +793,7 @@ export function UsageLimitsPooled({
               <OpenAI className="size-5 shrink-0" aria-hidden="true" />
             ) : null}
             <div className="min-w-0 space-y-1">
-              <h2 className="text-sm font-medium">{link.label}</h2>
+              <h2 className="text-body ">{link.label}</h2>
               <p className="text-caption break-words text-muted-foreground">
                 {link.accounts.join(", ")}
               </p>

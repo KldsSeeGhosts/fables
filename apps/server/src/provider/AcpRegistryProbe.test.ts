@@ -19,6 +19,7 @@ import {
   acpRegistryProbeResult,
   listAcpRegistrySessions,
   logoutAcpRegistry,
+  makeAcpRegistryTextGeneration,
   normalizeAcpRegistryAuthMethods,
   normalizeAcpRegistryCommands,
   probeAcpRegistryConfiguration,
@@ -110,7 +111,7 @@ describe("ACP Registry probe", () => {
         },
         { id: "login", name: "Terminal login", description: null, type: "terminal" },
       ],
-      models: [{ id: "gpt-5.4", name: "GPT-5.4", description: null, configOptions: [effort] }],
+      models: [{ id: "gpt-5.4", name: "GPT-5.4", description: null }],
       currentModelId: "gpt-5.4",
       configOptions: [
         effort,
@@ -265,7 +266,7 @@ describe("ACP Registry probe", () => {
     };
     expect(result.models).toEqual([
       { id: codexModel, name: "GPT-6.1 Sol", description: null },
-      { id: goModel, name: "DeepSeek V4.1 Flash", description: null, configOptions: [reasoning] },
+      { id: goModel, name: "DeepSeek V4.1 Flash", description: null },
     ]);
     expect(result.currentModelId).toBe(goModel);
     expect(result.configOptions).toEqual([reasoning]);
@@ -367,7 +368,7 @@ describe("ACP Registry probe", () => {
         environment: process.env,
       });
 
-      expect(result.agentVersion).toBe("0.0.0");
+      expect(result.probe.agentVersion).toBe("0.0.0");
       expect(result.slashCommands).toEqual([
         {
           name: "review",
@@ -389,6 +390,8 @@ describe("ACP Registry probe", () => {
         AcpRegistrySupport.AcpRegistryCatalog,
         AcpRegistrySupport.AcpRegistryCatalog.of({
           search: () => Effect.die("unused search"),
+          refreshIndex: () => Effect.die("unused refresh"),
+          invalidateIndex: () => Effect.void,
           prepare: () => Effect.die("unused prepare"),
           inspect: () => Effect.die("unused inspect"),
           uninstallManagedBinary: () => Effect.die("unused uninstall"),
@@ -422,6 +425,8 @@ describe("ACP Registry probe", () => {
     const catalog = AcpRegistrySupport.AcpRegistryCatalog.of({
       search: () => Effect.die("unused search"),
       prepare: () => Effect.die("unused prepare"),
+      refreshIndex: () => Effect.succeed(false),
+      invalidateIndex: () => Effect.void,
       inspect: () => Effect.die("unused inspect"),
       uninstallManagedBinary: () => Effect.die("unused uninstall"),
       resolve: () =>
@@ -483,6 +488,8 @@ describe("ACP Registry probe", () => {
         const catalog = AcpRegistrySupport.AcpRegistryCatalog.of({
           search: () => Effect.die("unused search"),
           prepare: () => Effect.die("unused prepare"),
+          refreshIndex: () => Effect.succeed(false),
+          invalidateIndex: () => Effect.void,
           inspect: () => Effect.die("unused inspect"),
           uninstallManagedBinary: () => Effect.die("unused uninstall"),
           resolve: () =>
@@ -552,6 +559,8 @@ await import(pathToFileURL(agentPath).href);
       const catalog = AcpRegistrySupport.AcpRegistryCatalog.of({
         search: () => Effect.die("unused search"),
         prepare: () => Effect.die("unused prepare"),
+        refreshIndex: () => Effect.succeed(false),
+        invalidateIndex: () => Effect.void,
         inspect: () => Effect.die("unused inspect"),
         uninstallManagedBinary: () => Effect.die("unused uninstall"),
         resolve: () =>
@@ -584,6 +593,92 @@ await import(pathToFileURL(agentPath).href);
       ]);
       expect(yield* fs.exists(probeDirectory)).toBe(false);
     }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+  );
+
+  it.live.each([
+    { model: "default", omitModelOptions: false, customModels: [], writes: 0 },
+    { model: "composer-2", omitModelOptions: false, customModels: [], writes: 1 },
+    { model: "retired-model", omitModelOptions: false, customModels: [], writes: 0 },
+    { model: "composer-2", omitModelOptions: true, customModels: [], writes: 0 },
+    { model: "custom-model", omitModelOptions: false, customModels: ["custom-model"], writes: 1 },
+  ])(
+    "generates text and deletes its session with $model and omitted options $omitModelOptions",
+    ({ model, omitModelOptions, customModels, writes }) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const directory = yield* fs.makeTempDirectoryScoped({ prefix: "acp-title-" });
+        const requestLogPath = NodePath.join(directory, "requests.ndjson");
+        let failResolution = false;
+        const catalog = AcpRegistrySupport.AcpRegistryCatalog.of({
+          search: () => Effect.die("unused search"),
+          prepare: () => Effect.die("unused prepare"),
+          refreshIndex: () => Effect.succeed(false),
+          invalidateIndex: () => Effect.void,
+          inspect: () => Effect.die("unused inspect"),
+          uninstallManagedBinary: () => Effect.die("unused uninstall"),
+          resolve: () =>
+            failResolution
+              ? Effect.fail(
+                  new AcpRegistrySupport.AcpRegistryError({
+                    reason: "runner_unavailable",
+                    detail: "private provider failure",
+                  }),
+                )
+              : Effect.succeed({
+                  distribution: "local" as const,
+                  spawn: {
+                    command: "node",
+                    args: [mockAgentPath],
+                    env: {
+                      ...process.env,
+                      T3_ACP_SESSION_LIFECYCLE: "1",
+                      T3_ACP_V2_MANAGEMENT: "1",
+                      T3_ACP_REQUEST_LOG_PATH: requestLogPath,
+                      T3_ACP_PROMPT_RESPONSE_TEXT: '{"title":"Migrate Sessions to Postgres"}',
+                      T3_ACP_OMIT_MODEL_OPTIONS: omitModelOptions ? "1" : "0",
+                    },
+                  },
+                }),
+        });
+        const textGeneration = yield* makeAcpRegistryTextGeneration({
+          instanceId,
+          settings: decodeSettings({ agentId: "mock-agent", customModels }),
+          environment: process.env,
+        }).pipe(Effect.provideService(AcpRegistrySupport.AcpRegistryCatalog, catalog));
+
+        const result = yield* textGeneration.generateThreadTitle({
+          cwd: process.cwd(),
+          message: "Move session storage from Redis to Postgres",
+          modelSelection: { instanceId, model },
+        });
+
+        expect(result.title).toBe("Migrate Sessions to Postgres");
+        failResolution = true;
+        const failure = yield* textGeneration
+          .generateThreadTitle({
+            cwd: process.cwd(),
+            message: "Generate a title",
+            modelSelection: { instanceId, model: "default" },
+          })
+          .pipe(Effect.result);
+        expect(failure).toMatchObject({
+          _tag: "Failure",
+          failure: { detail: "The ACP text generation request failed." },
+        });
+        const requests = (yield* fs.readFileString(requestLogPath))
+          .split("\n")
+          .filter((line) => line.length > 0)
+          .map((line) => JSON.parse(line));
+        expect(
+          requests.filter((request) => request.method === "session/set_config_option"),
+        ).toHaveLength(writes);
+        expect(requests.filter((request) => request.method === "session/set_model")).toHaveLength(
+          0,
+        );
+        expect(requests.filter((request) => request.method === "session/delete")).toEqual([
+          expect.objectContaining({ params: { sessionId: "mock-session-1" } }),
+        ]);
+      }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   it("distinguishes authentication failures from generic probe failures", () => {

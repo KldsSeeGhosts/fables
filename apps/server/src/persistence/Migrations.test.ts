@@ -6,6 +6,16 @@ import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as SqlClient from "effect/sql/SqlClient";
+import * as Ref from "effect/Ref";
+import * as Logger from "effect/Logger";
+import * as Console from "effect/Console";
+import * as NodeUtil from "node:util";
+import type { DatabaseMigrationProgress as Progress } from "@t3tools/contracts";
+import {
+  databaseMigrationProgress,
+  DATABASE_MIGRATION_PROGRESS_MESSAGE,
+} from "@t3tools/shared/databaseMigrationLog";
+import * as DatabaseMigrationProgress from "./DatabaseMigrationProgress.ts";
 
 import { migrationManifest, runMigrations } from "./Migrations.ts";
 
@@ -29,6 +39,26 @@ const v2TableCount = Effect.gen(function* () {
 });
 
 describe("runMigrations", () => {
+  it.effect("upgrades an existing KSG Captain database without rerunning its migrations", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* runMigrations({ toMigrationInclusive: 115 });
+      yield* sql`
+        INSERT INTO captains (id, name, role, instructions, avatar, primary_thread_id, report_policy, created_at, updated_at, coordinator_only)
+        VALUES ('captain', 'Lead', 'Maintainer', '', '', 'thread', 'context', '2026-11-23', '2026-11-23', 1)
+      `;
+
+      assert.deepStrictEqual(
+        yield* runMigrations(),
+        migrationManifest.filter(([id]) => id > 115),
+      );
+      assert.deepStrictEqual(yield* sql`SELECT name, coordinator_only FROM captains`, [
+        { name: "Lead", coordinator_only: 1 },
+      ]);
+      assert.deepStrictEqual(yield* history, migrationManifest);
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
   it.effect("refuses to start when another migration took a V2 id", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
@@ -73,7 +103,44 @@ describe("runMigrations", () => {
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       yield* runMigrations({ toMigrationInclusive: 54 });
-      assert.deepStrictEqual(yield* runMigrations(), v2Migrations);
+      const current = yield* Ref.make<Progress | null>(null);
+      const steps: Array<Progress | null> = [];
+      const loggedSteps: Array<Progress | null> = [];
+      let output = "";
+      const pretty = Logger.consolePretty({ mode: "tty", colors: false });
+      const logger = Logger.make((options) => {
+        pretty.log(options);
+        if (String(options.message).startsWith(DATABASE_MIGRATION_PROGRESS_MESSAGE)) {
+          steps.push(Ref.getUnsafe(current));
+          loggedSteps.push(databaseMigrationProgress(output.slice(-4_000)));
+        }
+      });
+      assert.deepStrictEqual(
+        yield* runMigrations().pipe(
+          Effect.provideService(DatabaseMigrationProgress.DatabaseMigrationProgress, { current }),
+          Effect.provide(Logger.layer([logger], { mergeWithExisting: false })),
+          Effect.provideService(Console.Console, {
+            ...globalThis.console,
+            log: (...args) => {
+              output += `${NodeUtil.format(...args)}\n`;
+            },
+          }),
+        ),
+        v2Migrations,
+      );
+      assert.deepStrictEqual(
+        steps,
+        v2Migrations.map((_, index) => ({ current: index + 1, total: v2Migrations.length })),
+      );
+      assert.deepStrictEqual(loggedSteps, steps);
+      assert.isNull(yield* Ref.get(current));
+      assert.deepStrictEqual(
+        yield* runMigrations().pipe(
+          Effect.provideService(DatabaseMigrationProgress.DatabaseMigrationProgress, { current }),
+        ),
+        [],
+      );
+      assert.isNull(yield* Ref.get(current));
       assert.deepStrictEqual(yield* history, migrationManifest);
       assert.isAbove(yield* v2TableCount, 0);
 
@@ -163,9 +230,15 @@ describe("runMigrations", () => {
       yield* runMigrations({ toMigrationInclusive: 81 });
       yield* sql`CREATE TABLE orchestration_v2_projection_turn_item_counts (thread_id TEXT)`;
 
-      const exit = yield* Effect.exit(runMigrations());
+      const current = yield* Ref.make<Progress | null>(null);
+      const exit = yield* Effect.exit(
+        runMigrations().pipe(
+          Effect.provideService(DatabaseMigrationProgress.DatabaseMigrationProgress, { current }),
+        ),
+      );
 
       assert.isTrue(Exit.isFailure(exit));
+      assert.isNull(yield* Ref.get(current));
       assert.deepStrictEqual(
         yield* history,
         migrationManifest.filter(([id]) => id <= 84),

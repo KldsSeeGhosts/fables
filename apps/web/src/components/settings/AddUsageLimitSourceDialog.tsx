@@ -49,7 +49,16 @@ export function AddUsageLimitSourceDialog({
   const [keyValid, setKeyValid] = useState(true);
   const managementKey = typeof keyDraft === "string" ? keyDraft.trim() : keyDraft;
   const trimmedUrl = url.trim();
-  const canSave = keyValid && trimmedUrl.length > 0 && managementKey !== "";
+  const http = kind === "http";
+  const endpoint = URL.parse(trimmedUrl);
+  const canSave =
+    keyValid &&
+    (http
+      ? endpoint !== null &&
+        /^https?:$/.test(endpoint.protocol) &&
+        !endpoint.username &&
+        !endpoint.password
+      : trimmedUrl.length > 0 && managementKey !== "");
 
   const reset = () => {
     setLabel("");
@@ -117,7 +126,11 @@ export function AddUsageLimitSourceDialog({
               >
                 <SelectTrigger id="usage-source-kind">
                   <SelectValue>
-                    {kind === "cpa-manager" ? gt("CPA Manager") : gt("CLIProxyAPI")}
+                    {kind === "http"
+                      ? gt("HTTP quota source")
+                      : kind === "cpa-manager"
+                        ? gt("CPA Manager")
+                        : gt("CLIProxyAPI")}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectPopup>
@@ -127,12 +140,15 @@ export function AddUsageLimitSourceDialog({
                   <SelectItem value="cliproxy">
                     <T>CLIProxyAPI</T>
                   </SelectItem>
+                  <SelectItem value="http">
+                    <T>HTTP quota source</T>
+                  </SelectItem>
                 </SelectPopup>
               </Select>
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="usage-source-url">
-                <T>Hub URL</T>
+                {http ? <T>Endpoint URL</T> : <T>Hub URL</T>}
               </Label>
               <Input
                 id="usage-source-url"
@@ -148,11 +164,17 @@ export function AddUsageLimitSourceDialog({
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="usage-source-key">
-                {kind === "cpa-manager" ? <T>Manager admin key</T> : <T>Management key</T>}
+                {http ? (
+                  <T>Bearer token (optional)</T>
+                ) : kind === "cpa-manager" ? (
+                  <T>Manager admin key</T>
+                ) : (
+                  <T>Management key</T>
+                )}
               </Label>
               <SecretSourceInput
                 id="usage-source-key"
-                aria-label={gt("Management key")}
+                aria-label={http ? gt("Bearer token (optional)") : gt("Management key")}
                 value={keyDraft}
                 sources={secretSources}
                 environmentId={environmentId}
@@ -185,7 +207,7 @@ export function AddUsageLimitSourceDialog({
             <T>Cancel</T>
           </Button>
           <Button type="submit" form={formId} disabled={!canSave}>
-            <T>Add hub</T>
+            {http ? <T>Add source</T> : <T>Add hub</T>}
           </Button>
         </DialogFooter>
       </DialogPopup>

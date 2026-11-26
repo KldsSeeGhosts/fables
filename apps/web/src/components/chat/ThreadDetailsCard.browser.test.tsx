@@ -13,6 +13,11 @@ import { ThreadDetailsControl } from "./ThreadDetailsControl";
 import { THREAD_DETAILS_CARD_GAP } from "./threadDetailsCardLayout";
 import "../../index.css";
 
+vi.mock(import("~/state/query"), async (original) => ({
+  ...(await original()),
+  useEnvironmentQuery: () => ({ data: null, error: null }) as never,
+}));
+
 const threadA: ScopedThreadRef = {
   environmentId: EnvironmentId.make("environment"),
   threadId: ThreadId.make("thread-a"),
@@ -74,6 +79,7 @@ function Card({
   rows = 1,
   automationRows = 0,
   serverOverflowRows = 0,
+  issueListRows = 0,
 }: {
   threadRef: ScopedThreadRef;
   inline: boolean;
@@ -84,6 +90,8 @@ function Card({
   automationRows?: number;
   /** Rows of 100px that expanded server lists add, which density ignores. */
   serverOverflowRows?: number;
+  /** Rows of 100px that expanded linked issues add, which density ignores. */
+  issueListRows?: number;
 }) {
   return (
     // The web root renders in StrictMode, which re-runs ref callbacks on every mount.
@@ -114,6 +122,9 @@ function Card({
                   data-thread-details-server-overflow
                   style={{ height: serverOverflowRows * 100 }}
                 />
+              ) : null}
+              {issueListRows > 0 ? (
+                <div data-thread-details-issue-list style={{ height: issueListRows * 100 }} />
               ) : null}
             </>
           )}

@@ -13,7 +13,6 @@ import {
 } from "@t3tools/contracts";
 import { AcpRegistrySettings } from "../settings.ts";
 import * as SecureRandom from "effect/crypto/SecureRandom";
-import * as Clock from "effect/Clock";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -53,9 +52,10 @@ const COMMAND_ADVERTISEMENT_GRACE = "500 millis";
 // Agents that fetch their catalog after session setup (Qoder CLI, OpenCode)
 // settle it in seconds, not milliseconds; commands arrive much sooner.
 const MODEL_ADVERTISEMENT_GRACE = "5 seconds";
-const PROBE_SESSION_DELETE_TIMEOUT_MS = 5_000;
-const MAX_MODEL_OPTION_PROBE_SWITCHES = 8;
-const MAX_MODEL_OPTION_PROBE_MS = 3_000;
+const PROBE_SESSION_DELETE_TIMEOUT = "5 seconds";
+const MODEL_DISCOVERY_BATCH_TIMEOUT = "30 seconds";
+// Large catalogs list well over a hundred models; batches let the picker fill in as they finish.
+const MODEL_DISCOVERY_BATCH_SIZE = 24;
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 const boundedText = (value: string, maximumLength: number): string =>
@@ -218,14 +218,20 @@ export interface AcpRegistryLiveConfiguration {
   readonly modelsFromModelSelect?: boolean;
 }
 
-const isModelScopedOption = (option: EffectAcpSchema.SessionConfigOption): boolean =>
-  isAcpThoughtLevelOption(option) || option.category === "model_config";
+export function acpRegistryLiveCatalogKey(
+  configuration: Pick<AcpRegistryLiveConfiguration, "models" | "modelsFromModelSelect">,
+): string {
+  if (configuration.models.length === 0) return "";
+  return `${configuration.modelsFromModelSelect ? "select" : "list"}:${configuration.models
+    .map((model) => `${model.id}\0${model.name}`)
+    .join("\u001f")}`;
+}
 
 export function normalizeAcpRegistryLiveConfiguration(
   configOptions: ReadonlyArray<EffectAcpSchema.SessionConfigOption>,
   modeState?: Parameters<typeof acpProviderOptionDescriptors>[0]["modeState"],
   modelState?: EffectAcpSchema.SessionModelState | null,
-  configOptionsReported = false,
+  options?: { readonly includeCatalog?: boolean },
 ): AcpRegistryLiveConfiguration {
   const modelOption = findModelConfigOption(configOptions);
   const currentModelId =
@@ -258,81 +264,23 @@ export function normalizeAcpRegistryLiveConfiguration(
   });
   const descriptors = acpProviderOptionDescriptors({ configOptions, modeState });
   const modelOptionIds = new Set(
-    configOptions.filter(isModelScopedOption).map((option) => option.id),
+    configOptions
+      .filter((option) => isAcpThoughtLevelOption(option) || option.category === "model_config")
+      .map((option) => option.id),
   );
-  const scoped = descriptors.filter((descriptor) => modelOptionIds.has(descriptor.id));
+  const includeCatalog = options?.includeCatalog !== false;
   return {
-    models: models.map((model) =>
-      model.id === boundedCurrentModelId && (configOptionsReported || configOptions.length > 0)
-        ? { ...model, configOptions: scoped }
-        : model,
-    ),
+    models: includeCatalog ? models : [],
     currentModelId: models.some((model) => model.id === boundedCurrentModelId)
       ? boundedCurrentModelId
       : null,
     configOptions: descriptors,
-    modelOptionIds: scoped.map((descriptor) => descriptor.id),
-    modelsFromModelSelect: modelOption !== undefined,
+    modelOptionIds: descriptors
+      .filter((descriptor) => modelOptionIds.has(descriptor.id))
+      .map((descriptor) => descriptor.id),
+    modelsFromModelSelect: includeCatalog && modelOption !== undefined,
   };
 }
-
-const probeAcpRegistryModelOptions = Effect.fn("AcpRegistryProbe.probeModelOptions")(function* (
-  runtime: AcpSessionRuntime.AcpSessionRuntime["Service"],
-  configuration: AcpRegistryLiveConfiguration,
-  modelOption: ReturnType<typeof findModelConfigOption>,
-  progress: AcpRegistryConfigurationProbeInput["modelOptionProgress"],
-  budgetMs: number,
-) {
-  if (
-    modelOption === undefined ||
-    configuration.currentModelId === null ||
-    (!configuration.modelOptionIds?.length && !progress?.hasScopedOptions) ||
-    budgetMs <= 0
-  ) {
-    return { configuration };
-  }
-  const models = configuration.models.filter((model) => model.id !== configuration.currentModelId);
-  const lastIndex = models.findIndex((model) => model.id === progress?.lastAttemptedModelId);
-  const rotated = [...models.slice(lastIndex + 1), ...models.slice(0, lastIndex + 1)];
-  const known = progress?.knownModelIds;
-  // Rotate even when a switch fails so early rejected models cannot stall discovery.
-  const candidates = [
-    ...rotated.filter((model) => !known?.has(model.id)),
-    ...rotated.filter((model) => known?.has(model.id)),
-  ].slice(0, MAX_MODEL_OPTION_PROBE_SWITCHES);
-  const modelOptions = new Map<string, AcpRegistryLiveConfiguration["configOptions"]>();
-  let lastAttemptedModelId: string | undefined;
-  yield* Effect.gen(function* () {
-    for (const model of candidates) {
-      lastAttemptedModelId = model.id;
-      const switched = yield* runtime.setConfigOption(modelOption.id, model.id).pipe(Effect.option);
-      if (Option.isNone(switched)) continue;
-      const latest = yield* runtime.getConfigOptions;
-      const reported =
-        findModelConfigOption(latest)?.currentValue === model.id
-          ? latest
-          : switched.value.configOptions;
-      if (findModelConfigOption(reported)?.currentValue !== model.id) continue;
-      modelOptions.set(
-        model.id,
-        acpProviderOptionDescriptors({
-          configOptions: reported.filter(isModelScopedOption),
-          modeState: undefined,
-        }),
-      );
-    }
-  }).pipe(Effect.timeoutOption(budgetMs));
-  return {
-    configuration: {
-      ...configuration,
-      models: configuration.models.map((model) => {
-        const configOptions = modelOptions.get(model.id);
-        return configOptions === undefined ? model : { ...model, configOptions };
-      }),
-    },
-    lastAttemptedModelId,
-  };
-});
 
 const emptyAcpRegistryAvailableCommands = (): AcpRegistryAvailableCommands => ({
   slashCommands: [],
@@ -398,7 +346,6 @@ export function acpRegistryProbeResult(
       started.sessionSetupResult.configOptions ?? [],
       parseSessionModeState(started.sessionSetupResult),
       started.sessionSetupResult.models,
-      started.sessionSetupResult.configOptions != null,
     );
   return AcpRegistryProbeResult.make({
     instanceId,
@@ -440,31 +387,100 @@ export function acpRegistryProbeFailure(
   });
 }
 
+/**
+ * Agents report model-specific options only for the session's current model, so the
+ * probe opens each requested model once in its session to read them.
+ */
+export interface AcpRegistryModelDiscovery {
+  /**
+   * Publishes the probe result with what discovery has learned so far and answers the models
+   * still to open, in priority order; asked again after each batch until none are left.
+   */
+  readonly onProbed: (
+    result: AcpRegistryConfigurationProbeResult,
+  ) => Effect.Effect<ReadonlyArray<string>>;
+  readonly onDiscovered: (configuration: AcpRegistryLiveConfiguration) => Effect.Effect<void>;
+}
+
 export interface AcpRegistryConfigurationProbeInput {
   readonly instanceId: ProviderInstanceId;
   readonly settings: AcpRegistrySettings;
   readonly cwd: string;
   readonly environment: NodeJS.ProcessEnv;
-  readonly modelOptionProgress?: {
-    readonly knownModelIds: ReadonlySet<string>;
-    readonly hasScopedOptions: boolean;
-    readonly lastAttemptedModelId: string | undefined;
-  };
+  readonly modelDiscovery?: AcpRegistryModelDiscovery;
 }
 
 type AcpRegistryManagementInput = AcpRegistryConfigurationProbeInput;
 
 export interface AcpRegistryConfigurationProbeResult {
-  readonly agentVersion?: string;
   readonly probe: AcpRegistryProbeResult;
   readonly slashCommands: ReadonlyArray<ServerProviderSlashCommand>;
   readonly skills: ReadonlyArray<ServerProviderSkill>;
-  readonly lastAttemptedModelId?: string;
+  readonly modelsFromModelSelect?: boolean;
 }
 
 export type AcpRegistryConfigurationProbe<Requirements = never> = (
   input: AcpRegistryConfigurationProbeInput,
 ) => Effect.Effect<AcpRegistryConfigurationProbeResult, AcpRegistryOperationError, Requirements>;
+
+const discoverAcpRegistryModelOptions = Effect.fn("AcpRegistryProbe.discoverModelOptions")(
+  function* (
+    runtime: AcpSessionRuntime.AcpSessionRuntime["Service"],
+    originalModelId: string | null,
+    result: AcpRegistryConfigurationProbeResult,
+    discovery: AcpRegistryModelDiscovery,
+  ) {
+    const modelOption = findModelConfigOption(yield* runtime.getConfigOptions);
+    if (modelOption === undefined || originalModelId === null) return;
+    const offered = new Set(flattenSelectChoices(modelOption.options).map(({ value }) => value));
+    const attempted = new Set([originalModelId]);
+    const discoverBatches = Effect.gen(function* () {
+      // Each answer is a bounded batch; asking again after it publishes progress and
+      // continues, and every model is tried at most once per probe.
+      while (true) {
+        const modelIds = (yield* discovery.onProbed(result))
+          .filter((modelId) => !attempted.has(modelId) && offered.has(modelId))
+          .slice(0, MODEL_DISCOVERY_BATCH_SIZE);
+        if (modelIds.length === 0) return;
+        for (const modelId of modelIds) attempted.add(modelId);
+        const finished = yield* Effect.forEach(
+          modelIds,
+          (modelId) =>
+            runtime.setConfigOption(modelOption.id, modelId).pipe(
+              Effect.andThen(Effect.all([runtime.getConfigOptions, runtime.getModeState])),
+              Effect.flatMap(([configOptions, modeState]) => {
+                const configuration = normalizeAcpRegistryLiveConfiguration(
+                  configOptions,
+                  modeState,
+                );
+                return configuration.currentModelId === modelId
+                  ? discovery.onDiscovered(configuration)
+                  : Effect.void;
+              }),
+              // A model the agent refuses keeps no options; the rest still count.
+              Effect.ignore,
+            ),
+          { discard: true },
+        ).pipe(Effect.timeoutOption(MODEL_DISCOVERY_BATCH_TIMEOUT));
+        // An agent too slow for one batch is left for a later probe.
+        if (Option.isNone(finished)) return;
+      }
+    });
+    yield* discoverBatches.pipe(
+      // Some agents save the selected model as the user's default. A switch that timed out
+      // may still have landed while the runtime reports the original, so always resend.
+      Effect.ensuring(
+        Effect.suspend(() =>
+          attempted.size === 1
+            ? Effect.void
+            : runtime
+                .setConfigOption(modelOption.id, originalModelId, { resendCurrentValue: true })
+                .pipe(Effect.timeoutOption(PROBE_SESSION_DELETE_TIMEOUT), Effect.ignore),
+        ),
+      ),
+    );
+  },
+);
 
 const isolateDeepSeekProbeHistory = Effect.fn("AcpRegistryProbe.isolateDeepSeekProbeHistory")(
   function* (commandPath: string, spawn: AcpSessionRuntime.AcpSpawnInput) {
@@ -498,17 +514,7 @@ const isolateDeepSeekProbeHistory = Effect.fn("AcpRegistryProbe.isolateDeepSeekP
 );
 
 export const probeAcpRegistryConfiguration = Effect.fn("AcpRegistryProbe.probeConfiguration")(
-  function* (
-    input: AcpRegistryConfigurationProbeInput,
-  ): Effect.fn.Return<
-    AcpRegistryConfigurationProbeResult,
-    AcpRegistryOperationError,
-    | AcpRegistrySupport.AcpRegistryCatalog
-    | ChildProcessSpawner.ChildProcessSpawner
-    | FileSystem.FileSystem
-    | Path.Path
-    | SecureRandom.SecureRandom
-  > {
+  function* (input: AcpRegistryConfigurationProbeInput) {
     const catalog = yield* AcpRegistrySupport.AcpRegistryCatalog;
     const probeTimeoutMs = resolveProviderProbeTimeoutMs(
       "acp_registry",
@@ -519,12 +525,12 @@ export const probeAcpRegistryConfiguration = Effect.fn("AcpRegistryProbe.probeCo
     const random = yield* SecureRandom.SecureRandom;
     const pty = yield* Effect.serviceOption(PtyAdapter.PtyAdapter);
 
-    const result = yield* Effect.gen(function* () {
-      const probeStartedAt = yield* Clock.currentTimeMillis;
-      // Resolution may install packages; bound it by the probe deadline.
-      const resolved = yield* catalog
-        .resolve(input.settings, input.cwd, input.environment)
-        .pipe(Effect.mapError(AcpRegistrySupport.toAcpRegistryOperationError));
+    // Downloads and package installs have their own bounded timeouts inside AcpRegistryCatalog.
+    const resolved = yield* catalog
+      .resolve(input.settings, input.cwd, input.environment)
+      .pipe(Effect.mapError(AcpRegistrySupport.toAcpRegistryOperationError));
+
+    const openSession = Effect.gen(function* () {
       const spawn = yield* isolateDeepSeekProbeHistory(
         input.settings.commandPath,
         resolved.spawn,
@@ -647,7 +653,7 @@ export const probeAcpRegistryConfiguration = Effect.fn("AcpRegistryProbe.probeCo
       yield* Effect.addFinalizer(() =>
         runtime
           .deleteSession(started.sessionId)
-          .pipe(Effect.timeoutOption(PROBE_SESSION_DELETE_TIMEOUT_MS), Effect.ignore),
+          .pipe(Effect.timeoutOption(PROBE_SESSION_DELETE_TIMEOUT), Effect.ignore),
       );
       const hasInitialModels = acpRegistryAdvertisesModelCatalog(
         started.sessionSetupResult.configOptions,
@@ -669,85 +675,70 @@ export const probeAcpRegistryConfiguration = Effect.fn("AcpRegistryProbe.probeCo
       );
 
       // config_option_update replaces the full option set, so an empty notice is authoritative.
-      const notifiedConfigOptions = yield* Ref.get(configOptionsRef);
-      const configOptions = notifiedConfigOptions ?? (yield* runtime.getConfigOptions);
-      const configuration = normalizeAcpRegistryLiveConfiguration(
-        configOptions,
+      const liveConfiguration = normalizeAcpRegistryLiveConfiguration(
+        (yield* Ref.get(configOptionsRef)) ?? (yield* runtime.getConfigOptions),
         (yield* runtime.getModeState) ?? parseSessionModeState(started.sessionSetupResult),
         started.sessionSetupResult.models,
-        notifiedConfigOptions !== undefined || started.sessionSetupResult.configOptions != null,
       );
-      // Only switch models if this probe session can be deleted.
-      const modelProbe =
-        started.initializeResult.agentCapabilities?.sessionCapabilities?.delete != null
-          ? yield* probeAcpRegistryModelOptions(
-              runtime,
-              configuration,
-              findModelConfigOption(configOptions),
-              input.modelOptionProgress,
-              Math.min(
-                MAX_MODEL_OPTION_PROBE_MS,
-                probeStartedAt +
-                  probeTimeoutMs -
-                  (yield* Clock.currentTimeMillis) -
-                  PROBE_SESSION_DELETE_TIMEOUT_MS,
-              ),
-            )
-          : { configuration };
 
       return {
         resolved,
         started,
         commands: yield* Ref.get(commandsRef),
-        modelProbe,
+        liveConfiguration,
+        runtime,
       };
     }).pipe(
-      Effect.scoped,
       Effect.timeoutOrElse({
         duration: probeTimeoutMs,
         orElse: () =>
           Effect.fail(
             new AcpRegistryOperationError({
               reason: "probe_failed",
-              message: `The ACP agent did not resolve and create a test session within ${probeTimeoutMs / 1_000} seconds. Package installation or agent startup may be slow; this check retries on the next provider refresh.`,
+              message: `The ACP agent did not create a test session within ${probeTimeoutMs / 1_000} seconds. Agent startup may be slow; this check retries on the next provider refresh.`,
             }),
           ),
       }),
+    );
+    return yield* Effect.gen(function* () {
+      const session = yield* openSession;
+      const result: AcpRegistryConfigurationProbeResult = {
+        probe: acpRegistryProbeResult(
+          input.instanceId,
+          session.started,
+          session.resolved.agent?.icon ?? null,
+          {
+            command: session.resolved.spawn.command,
+            args: session.resolved.spawn.args,
+          },
+          session.liveConfiguration,
+        ),
+        slashCommands: session.commands.slashCommands,
+        skills: session.commands.skills,
+        modelsFromModelSelect: session.liveConfiguration.modelsFromModelSelect === true,
+      };
+      // Runs in the probe session before it is deleted, outside the setup deadline.
+      if (input.modelDiscovery !== undefined) {
+        yield* discoverAcpRegistryModelOptions(
+          session.runtime,
+          session.liveConfiguration.currentModelId,
+          result,
+          input.modelDiscovery,
+        );
+      }
+      return result;
+    }).pipe(
       Effect.mapError((error) =>
         error._tag === "AcpRegistryOperationError" ? error : acpRegistryProbeFailure(error),
       ),
     );
-    return {
-      ...(result.started.initializeResult.agentInfo?.version
-        ? {
-            agentVersion: boundedText(
-              result.started.initializeResult.agentInfo.version,
-              MAX_ID_LENGTH,
-            ),
-          }
-        : {}),
-      probe: acpRegistryProbeResult(
-        input.instanceId,
-        result.started,
-        result.resolved.agent?.icon ?? null,
-        {
-          command: result.resolved.spawn.command,
-          args: result.resolved.spawn.args,
-        },
-        result.modelProbe.configuration,
-      ),
-      ...(result.modelProbe.lastAttemptedModelId === undefined
-        ? {}
-        : { lastAttemptedModelId: result.modelProbe.lastAttemptedModelId }),
-      slashCommands: result.commands.slashCommands,
-      skills: result.commands.skills,
-    };
   },
+  Effect.scoped,
 );
 
 const MANAGEMENT_TIMEOUT = Duration.seconds(60);
 
-const makeAcpRegistryManagementRuntime = Effect.fn("AcpRegistryProbe.makeManagementRuntime")(
+export const makeAcpRegistryManagementRuntime = Effect.fn("AcpRegistryProbe.makeManagementRuntime")(
   function* (input: AcpRegistryManagementInput) {
     const catalog = yield* AcpRegistrySupport.AcpRegistryCatalog;
     const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;

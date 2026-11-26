@@ -1,3 +1,4 @@
+import { WorkflowRunsAbout } from "../workflows/WorkflowRunsAbout";
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import { issueEventSentence, issueWriteAccess } from "@t3tools/client-runtime/issue-presentation";
 import { createIssueCommentPager } from "@t3tools/client-runtime/state/issues";
@@ -825,6 +826,13 @@ export function IssueDetailPanel({
               />
             </div>
           ) : null}
+          <WorkflowRunsAbout
+            environmentId={environmentId}
+            item={{
+              subject: detail.url,
+              issue: { ...reference, host: reference.host ?? detail.host },
+            }}
+          />
           <WorkItemFacts
             facts={[
               detail.labels.length > 0 || detail.capabilities.labels

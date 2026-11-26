@@ -1275,7 +1275,7 @@ export default function DiffPanel({
                   <span className="flex min-w-0 items-center gap-3">
                     <span className="min-w-0 truncate">{section.name}</span>
                     {section.relativePath !== "" && section.relativePath !== section.name ? (
-                      <span className="ml-auto min-w-0 truncate text-xs text-muted-foreground">
+                      <span className="ml-auto min-w-0 truncate text-meta text-muted-foreground">
                         {section.relativePath}
                       </span>
                     ) : null}
@@ -1604,6 +1604,18 @@ export default function DiffPanel({
                   description={gt("There is nothing to show for this selection.")}
                 />
               )
+            ) : shownFileEntries.length === 0 && testFileCount > 0 ? (
+              <div className="flex h-full flex-wrap items-center justify-center gap-2 px-3 py-2 text-meta text-muted-foreground/70">
+                <p>
+                  {gt(
+                    "{count, plural, one {{count} test file hidden} other {{count} test files hidden}}",
+                    { count: testFileCount },
+                  )}
+                </p>
+                <InlineButton onClick={() => setHideTestFiles(false)}>
+                  {gt("Show test files")}
+                </InlineButton>
+              </div>
             ) : lazySource || renderablePatch?.kind === "files" ? (
               <div className="flex min-h-0 flex-1 overflow-hidden">
                 <div

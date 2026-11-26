@@ -39,6 +39,8 @@ Review the selected release and both merge layers. Inspect
 their intent. If code moved, reapply the intent where it moved; never drop a
 patch to resolve a conflict. Run focused tests and affected package typechecks.
 Branches move forward by merges, never rebases or force-pushes.
+KSG databases already recorded Captain migrations 112–115. When syncing later
+upstream migrations, add four to the upstream ID in the filename and manifest.
 
 Only after approval, push `upstream`, `ksg/passthrough`, and `ksg/dev`.
 Pushing `ksg/dev` can publish a release; it is not just a source backup.

@@ -428,7 +428,7 @@ export function HtmlRenderTimelineRow({
 
   if (ctx.renderHtmlRender) {
     return (
-      <div className="min-w-0 rounded-xl border border-transparent px-1 duet:border-(--duet-hairline)">
+      <div className="html-preview-lane min-w-0 rounded-xl border border-transparent px-1 duet:border-(--duet-hairline)">
         {ctx.renderHtmlRender(row)}
       </div>
     );

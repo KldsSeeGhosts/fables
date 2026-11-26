@@ -92,6 +92,17 @@ describe("V2 preview upgrade", () => {
         [110, "Workflows"],
         [111, "SupersededRunAttemptIndex"],
         [112, "Captains"],
+        [113, "CaptainCoordinatorOnly"],
+        [114, "CaptainConversationEndReasons"],
+        [115, "CaptainRolloverResends"],
+        [116, "LayoutCommandApprovals"],
+        [117, "WorkflowSkippedRuns"],
+        [118, "WorkflowRunIndexes"],
+        [119, "WorkflowRunTags"],
+        [120, "ForkHistoryMembership"],
+        [121, "WorkflowMailSender"],
+        [122, "WorkflowPools"],
+        [123, "WorkflowRunSubject"],
       ]);
       assert.deepStrictEqual(yield* runMigrations(), []);
       assert.deepStrictEqual(yield* sql`SELECT * FROM orchestration_v2_legacy_imports`, imports);
@@ -227,6 +238,17 @@ describe("V2 preview upgrade", () => {
         [110, "Workflows"],
         [111, "SupersededRunAttemptIndex"],
         [112, "Captains"],
+        [113, "CaptainCoordinatorOnly"],
+        [114, "CaptainConversationEndReasons"],
+        [115, "CaptainRolloverResends"],
+        [116, "LayoutCommandApprovals"],
+        [117, "WorkflowSkippedRuns"],
+        [118, "WorkflowRunIndexes"],
+        [119, "WorkflowRunTags"],
+        [120, "ForkHistoryMembership"],
+        [121, "WorkflowMailSender"],
+        [122, "WorkflowPools"],
+        [123, "WorkflowRunSubject"],
       ]);
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );

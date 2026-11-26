@@ -1,3 +1,5 @@
+import { useOpenLink } from "~/browser/useOpenLink";
+import type { ScopedThreadRef } from "@t3tools/contracts";
 import type { PullRequestActor } from "@t3tools/contracts";
 import { T, useGT, useMessages } from "gt-react";
 import {
@@ -26,11 +28,14 @@ import {
 export function PullRequestCommentTime({
   createdAt,
   url,
+  threadRef,
 }: {
+  threadRef?: ScopedThreadRef | null;
   createdAt: string;
   url: string | null;
 }) {
   const gt = useGT();
+  const openLink = useOpenLink(threadRef);
   const timestampFormat = useClientSettings((settings) => settings.timestampFormat);
   return (
     <Tooltip>
@@ -40,6 +45,10 @@ export function PullRequestCommentTime({
             <InlineButton
               tone="muted"
               render={<a href={url} target="_blank" rel="noopener noreferrer" />}
+              onClick={(event) => {
+                event.preventDefault();
+                void openLink(url, { event }).catch(console.error);
+              }}
             />
           ) : (
             <span className="text-muted-foreground" />

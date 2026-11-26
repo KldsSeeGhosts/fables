@@ -1,3 +1,4 @@
+import { useChatCanvas } from "./ChatCanvasContext";
 import { T, useGT, useMessages, Var } from "gt-react";
 import type { SideThreadOpenIntent } from "@t3tools/client-runtime/side-thread";
 import { resolveThreadToolCallVisibility } from "@t3tools/client-runtime/tool-call-visibility";
@@ -166,7 +167,7 @@ import {
   resolveTimelineMinimapCurrentIndex,
   isTimelineMinimapTurnVisible,
   resolveTimelineMinimapVisibleRange,
-  resolveTimelineMinimapHitStripWidth,
+  resolveTimelineMinimapHitStrip,
   TIMELINE_MINIMAP_TARGET_OFFSET,
   timelineTurnFoldRunIdsByEntryId,
   liveAnswerPreview,
@@ -242,6 +243,15 @@ const TIMELINE_TOP_INSET = <div className="h-[var(--timeline-top-inset,0px)]" />
 const TIMELINE_LIST_FADE_HEADER = (
   <div className="h-[var(--workspace-titlebar-scroll-fade-height)]" />
 );
+// A floating preview over the lower half of a narrow chat covers the timeline's last rows,
+// so the end must scroll them above it as it does for the composer.
+function resolveTimelineEndInset(composerInset: number, canvas: ReturnType<typeof useChatCanvas>) {
+  const frame = canvas?.layout.overlapsChat ? canvas.layout.frame : null;
+  const height = canvas?.container.height ?? 0;
+  if (!frame || frame.y + frame.height / 2 < height / 2) return composerInset;
+  return Math.max(composerInset, Math.ceil(height - frame.y));
+}
+
 function TimelineListFooter({
   composerInset,
   onGrow,
@@ -522,7 +532,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   anchorMessageId,
   onAnchorReady,
   onAnchorSizeChanged,
-  contentInsetEndAdjustment,
+  contentInsetEndAdjustment: composerInsetEnd,
   onIsAtEndChange,
   liveFollowEnabled,
   onViewportAttach,
@@ -535,6 +545,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
   const gt = useGT();
   const layoutPaneFocusedRef = useLayoutPaneFocusedRef();
   const pendingRequest = pendingRequestProp?.blocking === false ? null : pendingRequestProp;
+  const canvas = useChatCanvas();
+  const contentInsetEndAdjustment = resolveTimelineEndInset(composerInsetEnd, canvas);
   const listIdentityKey = displayThreadKey ?? routeThreadKey;
   // Snapshot restore positions on identity changes; ongoing scroll writes must not move them.
   // Find open at the opening is part of the snapshot: opening find later
@@ -1227,7 +1239,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
           ...(alwaysRenderIndices.length === 0 ? {} : { indices: alwaysRenderIndices }),
           ...(alwaysRenderKeys.length === 0 ? {} : { keys: alwaysRenderKeys }),
         };
-  const [minimapHitStripWidth, setMinimapHitStripWidth] = useState(0);
+  const [minimapHitStrip, setMinimapHitStrip] = useState({ left: 0, width: 0 });
   const [minimapCurrentIndex, setMinimapCurrentIndex] = useState<number | null>(null);
   const [minimapAtEnd, setMinimapAtEnd] = useState(false);
   const handleAnchorReady = (info: { anchorIndex: number | undefined }) => {
@@ -1413,18 +1425,19 @@ const ConversationTimeline = memo(function ConversationTimeline({
   };
 
   const measureTimelineGutter = (viewportElement: HTMLElement) => {
-    const viewportWidth = viewportElement.getBoundingClientRect().width;
-    const contentWidth =
-      viewportElement.querySelector<HTMLElement>("[data-timeline-root]")?.getBoundingClientRect()
-        .width ?? viewportWidth;
-    const nextHasPersistentGutter = resolveTimelineMinimapHasPersistentGutter(
-      viewportWidth,
-      contentWidth,
-    );
+    const lane = viewportElement.querySelector<HTMLElement>("[data-timeline-root]");
+    // ChatCanvas can shift the lane off center, so measure the gutter the minimap sits in.
+    const sideGutter = lane
+      ? lane.getBoundingClientRect().left - viewportElement.getBoundingClientRect().left
+      : 0;
+    const nextHasPersistentGutter = resolveTimelineMinimapHasPersistentGutter(sideGutter);
     setMinimapHasPersistentGutter((current) =>
       current === nextHasPersistentGutter ? current : nextHasPersistentGutter,
     );
-    setMinimapHitStripWidth(resolveTimelineMinimapHitStripWidth(viewportWidth, contentWidth));
+    const next = resolveTimelineMinimapHitStrip(sideGutter);
+    setMinimapHitStrip((current) =>
+      current.left === next.left && current.width === next.width ? current : next,
+    );
     setTopInset(readTimelineTopInset(listRef.current?.getScrollableNode()));
   };
   // Rows added, removed or rewrapped (chat width) change the content size,
@@ -1437,16 +1450,17 @@ const ConversationTimeline = memo(function ConversationTimeline({
     }
     handleScroll();
   });
-  // The content lane only changes width with the viewport or the chat width
-  // setting, never with streamed content; measuring per content frame would
-  // force a layout on every chunk.
-  const measuredLaneWidthRef = useRef<number | null>(null);
+  // The content lane only moves or changes width with the viewport, the chat
+  // width setting or the canvas insets (which resize its row frame), never with
+  // streamed content; measuring per content frame would force a layout on every chunk.
+  const measuredLaneWidthRef = useRef<string | null>(null);
   const observeLaneWidth = (lane: HTMLDivElement | null) => {
-    if (!lane) return;
-    return observeResize(lane, (entries) => {
-      const width = entries.at(-1)?.contentRect.width;
-      if (width === undefined || width === measuredLaneWidthRef.current) return;
-      measuredLaneWidthRef.current = width;
+    const frame = lane?.parentElement;
+    if (!lane || !frame) return;
+    return observeResize([frame, lane], () => {
+      const widths = `${frame.clientWidth}:${lane.clientWidth}`;
+      if (widths === measuredLaneWidthRef.current) return;
+      measuredLaneWidthRef.current = widths;
       const viewportElement = lane.closest<HTMLElement>("[data-assistant-citation-viewport]");
       if (viewportElement) measureTimelineGutter(viewportElement);
     });
@@ -2025,7 +2039,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
                   <TimelineMinimap
                     items={minimapItems}
                     hasPersistentGutter={minimapHasPersistentGutter}
-                    hitStripWidth={minimapHitStripWidth}
+                    hitStrip={minimapHitStrip}
                     currentIndex={minimapCurrentIndex}
                     atEnd={minimapAtEnd}
                     stripMap={minimapStripMap}

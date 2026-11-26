@@ -47,6 +47,8 @@ export function PullRequestReviewForm({
   reference,
   completionScope,
   verdict,
+  headSha,
+  onRefused,
   term,
   requestChangesSummaryRequired,
   textareaRef,
@@ -60,6 +62,8 @@ export function PullRequestReviewForm({
   reference: PullRequestRef;
   completionScope: PullRequestCompletionScope | null;
   verdict: PullRequestReviewVerdict;
+  headSha?: string | undefined;
+  onRefused?: (() => void) | undefined;
   term: ChangeRequestTermKind;
   requestChangesSummaryRequired: boolean;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
@@ -102,6 +106,7 @@ export function PullRequestReviewForm({
       environmentId,
       input: {
         ...reference,
+        ...(headSha === undefined ? {} : { expectedHeadSha: headSha }),
         verdict,
         body: submittedBody,
         comments: submittedComments,
@@ -117,6 +122,7 @@ export function PullRequestReviewForm({
           m(msg("The host refused the review. Your draft is still here to try again.")),
         ),
       });
+      onRefused?.();
       return;
     }
     // Preserve comments and summary edits made during submission.

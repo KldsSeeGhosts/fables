@@ -24,6 +24,7 @@ import { isModelPickerOpen } from "../modelPickerVisibility";
 import {
   planNextReopen,
   closedChatTarget,
+  issuesSearchForRestore,
   pullRequestsSearchForRestore,
   reopenClosedView,
 } from "../reopenClosedView";
@@ -58,6 +59,7 @@ import { readIssueListPreferences } from "./issue/issueListPreferences";
 import { findLayoutTabByContent, isLayoutPageContent } from "../layout/layoutModel";
 import { useLayoutStore } from "../layout/layoutStore";
 import { layoutPageHref } from "../layout/pageNavigation";
+import { readPullRequestListPreferences } from "./pullRequest/pullRequestListPreferences";
 
 declare module "@tanstack/react-router" {
   interface HistoryState {
@@ -204,10 +206,17 @@ export function ReopenClosedViewShortcut() {
       );
       destination = linkOptions({
         to: "/pull-requests",
-        search: (previous) => pullRequestsSearchForRestore(previous, selected),
+        search: pullRequestsSearchForRestore(readPullRequestListPreferences(), selected),
       });
     } else if (globalIssues) {
-      destination = linkOptions({ to: "/issues", search: readIssueListPreferences() });
+      const selected = selectSelectedRightPanelSurface(
+        useRightPanelStore.getState().byThreadKey,
+        ref,
+      );
+      destination = linkOptions({
+        to: "/issues",
+        search: issuesSearchForRestore(readIssueListPreferences(), selected),
+      });
     } else if (!isThreadlessSurfacesRef(ref)) {
       // A threadless surface has no route; its tab shows it.
       const draftId = thread === null ? drafts.getDraftIdByRef(ref) : null;

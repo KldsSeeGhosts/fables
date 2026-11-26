@@ -96,7 +96,11 @@ function KeyLink({
           render={
             <InlineButton
               tone={null}
-              onClick={(event) => void openLink(subject.url, { event }).catch(console.error)}
+              render={<a href={subject.url} target="_blank" rel="noopener noreferrer" />}
+              onClick={(event) => {
+                event.preventDefault();
+                void openLink(subject.url, { event }).catch(console.error);
+              }}
               onAuxClick={(event) => {
                 if (event.button === 1) void openLink(subject.url, { event }).catch(console.error);
               }}

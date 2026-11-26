@@ -761,7 +761,7 @@ export function ThemeEditorPanel({
       shouldDisarmAfterClick = false;
     };
     const cancelInspection = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" || event.isComposing || event.keyCode === 229) return;
       if (
         event.target instanceof Element &&
         event.target.closest("[data-theme-editor-panel][data-slot=popover-popup]")
@@ -1182,8 +1182,17 @@ export function ThemeEditorPanel({
           <InputGroupInput
             aria-label={gt("Filter colors")}
             onChange={(event) => setRoleQuery(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape" || !roleQuery) return;
+              if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+              if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+              event.preventDefault();
+              event.stopPropagation();
+              setRoleQuery("");
+            }}
             placeholder={gt("Filter colors")}
-            type="search"
+            type="text"
+            role="searchbox"
             value={roleQuery}
           />
         </InputGroup>
@@ -1342,8 +1351,8 @@ export function ThemeEditorPanel({
           // Escape a popover or the inspector consumed, or one from a portaled popup, stays theirs.
           if (event.key !== "Escape" || event.defaultPrevented) return;
           if (!(event.target instanceof Node && event.currentTarget.contains(event.target))) return;
-          event.preventDefault();
           event.stopPropagation();
+          if (event.repeat || event.nativeEvent.isComposing || event.keyCode === 229) return;
           onOpenChange(false);
         }}
         style={{

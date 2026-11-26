@@ -98,7 +98,8 @@ export type PreviewStreamInput =
   | { readonly type: "history"; readonly delta: -1 | 1 }
   | { readonly type: "reload"; readonly ignoreCache?: boolean }
   | { readonly type: "stopLoading" }
-  | { readonly type: "probe"; readonly x: number; readonly y: number };
+  | { readonly type: "probe"; readonly x: number; readonly y: number }
+  | { readonly type: "selectMenu"; readonly id: string; readonly index: number };
 
 export interface PreviewStreamDownload {
   readonly fileName: string;
@@ -155,6 +156,27 @@ export const previewStreamDownloadUrl = (
     target.access,
   );
 
+/** A native select the controller pressed; answer with a `selectMenu` input. Box in page CSS px. */
+export interface PreviewStreamSelectMenu {
+  readonly id: string;
+  readonly options: ReadonlyArray<{ readonly label: string; readonly disabled: boolean }>;
+  readonly selectedIndex: number;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+const isSelectMenuOptions = (value: unknown): value is PreviewStreamSelectMenu["options"] =>
+  Array.isArray(value) &&
+  value.every(
+    (option) =>
+      typeof option === "object" &&
+      option !== null &&
+      typeof option.label === "string" &&
+      typeof option.disabled === "boolean",
+  );
+
 export interface PreviewStreamProbe {
   readonly x: number;
   readonly y: number;
@@ -200,6 +222,8 @@ export interface PreviewStreamEvents {
   readonly onDownload?: (download: PreviewStreamDownload) => void;
   readonly onPopup?: (tabId: string) => void;
   readonly onFileChooser?: (chooser: PreviewStreamFileChooser | null) => void;
+  /** `null` when the page withdraws the menu or the connection that offered it ends. */
+  readonly onSelectMenu?: (menu: PreviewStreamSelectMenu | null) => void;
   readonly onConnectedChange: (connected: boolean) => void;
   /** The upgrade was refused; refresh access and start a new client. */
   readonly onUnauthorized: () => void;
@@ -233,6 +257,7 @@ export function createPreviewStreamClient(
   let failures = 0;
   let control: PreviewStreamControl | null = null;
   let fileChooser: string | null = null;
+  let selectMenu: string | null = null;
 
   const clearReadyTimer = () => {
     if (readyTimer !== null) clearTimeout(readyTimer);
@@ -246,6 +271,12 @@ export function createPreviewStreamClient(
     if (fileChooser === null) return;
     fileChooser = null;
     events.onFileChooser?.(null);
+  };
+  // A menu's answer only reaches the server session that offered it.
+  const withdrawSelectMenu = () => {
+    if (selectMenu === null) return;
+    selectMenu = null;
+    events.onSelectMenu?.(null);
   };
 
   const connect = () => {
@@ -308,6 +339,8 @@ export function createPreviewStreamClient(
         phase,
         sequence,
         tabId,
+        options,
+        selectedIndex,
       } = message as Record<string, unknown>;
       if (
         type === "fileChooser" &&
@@ -322,6 +355,20 @@ export function createPreviewStreamClient(
           uploadUrl: previewStreamUploadUrl(target, id),
           credentials: target.access.credentials,
         });
+      } else if (
+        type === "selectMenu" &&
+        typeof id === "string" &&
+        isSelectMenuOptions(options) &&
+        typeof selectedIndex === "number" &&
+        typeof x === "number" &&
+        typeof y === "number" &&
+        typeof width === "number" &&
+        typeof height === "number"
+      ) {
+        selectMenu = id;
+        events.onSelectMenu?.({ id, options, selectedIndex, x, y, width, height });
+      } else if (type === "selectMenuClosed" && typeof id === "string") {
+        if (selectMenu === id) withdrawSelectMenu();
       } else if (type === "fileChooserClosed" && typeof id === "string") {
         if (fileChooser !== id) return;
         fileChooser = null;
@@ -385,6 +432,7 @@ export function createPreviewStreamClient(
       socket = null;
       control = null;
       withdrawFileChooser();
+      withdrawSelectMenu();
       if (opened) events.onConnectedChange(false);
       if (stopped) return;
       if (event.code === 4404) {
@@ -426,6 +474,7 @@ export function createPreviewStreamClient(
       socket = null;
       control = null;
       withdrawFileChooser();
+      withdrawSelectMenu();
       ws?.close();
     },
   };

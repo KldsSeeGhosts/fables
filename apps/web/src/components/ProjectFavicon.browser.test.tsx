@@ -9,6 +9,7 @@ import { ProjectFavicon, type ProjectFaviconProject } from "./ProjectFavicon";
 const state = vi.hoisted(() => ({
   favicon: undefined as Atom.Atom<string | null> | undefined,
   faviconByCwd: new Map<string, Atom.Atom<string | null>>(),
+  refresh: (() => {}) as () => void,
 }));
 vi.mock(import("../state/assets"), () => ({
   projectFaviconUrlAtom: ({ cwd }) => {
@@ -16,10 +17,12 @@ vi.mock(import("../state/assets"), () => ({
     if (!favicon) throw new Error("Favicon resource not configured");
     return favicon;
   },
+  refreshProjectFaviconUrl: () => state.refresh(),
 }));
 
 function setup() {
   state.faviconByCwd.clear();
+  state.refresh = () => {};
   const activeResources = new Set<string>();
   state.favicon = Atom.make((get) => {
     activeResources.add("favicon");

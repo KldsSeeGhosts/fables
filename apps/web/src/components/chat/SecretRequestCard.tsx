@@ -1,3 +1,4 @@
+import { flushSync } from "react-dom";
 import { pipe } from "effect/Function";
 import {
   secretRequestAnswerInput,
@@ -19,10 +20,11 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import type {
-  EnvironmentId,
-  OrchestrationV2ProjectedTurnItem,
-  SecretProviderId,
+import {
+  AuthProvidersManageScope,
+  type EnvironmentId,
+  type OrchestrationV2ProjectedTurnItem,
+  type SecretProviderId,
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { hasFeatureFlag } from "@t3tools/client-runtime/state/server";
@@ -40,6 +42,7 @@ import {
 import { useId, useRef, useState, type FormEvent, type MouseEvent } from "react";
 
 import { serverEnvironment } from "../../state/server";
+import { useEnvironmentScope } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { cn } from "../../lib/utils";
 import { Button, InlineButton } from "../ui/button";
@@ -124,7 +127,9 @@ function HostLink(props: { readonly href: string; readonly host: string }) {
 function useSecretRequestSources(environmentId: EnvironmentId) {
   const config = useAtomValue(serverEnvironment.configValueAtom(environmentId));
   const messages = useMessages();
-  return hasFeatureFlag(config, "secretProviders")
+  // The server accepts a reference answer only with this scope; without it the card is typed.
+  const canUseReferences = useEnvironmentScope(environmentId, AuthProvidersManageScope);
+  return canUseReferences && hasFeatureFlag(config, "secretProviders")
     ? secretRequestSources(config, config?.settings.secretProviders ?? {}, messages)
     : NO_SOURCES;
 }
@@ -366,7 +371,18 @@ function SecretRequestField(props: {
   const { input } = props;
   const gt = useGT();
   const [revealed, setRevealed] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const masked = input.secret && !revealed;
+  const toggleRevealed = () => {
+    const field = inputRef.current;
+    const start = field?.selectionStart ?? null;
+    const end = field?.selectionEnd ?? null;
+    flushSync(() => setRevealed((current) => !current));
+    // After a click changes a focused input's type, Chromium moves the caret to the
+    // start unless the new type is laid out before the selection is restored.
+    field?.getBoundingClientRect();
+    field?.setSelectionRange(start, end);
+  };
   const control = (
     <InputGroup>
       {props.prefix ? (
@@ -379,6 +395,7 @@ function SecretRequestField(props: {
         </InputGroupAddon>
       ) : null}
       <InputGroupInput
+        ref={inputRef}
         id={props.id}
         // A CSS-masked text field still exposes its value to screen readers.
         type={masked ? "password" : "text"}
@@ -407,7 +424,7 @@ function SecretRequestField(props: {
             disabled={props.disabled}
             // Keep focus, and the caret, in the input.
             onMouseDown={(event) => event.preventDefault()}
-            onClick={() => setRevealed((current) => !current)}
+            onClick={toggleRevealed}
           >
             {revealed ? <EyeOffIcon aria-hidden /> : <EyeIcon aria-hidden />}
           </Button>

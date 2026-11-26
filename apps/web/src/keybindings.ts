@@ -232,7 +232,8 @@ export function resolveShortcutCommand(
   }
 
   // Every scope resolves every keydown, so rule out other keys before the full match.
-  const eventKeys = resolveEventKeys(event);
+  const keyboardLayoutMap = options?.keyboardLayoutMap ?? getKeyboardLayoutMap();
+  const eventKeys = resolveEventKeys(event, keyboardLayoutMap);
   for (let index = keybindings.length - 1; index >= 0; index -= 1) {
     const binding = keybindings[index];
     if (!binding) continue;
@@ -243,7 +244,7 @@ export function resolveShortcutCommand(
         event,
         shortcutForContext(binding, context),
         platform,
-        options?.keyboardLayoutMap ?? getKeyboardLayoutMap(),
+        keyboardLayoutMap,
       )
     )
       continue;
@@ -416,6 +417,15 @@ export function isTerminalNewShortcut(
   options?: ShortcutMatchOptions,
 ): boolean {
   return matchesCommandShortcut(event, keybindings, "terminal.new", options);
+}
+
+export function isTerminalCycleShortcut(
+  event: ShortcutEventLike,
+  keybindings: ResolvedKeybindingsConfig,
+  options?: ShortcutMatchOptions,
+): boolean {
+  const command = resolveShortcutCommand(event, keybindings, options);
+  return command === "terminal.previous" || command === "terminal.next";
 }
 
 export function isTerminalCloseShortcut(

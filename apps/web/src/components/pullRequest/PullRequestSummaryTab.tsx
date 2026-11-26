@@ -1,3 +1,4 @@
+import { WorkflowRunsAbout } from "../workflows/WorkflowRunsAbout";
 import {
   parsePullRequestAnchor,
   pullRequestAnchorMatchesUrl,
@@ -1089,6 +1090,12 @@ export function PullRequestSummaryTab({
         }}
       >
         {readiness ? <section className="px-4 pt-0.75 pb-1">{readiness}</section> : null}
+        <div className="px-4">
+          <WorkflowRunsAbout
+            environmentId={environmentId}
+            item={{ subject: detail.url, pullRequest: reference }}
+          />
+        </div>
 
         <PullRequestSection
           key={`description:${detail.url}`}

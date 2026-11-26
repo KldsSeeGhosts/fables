@@ -293,6 +293,43 @@ it("opens a repository-relative file from a nested project without a remote", as
   ).toMatchObject({ activeSurfaceId: "file:back\\slash.txt" });
 });
 
+it("explains a branch diff whose only changes are hidden test files", async () => {
+  using context = setup("origin/orphan");
+  using _hideTestFiles = {
+    [Symbol.dispose]() {
+      window.localStorage.removeItem("t3code.diffHideTestFiles");
+    },
+  };
+  const path = "math.test.ts";
+  const metadata = preview();
+  const source = {
+    ...metadata.sources[0]!,
+    files: [{ path, previousPath: null, additions: 1, deletions: 0 }],
+  };
+  state.previews.set("main", Atom.make(AsyncResult.success({ ...metadata, sources: [source] })));
+  useDiffPanelStore.getState().selectBranchBaseRef(context.threadRef, "main");
+  await using screen = await render(
+    <RegistryContext.Provider value={context.registry}>
+      <div style={{ height: 600, display: "flex", flexDirection: "column" }}>
+        <DiffPanel composerDraftTarget={context.threadRef} workspaceMutationId={null} visible />
+      </div>
+    </RegistryContext.Provider>,
+  );
+  const file = screen.getByText(path, { exact: true });
+  const expectFileVisible = () =>
+    vi.waitFor(() =>
+      expect(file.elements().some((element) => element.checkVisibility())).toBe(true),
+    );
+  await expectFileVisible();
+  await userEvent.click(screen.getByRole("button", { name: "More diff actions" }));
+  await userEvent.click(page.getByRole("menuitemcheckbox", { name: "Hide test files" }));
+  await userEvent.keyboard("{Escape}");
+  await vi.waitFor(() => expect(file.elements()).toHaveLength(0));
+  await expect.element(screen.getByText("1 test file hidden", { exact: true })).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "Show test files", exact: true }));
+  await expectFileVisible();
+});
+
 it.each([false, true])(
   "expands an unloaded file on the first click with default collapse %s",
   async (collapsed) => {

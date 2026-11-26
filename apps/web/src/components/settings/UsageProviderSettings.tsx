@@ -63,7 +63,11 @@ export function UsageProviderSettings({
           entries.map(([id, source]) => {
             const label = source.label?.trim() || source.url;
             const providerName =
-              source.kind === "cpa-manager" ? gt("CPA Manager") : gt("CLI Proxy");
+              source.kind === "http"
+                ? gt("HTTP quota source")
+                : source.kind === "cpa-manager"
+                  ? gt("CPA Manager")
+                  : gt("CLI Proxy");
             return (
               <SettingsRow
                 key={id}
@@ -94,7 +98,9 @@ export function UsageProviderSettings({
       {adding && !readOnly ? (
         <AddUsageLimitSourceDialog
           open
-          onOpenChange={setAdding}
+          onOpenChange={(open) => {
+            if (!open) setAdding(false);
+          }}
           environmentId={environmentId}
           environmentLabel={environmentLabel}
           sources={sources}
@@ -126,11 +132,7 @@ function RemoveUsageProviderButton({
               </T>
             </AlertDialogTitle>
             <AlertDialogDescription>
-              <T>
-                The hub's management key is deleted from this server. Its accounts leave the Limits
-                view; the hub itself is untouched. Add it again with the URL and key to bring them
-                back.
-              </T>
+              <T>The saved connection and its credentials are removed from this environment.</T>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -144,7 +146,7 @@ function RemoveUsageProviderButton({
                 onConfirm();
               }}
             >
-              <T>Remove hub</T>
+              <T>Remove</T>
             </Button>
           </AlertDialogFooter>
         </AlertDialogPopup>

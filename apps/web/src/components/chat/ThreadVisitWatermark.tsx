@@ -3,16 +3,26 @@ import { useAtomMount } from "@effect/atom-react";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { createThreadVisitTracker } from "@t3tools/client-runtime/state/thread-visits";
 import { type ScopedThreadRef } from "@t3tools/contracts";
+import { Atom } from "effect/reactivity";
 
 import { environmentCatalog } from "../../connection/catalog";
+import { subscribeDocumentActivity } from "../../lib/documentActivity";
 import { useUiStateStore } from "../../uiStateStore";
 import { environmentThreadShells, threadEnvironment } from "../../state/threads";
 import { findLayoutTab, type LayoutTab } from "../../layout/layoutModel";
 import { useLayoutStore } from "../../layout/layoutStore";
 
+const isDocumentViewed = () => document.visibilityState === "visible" && document.hasFocus();
+
+const documentViewedAtom = Atom.make((get) => {
+  get.addFinalizer(subscribeDocumentActivity(() => get.setSelf(isDocumentViewed())));
+  return isDocumentViewed();
+}).pipe(Atom.withLabel("document-viewed"));
+
 function makeVisitTracker() {
   return createThreadVisitTracker({
     dispatchedVisits: new Map(),
+    viewingAtom: documentViewedAtom,
     threadShellAtom: environmentThreadShells.threadShellAtom,
     sessionGenerationAtom: environmentCatalog.sessionGenerationAtom,
     visit: threadEnvironment.visit,

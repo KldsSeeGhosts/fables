@@ -1,6 +1,8 @@
 import {
   FULL_ACCESS_OVERRIDE_QUESTION,
   fullAccessOverrideExplanation,
+  PUSH_HOOKS_APPROVAL_LABEL,
+  PUSH_HOOKS_APPROVAL_QUESTION,
 } from "@t3tools/client-runtime/state/thread-requests";
 import type {
   OrchestrationV2TurnItem,
@@ -40,6 +42,7 @@ import {
   DEFAULT_APPROVAL_OPTIONS,
   resolveApprovalPrimaryDecision,
 } from "./ComposerPendingApprovalActions";
+import { PushHooksApprovalDetails } from "./PushHooksApprovalDetails";
 import { TimelineApprovalCtx, TimelineRowCtx } from "./timelineRowContext";
 import { WorkLogRow, WorkLogTarget, WorkLogVerb } from "./WorkLog";
 
@@ -241,8 +244,9 @@ export function TimelineApprovalCard({
     return () => document.removeEventListener("keydown", handler);
   }, [canUseShortcuts, primary, decline, paneFocusedRef]);
 
-  const cardTitle = title ?? m(presentation.label);
-  const cardAriaLabel = ariaLabel ?? m(presentation.label);
+  const approvalLabel = approval.pushHooks ? m(PUSH_HOOKS_APPROVAL_LABEL) : m(presentation.label);
+  const cardTitle = title ?? approvalLabel;
+  const cardAriaLabel = ariaLabel ?? approvalLabel;
 
   return (
     <div
@@ -288,7 +292,12 @@ export function TimelineApprovalCard({
       </div>
 
       <div className="flex min-w-0 flex-col rounded-control surface-well">
-        {files.length > 0 ? (
+        {approval.pushHooks ? (
+          <div className="space-y-2 px-2.5 py-2">
+            <p className="text-foreground">{m(PUSH_HOOKS_APPROVAL_QUESTION)}</p>
+            <PushHooksApprovalDetails pushHooks={approval.pushHooks} />
+          </div>
+        ) : files.length > 0 ? (
           <>
             {detail ? (
               <div

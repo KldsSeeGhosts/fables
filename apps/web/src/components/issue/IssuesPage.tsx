@@ -527,7 +527,8 @@ export function IssuesPage() {
     if (panelSurface === null) return;
     event.preventDefault();
     event.stopPropagation();
-    if (!event.repeat) toggleRightPanel();
+    if (event.repeat) return;
+    toggleRightPanel();
   });
   const toggleRightPanelMaximizedFromShortcut = useEffectEvent((event: KeyboardEvent) => {
     if (!rightPanelState.isOpen) return;

@@ -34,7 +34,12 @@ import { ThreadDetailsControl } from "./ThreadDetailsControl";
 import { ContextWindowSegments } from "./ContextWindowMeter";
 import { contextWindowSegments } from "./compaction.logic";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
-import { nextPoolReset, poolSources, resolveThreadDetailsLimits } from "./ThreadDetailsUsage.logic";
+import {
+  nextPoolReset,
+  poolSources,
+  resolveThreadDetailsLimits,
+  resolveThreadHttpQuotas,
+} from "./ThreadDetailsUsage.logic";
 
 const USAGE_ROW_CLASS =
   "col-span-full grid min-w-0 grid-cols-subgrid items-center gap-x-1.5 text-meta";
@@ -70,15 +75,19 @@ export function ThreadDetailsUsage({
   const nowMinute = useNowMinute();
   const now = Date.parse(`${nowMinute}:00Z`);
   const resolved = resolveThreadDetailsLimits(providerInstanceId, model, providers, sources, now);
-  if (!resolved) return null;
+  const quotas = resolveThreadHttpQuotas(providerInstanceId, sources);
+  if (!resolved && quotas.length === 0) return null;
 
   return (
     <ThreadDetailsSection title={gt("Usage limits")} variant="usage">
-      {resolved.kind === "pool" ? (
+      {resolved === null ? null : resolved.kind === "pool" ? (
         resolved.windows.map((window) => <PoolRow key={window.id} window={window} now={now} />)
       ) : (
         <InstanceRows limits={resolved.limits} now={now} />
       )}
+      {quotas.map(({ key, window, accountLabel }) => (
+        <LimitRow key={key} window={window} now={now} accountLabel={accountLabel} />
+      ))}
     </ThreadDetailsSection>
   );
 }
@@ -272,10 +281,12 @@ function LimitRow({
   window,
   now,
   pooledAccounts = 1,
+  accountLabel,
 }: {
   readonly window: ServerProviderUsageWindow;
   readonly now: number;
   readonly pooledAccounts?: number;
+  readonly accountLabel?: string;
 }) {
   const gt = useGT();
   const m = useMessages();
@@ -312,6 +323,7 @@ function LimitRow({
           <span className="text-foreground">
             {gt("{label}: {left}% left", { label: window.label, left })}
           </span>
+          {accountLabel ? <span className="text-muted-foreground">{accountLabel}</span> : null}
           {pace && timeLeft !== null ? (
             <span>
               <span className="block">{m(PACE_LABEL[pace])}</span>

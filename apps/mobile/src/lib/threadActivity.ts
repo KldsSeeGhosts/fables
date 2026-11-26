@@ -30,8 +30,9 @@ import {
   resolveWorkEntryToolPresentation,
   summarizeToolGroup,
   toolGroupSummaryKind,
-  workEntriesViewedImagePaths,
+  workEntriesViewedImages,
   type ToolGroupSummaryKind,
+  type ViewedImage,
   type WorkLogPresentationEntry,
   type WorkLogToolLifecycleStatus,
   workEntryHiddenByToolCallVisibility,
@@ -253,7 +254,7 @@ type ThreadFeedEntryContent =
       readonly id: string;
       readonly createdAt: string;
       readonly runId: RunId | null;
-      readonly paths: ReadonlyArray<string>;
+      readonly images: ReadonlyArray<ViewedImage>;
     }
   | {
       readonly type: "run-fold";
@@ -2072,6 +2073,15 @@ function runningSubagentsAtRunTail(feed: ReadonlyArray<ThreadFeedEntry>, runId: 
   let running = 0;
   for (let index = feed.length - 1; index >= 0; index -= 1) {
     const entry = feed[index]!;
+    // The run's own finished reply is the parent parking on the children, not new work.
+    if (
+      entry.type === "message" &&
+      entry.message.role === "assistant" &&
+      !entry.message.streaming &&
+      entry.message.runId === runId
+    ) {
+      continue;
+    }
     if (entry.type !== "activity-group" || entry.runId !== runId) break;
     const items = entry.activities.map((activity) => activity.projectedItem.item);
     if (items.some((item) => item.type !== "subagent")) break;
@@ -2231,14 +2241,14 @@ function appendActivityGroupRows(
       activeTail && isTrailingRun,
       resolve,
     );
-    const paths = workEntriesViewedImagePaths(groupableRun.map((activity) => activity.workEntry));
-    if (paths.length > 0) {
+    const images = workEntriesViewedImages(groupableRun.map((activity) => activity.workEntry));
+    if (images.length > 0) {
       result.push({
         type: "viewed-images",
         id: `${groupId}:viewed-images`,
         createdAt: groupableRun[0]!.createdAt,
         runId: groupableRun[0]!.runId,
-        paths,
+        images,
       });
     }
     groupableRun = [];

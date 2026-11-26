@@ -931,14 +931,18 @@ export function SettingsSearchField({
       </InputGroupAddon>
       <InputGroupInput
         ref={inputRef}
-        type="search"
+        type="text"
+        role="searchbox"
+        enterKeyHint="search"
         value={value}
         onChange={(event) => onChange(event.currentTarget.value)}
         onKeyDown={(event) => {
           if (event.key !== "Escape") return;
+          if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+          event.stopPropagation();
+          if (event.nativeEvent.isComposing || event.keyCode === 229 || event.repeat) return;
           event.preventDefault();
           if (value.length > 0) {
-            event.stopPropagation();
             onChange("");
           } else event.currentTarget.blur();
         }}

@@ -811,7 +811,20 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
     canScrollRight: false,
   });
 
-  if (props.open === false && addSurfaceMenuOpen) setAddSurfaceMenuOpen(false);
+  const canAddPanelSurface = Boolean(
+    props.onNewThread ||
+    props.browserAvailable ||
+    props.terminalAvailable ||
+    props.diffAvailable ||
+    props.filesAvailable ||
+    props.pullRequestAvailable ||
+    props.pullRequestsAvailable ||
+    props.deviceAvailable ||
+    (props.onAddSideChat && props.sideChatAvailable && !props.sideChatDisabledReason),
+  );
+  if ((props.open === false || !canAddPanelSurface) && addSurfaceMenuOpen) {
+    setAddSurfaceMenuOpen(false);
+  }
 
   const addSurfaceMenuBlocked = () => !addSurfaceMenuOpen && isModalDialogOpen();
   const onNewSurfaceKeyDown = useEffectEvent((event: KeyboardEvent) => {
@@ -839,14 +852,14 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
   });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes document keydown and the desktop menu action (forwarded from a focused browser page) for the new surface shortcut while the panel is open
   useEffect(() => {
-    if (props.open === false) return;
+    if (props.open === false || !canAddPanelSurface) return;
     document.addEventListener("keydown", onNewSurfaceKeyDown, true);
     const unsubscribe = window.desktopBridge?.onMenuAction(onMenuAction);
     return () => {
       document.removeEventListener("keydown", onNewSurfaceKeyDown, true);
       unsubscribe?.();
     };
-  }, [props.open]);
+  }, [props.open, canAddPanelSurface]);
 
   const updateTabScrollState = (viewport: HTMLDivElement) => {
     const hasOverflow = viewport.scrollWidth - viewport.clientWidth > TAB_SCROLL_EDGE_TOLERANCE;
@@ -1123,8 +1136,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
   const addSurfaceMenu =
     paneTabsId !== null ? (
       <LayoutNewTabButton tabId={paneTabsId} />
-    ) : // A notch keeps it while empty too: an empty notch reads as a broken corner.
-    props.open !== false || props.surfaces.length > 0 || notched ? (
+    ) : canAddPanelSurface && (props.open !== false || props.surfaces.length > 0 || notched) ? (
       <Menu open={addSurfaceMenuOpen} onOpenChange={setAddSurfaceMenuOpen}>
         <MenuTrigger
           ref={addSurfaceTriggerRef}

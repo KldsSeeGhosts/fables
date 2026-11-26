@@ -158,6 +158,7 @@ function LinkPullRequestDialog({
     update();
     return observeResize(content, update);
   }, []);
+  const submittingRef = useRef(false);
   const [reference, setReference] = useState("");
   const [dirty, setDirty] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -192,13 +193,16 @@ function LinkPullRequestDialog({
   });
 
   const submit = async () => {
+    if (submittingRef.current) return;
     setDirty(true);
     if (resolved === null || "error" in resolved) return;
+    submittingRef.current = true;
     setSubmitError(null);
     setPending(true);
     const result = await settlePromise(() =>
       linking.changeLink(threadRef, resolved.link.url, true),
     );
+    submittingRef.current = false;
     setPending(false);
     if (result._tag === "Failure") {
       const error = squashAtomCommandFailure(result);
@@ -277,12 +281,19 @@ function LinkPullRequestDialog({
                   { term: changeRequestTermKind(terminology) },
                 )}
                 value={reference}
+                readOnly={pending}
                 onChange={(event) => {
                   setDirty(true);
                   setReference(event.target.value);
                 }}
                 onKeyDown={(event) => {
-                  if (event.key !== "Enter") return;
+                  if (
+                    event.key !== "Enter" ||
+                    event.nativeEvent.isComposing ||
+                    event.keyCode === 229 ||
+                    event.repeat
+                  )
+                    return;
                   event.preventDefault();
                   void submit();
                 }}

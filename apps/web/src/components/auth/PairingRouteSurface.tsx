@@ -13,6 +13,7 @@ import {
 } from "../../environments/primary";
 import { readHostedPairingRequest } from "../../hostedPairing";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "../ui/alert";
+import { resolveRemotePairingTarget } from "@t3tools/shared/remote";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Kbd } from "../ui/kbd";
@@ -182,18 +183,32 @@ export function HostedPairingRouteSurface() {
     reportFailure: false,
   });
   const [request] = useState(readHostedPairingRequest);
+  // The origin shows the scheme along with the host.
+  const [origin] = useState(() => {
+    if (!request) return null;
+    try {
+      return new URL(
+        resolveRemotePairingTarget({ host: request.host, pairingCode: request.token }).httpBaseUrl,
+      ).origin;
+    } catch {
+      return null;
+    }
+  });
   const gt = useGT();
-  const [status, setStatus] = useState<"pairing" | "paired" | "error">(
-    request ? "pairing" : "error",
+  const [status, setStatus] = useState<"confirm" | "pairing" | "paired" | "error">(
+    origin ? "confirm" : "error",
   );
   const [message, setMessage] = useState(() =>
-    request
-      ? m(msg("Connecting to this backend."))
-      : m(msg("This pairing link is missing its backend host or token.")),
+    origin
+      ? m(msg("This link adds a backend to this browser. Continue only if you trust it."))
+      : request
+        ? m(msg("This pairing link has an invalid backend host."))
+        : m(msg("This pairing link is missing its backend host or token.")),
   );
   const [errorTitle, setErrorTitle] = useState(() => m(msg("Pairing link incomplete")));
   const [canRetry, setCanRetry] = useState(false);
-  const submitAttemptedRef = useRef(false);
+  // Nothing is sent to the link's host until the user confirms.
+  // The token stays in the URL until then: the root route picks this page from it.
   const tokenSubmittedRef = useRef(false);
 
   const submitHostedPairingRequest = async () => {
@@ -219,6 +234,7 @@ export function HostedPairingRouteSurface() {
     setMessage(gt("Connecting to this backend."));
     setCanRetry(false);
     tokenSubmittedRef.current = true;
+    stripPairingTokenFromUrl();
 
     const result = await connectPairingEnvironment({
       host: request.host,
@@ -246,21 +262,6 @@ export function HostedPairingRouteSurface() {
     );
   };
 
-  const submitOnMount = useEffectEvent(() => {
-    void submitHostedPairingRequest();
-  });
-
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- strips the pairing token from the URL and submits the hosted pairing request once on mount
-  useEffect(() => {
-    if (submitAttemptedRef.current) {
-      return;
-    }
-    submitAttemptedRef.current = true;
-
-    stripPairingTokenFromUrl();
-    submitOnMount();
-  }, []);
-
   return (
     <StandalonePage size="card">
       <StandalonePageIcon tone={status === "error" ? "error" : "default"}>
@@ -272,7 +273,9 @@ export function HostedPairingRouteSurface() {
             ? gt("Backend paired")
             : status === "error"
               ? gt("Pairing failed")
-              : gt("Pairing backend")
+              : status === "confirm"
+                ? gt("Add this backend?")
+                : gt("Pairing backend")
         }
         description={
           status === "error" ? gt("This browser could not pair with the backend.") : message
@@ -291,16 +294,32 @@ export function HostedPairingRouteSurface() {
         <div className="rounded-control surface-well px-3 py-2.5 text-meta leading-relaxed text-muted-foreground">
           <T>
             Host:{" "}
-            <span className="font-mono text-foreground">
-              <Var>{request.host}</Var>
+            <span className="font-mono text-foreground/80">
+              <Var>{origin ?? request.host}</Var>
             </span>
           </T>
         </div>
       ) : null}
 
-      {status === "pairing" || canRetry || status === "paired" ? (
+      {status === "confirm" || status === "pairing" || canRetry || status === "paired" ? (
         <div className="flex flex-wrap justify-end gap-2">
-          {status === "pairing" ? (
+          {status === "confirm" ? (
+            <>
+              <Button
+                size="standard"
+                variant="secondary"
+                onClick={() => {
+                  stripPairingTokenFromUrl();
+                  window.location.href = "/";
+                }}
+              >
+                <T>Cancel</T>
+              </Button>
+              <Button size="standard" onClick={() => void submitHostedPairingRequest()}>
+                <T>Add backend</T>
+              </Button>
+            </>
+          ) : status === "pairing" ? (
             <Button disabled size="standard">
               <Spinner />
               <T>Pairing…</T>

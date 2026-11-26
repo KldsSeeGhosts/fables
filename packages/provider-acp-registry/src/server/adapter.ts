@@ -41,13 +41,14 @@ import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderS
 import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import {
+  acpRegistryLiveCatalogKey,
   normalizeAcpRegistryCommands,
   normalizeAcpRegistryLiveConfiguration,
   normalizeAcpRegistryWebUrl,
 } from "./probe.ts";
 import * as AcpRegistrySupport from "./AcpRegistrySupport.ts";
 import * as AcpRegistryRuntimeCoordinator from "./AcpRegistryRuntimeCoordinator.ts";
-import type { AcpAgentProfile } from "./agentProfile.ts";
+import { acpAgentSlashCommands, type AcpAgentProfile } from "./agentProfile.ts";
 import * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
 import { makeAcpNativeLoggerFactory } from "@t3tools/provider-acp/server/nativeLogging";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
@@ -354,11 +355,13 @@ export const makeAcpRegistryAdapterV2 = Effect.fn("makeAcpRegistryAdapterV2")(fu
     ...(runtimeCoordinator === undefined
       ? {}
       : {
-          onAvailableCommandsUpdate: (commands) =>
-            runtimeCoordinator.publishAvailableCommands(
-              options.instanceId,
-              normalizeAcpRegistryCommands(commands),
-            ),
+          onAvailableCommandsUpdate: (commands) => {
+            const normalized = normalizeAcpRegistryCommands(commands);
+            return runtimeCoordinator.publishAvailableCommands(options.instanceId, {
+              ...normalized,
+              slashCommands: acpAgentSlashCommands(options.profile, normalized.slashCommands),
+            });
+          },
           // A new Copilot session starts at its own effort, not the one the composer shows.
           ...(isCopilot
             ? {
@@ -381,21 +384,24 @@ export const makeAcpRegistryAdapterV2 = Effect.fn("makeAcpRegistryAdapterV2")(fu
                   ),
               }
             : {}),
-          onSessionConfigurationUpdate: (
-            configOptions,
-            modeState,
-            modelState,
-            configOptionsReported,
-          ) =>
-            runtimeCoordinator.publishLiveConfiguration(
-              options.instanceId,
-              normalizeAcpRegistryLiveConfiguration(
-                configOptions,
-                modeState,
-                modelState,
-                configOptionsReported,
-              ),
-            ),
+          onSessionConfigurationUpdate: (configOptions, modeState, modelState, updateOptions) => {
+            const normalized = normalizeAcpRegistryLiveConfiguration(
+              configOptions,
+              modeState,
+              modelState,
+            );
+            const catalogKey = acpRegistryLiveCatalogKey(normalized);
+            const includeCatalog =
+              catalogKey.length > 0 && catalogKey !== updateOptions?.lastCatalogKey;
+            const published = includeCatalog
+              ? normalized
+              : normalizeAcpRegistryLiveConfiguration(configOptions, modeState, modelState, {
+                  includeCatalog: false,
+                });
+            return runtimeCoordinator
+              .publishLiveConfiguration(options.instanceId, published)
+              .pipe(Effect.as(catalogKey.length > 0 ? catalogKey : null));
+          },
           onUrlElicitation: ({ elicitationId, url, message }) => {
             const normalizedUrl = normalizeAcpRegistryWebUrl(url);
             if (normalizedUrl === undefined || elicitationId.trim().length === 0) {
@@ -452,7 +458,7 @@ export interface AcpAgentDriverDefinition<Settings> {
   readonly toRegistrySettings: (settings: Settings) => AcpRegistrySettings;
 }
 
-export const makeAcpAgentAdapterV2Driver = <Settings>(
+const makeAcpAgentAdapterV2Driver = <Settings>(
   definition: AcpAgentDriverDefinition<Settings>,
 ): ProviderAdapterDriver<Settings, AcpRegistryAdapterV2DriverEnv> => ({
   driverKind: definition.profile?.driverKind ?? ACP_REGISTRY_PROVIDER,

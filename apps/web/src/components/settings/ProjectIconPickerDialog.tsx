@@ -2,7 +2,7 @@ import { deriveProjectIdentity } from "../../projectIdentity";
 import { ProjectMonogram } from "../ProjectMonogram";
 import type { ProjectIconColor, ProjectIconOverride } from "@t3tools/contracts";
 import { T, useGT, useMessages } from "gt-react";
-import { SearchIcon } from "lucide-react";
+
 import { createElement, useState } from "react";
 import {
   filterProjectIconNames,
@@ -25,7 +25,7 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { Input } from "../ui/input";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "../ui/input-group";
+
 import { ScrollArea } from "../ui/scroll-area";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 
@@ -149,18 +149,26 @@ function ProjectIconPickerBody({
 
         {mode === "lucide" ? (
           <>
-            <InputGroup>
-              <InputGroupAddon>
-                <SearchIcon aria-hidden />
-              </InputGroupAddon>
-              <InputGroupInput
-                type="search"
-                value={query}
-                aria-label={gt("Search Lucide icons")}
-                placeholder={gt("Search all Lucide icons")}
-                onChange={(event) => setQuery(event.currentTarget.value)}
-              />
-            </InputGroup>
+            {/* Native search inputs clear on Escape even during IME composition. */}
+            <Input
+              type="text"
+              role="searchbox"
+              value={query}
+              aria-label={gt("Search Lucide icons")}
+              placeholder={gt("Search all Lucide icons")}
+              onChange={(event) => setQuery(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (
+                  event.key !== "Escape" ||
+                  event.nativeEvent.isComposing ||
+                  event.keyCode === 229
+                )
+                  return;
+                if (!query && !event.repeat) return;
+                event.stopPropagation();
+                setQuery("");
+              }}
+            />
             <ScrollArea scrollFade className="max-h-64">
               <div className="grid grid-cols-8 gap-1.5 p-0.5">
                 {icons.map((name) => (

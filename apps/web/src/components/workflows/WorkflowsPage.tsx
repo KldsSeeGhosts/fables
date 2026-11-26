@@ -3,7 +3,7 @@ import {
   workflowReferenceIssue,
   workflowReferencePullRequest,
 } from "@t3tools/client-runtime/workflows";
-import { EnvironmentId, ThreadId, type WorkflowRunReference } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId, type WorkflowRunSubject } from "@t3tools/contracts";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { T, useGT } from "gt-react";
 import { FileCode2Icon, WorkflowIcon } from "lucide-react";
@@ -141,10 +141,15 @@ export function WorkflowsPage() {
   const paneOpen = pane.pane !== undefined;
   const shownTab = activeWorkflowPaneTab(pane);
   // Opening something pins the run it is from, so the address keeps naming the run it belongs to.
+  // A tab of another run's starts a pane of that run's own.
   const togglePane = (runId: string, tab: Parameters<typeof toggleWorkflowPaneTab>[1]) =>
-    select({ ...env, run: runId, ...toggleWorkflowPaneTab(pane, tab) });
+    select({
+      ...env,
+      run: runId,
+      ...toggleWorkflowPaneTab(runId === search.run ? pane : {}, tab),
+    });
 
-  const openReferenceBeside = (runId: string, reference: WorkflowRunReference) => {
+  const openReferenceBeside = (runId: string, reference: WorkflowRunSubject) => {
     if (environmentId === null) return;
     const focusedPane = selectFocusedPane(useLayoutStore.getState().layout);
     const issue = workflowReferenceIssue(reference);

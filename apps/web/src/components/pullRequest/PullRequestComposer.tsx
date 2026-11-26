@@ -36,10 +36,12 @@ export function PullRequestComposer({
   onCommented,
   onReviewSubmitted,
   openReviewRequest,
+  shownHeadSha,
 }: {
   environmentId: EnvironmentId;
   reference: PullRequestRef;
   detail: PullRequestDetailView;
+  shownHeadSha?: string | undefined;
   actionPending: boolean;
   onCommentAction: (
     body: string,
@@ -202,6 +204,8 @@ export function PullRequestComposer({
             reference={reference}
             completionScope={pullRequestCompletionScope(detail, environmentId, reference)}
             verdict={mode}
+            headSha={shownHeadSha ?? detail.headSha}
+            onRefused={onReviewSubmitted}
             term={term}
             requestChangesSummaryRequired={sourceControlClients
               .get(detail.provider)

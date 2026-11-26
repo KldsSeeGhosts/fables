@@ -1,3 +1,6 @@
+import { Alert, AlertAction, AlertDescription } from "../ui/alert";
+import { TriangleAlertIcon } from "lucide-react";
+import { mergeHeadPin, seenPullRequestHead } from "./pullRequestDetail.logic";
 import {
   parsePullRequestAnchor,
   pullRequestAnchorMatchesUrl,
@@ -736,6 +739,19 @@ export function PullRequestDetailPanel({
     nativeStackQuery.refresh();
   };
   const [refreshToken, setRefreshToken] = useState(0);
+  const seenHeadKey = `${environmentId}:${pullRequestKey}`;
+  const [storedSeenHead, setSeenHead] = useState<ReturnType<typeof seenPullRequestHead> | null>(
+    null,
+  );
+  const seenHead = seenPullRequestHead(
+    storedSeenHead,
+    seenHeadKey,
+    detailQuery.isPending ? undefined : detail?.headSha,
+  );
+  if (seenHead !== storedSeenHead) setSeenHead(seenHead);
+  const shownHeadSha = seenHead.sha ?? detail?.headSha;
+  const unseenHeadSha =
+    detail?.state === "open" && detail.headSha !== shownHeadSha ? detail.headSha : undefined;
   const [activityRevision, setActivityRevision] = useState<{
     readonly key: string;
     readonly updatedAt: string;
@@ -897,6 +913,7 @@ export function PullRequestDetailPanel({
       input: {
         ...reference,
         action,
+        ...mergeHeadPin(action, shownHeadSha),
         ...(method ? { mergeMethod: method } : {}),
         ...(updateMethod ? { updateMethod } : {}),
       },
@@ -2101,6 +2118,32 @@ export function PullRequestDetailPanel({
         </div>
       </div>
 
+      {unseenHeadSha !== undefined && shownHeadSha !== undefined ? (
+        <div className="shrink-0 px-4 pb-2">
+          <Alert variant="warning">
+            <TriangleAlertIcon />
+            <AlertDescription>
+              {gt("New commits were pushed. A merge or review still applies to {sha}.", {
+                sha: shownHeadSha.slice(0, 7),
+              })}
+            </AlertDescription>
+            <AlertAction>
+              <Button
+                size="xs"
+                variant="secondary"
+                disabled={isInvalidating}
+                onClick={() => {
+                  void refetchFromHost().then(() =>
+                    setSeenHead({ key: seenHeadKey, sha: unseenHeadSha }),
+                  );
+                }}
+              >
+                {gt("Load new commits")}
+              </Button>
+            </AlertAction>
+          </Alert>
+        </div>
+      ) : null}
       <SourceControlAppAccessNotice
         environmentId={environmentId}
         provider={detail?.provider ?? repositoryIdentity?.provider}
@@ -2308,6 +2351,7 @@ export function PullRequestDetailPanel({
             onCommented={refreshDetail}
             onReviewSubmitted={refreshDetail}
             openReviewRequest={openReviewRequest}
+            shownHeadSha={shownHeadSha}
           />
         </div>
       ) : null}
