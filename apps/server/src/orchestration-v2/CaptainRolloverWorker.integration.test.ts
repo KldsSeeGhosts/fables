@@ -22,6 +22,7 @@ import * as Layer from "effect/Layer";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
 import * as TestClock from "effect/testing/TestClock";
+import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 
 import * as CaptainService from "../captains/CaptainService.ts";
 import * as CaptainStore from "../captains/CaptainStore.ts";
@@ -29,14 +30,17 @@ import * as Sqlite from "../persistence/Sqlite.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
+import { ClaudeProviderCapabilitiesV2 } from "./Adapters/ClaudeAdapterV2.ts";
 import * as CaptainRolloverWorker from "./CaptainRolloverWorker.ts";
 import * as EventSink from "./EventSink.ts";
 import * as EventStore from "./EventStore.ts";
 import * as OrchestrationEventStore from "../persistence/OrchestrationEventStore.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
+import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
 import * as ThreadLaunch from "./ThreadLaunchService.ts";
 import * as ThreadManagement from "./ThreadManagementService.ts";
+import * as ProviderReplayHarness from "./testkit/ProviderReplayHarness.ts";
 
 const projectId = ProjectId.make("rollover-project");
 const driver = ProviderDriverKind.make("claude");
@@ -64,7 +68,9 @@ const layerPersistence = EventSink.layer.pipe(
   Layer.provideMerge(OrchestrationEventStore.layer),
 );
 
-const makeFixture = Effect.fn("CaptainRolloverWorkerTest.makeFixture")(function* () {
+const makeFixture = Effect.fn("CaptainRolloverWorkerTest.makeFixture")(function* (
+  observeRunUpdates = false,
+) {
   const firstSend = yield* Deferred.make<void>();
   const nextSent = yield* Deferred.make<ThreadManagement.ThreadManagementSendInput>();
   const sends: ThreadManagement.ThreadManagementSendInput[] = [];
@@ -136,11 +142,31 @@ const makeFixture = Effect.fn("CaptainRolloverWorkerTest.makeFixture")(function*
       );
     }),
   );
+  const persistence = observeRunUpdates
+    ? Layer.merge(
+        ProjectionStore.layer,
+        ProviderReplayHarness.layerWithRegistry(
+          { name: "captain-rollover-steering" },
+          ProviderAdapterRegistry.layerFromAdaptersEffect(
+            ProviderAdapter.ProviderAdapterV2.pipe(
+              Effect.map((adapter) => [adapter]),
+              Effect.provide(
+                Layer.mock(ProviderAdapter.ProviderAdapterV2)({
+                  instanceId: providerInstanceId,
+                  driver,
+                  getCapabilities: () => Effect.succeed(ClaudeProviderCapabilitiesV2),
+                }),
+              ),
+            ),
+          ),
+          { runEffectWorker: false },
+        ),
+      )
+    : Layer.merge(layerPersistence, ThreadCommandExecutor.layer);
   const base = CaptainService.layer.pipe(
     Layer.provideMerge(
       Layer.mergeAll(
         CaptainStore.layer,
-        ThreadCommandExecutor.layer,
         testServices,
         Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
           namedProjectsRoot: "/unused",
@@ -153,7 +179,7 @@ const makeFixture = Effect.fn("CaptainRolloverWorkerTest.makeFixture")(function*
         }),
       ),
     ),
-    Layer.provideMerge(layerPersistence),
+    Layer.provideMerge(persistence),
     Layer.provideMerge(Sqlite.layerMemory),
   );
   return {
@@ -220,6 +246,31 @@ const itemBase = (threadId: ThreadId, second: number, runId: RunId | null) => ({
   updatedAt: at(second),
 });
 
+const providerThreadEvent = (threadId: ThreadId) =>
+  ({
+    id: EventId.make("rollover-provider-thread"),
+    type: "provider-thread.updated",
+    threadId,
+    occurredAt: at(0),
+    payload: {
+      id: providerThreadId,
+      appThreadId: threadId,
+      driver,
+      providerInstanceId,
+      providerSessionId: null,
+      ownerNodeId: null,
+      nativeThreadRef: null,
+      nativeConversationHeadRef: null,
+      lastRunOrdinal: null,
+      handoffIds: [],
+      forkedFrom: null,
+      status: "active",
+      firstRunOrdinal: 1,
+      createdAt: at(0),
+      updatedAt: at(0),
+    },
+  }) satisfies OrchestrationV2DomainEvent;
+
 it.effect(
   "uses persisted compaction, failures and crew settlement at a Captain's turn boundary",
   () =>
@@ -270,29 +321,7 @@ it.effect(
             occurredAt: run.requestedAt,
             payload: run,
           }).pipe(Effect.andThen(commands.handleCaptainTurnEnd(threadId, run)));
-        yield* write({
-          id: EventId.make("rollover-provider-thread"),
-          type: "provider-thread.updated",
-          threadId,
-          occurredAt: at(0),
-          payload: {
-            id: providerThreadId,
-            appThreadId: threadId,
-            driver,
-            providerInstanceId,
-            providerSessionId: null,
-            ownerNodeId: null,
-            nativeThreadRef: null,
-            nativeConversationHeadRef: null,
-            lastRunOrdinal: null,
-            handoffIds: [],
-            forkedFrom: null,
-            status: "active",
-            firstRunOrdinal: 1,
-            createdAt: at(0),
-            updatedAt: at(0),
-          },
-        });
+        yield* write(providerThreadEvent(threadId));
         yield* usage(1);
         yield* write({
           id: EventId.make("background-compaction"),
@@ -517,5 +546,99 @@ it.effect("drains a durable resend when the rollover worker starts", () =>
       );
       assert.deepEqual(recovered, pending);
     }).pipe(Effect.provide(fixture.base));
+  }),
+);
+
+it.effect("moves an unread steer with queued follow-ups when the active turn overflows", () =>
+  Effect.gen(function* () {
+    const fixture = yield* makeFixture(true);
+    yield* Effect.gen(function* () {
+      const captains = yield* CaptainService.CaptainService;
+      const store = yield* CaptainStore.CaptainStore;
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const sink = yield* EventSink.EventSinkV2;
+      const captain = yield* captains.create(newCaptain("rollover-steer"));
+      const threadId = captain.primaryThreadId;
+      const failed = makeRun(threadId, 1, "failed");
+      const queued = makeRun(threadId, 2, "queued");
+      const steer = { ...message(failed, "Unread steer"), id: MessageId.make("unread-steer") };
+      const runEvent = (run: OrchestrationV2Run, second: number) =>
+        ({
+          id: EventId.make(`run:${run.id}:${second}`),
+          type: "run.updated",
+          threadId,
+          occurredAt: at(second),
+          payload: run,
+        }) satisfies OrchestrationV2DomainEvent;
+      const messageEvent = (prompt: OrchestrationV2ConversationMessage, second: number) =>
+        ({
+          id: EventId.make(`message:${prompt.id}`),
+          type: "message.updated",
+          threadId,
+          occurredAt: at(second),
+          payload: prompt,
+        }) satisfies OrchestrationV2DomainEvent;
+      yield* sink.write({
+        events: [
+          providerThreadEvent(threadId),
+          runEvent({ ...failed, status: "running", completedAt: null }, 1),
+          messageEvent(message(failed, "Overflowed prompt"), 1),
+          runEvent(queued, 2),
+          messageEvent(message(queued, "Queued follow-up"), 2),
+          messageEvent(steer, 3),
+          {
+            id: EventId.make("steer-pending"),
+            type: "turn-item.updated",
+            threadId,
+            occurredAt: at(3),
+            payload: {
+              ...itemBase(threadId, 3, failed.id),
+              type: "user_message",
+              status: "pending",
+              messageId: steer.id,
+              inputIntent: "steer",
+              text: steer.text,
+              attachments: [],
+              createdBy: steer.createdBy,
+              creationSource: steer.creationSource,
+              startedAt: null,
+              completedAt: null,
+            },
+          },
+          {
+            id: EventId.make("steer-overflow"),
+            type: "turn-item.updated",
+            threadId,
+            occurredAt: at(4),
+            payload: {
+              ...itemBase(threadId, 4, failed.id),
+              type: "error",
+              status: "failed",
+              failure: {
+                class: "provider_error",
+                code: "blocking_limit",
+                message: "Blocked",
+                retryable: null,
+              },
+            },
+          },
+        ],
+      });
+      fixture.failNext();
+      yield* sink.write({ events: [runEvent(failed, 4)] });
+      yield* Deferred.await(fixture.firstSend);
+
+      const reset = yield* store.requireCaptain(captain.id);
+      const pending = yield* store.pendingRolloverResends(reset.primaryThreadId);
+      assert.deepEqual(
+        pending.map((entry) => entry.text),
+        ["Overflowed prompt", "Queued follow-up", "Unread steer"],
+      );
+      const old = yield* projections.getThreadRecords(threadId, ["runs"]);
+      assert.deepEqual(
+        old.runs.map((run) => run.status),
+        ["failed", "cancelled", "cancelled"],
+      );
+    }).pipe(Effect.provide(CaptainRolloverWorker.layer.pipe(Layer.provideMerge(fixture.base))));
   }),
 );

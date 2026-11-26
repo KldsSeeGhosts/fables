@@ -3533,6 +3533,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   const requeueUnreadSteers = Effect.fn("Orchestrator.requeueUnreadSteers")(function* (
     threadId: ThreadId,
     runIds?: ReadonlyArray<RunId>,
+    deferQueueStart = false,
   ) {
     const { turnItems } = yield* projectionStore.getThreadRecords(threadId, ["turnItems"], {
       turnItemTypes: ["user_message"],
@@ -3628,38 +3629,43 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       );
       placed.push({ item, run, message, steer, afterRunOrdinal });
     }
-    // Each requeue starts the queue once it commits, so earlier places go first.
+    // A requeue can start the queue once it commits, so earlier places go first.
     placed.sort(
       (left, right) =>
         left.afterRunOrdinal - right.afterRunOrdinal || left.item.ordinal - right.item.ordinal,
     );
     for (const { run, message, steer, afterRunOrdinal } of placed) {
-      yield* dispatchWithReceiptEffect({
-        type: "message.dispatch",
-        commandId: CommandId.make(`command:unread-steer:${run.id}:${message.id}`),
-        threadId,
-        messageId: message.id,
-        steerFollowUpOfRunId: run.id,
-        steerFollowUpAfterRunOrdinal: afterRunOrdinal,
-        ...(message.followsThreadSelection === true
-          ? {}
-          : { modelSelection: steer?.modelSelection ?? run.modelSelection }),
-        text: message.text,
-        ...(message.context ? { context: message.context } : {}),
-        attachments: message.attachments,
-        ...(message.delegatedCompletion === undefined
-          ? {}
-          : { delegatedCompletion: message.delegatedCompletion }),
-        ...(message.notification === undefined ? {} : { notification: message.notification }),
-        dispatchMode: { type: "queue_after_active" },
-        createdBy: message.createdBy,
-        creationSource: message.creationSource,
-        ...(message.scheduledTaskId === undefined
-          ? {}
-          : { scheduledTaskId: message.scheduledTaskId }),
-        ...(message.senderThreadId === undefined ? {} : { senderThreadId: message.senderThreadId }),
-        ...(message.linkedSender === undefined ? {} : { linkedSender: message.linkedSender }),
-      }).pipe(
+      yield* dispatchWithReceiptEffect(
+        {
+          type: "message.dispatch",
+          commandId: CommandId.make(`command:unread-steer:${run.id}:${message.id}`),
+          threadId,
+          messageId: message.id,
+          steerFollowUpOfRunId: run.id,
+          steerFollowUpAfterRunOrdinal: afterRunOrdinal,
+          ...(message.followsThreadSelection === true
+            ? {}
+            : { modelSelection: steer?.modelSelection ?? run.modelSelection }),
+          text: message.text,
+          ...(message.context ? { context: message.context } : {}),
+          attachments: message.attachments,
+          ...(message.delegatedCompletion === undefined
+            ? {}
+            : { delegatedCompletion: message.delegatedCompletion }),
+          ...(message.notification === undefined ? {} : { notification: message.notification }),
+          dispatchMode: { type: "queue_after_active" },
+          createdBy: message.createdBy,
+          creationSource: message.creationSource,
+          ...(message.scheduledTaskId === undefined
+            ? {}
+            : { scheduledTaskId: message.scheduledTaskId }),
+          ...(message.senderThreadId === undefined
+            ? {}
+            : { senderThreadId: message.senderThreadId }),
+          ...(message.linkedSender === undefined ? {} : { linkedSender: message.linkedSender }),
+        },
+        { deferSteerFollowUpStart: deferQueueStart },
+      ).pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning("Failed to requeue an unread steer", {
             threadId,
@@ -16393,11 +16399,18 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     } satisfies OrchestratorV2DispatchResult;
   });
 
-  /** `sideChatIds` are the live side chats a delete, archive, or unarchive cascades to, read under their locks. */
   const dispatchWithReceiptEffect = Effect.fn("orchestrationV2.dispatch.withReceipt")(function* (
     command: OrchestrationV2ServerCommand,
-    sideChatIds: ReadonlyArray<ThreadId> = [],
-    cancelledTask?: OrchestrationV2Subagent,
+    {
+      sideChatIds = [],
+      cancelledTask,
+      deferSteerFollowUpStart = false,
+    }: {
+      /** Live side chats a delete, archive or unarchive cascades to, read under their locks. */
+      readonly sideChatIds?: ReadonlyArray<ThreadId>;
+      readonly cancelledTask?: OrchestrationV2Subagent | undefined;
+      readonly deferSteerFollowUpStart?: boolean;
+    } = {},
   ): Effect.fn.Return<OrchestratorV2DispatchResult, OrchestratorV2Error> {
     yield* Effect.annotateCurrentSpan({
       "orchestration_v2.command_id": command.commandId,
@@ -16663,7 +16676,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       yield* mapDispatchError(command)(offerDelegatedCompletionDeliveries(command.parentThreadId));
     }
 
-    if (command.type === "message.dispatch" && command.steerFollowUpOfRunId !== undefined) {
+    if (
+      command.type === "message.dispatch" &&
+      command.steerFollowUpOfRunId !== undefined &&
+      !deferSteerFollowUpStart
+    ) {
       yield* mapDispatchError(command)(
         startNextQueuedRun(command.threadId, { latestRunEnded: true }),
       );
@@ -16724,7 +16741,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           Effect.flatMap((sideChatIds) =>
             sideChatIds.reduce(
               (locked, sideChatId) => threadDispatch.withLock(sideChatId, locked),
-              dispatchWithReceiptEffect(command, sideChatIds),
+              dispatchWithReceiptEffect(command, { sideChatIds }),
             ),
           ),
         ),
@@ -16836,33 +16853,32 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               }),
             ),
           );
-        if (
-          isCaptainThreadId(threadId) &&
-          (run.status === "completed" || run.status === "failed")
-        ) {
+        const captainTurnEnded =
+          isCaptainThreadId(threadId) && (run.status === "completed" || run.status === "failed");
+        const prepareQueue = (
+          run.status === "completed" ? releaseUnattendedHolds(threadId, run.id) : Effect.void
+        ).pipe(
+          Effect.andThen(
+            requeueUnreadSteers(threadId, [run.id], captainTurnEnded).pipe(
+              Effect.catchCause((cause) =>
+                Effect.logWarning("Failed to read unread steers", { threadId, cause }),
+              ),
+            ),
+          ),
+        );
+        const startQueue = startNextQueuedRun(threadId, {
+          endedRunId: run.id,
+          ...(run.status === "failed" ? { failedRunId: run.id } : {}),
+        });
+        if (captainTurnEnded) {
+          // Reset takes the thread lock itself and needs to see every queued steer before promotion.
+          yield* threadDispatch.withLock(threadId, prepareQueue);
           yield* threadDispatch.handleCaptainTurnEnd(threadId, run);
         }
         yield* threadDispatch
           .withLock(
             threadId,
-            (run.status === "completed"
-              ? releaseUnattendedHolds(threadId, run.id)
-              : Effect.void
-            ).pipe(
-              Effect.andThen(
-                requeueUnreadSteers(threadId, [run.id]).pipe(
-                  Effect.catchCause((cause) =>
-                    Effect.logWarning("Failed to read unread steers", { threadId, cause }),
-                  ),
-                ),
-              ),
-              Effect.andThen(
-                startNextQueuedRun(threadId, {
-                  endedRunId: run.id,
-                  ...(run.status === "failed" ? { failedRunId: run.id } : {}),
-                }),
-              ),
-            ),
+            captainTurnEnded ? startQueue : prepareQueue.pipe(Effect.andThen(startQueue)),
           )
           .pipe(
             Effect.catchCause((cause) =>
@@ -17270,7 +17286,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                 ? { ...task, cancelledRunId: cancelledRun.id, updatedAt: now }
                 : undefined;
             // The marker, Stop receipt and interrupt outbox commit together under both locks.
-            yield* dispatchWithReceiptEffect(command, [], cancelledTask);
+            yield* dispatchWithReceiptEffect(command, { cancelledTask });
           }),
         );
         yield* finalizeAppOwnedSubagent(command.threadId).pipe(mapDispatchError(command));
