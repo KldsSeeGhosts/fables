@@ -130,6 +130,11 @@ const dmSansFonts = {
   bold: "@expo-google-fonts/dm-sans/700Bold/DMSans_700Bold.ttf",
 } as const;
 
+const sourceSerifFonts = {
+  medium: "@expo-google-fonts/source-serif-4/500Medium/SourceSerif4_500Medium.ttf",
+  semiBold: "@expo-google-fonts/source-serif-4/600SemiBold/SourceSerif4_600SemiBold.ttf",
+} as const;
+
 const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
   "expo-widgets",
   {
@@ -332,7 +337,13 @@ const config: ExpoConfig = {
       "expo-font",
       {
         ios: {
-          fonts: [dmSansFonts.regular, dmSansFonts.medium, dmSansFonts.bold],
+          fonts: [
+            dmSansFonts.regular,
+            dmSansFonts.medium,
+            dmSansFonts.bold,
+            sourceSerifFonts.medium,
+            sourceSerifFonts.semiBold,
+          ],
         },
         android: {
           fonts: [
@@ -352,6 +363,14 @@ const config: ExpoConfig = {
                 { path: dmSansFonts.bold, weight: 400 },
                 { path: dmSansFonts.bold, weight: 700 },
               ],
+            },
+            {
+              fontFamily: "SourceSerif4-Medium",
+              fontDefinitions: [{ path: sourceSerifFonts.medium, weight: 500 }],
+            },
+            {
+              fontFamily: "SourceSerif4-SemiBold",
+              fontDefinitions: [{ path: sourceSerifFonts.semiBold, weight: 600 }],
             },
           ],
         },
