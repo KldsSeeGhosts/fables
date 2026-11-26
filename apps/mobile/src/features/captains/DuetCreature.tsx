@@ -8,10 +8,8 @@ import {
   DUET_PALETTE_SWATCH,
 } from "@t3tools/client-runtime/state/captain-palette";
 import type { Captain } from "@t3tools/contracts";
-import { useIsFocused } from "@react-navigation/native";
 import { useId, type ReactNode } from "react";
 import { View } from "react-native";
-import Animated, { useReducedMotion } from "react-native-reanimated";
 import Svg, { ClipPath, Defs, G, Path, Rect } from "react-native-svg";
 
 import { AppText as Text } from "../../components/ui/AppText";
@@ -25,7 +23,6 @@ type CreatureCaptain = Pick<Captain, "id" | "avatar">;
 
 const LINE_PERIOD_WIDTH = 22;
 const LINE_PERIOD_HEIGHT = 14;
-const LINE_VIEW_WIDTH = 44;
 /** A disc's creature sits on the middle 62.5%, as on desktop. */
 const DISC_STAGE_INSET = 0.1875;
 
@@ -152,153 +149,6 @@ export function DuetCreature(props: {
   );
 }
 
-function layer(size: number) {
-  return { position: "absolute", top: 0, left: 0, width: size, height: size } as const;
-}
-
-/**
- * The creature in layers so Reanimated can move each by transform and opacity on the UI thread,
- * the way desktop's CSS does. Only the open conversation's floating orb uses it.
- */
-function MovingCreature(props: {
-  readonly captain: CreatureCaptain;
-  readonly size: number;
-  readonly state: DuetCreatureState;
-}) {
-  const tokens = useDuetTokens();
-  const { design, ink } = creatureOf(props.captain);
-  const { size, state } = props;
-  const unit = size / 100;
-  const origin = `${design.origin[0]}% ${design.origin[1]}%`;
-  const working = state === "working";
-  const { line, halo } = design;
-  const lineWindow = line
-    ? {
-        left: line.window.x * unit,
-        top: line.window.y * unit,
-        width: line.window.w * unit,
-        height: line.window.h * unit,
-      }
-    : null;
-  return (
-    <Animated.View
-      style={[
-        layer(size),
-        state === "waiting"
-          ? {
-              animationName: {
-                "0%": { transform: [{ translateY: 0 }, { scale: 1 }] },
-                "50%": { transform: [{ translateY: -0.04 * size }, { scale: 1.025 }] },
-                "100%": { transform: [{ translateY: 0 }, { scale: 1 }] },
-              },
-              animationDuration: "2.4s",
-              animationIterationCount: "infinite",
-              animationTimingFunction: "ease-in-out",
-            }
-          : null,
-      ]}
-    >
-      {halo ? (
-        <Animated.View
-          style={[
-            layer(size),
-            { transformOrigin: origin },
-            halo.motion === "turn"
-              ? {
-                  transform: [{ rotate: "-24deg" }],
-                  ...(working
-                    ? {
-                        animationName: {
-                          from: { transform: [{ rotate: "-24deg" }] },
-                          to: { transform: [{ rotate: "336deg" }] },
-                        },
-                        animationDuration: "3.2s",
-                        animationIterationCount: "infinite",
-                        animationTimingFunction: "linear",
-                      }
-                    : null),
-                }
-              : working
-                ? {
-                    animationName: {
-                      from: { opacity: 0.5, transform: [{ scale: 0.92 }] },
-                      to: { opacity: 1, transform: [{ scale: 1.06 }] },
-                    },
-                    animationDuration: "1.2s",
-                    animationIterationCount: "infinite",
-                    animationDirection: "alternate",
-                    animationTimingFunction: "ease-in-out",
-                  }
-                : null,
-          ]}
-        >
-          <Svg width={size} height={size} viewBox="0 0 100 100">
-            <Path d={halo.path} fill="none" {...haloStroke(design, ink, tokens)} />
-          </Svg>
-        </Animated.View>
-      ) : null}
-      <Animated.View
-        style={[
-          layer(size),
-          { transformOrigin: origin },
-          working
-            ? {
-                animationName: {
-                  from: { transform: [{ scale: 1 }] },
-                  to: { transform: [{ scale: 1.07 }] },
-                },
-                animationDuration: "1.2s",
-                animationIterationCount: "infinite",
-                animationDirection: "alternate",
-                animationTimingFunction: "ease-in-out",
-              }
-            : null,
-        ]}
-      >
-        <Svg width={size} height={size} viewBox="0 0 100 100">
-          <Path d={design.body} fill={ink} />
-        </Svg>
-      </Animated.View>
-      {line && lineWindow ? (
-        <View style={{ position: "absolute", overflow: "hidden", ...lineWindow }}>
-          <Animated.View
-            style={[
-              { width: lineWindow.width * 2, height: lineWindow.height },
-              working
-                ? {
-                    animationName: {
-                      from: { transform: [{ translateX: 0 }] },
-                      to: { transform: [{ translateX: -lineWindow.width }] },
-                    },
-                    animationDuration: "1.4s",
-                    animationIterationCount: "infinite",
-                    animationTimingFunction: "linear",
-                  }
-                : null,
-            ]}
-          >
-            <Svg
-              width={lineWindow.width * 2}
-              height={lineWindow.height}
-              viewBox={`0 0 ${LINE_VIEW_WIDTH} ${LINE_PERIOD_HEIGHT}`}
-              preserveAspectRatio="none"
-            >
-              <Path
-                d={line.path}
-                fill="none"
-                stroke={tokens.line}
-                strokeWidth={line.width}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
-          </Animated.View>
-        </View>
-      ) : null}
-    </Animated.View>
-  );
-}
-
 const FLOATING_ORB_SIZE = 44;
 const LIVE_PILL_HEIGHT = 28;
 const LIVE_PILL_OVERLAP = 10;
@@ -307,8 +157,8 @@ export const DUET_FLOATING_ORB_HEIGHT = FLOATING_ORB_SIZE + LIVE_PILL_HEIGHT - L
 
 /**
  * The floating orb over an open Duet conversation: the creature on its disc, and the live pill
- * while the Duet works. The one creature that moves, and only while this screen is focused and
- * Reduce Motion is off; AGENTS.md forbids continuous animation anywhere else.
+ * while the Duet works. Static: an endless Reanimated animation commits every frame on iOS and
+ * makes the conversation scrolled under it, and any list beside or over it, drag.
  */
 export function DuetFloatingOrb(props: {
   readonly captain: CreatureCaptain;
@@ -316,21 +166,12 @@ export function DuetFloatingOrb(props: {
   readonly live: string | null;
 }) {
   const tokens = useDuetTokens();
-  const focused = useIsFocused();
-  const reduceMotion = useReducedMotion();
-  const moving = focused && !reduceMotion && props.state !== "idle";
   const stage = FLOATING_ORB_SIZE * (1 - 2 * DISC_STAGE_INSET);
   return (
     <View pointerEvents="none" className="items-center">
       <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <Disc size={FLOATING_ORB_SIZE} state={props.state === "waiting" ? "waiting" : "idle"}>
-          {moving ? (
-            <View style={{ width: stage, height: stage }}>
-              <MovingCreature captain={props.captain} size={stage} state={props.state} />
-            </View>
-          ) : (
-            <StaticCreature captain={props.captain} size={stage} />
-          )}
+        <Disc size={FLOATING_ORB_SIZE} state={props.state}>
+          <StaticCreature captain={props.captain} size={stage} />
         </Disc>
       </View>
       {props.live ? (
