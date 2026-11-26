@@ -18,10 +18,12 @@ each merge layer.
 
 These commands assume a single checkout. If a branch already has a worktree,
 run its merge commands there instead of switching or force-moving it. Start
-with clean worktrees. If any command fails, stop and resolve it before continuing.
+with clean worktrees. Run one command at a time. If any command fails, stop and
+resolve it before continuing. Finish each layer before starting the next.
 
 ```sh
 git config rerere.enabled true
+git config rerere.autoupdate false
 git fetch origin
 git fetch --no-tags https://github.com/pingdotgg/t3code.git 'refs/tags/v*:refs/tags/upstream/v*'
 tag="$(gh api 'repos/pingdotgg/t3code/releases?per_page=100' --jq '[.[] | select(.draft == false and .published_at != null and (.tag_name | test("^v[0-9]+\\.[0-9]+\\.[0-9]+-nightly\\.[0-9]{8}\\.[0-9]+$")))] | max_by(.published_at).tag_name')"
@@ -29,7 +31,11 @@ test -n "$tag" && test "$tag" != null
 upstream_ref="refs/tags/upstream/$tag"
 git rev-parse --verify "$upstream_ref^{commit}"
 
-git switch upstream && git merge --ff-only origin/upstream && git merge --ff-only "$upstream_ref"
+git switch upstream
+git merge-base --is-ancestor HEAD "$upstream_ref"
+git merge-base --is-ancestor origin/upstream "$upstream_ref"
+git merge --ff-only origin/upstream && git merge --ff-only "$upstream_ref"
+test "$(git rev-parse HEAD)" = "$(git rev-parse "$upstream_ref^{commit}")"
 git switch ksg/passthrough && git merge --ff-only origin/ksg/passthrough && git merge --no-edit upstream
 git switch ksg/dev && git merge --ff-only origin/ksg/dev && git merge --no-edit ksg/passthrough
 vp i
@@ -39,15 +45,17 @@ Review the selected release and both merge layers. Inspect
 `git diff upstream ksg/passthrough` for distribution patches and
 `git diff ksg/passthrough ksg/dev` for customizations. Use the
 [customization inventory](ksg-customization-inventory.md) to identify the
-owning files, required behavior, and cheap post-merge checks. Upstream wins
-outside the inventory's intent. If code moved, reapply the intent where it
-moved; never drop a patch to resolve a conflict. Stop and report when a
+owning files, required behavior, and cheap post-merge checks. Preserve the
+intent of the fork's patches and use upstream behavior elsewhere. If code
+moved, reapply the patch where it moved. Stop and report when a
 conflict makes that intent unclear rather than guessing. Run focused tests and
 affected package typechecks. Branches move forward by merges, never rebases or
 force-pushes.
 
-KSG databases already recorded Captain migrations 112–115. When syncing later
-upstream migrations, add four to the upstream ID in the filename and manifest.
+KSG databases already recorded Captain migrations 112–115. Add four to every
+newly integrated upstream migration ID 112 or higher in its filename, manifest
+ID, and manifest import. Keep previously shipped migration IDs and files intact.
+Check the mapping even when Git merged the files cleanly.
 
 Only after approval, push `upstream`, `ksg/passthrough`, and `ksg/dev`.
 Pushing `ksg/dev` can publish a release; it is not just a source backup.

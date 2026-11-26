@@ -92,15 +92,32 @@ describe("published upstream nightlies", () => {
     expect(upstreamReviewUrl("0.0.46-nightly.20261014.3132", "0.0.46-nightly.20261014.3132")).toBe(
       "https://github.com/pingdotgg/t3code/releases/tag/v0.0.46-nightly.20261014.3132",
     );
-    expect(upstreamMergePrompt("0.0.46-nightly.20261014.3132")).toContain(
+  });
+
+  it("guards the sync against unpublished tags, an ahead mirror, and an unapproved push", () => {
+    const prompt = upstreamMergePrompt("0.0.46-nightly.20261014.3132");
+    expect(prompt).toContain(
       "published upstream nightly v0.0.46-nightly.20261014.3132 from pingdotgg/t3code",
     );
+    expect(prompt).toContain("repos/pingdotgg/t3code/releases/tags/$tag");
+    expect(prompt).toContain(".draft == false and .published_at != null");
+    expect(prompt).toContain("refs/tags/v*:refs/tags/upstream/v*");
+    expect(prompt).toContain('git merge-base --is-ancestor HEAD "$upstream_ref"');
+    expect(prompt).toMatch(
+      /git merge --ff-only "\$upstream_ref"[\s\S]*git merge --no-edit upstream[\s\S]*git merge --no-edit ksg\/passthrough/,
+    );
+    expect(prompt).toContain("Do not push unless the user explicitly approves in a later message.");
+  });
+
+  it("requires review of semantic conflicts, generated catalogs, and migration IDs", () => {
     const prompt = upstreamMergePrompt("0.0.46-nightly.20261014.3132");
     expect(prompt).toContain("docs/operations/ksg-customization-inventory.md");
-    expect(prompt).toContain("git switch upstream && git merge --ff-only origin/upstream");
-    expect(prompt).toContain("git merge --no-edit ksg/passthrough");
-    expect(prompt).toContain("Never push, publish a release, or update a running device.");
+    expect(prompt).toMatch(/MERGE BLOCKED.+modify\/delete.+ThreadRouteScreen\.tsx.+multi-hunk/);
+    expect(prompt).toContain(
+      "Add four to every newly integrated upstream migration ID 112 or higher",
+    );
+    expect(prompt).toContain("vp run i18n:generate");
+    expect(prompt).toContain("vp run i18n:check");
     expect(prompt).toContain("path | branch layer | resolution | evidence or check");
-    expect(prompt).toContain("Do not push unless the user explicitly approves in a later message.");
   });
 });

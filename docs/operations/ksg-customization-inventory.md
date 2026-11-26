@@ -20,12 +20,13 @@ Use the check commands from the repository root after resolving a merge. They ar
 
 Owners: `apps/server/src/captains/`, `apps/server/src/orchestration-v2/CaptainRolloverWorker.ts`, `apps/server/src/mcp/toolkits/captain/`, `packages/contracts/src/captain.ts`, `packages/client-runtime/src/state/captain*.ts`, `packages/client-runtime/src/state/duetOrder.ts`, Captain migrations `112` through `115`, and `evals/mcp-tool-use/cases/captain.ndjson`.
 
-Must survive: Captain profiles, scoped projects, documents, memories, archive and reset behavior, delegation to crew threads, earlier conversation identity, rollover end reasons, durable resends, coordinator-only Captains, Captain MCP tools, and the client projection that tracks attention across current and earlier conversations.
+Must survive: Captain profiles, scoped projects, documents, local and optional [Honcho memory](../user/captain-honcho-memory.md), archive and reset behavior, delegation to crew threads, earlier conversation identity, rollover end reasons, durable resends, coordinator-only Captains, Captain MCP tools, and the client projection that tracks attention across current and earlier conversations.
 
 Checks:
 
 ```sh
 git grep -n 'class CaptainService' -- apps/server/src/captains/CaptainService.ts
+git grep -n 'class CaptainHonchoMemory' -- apps/server/src/captains/CaptainHonchoMemory.ts
 git grep -n 'CaptainRolloverWorker' -- apps/server/src/orchestration-v2 apps/server/src
 git grep -n 'captainEarlierConversations' -- packages/contracts/src/captain.ts
 git grep -n '\[112, "Captains"' -- apps/server/src/persistence/Migrations.ts
@@ -106,6 +107,20 @@ git grep -n 'ksg-salon.css' -- apps/web/src/index.css
 git grep -n 'APP_ICONS' -- packages/shared/src/appIcons.ts
 ```
 
+## Native desktop appearance and controls
+
+Owners: `apps/desktop/src/app/DesktopAppIdentity.ts`, `apps/desktop/src/app/DesktopAssets.ts`, `apps/desktop/src/window/DesktopWindow.ts`, `apps/desktop/src/electron/ElectronTheme.ts`, and window IPC in `apps/desktop/src/ipc/methods/window.ts` and `apps/desktop/src/preload.ts`.
+
+Must survive: applying custom dock and window icons on launch and reverting to the packaged icon, matching native chrome to the selected theme, and positioning the macOS window buttons at the current zoom level.
+
+Checks:
+
+```sh
+git grep -n 'applyAppIcon' -- apps/desktop/src/app/DesktopAppIdentity.ts
+git grep -n 'macosWindowButtonPosition' -- apps/desktop/src/window/DesktopWindow.ts
+git grep -n 'setBlackChrome' -- apps/desktop/src/electron/ElectronTheme.ts
+```
+
 ## CPA usage limits and hub quota routing
 
 Owners: `apps/server/src/usage/cpaManager.ts`, `apps/server/src/usage/UsageLimitSources.ts`, `apps/server/src/serverSettings.ts`, `packages/contracts/src/providerUsageLimits.ts`, `packages/shared/src/usageLimits.ts`, `packages/shared/src/usageLimitsCopy.ts`, `apps/web/src/components/usage/CpaAccounts.tsx`, `apps/mobile/src/features/usage/CpaAccounts.tsx`, and usage settings on both clients.
@@ -183,7 +198,7 @@ git grep -n 'kidsseeghosts\|0db5bfe2-75db-4fa0-a957-e2ef19fac1d8' -- apps/mobile
 
 ## Migration renumbering
 
-KSG databases already recorded Captain migrations `112` through `115`. Upstream migrations that originally use those IDs must move forward by four in both filename and manifest entry. In the 5258 baseline this means upstream `112` through `119` are KSG `116` through `123`. Never renumber or edit the Captain migrations themselves.
+KSG databases already recorded Captain migrations `112` through `115`. Newly integrated upstream migrations with IDs `112` or higher must move forward by four in the filename, manifest ID, and manifest import. In the 5258 baseline this means upstream `112` through `119` are KSG `116` through `123`. Keep all previously shipped migration IDs and files intact.
 
 Checks:
 
