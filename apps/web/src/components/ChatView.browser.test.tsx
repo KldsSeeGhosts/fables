@@ -1548,3 +1548,63 @@ it("follows a live Duet rollover in a tab and opens a past conversation explicit
     ),
   );
 });
+
+it("keeps earlier Duet history accessible in a fresh conversation", async () => {
+  await using _viewport = await appViewport();
+  useLayoutStore.getState().reset();
+  using _layout = { [Symbol.dispose]: () => useLayoutStore.getState().reset() };
+  const old = threadWithHistory("captain:earlier-render:0", 3);
+  const primary = threadWithHistory("captain:earlier-render:1", 0);
+  const captain = {
+    id: CaptainId.make("earlier-render"),
+    primaryThreadId: primary.id,
+    earlierThreadIds: [old.id],
+    earlierThreadEndReasons: ["manual"],
+    name: "Coordinator",
+    role: "Coordinator",
+    instructions: "",
+    avatar: { preset: "compass", color: "violet" },
+    scopedProjectIds: [],
+    reportPolicy: "context",
+    coordinatorOnly: false,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    archivedAt: null,
+  } satisfies Captain;
+  using _environment = installFakeEnvironment([old, primary], { supportsCaptains: true });
+  using _captains = answerRpc(WS_METHODS.captainsSubscribe, () =>
+    Stream.succeed({ captains: [captain], documents: [], memories: [] }).pipe(
+      Stream.concat(Stream.never),
+    ),
+  );
+  appAtomRegistry.reset();
+  __setClientSettingsForTests({
+    ...DEFAULT_CLIENT_SETTINGS,
+    onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
+  });
+  const router = getRouter(
+    createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${primary.id}`] }),
+  );
+  await router.load();
+  // This test supplies its own router to exercise the whole workspace.
+  await using screen = await render(<AppRoot router={router} />, {
+    container: appContainer(),
+    router: false,
+  });
+
+  const showEarlier = screen.getByRole("button", { name: "Show earlier conversation" });
+  await expect.element(showEarlier).toBeVisible();
+  const tabs = screen.getByRole("region", { name: "Thread tabs" });
+  expect(showEarlier.element().getBoundingClientRect().top).toBeGreaterThanOrEqual(
+    tabs.element().getBoundingClientRect().bottom,
+  );
+  await userEvent.click(showEarlier);
+
+  await expect.element(screen.getByText("Earlier conversation", { exact: true })).toBeVisible();
+  await expect.element(screen.getByText(`${old.id}: question 2`, { exact: true })).toBeVisible();
+  await expect.element(screen.getByText(`Answer 2 for ${old.id}.`, { exact: true })).toBeVisible();
+  expect(document.querySelector("[data-chat-composer-overlay]")).toHaveAttribute(
+    "data-chat-composer-layout",
+    "docked",
+  );
+});

@@ -1851,11 +1851,13 @@ export default function ChatView(props: ChatViewProps) {
     backgroundSubmissionPending,
     hasWorktreeSetupCard: worktreeSetup !== null,
   });
-  // An empty started thread, such as a fresh Captain conversation, centers the same hero.
+  // Keep the timeline and docked composer visible when a fresh Duet has history.
   const isEmptyThreadHero =
     isServerThread &&
     !embedded &&
     timelineEmpty &&
+    captainEarlier.expandedCount === 0 &&
+    captainEarlier.unexpandedCount === 0 &&
     !isWorking &&
     threadSyncPhase === null &&
     worktreeSetup === null;
