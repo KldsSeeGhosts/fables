@@ -425,7 +425,10 @@ it.effect("thread cleanup notifies subscribers and a finishing run cannot recrea
 
 it.effect("dispatches morning briefs to the generator while ordinary tasks start turns", () =>
   Effect.gen(function* () {
-    const briefCalls: Array<{ readonly threadId: ThreadId; readonly projectId: ProjectId }> = [];
+    const briefCalls: Array<{
+      readonly threadId: ThreadId;
+      readonly projectId?: ProjectId | undefined;
+    }> = [];
     let launches = 0;
     let sends = 0;
     const layer = ScheduledTaskService.layer.pipe(
@@ -456,7 +459,7 @@ it.effect("dispatches morning briefs to the generator while ordinary tasks start
             sendToThread: () =>
               Effect.sync(() => {
                 sends++;
-              }),
+              }).pipe(Effect.as(undefined as never)),
             getThreadShell: () => Effect.succeed(threadShell(ProjectId.make("project:test"))),
           }),
           Layer.mock(SecretRequests.SecretRequests)({}),
