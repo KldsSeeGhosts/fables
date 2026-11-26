@@ -6,11 +6,13 @@ import {
   type Captain,
   type CaptainConversationEndReason,
   type ScopedThreadRef,
+  type ThreadId,
 } from "@t3tools/contracts";
 import { threadKey } from "@t3tools/client-runtime/state/entities";
 import { isCompleteTurnItemRow } from "@t3tools/client-runtime/state/threads";
 
-import { useEnvironmentThreads } from "../../state/threads";
+import type { EnvironmentThreadState } from "@t3tools/client-runtime/state/threads";
+import { useEnvironmentThread, useEnvironmentThreadRetry } from "../../state/threads";
 import {
   deriveTimelineEntriesFromVisibleTurnItemsWithState,
   type TimelineEntry,
@@ -35,35 +37,48 @@ function endReasonDetail(
 export function useCaptainEarlierConversations(input: {
   readonly threadRef: ScopedThreadRef | null;
   readonly captain: Captain | undefined;
+  readonly followedFrom?: ThreadId | undefined;
 }) {
   const gt = useGT();
   const resolve = useMessages();
   const key = input.threadRef === null ? null : threadKey(input.threadRef);
-  const [expansion, setExpansion] = useState<{ key: string | null; count: number }>({
-    key: null,
-    count: 0,
-  });
-  const expandedCount = expansion.key === key ? expansion.count : 0;
+  const [expansion, setExpansion] = useState<{
+    key: string | null;
+    count: number;
+    snapshots: ReadonlyArray<EnvironmentThreadState>;
+  }>({ key: null, count: 0, snapshots: [] });
   const threadRef = input.threadRef;
+  const history = input.captain ? captainEarlierConversations(input.captain) : [];
+  const expandedCount =
+    expansion.key === key
+      ? expansion.count
+      : Number(
+          input.followedFrom !== undefined &&
+            history.some((item) => item.threadId === input.followedFrom),
+        );
   const conversations =
-    threadRef === null || input.captain === undefined
+    threadRef === null
       ? []
-      : captainEarlierConversations(input.captain)
-          .slice(0, expandedCount)
-          .reverse()
-          .map((conversation) => ({
-            ...conversation,
-            ref: {
-              environmentId: threadRef.environmentId,
-              threadId: conversation.threadId,
-            },
-          }));
-  const states = useEnvironmentThreads(conversations.map((conversation) => conversation.ref));
+      : history.slice(0, expandedCount).map((conversation) => ({
+          ...conversation,
+          ref: { environmentId: threadRef.environmentId, threadId: conversation.threadId },
+        }));
+  // Once a conversation has been paged through, keep its snapshot and release its live stream.
+  const oldest = conversations.at(-1);
+  const detailState = useEnvironmentThread(
+    oldest?.ref.environmentId ?? null,
+    oldest?.ref.threadId ?? null,
+  );
+  const retry = useEnvironmentThreadRetry(oldest?.ref ?? null);
+  const snapshots = expansion.key === key ? expansion.snapshots : [];
+  const missing = oldest !== undefined && Option.isNone(detailState.data);
+  const failed = missing && (detailState.status === "deleted" || Option.isSome(detailState.error));
+  const loading = missing && !failed;
 
   const entries = (() => {
     const result: TimelineEntry[] = [];
-    for (const [index, conversation] of conversations.entries()) {
-      const state = states[index];
+    for (const [index, conversation] of [...conversations.entries()].reverse()) {
+      const state = conversation === oldest ? detailState : snapshots[index];
       const projection = state && Option.isSome(state.data) ? state.data.value : null;
       if (projection !== null) {
         const visibleTurnItems = projection.visibleTurnItems
@@ -82,12 +97,13 @@ export function useCaptainEarlierConversations(input: {
           }).entries,
         );
       }
+      if (projection === null) continue;
       const lastEntry = result.at(-1);
       const detail = endReasonDetail(conversation.endReason, gt);
       result.push({
         id: `captain-earlier-divider:${conversation.threadId}`,
         kind: "conversation-divider",
-        createdAt: lastEntry?.createdAt ?? input.captain?.updatedAt ?? "1970-01-01T00:00:00.000Z",
+        createdAt: lastEntry?.createdAt ?? "1970-01-01T00:00:00.000Z",
         label: gt("Earlier conversation"),
         ...(detail === undefined ? {} : { detail }),
       });
@@ -95,28 +111,22 @@ export function useCaptainEarlierConversations(input: {
     return result;
   })();
 
-  const unexpandedCount = Math.max(
-    0,
-    (input.captain?.earlierThreadIds.length ?? 0) - expandedCount,
-  );
-  const loading =
-    expandedCount > 0 &&
-    states.some((state) => state.status === "empty" || state.status === "synchronizing");
+  const unexpandedCount = Math.max(0, history.length - expandedCount);
   return {
     entries,
     expandedCount,
     unexpandedCount,
     loading,
+    failed,
+    retry,
     expand: () => {
-      if (input.captain === undefined || unexpandedCount === 0) return;
-      setExpansion({ key, count: expandedCount + 1 });
+      if (unexpandedCount === 0 || missing) return;
+      setExpansion({
+        key,
+        count: expandedCount + 1,
+        snapshots: oldest === undefined ? snapshots : [...snapshots, detailState],
+      });
     },
-    oldestExpanded:
-      conversations.length === 0
-        ? null
-        : {
-            ref: conversations[0]!.ref,
-            state: states[0] ?? null,
-          },
+    oldestExpanded: oldest === undefined ? null : { ref: oldest.ref, state: detailState },
   };
 }

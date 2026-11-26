@@ -484,6 +484,7 @@ type ChatViewProps =
       /** A side chat in its parent's right panel; the parent keeps the keyboard and workspace UI. */
       embedded?: SideChatParentPanel;
       routeKind: "server";
+      earlierConversationJustEnded?: ThreadId | undefined;
       draftId?: never;
     }
   | {
@@ -520,9 +521,8 @@ export default function ChatView(props: ChatViewProps) {
   const draftId = routeKind === "draft" ? props.draftId : null;
   const handleNewThread = useNewThreadHandler();
   const routeThreadRef = scopeThreadRef(environmentId, threadId);
-  const isEarlierConversation =
-    useCaptainPrimaryReplacement(embedded ? routeThreadRef : null) !== undefined;
-  const canOperateThread = canOperateEnvironment && !isEarlierConversation;
+  const isEarlierConversation = useCaptainPrimaryReplacement(routeThreadRef) !== undefined;
+  const canOperateThread = canOperateEnvironment;
   const routeThreadKey = scopedThreadKey(routeThreadRef);
   const currentRouteThreadKeyRef = useRef<string | null>(routeThreadKey);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- publishes the committed route thread key to a ref that async handlers check before applying results
@@ -634,6 +634,7 @@ export default function ChatView(props: ChatViewProps) {
   const captainEarlier = useCaptainEarlierConversations({
     threadRef: routeThreadDetailRef,
     captain,
+    followedFrom: routeKind === "server" ? props.earlierConversationJustEnded : undefined,
   });
   const threadHistoryControls = (() => {
     if (routeThreadDetailRef !== null && shouldShowLoadEarlierControl(serverThreadHistory)) {
@@ -669,14 +670,14 @@ export default function ChatView(props: ChatViewProps) {
         },
       };
     }
-    if (captainEarlier.unexpandedCount > 0 || captainEarlier.loading) {
+    if (captainEarlier.failed || captainEarlier.unexpandedCount > 0 || captainEarlier.loading) {
       return {
         hasMoreHistory: true,
         loading: captainEarlier.loading,
-        error: null,
-        label: gt("Show earlier conversation"),
+        error: captainEarlier.failed ? gt("Could not load earlier conversation.") : null,
+        label: captainEarlier.failed ? gt("Retry") : gt("Show earlier conversation"),
         loadingLabel: gt("Loading earlier conversation…"),
-        onLoadEarlier: captainEarlier.expand,
+        onLoadEarlier: captainEarlier.failed ? captainEarlier.retry : captainEarlier.expand,
       };
     }
     return undefined;
@@ -3381,8 +3382,9 @@ export default function ChatView(props: ChatViewProps) {
       isLocalDraftThread,
       isGitRepo,
       phase,
-      failedRunId,
+      failedRunId: isEarlierConversation ? null : failedRunId,
       failedRunMessage,
+      earlierConversation: isEarlierConversation,
       runtimeMode,
       sendEnvMode,
       worktreeRepositories,
@@ -4194,19 +4196,21 @@ export default function ChatView(props: ChatViewProps) {
                               canResume={canResume}
                               isRevertingCheckpoint={isRevertingCheckpoint}
                               sendDisabledReason={
-                                !canOperateThread
-                                  ? gt("This connection cannot change threads.")
-                                  : isEnvironmentChanging
-                                    ? gt("Preparing machine")
-                                    : isRevertingCheckpoint
-                                      ? gt("Rewinding conversation")
-                                      : feedbackUploading
-                                        ? gt("Sending feedback")
-                                        : threadDetailLoading
-                                          ? gt("Messages loading")
-                                          : worktreeSetupBlocksSend
-                                            ? gt("Preparing worktree")
-                                            : projectCloneSendBlockReason
+                                isEarlierConversation && activePendingUserInput === null
+                                  ? gt("Send new messages in the current conversation.")
+                                  : !canOperateThread
+                                    ? gt("This connection cannot change threads.")
+                                    : isEnvironmentChanging
+                                      ? gt("Preparing machine")
+                                      : isRevertingCheckpoint
+                                        ? gt("Rewinding conversation")
+                                        : feedbackUploading
+                                          ? gt("Sending feedback")
+                                          : threadDetailLoading
+                                            ? gt("Messages loading")
+                                            : worktreeSetupBlocksSend
+                                              ? gt("Preparing worktree")
+                                              : projectCloneSendBlockReason
                               }
                               isPreparingWorktree={isPreparingWorktree && !sendQueuesBehindSetup}
                               bannerItems={trayBannerItems}

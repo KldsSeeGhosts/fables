@@ -97,7 +97,10 @@ import { useSelectedThreadRequests } from "../../state/use-selected-thread-reque
 import { useSelectedThreadWorktree } from "../../state/use-selected-thread-worktree";
 import { useThreadComposerState } from "../../state/use-thread-composer-state";
 import { useCaptainOfThread, useCaptainPrimaryReplacement } from "../captains/useCaptainsDirectory";
-import { useCaptainEarlierConversations } from "../captains/useCaptainEarlierConversations";
+import {
+  useCaptainEarlierConversations,
+  useCaptainThreadRouteRollover,
+} from "../captains/useCaptainEarlierConversations";
 import { resolveMergeBackTargetThreadId } from "@t3tools/client-runtime/state/thread-relationships";
 import { resolveLatestMergeBackRun } from "@t3tools/client-runtime/state/thread-workflows";
 import { threadEnvironment } from "../../state/threads";
@@ -272,16 +275,20 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
   const navigation = useNavigation();
   const routeName = useRoute().name;
   const isFocused = useIsFocused();
-  const replacementThreadId = useCaptainPrimaryReplacement(
-    environmentId,
-    threadIdRaw === null ? null : ThreadId.make(threadIdRaw),
-  );
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the focused route on the Duet's live primary conversation
-  useEffect(() => {
-    if (isFocused && replacementThreadId !== undefined) {
-      navigation.setParams({ threadId: replacementThreadId });
-    }
-  }, [isFocused, navigation, replacementThreadId]);
+  const routeThreadId = threadIdRaw === null ? null : ThreadId.make(threadIdRaw);
+  const routeRef =
+    environmentId === null || routeThreadId === null
+      ? null
+      : { environmentId, threadId: routeThreadId };
+  const primaryCaptain = useCaptainOfThread(environmentId, routeThreadId);
+  const replacementThreadId = useCaptainPrimaryReplacement(environmentId, routeThreadId);
+  const routeRollover = useCaptainThreadRouteRollover({
+    thread: routeRef,
+    isPrimary: primaryCaptain !== null,
+    replacement: replacementThreadId,
+    focused: isFocused,
+    follow: (next) => navigation.setParams({ threadId: next.threadId }),
+  });
   const routeConnectionState =
     routeEnvironmentRuntime?.connectionState ?? (environmentId ? "available" : connectionState);
   const routeThreadKey =
@@ -313,7 +320,11 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
       content
     );
 
-  if (environmentId === null || threadIdRaw === null || replacementThreadId !== undefined) {
+  if (
+    environmentId === null ||
+    threadIdRaw === null ||
+    (isFocused && routeRollover.following !== null)
+  ) {
     return withInspectorHeader(<OpeningThreadLoadingScreen />);
   }
 
@@ -321,7 +332,12 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
     // ThreadRouteContent draws its own inspector header so it can show the sync status.
     return (
       <InspectorHeaderShownContext value={props.inspectorPresentation !== undefined}>
-        <ThreadRouteContent {...props} selectedThreadDetailState={selectedThreadDetailState} />
+        <ThreadRouteContent
+          {...props}
+          selectedThreadDetailState={selectedThreadDetailState}
+          earlierConversation={replacementThreadId !== undefined}
+          earlierConversationJustEnded={routeRollover.followedFrom}
+        />
       </InspectorHeaderShownContext>
     );
   }
@@ -377,6 +393,8 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
 function ThreadRouteContent(
   props: ThreadRouteScreenProps & {
     readonly selectedThreadDetailState: ReturnType<typeof useSelectedThreadDetailState>;
+    readonly earlierConversation: boolean;
+    readonly earlierConversationJustEnded?: ThreadId | undefined;
   },
 ) {
   const gt = useGT();
@@ -415,10 +433,12 @@ function ThreadRouteContent(
   const captainEarlier = useCaptainEarlierConversations({
     threadRef: selectedThreadDetailRef,
     captain,
+    followedFrom: props.earlierConversationJustEnded,
   });
   const composer = useThreadComposerState({
     startSideChat,
     earlierFeed: captainEarlier.entries,
+    earlierConversation: props.earlierConversation,
   });
   const gitState = useSelectedThreadGitState();
   const gitActions = useSelectedThreadGitActions();
@@ -509,15 +529,15 @@ function ThreadRouteContent(
         };
       }
     }
-    if (captainEarlier.unexpandedCount > 0 || captainEarlier.loading) {
+    if (captainEarlier.failed || captainEarlier.unexpandedCount > 0 || captainEarlier.loading) {
       return {
         hasMoreHistory: true,
         loading: captainEarlier.loading,
-        error: null,
-        label: gt("Show earlier conversation"),
+        error: captainEarlier.failed ? gt("Could not load earlier conversation.") : null,
+        label: captainEarlier.failed ? gt("Retry") : gt("Show earlier conversation"),
         loadingLabel: gt("Loading earlier conversation…"),
-        onLoadEarlier: captainEarlier.expand,
-        onLoadThrough: captainEarlier.expand,
+        onLoadEarlier: captainEarlier.failed ? captainEarlier.retry : captainEarlier.expand,
+        onLoadThrough: captainEarlier.failed ? captainEarlier.retry : captainEarlier.expand,
       };
     }
     return undefined;
@@ -1115,7 +1135,12 @@ function ThreadRouteContent(
               />
             )
           }
-          canOperateThread={canOperateThread}
+          canOperateThread={
+            canOperateThread &&
+            (!props.earlierConversation ||
+              requests.activePendingApproval !== null ||
+              requests.activePendingUserInput !== null)
+          }
           selectedThread={selectedThreadWithDraftSettings ?? selectedThread}
           selectedThreadDetailRef={selectedThreadDetailRef}
           contentPresentation={contentPresentation}

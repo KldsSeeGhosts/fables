@@ -1431,8 +1431,10 @@ it("/side sends the draft's attachments and context, and keeps them when it does
   );
 });
 
-it("follows the Duet primary and loads earlier conversations only on demand", async () => {
-  const old = threadWithHistory("captain:maria:1", 1);
+it("follows a live Duet rollover in a tab and opens a past conversation explicitly", async () => {
+  useLayoutStore.getState().reset();
+  using _layout = { [Symbol.dispose]: () => useLayoutStore.getState().reset() };
+  const old = threadWithQuestion("captain:maria:1", "Which option should the earlier Duet use?");
   const primary = threadWithHistory("captain:maria:2", 1);
   const replacement = threadWithHistory("captain:maria:3", 1);
   const captain = {
@@ -1454,6 +1456,7 @@ it("follows the Duet primary and loads earlier conversations only on demand", as
   const nextCaptain = Promise.withResolvers<Captain>();
   using _environment = installFakeEnvironment([old, primary, replacement], {
     supportsCaptains: true,
+    acceptCommands: true,
   });
   using _captains = answerRpc(WS_METHODS.captainsSubscribe, () =>
     Stream.succeed({ captains: [captain], documents: [], memories: [] }).pipe(
@@ -1489,6 +1492,9 @@ it("follows the Duet primary and loads earlier conversations only on demand", as
   await expect.element(screen.getByText(`${old.id}: question 0`)).toBeVisible();
   expect(isThreadSubscribed(old.id)).toBe(true);
 
+  const primaryRef = scopeThreadRef(ENVIRONMENT_ID, primary.id);
+  const replacementRef = scopeThreadRef(ENVIRONMENT_ID, replacement.id);
+  await act(() => useComposerDraftStore.getState().setPrompt(primaryRef, "Carry over this draft"));
   await act(() =>
     nextCaptain.resolve({
       ...captain,
@@ -1502,5 +1508,30 @@ it("follows the Duet primary and loads earlier conversations only on demand", as
     `/${ENVIRONMENT_ID}/${encodeURIComponent(replacement.id)}`,
   );
   await expect.element(showEarlier).toBeVisible();
-  await expect.element(screen.getByText(`${primary.id}: question 0`)).not.toBeInTheDocument();
+  await expect.element(screen.getByText(`${primary.id}: question 0`)).toBeVisible();
+  expect(useComposerDraftStore.getState().getComposerDraft(replacementRef)?.prompt).toBe(
+    "Carry over this draft",
+  );
+  expect(useComposerDraftStore.getState().getComposerDraft(primaryRef)?.prompt ?? "").toBe("");
+  await vi.waitFor(() => expect(isThreadSubscribed(old.id)).toBe(false));
+
+  await act(() =>
+    router.navigate({
+      to: "/$environmentId/$threadId",
+      params: { environmentId: ENVIRONMENT_ID, threadId: old.id },
+    }),
+  );
+  await expect.element(screen.getByText("Which option should the earlier Duet use?")).toBeVisible();
+  expect(router.state.location.pathname).toBe(`/${ENVIRONMENT_ID}/${encodeURIComponent(old.id)}`);
+  await screen.getByRole("radio", { name: /Continue Resume work/ }).click();
+  await screen.getByRole("button", { name: "Answer", exact: true }).click();
+  await vi.waitFor(() =>
+    expect(dispatchedCommands()).toContainEqual(
+      expect.objectContaining({
+        type: "runtime-request.respond",
+        threadId: old.id,
+        requestId: old.runtimeRequests?.[0]?.id,
+      }),
+    ),
+  );
 });

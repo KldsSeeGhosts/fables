@@ -1,5 +1,5 @@
 import { createChildThreadApprovalsAtom } from "@t3tools/client-runtime/state/thread-requests";
-import { useAtomValue } from "@effect/atom-react";
+import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import {
   createEnvironmentThreadDetailAtoms,
   createEnvironmentThreadShellAtoms,
@@ -92,36 +92,17 @@ export function startOpeningEnvironmentThread(environmentId: EnvironmentId, thre
   setTimeout(release, OPENING_THREAD_HOLD_MS);
 }
 
-const EMPTY_THREAD_STATE_LIST_ATOM = Atom.make<ReadonlyArray<EnvironmentThreadState>>(
-  Object.freeze([]),
-).pipe(Atom.withLabel("mobile-environment-thread-list:empty"));
-
-const environmentThreadStateListAtom = Atom.family((refsJson: string) =>
-  Atom.make((get): ReadonlyArray<EnvironmentThreadState> => {
-    const refs = JSON.parse(refsJson) as ReadonlyArray<ScopedThreadRef>;
-    return refs.map((ref) =>
-      AsyncResult.getOrElse(
-        get(environmentThreads.stateAtom(ref.environmentId, ref.threadId)),
-        () => EMPTY_ENVIRONMENT_THREAD_STATE,
-      ),
-    );
-  }).pipe(Atom.withLabel(`mobile-environment-thread-list:${refsJson}`)),
-);
-
-/** Subscribes to a caller-chosen list of thread details without sending their history up front. */
-export function useEnvironmentThreads(
-  refs: ReadonlyArray<ScopedThreadRef>,
-): ReadonlyArray<EnvironmentThreadState> {
-  return useAtomValue(
-    refs.length === 0
-      ? EMPTY_THREAD_STATE_LIST_ATOM
-      : environmentThreadStateListAtom(JSON.stringify(refs)),
-  );
-}
-
 const EMPTY_THREAD_STATE_ATOM = Atom.make(AsyncResult.success(EMPTY_ENVIRONMENT_THREAD_STATE)).pipe(
   Atom.withLabel("mobile-environment-thread:empty"),
 );
+
+export function useEnvironmentThreadRetry(ref: ScopedThreadRef | null) {
+  return useAtomRefresh(
+    ref === null
+      ? EMPTY_THREAD_STATE_ATOM
+      : environmentThreads.stateAtom(ref.environmentId, ref.threadId),
+  );
+}
 
 export function useEnvironmentThread(
   environmentId: EnvironmentId | null,

@@ -5,6 +5,10 @@ import {
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
 import { parseThreadKey, threadKey } from "@t3tools/client-runtime/state/entities";
+import {
+  EMPTY_CAPTAIN_ROUTE_ROLLOVER,
+  trackCaptainRouteRollover,
+} from "@t3tools/client-runtime/state/captains";
 import { visibilityParentKey } from "@t3tools/client-runtime/state/threads";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import * as Option from "effect/Option";
@@ -12,7 +16,7 @@ import { Navigate, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import ChatView from "./ChatView";
-import { useCaptainPrimaryReplacement } from "./captains/useCaptain";
+import { useCaptain, useCaptainPrimaryReplacement } from "./captains/useCaptain";
 import { BackgroundThreadContext, HiddenThreadContext } from "./chat/backgroundThread";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { closeLayoutThread } from "../layout/layoutActions";
@@ -77,24 +81,39 @@ export function ThreadRouteView({
     draftId === null ? null : store.getPromotedDraftRedirect(draftId),
   );
   const serverThreadRef = target.kind === "server" ? target.threadRef : null;
+  const currentCaptain = useCaptain(serverThreadRef);
   const replacementThreadId = useCaptainPrimaryReplacement(serverThreadRef);
-  const replacementEnvironmentId = serverThreadRef?.environmentId;
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- follows the Duet's live primary conversation in the workspace tab
+  const [rollover, setRollover] = useState(EMPTY_CAPTAIN_ROUTE_ROLLOVER);
+  const routeRollover = trackCaptainRouteRollover(
+    rollover,
+    serverThreadRef,
+    currentCaptain?.archivedAt === null,
+    replacementThreadId,
+  );
+  if (routeRollover !== rollover) setRollover(routeRollover);
+  const following = routeRollover.following;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- moves the draft and follows a Duet's live rollover in the workspace and URL
   useEffect(() => {
     if (
-      tabId === null ||
-      replacementThreadId === undefined ||
-      replacementEnvironmentId === undefined
+      following === null ||
+      serverThreadRef === null ||
+      (tabId === null && (!focused || background))
     )
       return;
-    useLayoutStore.getState().replaceTabContent(tabId, {
-      kind: "chat",
-      target: {
-        kind: "server",
-        threadRef: scopeThreadRef(replacementEnvironmentId, replacementThreadId),
-      },
-    });
-  }, [tabId, replacementThreadId, replacementEnvironmentId]);
+    useComposerDraftStore.getState().moveComposerContent(serverThreadRef, following);
+    if (tabId !== null) {
+      useLayoutStore.getState().replaceTabContent(tabId, {
+        kind: "chat",
+        target: { kind: "server", threadRef: following },
+      });
+    } else {
+      void navigate({
+        to: "/$environmentId/$threadId",
+        params: buildThreadRouteParams(following),
+        replace: true,
+      });
+    }
+  }, [background, focused, following, navigate, serverThreadRef, tabId]);
   const serverThreadShell = useQuietThreadShell(serverThreadRef);
   const shellStatus = useEnvironmentShellStatus(serverThreadRef?.environmentId ?? null);
   const environmentThreadRefs = useEnvironmentThreadRefs(serverThreadRef?.environmentId ?? null);
@@ -176,7 +195,7 @@ export function ThreadRouteView({
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears pending file drops and navigates the router home once a server thread is confirmed missing
   useEffect(() => {
-    if (target.kind !== "server" || !shellLive || replacementThreadId !== undefined) {
+    if (target.kind !== "server" || !shellLive || following !== null) {
       return;
     }
     if (renderState === "missing") {
@@ -195,7 +214,7 @@ export function ThreadRouteView({
     environmentHasAnyThreads,
     navigate,
     renderState,
-    replacementThreadId,
+    following,
     shellLive,
     tabId,
     target,
@@ -255,18 +274,6 @@ export function ThreadRouteView({
     } else {
       redirect = <Navigate to="/" replace />;
     }
-  } else if (replacementThreadId !== undefined) {
-    if (tabId === null) {
-      redirect = (
-        <Navigate
-          to="/$environmentId/$threadId"
-          params={buildThreadRouteParams(
-            scopeThreadRef(target.threadRef.environmentId, replacementThreadId),
-          )}
-          replace
-        />
-      );
-    }
   } else if (hiddenByTagFilter) {
     redirect = <Navigate to="/" replace />;
   } else if (offShellBlocked) {
@@ -278,6 +285,7 @@ export function ThreadRouteView({
         key={nextHandoffKey?.key}
         environmentId={target.threadRef.environmentId}
         threadId={target.threadRef.threadId}
+        earlierConversationJustEnded={routeRollover.followedFrom}
         routeKind="server"
       />
     );

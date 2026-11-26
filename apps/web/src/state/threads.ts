@@ -1,5 +1,5 @@
 import { createChildThreadApprovalsAtom } from "@t3tools/client-runtime/state/thread-requests";
-import { useAtomValue } from "@effect/atom-react";
+import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { enabledEnvironmentIds } from "@t3tools/client-runtime/state/connections";
 import { arrayElementsEqual } from "@t3tools/client-runtime/state/entities";
 import {
@@ -39,33 +39,6 @@ export const threadEnvironment: ReturnType<typeof createThreadEnvironmentAtoms> 
   createThreadEnvironmentAtoms(connectionAtomRuntime, threadFamilies.snapshotAtom);
 const environmentThreads = createEnvironmentThreadStateAtoms(connectionAtomRuntime);
 
-const EMPTY_THREAD_STATE_LIST_ATOM = Atom.make<ReadonlyArray<EnvironmentThreadState>>(
-  Object.freeze([]),
-).pipe(Atom.withLabel("web-environment-thread-list:empty"));
-
-const environmentThreadStateListAtom = Atom.family((refsJson: string) =>
-  Atom.make((get): ReadonlyArray<EnvironmentThreadState> => {
-    const refs = JSON.parse(refsJson) as ReadonlyArray<ScopedThreadRef>;
-    return refs.map((ref) =>
-      AsyncResult.getOrElse(
-        get(environmentThreads.stateAtom(ref.environmentId, ref.threadId)),
-        () => EMPTY_ENVIRONMENT_THREAD_STATE,
-      ),
-    );
-  }).pipe(Atom.withLabel(`web-environment-thread-list:${refsJson}`)),
-);
-
-/** Subscribes to a caller-chosen list of thread details without sending their history up front. */
-export function useEnvironmentThreads(
-  refs: ReadonlyArray<ScopedThreadRef>,
-): ReadonlyArray<EnvironmentThreadState> {
-  return useAtomValue(
-    refs.length === 0
-      ? EMPTY_THREAD_STATE_LIST_ATOM
-      : environmentThreadStateListAtom(JSON.stringify(refs)),
-  );
-}
-
 export const environmentThreadDetails = createEnvironmentThreadDetailAtoms(
   environmentThreads.stateAtom,
 );
@@ -82,6 +55,14 @@ export const childThreadApprovalsAtom = createChildThreadApprovalsAtom({
 const EMPTY_THREAD_STATE_ATOM = Atom.make(AsyncResult.success(EMPTY_ENVIRONMENT_THREAD_STATE)).pipe(
   Atom.withLabel("web-environment-thread:empty"),
 );
+
+export function useEnvironmentThreadRetry(ref: ScopedThreadRef | null) {
+  return useAtomRefresh(
+    ref === null
+      ? EMPTY_THREAD_STATE_ATOM
+      : environmentThreads.stateAtom(ref.environmentId, ref.threadId),
+  );
+}
 
 export function useEnvironmentThread(
   environmentId: EnvironmentId | null,

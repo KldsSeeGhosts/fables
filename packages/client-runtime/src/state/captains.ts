@@ -13,7 +13,7 @@ import {
 import * as DateTime from "effect/DateTime";
 
 import { scopeThreadRef } from "../environment/scoped.ts";
-import { threadKey } from "./entities.ts";
+import { parseThreadKey, threadKey } from "./entities.ts";
 import { threadRuntimeIsActive, type EnvironmentThreadShell } from "./models.ts";
 
 export const captainForThread = (snapshot: CaptainSnapshot | null, threadId: ThreadId) =>
@@ -26,6 +26,50 @@ export const captainForEarlierConversation = (
   snapshot?.captains.find(
     (captain) => captain.archivedAt === null && captain.earlierThreadIds.includes(threadId),
   );
+
+type CaptainRouteRollover = {
+  readonly key: string | null;
+  readonly wasPrimary: boolean;
+  readonly following: ScopedThreadRef | null;
+  readonly followedFrom?: ThreadId;
+};
+
+export const EMPTY_CAPTAIN_ROUTE_ROLLOVER: CaptainRouteRollover = {
+  key: null,
+  wasPrimary: false,
+  following: null,
+};
+
+export function trackCaptainRouteRollover(
+  previous: CaptainRouteRollover,
+  thread: ScopedThreadRef | null,
+  isPrimary: boolean,
+  replacement: ThreadId | undefined,
+): CaptainRouteRollover {
+  const key = thread === null ? null : threadKey(thread);
+  if (previous.key !== key) {
+    return {
+      key,
+      wasPrimary: isPrimary,
+      following: null,
+      ...(thread !== null &&
+      previous.following !== null &&
+      threadKey(previous.following) === key &&
+      previous.key !== null
+        ? { followedFrom: parseThreadKey(previous.key).threadId }
+        : {}),
+    };
+  }
+  if (thread === null) return previous;
+  if (isPrimary && !previous.wasPrimary) return { ...previous, wasPrimary: true };
+  if (
+    !previous.wasPrimary ||
+    replacement === undefined ||
+    previous.following?.threadId === replacement
+  )
+    return previous;
+  return { ...previous, following: scopeThreadRef(thread.environmentId, replacement) };
+}
 
 export const captainChildIsActive = (thread: EnvironmentThreadShell) =>
   threadRuntimeIsActive(thread.runtime) ||
