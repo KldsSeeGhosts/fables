@@ -63,6 +63,7 @@ import * as ThreadIssueService from "./ThreadIssueService.ts";
 import * as ThreadLaunchService from "./ThreadLaunchService.ts";
 import * as ThreadForkService from "./ThreadForkService.ts";
 import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
+import * as CaptainHonchoMemory from "../captains/CaptainHonchoMemory.ts";
 import * as CaptainService from "../captains/CaptainService.ts";
 import * as CaptainStore from "../captains/CaptainStore.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
@@ -185,10 +186,15 @@ const layerRunExecutionServiceProvided = RunExecutionService.layer.pipe(
   ),
 );
 
+const layerCaptainHonchoMemoryProvided = CaptainHonchoMemory.layer.pipe(
+  Layer.provide(Layer.merge(CaptainStore.layer, layerEventSink)),
+);
+
 const layerProviderTurnStartServiceProvided = ProviderTurnStartService.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
       CaptainStore.layer,
+      layerCaptainHonchoMemoryProvided,
       layerContextHandoffServiceProvided,
       layerEventSink,
       IdAllocator.layer,
@@ -458,6 +464,7 @@ export const layerProduction = Layer.mergeAll(
   layerWorkflowsProvided,
   layerCaptainProvided,
   CaptainStore.layer,
+  layerCaptainHonchoMemoryProvided,
   layerScratchThreadPromotionProvided,
   layerSecretRequestsProvided,
   layerFeedbackStoreProvided,

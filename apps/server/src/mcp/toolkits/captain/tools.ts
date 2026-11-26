@@ -69,7 +69,8 @@ export const CaptainToolkit = Toolkit.make(
   }).annotate(McpSchema.EnabledWhen, McpInvocationContext.captainOnly),
   Tool.make("captain_memory_search", {
     ...options,
-    description: "Search your Captain's memories by text, or omit query to list recent memories.",
+    description:
+      "Search your Captain's memories by text, or omit query to list recent memories. When long-term memory is enabled, recalled matches follow local memories and start with 'Recalled:'.",
     parameters: Schema.Struct({
       query: Schema.optional(Schema.String.check(Schema.isMaxLength(500))),
     }),
