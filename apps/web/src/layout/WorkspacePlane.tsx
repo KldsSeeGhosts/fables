@@ -15,6 +15,7 @@ import { buildThreadRouteParams, type ThreadRouteTarget } from "../threadRoutes"
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 import { LayoutSurfaceHost } from "./SurfaceHost";
+import { LayoutThreadTabCleanup } from "./LayoutThreadTabCleanup";
 import { layoutRoutePage } from "./pageNavigation";
 import { useIndexShowsLayout } from "./useIndexShowsLayout";
 import { useLayoutRouteSync } from "./useLayoutRouteSync";
@@ -63,6 +64,7 @@ export function WorkspacePlane({ children }: { children: ReactNode }) {
   );
   return (
     <>
+      <LayoutThreadTabCleanup layout={layout} />
       {!modalOpen && threadTarget?.kind === "server" ? (
         <ThreadLinkPrompt threadRef={threadTarget.threadRef} />
       ) : null}

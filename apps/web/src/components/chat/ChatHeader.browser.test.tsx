@@ -84,6 +84,7 @@ import { LayoutPaneContext, useLayoutPane } from "../../layout/layoutPaneContext
 import {
   createLayoutState,
   findLayoutTab,
+  selectFocusedChatTab,
   type LayoutState,
   type LayoutTab,
 } from "../../layout/layoutModel";
@@ -239,6 +240,61 @@ it("uses the always-tabless Duet header and keeps the hidden terminal chip", asy
     expect(screen.container.querySelector('[aria-label="Status: Idle"]')).toBeNull();
   } finally {
     duetShell.enabled = false;
+  }
+});
+
+it("switches between a Duet and a sibling thread from the visible header", async () => {
+  duetShell.enabled = true;
+  captainState.enabled = true;
+  const originalLayout = useLayoutStore.getState().layout;
+  const environmentId = EnvironmentId.make("environment");
+  const duetId = ThreadId.make("captain:maria:0");
+  const ordinaryId = ThreadId.make("publisher");
+  const open = (threadId: ThreadId) =>
+    useLayoutStore.getState().openTab({
+      kind: "chat",
+      target: { kind: "server", threadRef: scopeThreadRef(environmentId, threadId) },
+    });
+  useLayoutStore.getState().reset();
+  open(ordinaryId);
+  open(duetId);
+
+  function FocusedHeader() {
+    const layout = useLayoutStore((state) => state.layout);
+    const focused = selectFocusedChatTab(layout);
+    const paneContext = useLayoutPane();
+    const content = focused?.tab.content;
+    if (!focused || content?.kind !== "chat" || content.target.kind !== "server") return null;
+    return (
+      <LayoutPaneContext value={{ ...paneContext, paneId: focused.pane.id, tabId: focused.tab.id }}>
+        <ChatPaneHeader reserveNativeControlsInset={false}>
+          <ChatHeader
+            activeThreadEnvironmentId={environmentId}
+            activeThreadId={content.target.threadRef.threadId}
+            activeThreadTitle="Publisher"
+            isServerThread
+            activeProject={null}
+            parentThreadLink={null}
+            onOpenThread={() => {}}
+            rightPanelOpen={false}
+          />
+        </ChatPaneHeader>
+      </LayoutPaneContext>
+    );
+  }
+
+  try {
+    await using screen = await render(<FocusedHeader />);
+    await screen.getByRole("button", { name: "New thread", exact: true }).click();
+    await expect
+      .element(screen.getByRole("button", { name: "Thread actions for Publisher" }))
+      .toBeVisible();
+    await screen.getByRole("button", { name: "New thread", exact: true }).click();
+    await expect.element(screen.getByRole("button", { name: "Duet menu for Maria" })).toBeVisible();
+  } finally {
+    useLayoutStore.setState({ layout: originalLayout });
+    duetShell.enabled = false;
+    captainState.enabled = false;
   }
 });
 
