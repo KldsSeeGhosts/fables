@@ -55,6 +55,7 @@ import { appAtomRegistry } from "./state/atom-registry";
 import { subscribeComposerDraftModelReconciliation } from "./state/use-composer-drafts";
 import { environmentThreadShells, threadEnvironment } from "./state/threads";
 import { environmentShell, shellCachesReadAtom } from "./state/shell";
+import { captainsCacheReadAtom } from "./features/captains/captainsCache";
 import { OverlayPortalHost } from "./components/ui/OverlayPortal";
 import { shouldHandleAppLink, restoreDraftLinkState } from "./lib/appLinking";
 import { hasCloudPublicConfig } from "./features/cloud/publicConfig";
@@ -228,7 +229,10 @@ const SPLASH_WAIT_MS = 1_500;
 
 function SplashScreenCoordinator() {
   const { isReady } = useAppearancePreferences();
-  const shellCachesRead = useAtomValue(shellCachesReadAtom);
+  const shellsRead = useAtomValue(shellCachesReadAtom);
+  // Cached Captains decide which Home rows are Duets, so they belong to the same read.
+  const captainsRead = useAtomValue(captainsCacheReadAtom);
+  const shellCachesRead = shellsRead && captainsRead;
   const homeRowsPending = useLaunchSplashHomeRowsPending();
   const [waitEnded, setWaitEnded] = useState(false);
   const hidden = useRef(false);
