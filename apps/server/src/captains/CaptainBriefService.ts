@@ -92,7 +92,7 @@ const briefPrompt = (input: {
   readonly activity: string;
 }) => `Write the next "## New" section of ${input.captain.name}'s DIGEST.md morning brief.
 
-Return only the markdown body for that section. Do not include the "## New" heading, a code fence, or commentary. Prefer 3 to 6 concise bullets. Cover progress, open work, blockers, and decisions that need the user. Use the existing digest for continuity, but write a fresh current section rather than copying stale items forward.
+Return only the markdown body for that section. Do not include the "## New" heading, a code fence, or commentary. Write no more than 8 bullets, with one line per item that needs the user's attention or decision. Use plain language. Cover progress, open work, blockers, and decisions that need the user. Use the existing digest for continuity, but write a fresh current section rather than copying stale items forward.
 
 ## NOTES.md
 ${input.notes.trim() || "(empty)"}

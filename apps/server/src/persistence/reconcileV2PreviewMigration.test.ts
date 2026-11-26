@@ -103,6 +103,7 @@ describe("V2 preview upgrade", () => {
         [121, "WorkflowMailSender"],
         [122, "WorkflowPools"],
         [123, "WorkflowRunSubject"],
+        [124, "ScheduledTaskKind"],
       ]);
       assert.deepStrictEqual(yield* runMigrations(), []);
       assert.deepStrictEqual(yield* sql`SELECT * FROM orchestration_v2_legacy_imports`, imports);
@@ -249,6 +250,7 @@ describe("V2 preview upgrade", () => {
         [121, "WorkflowMailSender"],
         [122, "WorkflowPools"],
         [123, "WorkflowRunSubject"],
+        [124, "ScheduledTaskKind"],
       ]);
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );

@@ -63,6 +63,7 @@ import * as ThreadIssueService from "./ThreadIssueService.ts";
 import * as ThreadLaunchService from "./ThreadLaunchService.ts";
 import * as ThreadForkService from "./ThreadForkService.ts";
 import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
+import * as CaptainBriefService from "../captains/CaptainBriefService.ts";
 import * as CaptainHonchoMemory from "../captains/CaptainHonchoMemory.ts";
 import * as CaptainService from "../captains/CaptainService.ts";
 import * as CaptainRolloverWorker from "./CaptainRolloverWorker.ts";
@@ -347,10 +348,17 @@ const layerSecretRequestsProvided = SecretRequests.layer.pipe(
 const layerFeedbackStoreProvided = FeedbackStore.layer.pipe(
   Layer.provide(layerThreadManagementProvided),
 );
+const layerTextGenerationProvided = TextGeneration.layer.pipe(
+  Layer.provide(ProviderInstallationGate.layer),
+);
+const layerCaptainBriefProvided = CaptainBriefService.layer.pipe(
+  Layer.provide(Layer.mergeAll(CaptainStore.layer, layerTextGenerationProvided)),
+);
 const layerScheduledTaskProvided = ScheduledTaskService.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
       CaptainStore.layer,
+      layerCaptainBriefProvided,
       layerThreadLaunchProvided,
       layerThreadManagementProvided,
       layerManagedProjectFoldersProvided,
@@ -402,11 +410,7 @@ const layerProviderContinuationWorkerProvided = ProviderContinuationService.laye
 );
 const layerThreadTitleRegenerationProvided = ThreadTitleRegenerationService.layer.pipe(
   Layer.provide(
-    Layer.mergeAll(
-      layerThreadManagementProvided,
-      ProjectStore.layer,
-      TextGeneration.layer.pipe(Layer.provide(ProviderInstallationGate.layer)),
-    ),
+    Layer.mergeAll(layerThreadManagementProvided, ProjectStore.layer, layerTextGenerationProvided),
   ),
 );
 const layerEffectExecutorProvided = EffectWorker.layerExecutor.pipe(

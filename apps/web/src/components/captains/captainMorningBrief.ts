@@ -2,13 +2,14 @@ import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { ScheduledTaskId, type Captain, type EnvironmentId } from "@t3tools/contracts";
 import { useGT } from "gt-react";
+import { Atom } from "effect/reactivity";
+import { resolveBriefModelSelection } from "@t3tools/shared/serverSettings";
 
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 
-const MORNING_BRIEF_PROMPT =
-  "Prepare a concise morning brief covering recent progress, open tasks, blockers, and decisions that need the user's attention. " +
-  "Read DIGEST.md with captain_document_read, then update it with captain_document_write using the current revision.";
+const MORNING_BRIEF_PROMPT = "Generate the morning brief.";
+const noEnvironmentSettingsAtom = Atom.make(null);
 
 export const captainMorningBriefTaskId = (captainId: Captain["id"]) =>
   ScheduledTaskId.make(`captain-morning-brief:${captainId}`);
@@ -16,6 +17,11 @@ export const captainMorningBriefTaskId = (captainId: Captain["id"]) =>
 export function useCaptainMorningBrief(environmentId: EnvironmentId | null) {
   const gt = useGT();
   const canSave = useAtomValue(serverEnvironment.upsertScheduledTask.permissionAtom(environmentId));
+  const settings = useAtomValue(
+    environmentId === null
+      ? noEnvironmentSettingsAtom
+      : serverEnvironment.settingsValueAtom(environmentId),
+  );
   const upsert = useAtomCommand(serverEnvironment.upsertScheduledTask);
   return {
     canSave,
@@ -60,7 +66,8 @@ export function useCaptainMorningBrief(environmentId: EnvironmentId | null) {
           threadId: captain.primaryThreadId,
           threadMode: "continue",
           workspaceStrategy: { type: "root" },
-          modelSelection: thread.modelSelection,
+          kind: "captain_morning_brief",
+          modelSelection: settings ? resolveBriefModelSelection(settings) : thread.modelSelection,
           runtimeMode: thread.runtimeMode,
           interactionMode: thread.interactionMode,
           creationSource: "web",
