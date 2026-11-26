@@ -175,9 +175,9 @@ jobs:
           git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
           git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
           git sparse-checkout set --no-cone '/*' '!/.repos/'
-          git -c checkout.workers=0 checkout --detach FETCH_HEAD
-          # Self-hosted runners keep the workspace between jobs; drop leftovers
-          # (dist/, node_modules/) from earlier runs to match a fresh checkout.
+          # Self-hosted runners keep the workspace between jobs. Discard release
+          # version bumps at checkout and clean leftover build files afterward.
+          git -c checkout.workers=0 checkout --force --detach FETCH_HEAD
           git clean -fdx
 
       # pnpm checks the lockfile and policy before reusing this result. A missing
@@ -272,8 +272,29 @@ jobs:
             sudo /usr/sbin/softwareupdate --install-rosetta --agree-to-license
           fi
 
+      # On ksg-local, rustup has stalled while updating an already installed stable toolchain.
+      - name: Reuse installed Rust on ksg-local
+        id: local_rust
+        if: inputs.runner == 'ksg-local' && steps.resource_monitor_cache.outputs.cache-hit != 'true'
+        timeout-minutes: 1
+        shell: bash
+        env:
+          RUST_TARGET: ${{ inputs.rust_target }}
+          RUSTUP_AUTO_INSTALL: "0"
+        run: |
+          if cargo_path="$(rustup which --toolchain stable cargo)" &&
+             rustup target list --installed --toolchain stable | grep -Fx "$RUST_TARGET" >/dev/null &&
+             rustup run stable rustc --version; then
+            dirname "$cargo_path" >> "$GITHUB_PATH"
+            echo "RUSTUP_TOOLCHAIN=stable" >> "$GITHUB_ENV"
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Stable Rust with target $RUST_TARGET is unavailable. Running Rust setup."
+          fi
+
       - name: Setup Rust
-        if: steps.resource_monitor_cache.outputs.cache-hit != 'true' || (inputs.platform == 'linux' && steps.capture_helper_cache.outputs.cache-hit != 'true')
+        if: steps.local_rust.outputs.ready != 'true' && (steps.resource_monitor_cache.outputs.cache-hit != 'true' || (inputs.platform == 'linux' && steps.capture_helper_cache.outputs.cache-hit != 'true'))
+        timeout-minutes: ${{ inputs.runner == 'ksg-local' && 5 || 360 }}
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
