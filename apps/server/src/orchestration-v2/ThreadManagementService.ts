@@ -16,6 +16,7 @@ import {
   isListedThreadLineage,
   MessageId,
   OrchestrationV2StopWorkflowError,
+  type OrchestrationMessageContext,
   type OrchestrationV2StopWorkflowInput,
   OrchestrationV2ForceStopThreadError,
   type OrchestrationV2ForceStopThreadInput,
@@ -159,6 +160,7 @@ export interface ThreadManagementSendInput {
   readonly senderThreadId?: ThreadId;
   readonly linkedSender?: OrchestrationV2LinkedSender;
   readonly text: string;
+  readonly context?: OrchestrationMessageContext;
   readonly attachments: ReadonlyArray<ChatAttachment>;
   readonly modelSelection?: ModelSelection;
   readonly mode: ThreadManagementSendMode;
@@ -977,6 +979,7 @@ const make = Effect.gen(function* () {
       ...(input.senderThreadId === undefined ? {} : { senderThreadId: input.senderThreadId }),
       ...(input.linkedSender === undefined ? {} : { linkedSender: input.linkedSender }),
       text: input.text,
+      ...(input.context === undefined ? {} : { context: input.context }),
       attachments: input.attachments,
       ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
       ...(input.freshContext ? { freshContext: true } : {}),

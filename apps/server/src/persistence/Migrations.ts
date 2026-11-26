@@ -121,6 +121,8 @@ import Migration0110 from "./Migrations/110_Workflows.ts";
 import Migration0111 from "./Migrations/111_SupersededRunAttemptIndex.ts";
 import Migration0112 from "./Migrations/112_Captains.ts";
 import Migration0113 from "./Migrations/113_CaptainCoordinatorOnly.ts";
+import Migration0114 from "./Migrations/114_CaptainConversationEndReasons.ts";
+import Migration0115 from "./Migrations/115_CaptainRolloverResends.ts";
 
 const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -237,6 +239,8 @@ const migrationEntries = [
   [111, "SupersededRunAttemptIndex", Migration0111],
   [112, "Captains", Migration0112],
   [113, "CaptainCoordinatorOnly", Migration0113],
+  [114, "CaptainConversationEndReasons", Migration0114],
+  [115, "CaptainRolloverResends", Migration0115],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

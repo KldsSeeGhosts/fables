@@ -221,6 +221,7 @@ interface ComposerSendInput {
   readonly isLocalDraftThread: boolean;
   readonly isGitRepo: boolean;
   readonly phase: SessionPhase;
+  readonly earlierConversation: boolean;
   readonly failedRunId: RunId | null;
   readonly failedRunMessage: ChatMessage | null;
   readonly runtimeMode: RuntimeMode;
@@ -327,6 +328,7 @@ export function useComposerSend(input: ComposerSendInput) {
     isLocalDraftThread,
     isGitRepo,
     phase,
+    earlierConversation,
     failedRunId,
     failedRunMessage,
     runtimeMode,
@@ -486,6 +488,8 @@ export function useComposerSend(input: ComposerSendInput) {
       }
       return;
     }
+
+    if (earlierConversation) return;
 
     const notifyDirectAnnotationAttached = () => {
       if (!directAnnotation) return;

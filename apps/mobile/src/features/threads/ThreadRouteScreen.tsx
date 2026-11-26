@@ -9,6 +9,7 @@ import { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setu
 import { AppBar } from "../../components/ui/AppBar";
 import {
   StackActions,
+  useIsFocused,
   useNavigation,
   useRoute,
   type StaticScreenProps,
@@ -95,6 +96,11 @@ import { useSelectedThreadGitState } from "../../state/use-selected-thread-git-s
 import { useSelectedThreadRequests } from "../../state/use-selected-thread-requests";
 import { useSelectedThreadWorktree } from "../../state/use-selected-thread-worktree";
 import { useThreadComposerState } from "../../state/use-thread-composer-state";
+import { useCaptainOfThread, useCaptainPrimaryReplacement } from "../captains/useCaptainsDirectory";
+import {
+  useCaptainEarlierConversations,
+  useCaptainThreadRouteRollover,
+} from "../captains/useCaptainEarlierConversations";
 import { resolveMergeBackTargetThreadId } from "@t3tools/client-runtime/state/thread-relationships";
 import { resolveLatestMergeBackRun } from "@t3tools/client-runtime/state/thread-workflows";
 import { threadEnvironment } from "../../state/threads";
@@ -268,6 +274,21 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
   const { onReconnectEnvironment } = useRemoteConnections();
   const navigation = useNavigation();
   const routeName = useRoute().name;
+  const isFocused = useIsFocused();
+  const routeThreadId = threadIdRaw === null ? null : ThreadId.make(threadIdRaw);
+  const routeRef =
+    environmentId === null || routeThreadId === null
+      ? null
+      : { environmentId, threadId: routeThreadId };
+  const primaryCaptain = useCaptainOfThread(environmentId, routeThreadId);
+  const replacementThreadId = useCaptainPrimaryReplacement(environmentId, routeThreadId);
+  const routeRollover = useCaptainThreadRouteRollover({
+    thread: routeRef,
+    isPrimary: primaryCaptain !== null,
+    replacement: replacementThreadId,
+    focused: isFocused,
+    follow: (next) => navigation.setParams({ threadId: next.threadId }),
+  });
   const routeConnectionState =
     routeEnvironmentRuntime?.connectionState ?? (environmentId ? "available" : connectionState);
   const routeThreadKey =
@@ -299,7 +320,11 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
       content
     );
 
-  if (environmentId === null || threadIdRaw === null) {
+  if (
+    environmentId === null ||
+    threadIdRaw === null ||
+    (isFocused && routeRollover.following !== null)
+  ) {
     return withInspectorHeader(<OpeningThreadLoadingScreen />);
   }
 
@@ -307,7 +332,12 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
     // ThreadRouteContent draws its own inspector header so it can show the sync status.
     return (
       <InspectorHeaderShownContext value={props.inspectorPresentation !== undefined}>
-        <ThreadRouteContent {...props} selectedThreadDetailState={selectedThreadDetailState} />
+        <ThreadRouteContent
+          {...props}
+          selectedThreadDetailState={selectedThreadDetailState}
+          earlierConversation={replacementThreadId !== undefined}
+          earlierConversationJustEnded={routeRollover.followedFrom}
+        />
       </InspectorHeaderShownContext>
     );
   }
@@ -363,6 +393,8 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
 function ThreadRouteContent(
   props: ThreadRouteScreenProps & {
     readonly selectedThreadDetailState: ReturnType<typeof useSelectedThreadDetailState>;
+    readonly earlierConversation: boolean;
+    readonly earlierConversationJustEnded?: ThreadId | undefined;
   },
 ) {
   const gt = useGT();
@@ -394,7 +426,20 @@ function ThreadRouteContent(
   const selectedThreadDetail = Option.getOrNull(selectedThreadDetailState.data);
   const { selectedThreadCwd } = useSelectedThreadWorktree();
   const startSideChat = useStartSideChat();
-  const composer = useThreadComposerState({ startSideChat });
+  const captain = useCaptainOfThread(
+    selectedThreadDetailRef?.environmentId ?? null,
+    selectedThreadDetailRef?.threadId ?? null,
+  );
+  const captainEarlier = useCaptainEarlierConversations({
+    threadRef: selectedThreadDetailRef,
+    captain,
+    followedFrom: props.earlierConversationJustEnded,
+  });
+  const composer = useThreadComposerState({
+    startSideChat,
+    earlierFeed: captainEarlier.entries,
+    earlierConversation: props.earlierConversation,
+  });
   const gitState = useSelectedThreadGitState();
   const gitActions = useSelectedThreadGitActions();
   const requests = useSelectedThreadRequests();
@@ -442,26 +487,60 @@ function ThreadRouteContent(
     if (!selectedThread) {
       return undefined;
     }
-    if (!history.hasMoreHistory && history.error === null) {
-      return undefined;
+    if (history.hasMoreHistory || history.error !== null) {
+      return {
+        hasMoreHistory: history.hasMoreHistory,
+        loading: history.loading,
+        error: history.error === null ? null : threadErrorText(history.error, m),
+        onLoadEarlier: () => {
+          void loadEarlierHistory({
+            environmentId: selectedThread.environmentId,
+            input: { threadId: selectedThread.id },
+          });
+        },
+        onLoadThrough: (throughEntryId: string) => {
+          void loadEarlierHistory({
+            environmentId: selectedThread.environmentId,
+            input: { threadId: selectedThread.id, throughEntryId },
+          });
+        },
+      };
     }
-    return {
-      hasMoreHistory: history.hasMoreHistory,
-      loading: history.loading,
-      error: history.error === null ? null : threadErrorText(history.error, m),
-      onLoadEarlier: () => {
-        void loadEarlierHistory({
-          environmentId: selectedThread.environmentId,
-          input: { threadId: selectedThread.id },
-        });
-      },
-      onLoadThrough: (throughEntryId: string) => {
-        void loadEarlierHistory({
-          environmentId: selectedThread.environmentId,
-          input: { threadId: selectedThread.id, throughEntryId },
-        });
-      },
-    };
+    const oldestExpanded = captainEarlier.oldestExpanded;
+    if (oldestExpanded?.state) {
+      const earlierHistory = oldestExpanded.state.history;
+      if (earlierHistory.hasMoreHistory || earlierHistory.error !== null) {
+        return {
+          hasMoreHistory: earlierHistory.hasMoreHistory,
+          loading: earlierHistory.loading,
+          error: earlierHistory.error === null ? null : threadErrorText(earlierHistory.error, m),
+          onLoadEarlier: () => {
+            void loadEarlierHistory({
+              environmentId: oldestExpanded.ref.environmentId,
+              input: { threadId: oldestExpanded.ref.threadId },
+            });
+          },
+          onLoadThrough: (throughEntryId: string) => {
+            void loadEarlierHistory({
+              environmentId: oldestExpanded.ref.environmentId,
+              input: { threadId: oldestExpanded.ref.threadId, throughEntryId },
+            });
+          },
+        };
+      }
+    }
+    if (captainEarlier.failed || captainEarlier.unexpandedCount > 0 || captainEarlier.loading) {
+      return {
+        hasMoreHistory: true,
+        loading: captainEarlier.loading,
+        error: captainEarlier.failed ? gt("Could not load earlier conversation.") : null,
+        label: captainEarlier.failed ? gt("Retry") : gt("Show earlier conversation"),
+        loadingLabel: gt("Loading earlier conversation…"),
+        onLoadEarlier: captainEarlier.failed ? captainEarlier.retry : captainEarlier.expand,
+        onLoadThrough: captainEarlier.failed ? captainEarlier.retry : captainEarlier.expand,
+      };
+    }
+    return undefined;
   })();
   const navigation = useNavigation();
   const selectDetail = useSelectWorkspaceDetail();
@@ -1056,7 +1135,12 @@ function ThreadRouteContent(
               />
             )
           }
-          canOperateThread={canOperateThread}
+          canOperateThread={
+            canOperateThread &&
+            (!props.earlierConversation ||
+              requests.activePendingApproval !== null ||
+              requests.activePendingUserInput !== null)
+          }
           selectedThread={selectedThreadWithDraftSettings ?? selectedThread}
           selectedThreadDetailRef={selectedThreadDetailRef}
           contentPresentation={contentPresentation}

@@ -1,5 +1,5 @@
 import { createChildThreadApprovalsAtom } from "@t3tools/client-runtime/state/thread-requests";
-import { useAtomValue } from "@effect/atom-react";
+import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import {
   createEnvironmentThreadDetailAtoms,
   createEnvironmentThreadShellAtoms,
@@ -11,7 +11,7 @@ import {
   createThreadFamilyAtoms,
 } from "@t3tools/client-runtime/state/threads";
 import { createSteadyShellAtoms } from "@t3tools/client-runtime/state/shell";
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 import { AsyncResult, Atom } from "effect/reactivity";
 
 import { environmentCatalog } from "../connection/catalog";
@@ -95,6 +95,14 @@ export function startOpeningEnvironmentThread(environmentId: EnvironmentId, thre
 const EMPTY_THREAD_STATE_ATOM = Atom.make(AsyncResult.success(EMPTY_ENVIRONMENT_THREAD_STATE)).pipe(
   Atom.withLabel("mobile-environment-thread:empty"),
 );
+
+export function useEnvironmentThreadRetry(ref: ScopedThreadRef | null) {
+  return useAtomRefresh(
+    ref === null
+      ? EMPTY_THREAD_STATE_ATOM
+      : environmentThreads.stateAtom(ref.environmentId, ref.threadId),
+  );
+}
 
 export function useEnvironmentThread(
   environmentId: EnvironmentId | null,

@@ -667,6 +667,13 @@ type MessagesTimelineRowContent =
       expanded: boolean;
     }
   | {
+      kind: "conversation-divider";
+      id: string;
+      createdAt: string;
+      label: string;
+      detail?: string;
+    }
+  | {
       kind: "context-compaction";
       id: string;
       createdAt: string;
@@ -2719,6 +2726,17 @@ export function deriveMessagesTimelineRows(
       appendActiveWorkRows();
     }
 
+    if (timelineEntry.kind === "conversation-divider") {
+      nextRows.push({
+        kind: "conversation-divider",
+        id: timelineEntry.id,
+        createdAt: timelineEntry.createdAt,
+        label: timelineEntry.label,
+        ...(timelineEntry.detail === undefined ? {} : { detail: timelineEntry.detail }),
+      });
+      continue;
+    }
+
     const turnFold = foldsByAnchorEntryId.get(timelineEntry.id);
     if (turnFold) {
       const deferredWorkItemIds = [...turnFold.entryIds].flatMap((entryId) => {
@@ -4300,6 +4318,14 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
   if (a.turnTailBelow !== b.turnTailBelow) return false;
 
   switch (a.kind) {
+    case "conversation-divider": {
+      const divider = b as typeof a;
+      return (
+        a.createdAt === divider.createdAt &&
+        a.label === divider.label &&
+        a.detail === divider.detail
+      );
+    }
     case "background-activity": {
       const bg = b as typeof a;
       return (

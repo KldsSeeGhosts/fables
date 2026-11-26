@@ -27,6 +27,7 @@ import {
   type ChatAttachment,
   CommandId,
   type GuestMessageId,
+  isCaptainThreadId,
   isCompactionCommandMessage,
   isDeliveredProviderTurn,
   isOrchestrationV2WorkActive,
@@ -204,7 +205,11 @@ import * as RunExecutionService from "./RunExecutionService.ts";
 import { makeInterruptResultTurnItem } from "./runInterruptResult.ts";
 import { ProviderSessionManagerV2 } from "./ProviderSessionManager.ts";
 import { ProviderSwitchServiceV2 } from "./ProviderSwitchService.ts";
-import { isAutomaticCompletionRun, queuedRunsInDeliveryOrder } from "./QueuedRunOrder.ts";
+import {
+  isAutomaticCompletionRun,
+  queuedRunCancellationEvents,
+  queuedRunsInDeliveryOrder,
+} from "./QueuedRunOrder.ts";
 import { isRuntimePolicyAboveCeilingError, RuntimePolicyV2 } from "./RuntimePolicy.ts";
 import {
   endOrphanedNativeSubagent,
@@ -1243,49 +1248,6 @@ function withoutSection({ section: _, ...stamp }: MonitorPullRequestStamp) {
   return stamp;
 }
 
-function queuedRunCancellationEvents(
-  projection: Pick<OrchestrationV2ThreadProjection, "nodes" | "attempts">,
-  run: OrchestrationV2Run,
-  now: DateTime.Utc,
-): ReadonlyArray<Omit<OrchestrationV2DomainEvent, "id">> {
-  const rootNode = projection.nodes.find((node) => node.id === run.rootNodeId);
-  const attempt = projection.attempts.find((candidate) => candidate.id === run.activeAttemptId);
-  const events: Array<Omit<OrchestrationV2DomainEvent, "id">> = [
-    {
-      type: "run.updated",
-      threadId: run.threadId,
-      runId: run.id,
-      ...(run.rootNodeId === null ? {} : { nodeId: run.rootNodeId }),
-      providerInstanceId: run.providerInstanceId,
-      occurredAt: now,
-      payload: { ...run, status: "cancelled", queuePosition: null, completedAt: now },
-    },
-  ];
-  if (attempt !== undefined && rootNode !== undefined) {
-    events.push({
-      type: "run-attempt.updated",
-      threadId: run.threadId,
-      runId: run.id,
-      nodeId: rootNode.id,
-      providerInstanceId: run.providerInstanceId,
-      occurredAt: now,
-      payload: { ...attempt, status: "cancelled", completedAt: now },
-    });
-  }
-  if (rootNode !== undefined) {
-    events.push({
-      type: "node.updated",
-      threadId: run.threadId,
-      runId: run.id,
-      nodeId: rootNode.id,
-      providerInstanceId: run.providerInstanceId,
-      occurredAt: now,
-      payload: { ...rootNode, status: "cancelled", completedAt: now },
-    });
-  }
-  return events;
-}
-
 function latestStartedRun(runs: ReadonlyArray<OrchestrationV2Run>): OrchestrationV2Run | undefined {
   return runs
     .filter((run) => run.status !== "queued")
@@ -2320,7 +2282,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     }) {
       const emitEvent = emit(input.events, input.command);
       for (const event of queuedRunCancellationEvents(input.projection, input.run, input.now)) {
-        yield* emitEvent(event);
+        yield* emitEvent<OrchestrationV2DomainEvent>(event);
       }
     },
   );
@@ -16874,6 +16836,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               }),
             ),
           );
+        if (
+          isCaptainThreadId(threadId) &&
+          (run.status === "completed" || run.status === "failed")
+        ) {
+          yield* threadDispatch.handleCaptainTurnEnd(threadId, run);
+        }
         yield* threadDispatch
           .withLock(
             threadId,

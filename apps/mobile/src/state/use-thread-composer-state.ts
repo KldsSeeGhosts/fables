@@ -68,7 +68,11 @@ import {
 } from "../lib/composerImages";
 import { retainComposerAttachmentFileForPreview } from "../lib/composerAttachmentPreviewRetention";
 import { scopedThreadKey } from "../lib/scopedEntities";
-import { buildThreadFeed, createThreadFeedCache } from "../lib/threadActivity";
+import {
+  buildThreadFeed,
+  createThreadFeedCache,
+  type ThreadFeedEntry,
+} from "../lib/threadActivity";
 import {
   acknowledgedThreadMessagesAtom,
   pruneCaughtUpAcknowledgedThreadMessages,
@@ -226,6 +230,8 @@ export function useThreadComposerState(input: {
     message: SideChatMessage,
     settings: { readonly runtimeMode: RuntimeMode; readonly modelSelection: ModelSelection },
   ) => Promise<boolean>;
+  readonly earlierConversation?: boolean;
+  readonly earlierFeed?: ReadonlyArray<ThreadFeedEntry>;
 }) {
   const {
     selectedThread: selectedThreadShell,
@@ -304,7 +310,7 @@ export function useThreadComposerState(input: {
       !selectedThreadMessages?.some((message) => message.id === pendingCreationMessage.messageId)
         ? [pendingThreadCreationMessage(pendingCreationMessage)]
         : [];
-    const feed = buildThreadFeed(selectedThreadVisibleTurnItems, {
+    const currentFeed = buildThreadFeed(selectedThreadVisibleTurnItems, {
       anchoredMessages: pendingCreation,
       attempts: selectedThreadAttempts,
       nodes: selectedThreadNodes,
@@ -312,6 +318,10 @@ export function useThreadComposerState(input: {
       resolve,
       locale,
     });
+    const feed =
+      input.earlierFeed === undefined || input.earlierFeed.length === 0
+        ? currentFeed
+        : [...input.earlierFeed, ...currentFeed];
     const pendingAcknowledgments = selectPendingAcknowledgedMessages(acknowledgedMessages, {
       threadKey: selectedThreadKey,
       queuedMessages: selectedThreadQueuedMessages,
@@ -691,6 +701,7 @@ export function useThreadComposerState(input: {
     }
 
     // A redirect's text answers its approval, so `/side` there is that text, not the command.
+    if (input.earlierConversation && beforeDispatch === undefined) return null;
     const sideChatCommand = beforeDispatch === undefined ? parseSideChatCommand(text) : null;
     if (sideChatCommand) {
       if (sideChatUnavailableReason !== null) {
@@ -863,6 +874,7 @@ export function useThreadComposerState(input: {
 
     // Resolve at send time because outbox delivery may be delayed.
     // An approval redirect must steer the waiting turn instead of queueing behind it.
+    if (input.earlierConversation) return null;
     const activeTurnDefault = beforeDispatch !== undefined ? "steer" : followUpBehavior;
     const followUpAction = resolveComposerDispatchMode({
       running: activeThreadBusy && canSteerActiveTurn,
@@ -971,6 +983,7 @@ export function useThreadComposerState(input: {
   /** Queues a standalone text command such as `/goal clear` and leaves the composer draft alone. */
   const onSendCommand = async (text: string) => {
     if (
+      input.earlierConversation ||
       !selectedThreadShell ||
       selectedThreadCreation !== null ||
       (selectedEnvironmentRuntime?.connectionState === "connected" &&

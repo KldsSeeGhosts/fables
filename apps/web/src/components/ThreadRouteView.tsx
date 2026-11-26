@@ -5,13 +5,18 @@ import {
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
 import { parseThreadKey, threadKey } from "@t3tools/client-runtime/state/entities";
+import {
+  EMPTY_CAPTAIN_ROUTE_ROLLOVER,
+  trackCaptainRouteRollover,
+} from "@t3tools/client-runtime/state/captains";
 import { visibilityParentKey } from "@t3tools/client-runtime/state/threads";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import * as Option from "effect/Option";
-import { Navigate } from "@tanstack/react-router";
+import { Navigate, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import ChatView from "./ChatView";
+import { useCaptain, useCaptainPrimaryReplacement } from "./captains/useCaptain";
 import { BackgroundThreadContext, HiddenThreadContext } from "./chat/backgroundThread";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useLayoutPane } from "../layout/layoutPaneContext";
@@ -57,6 +62,7 @@ export function ThreadRouteView({
   focused?: boolean;
   background?: boolean;
 }) {
+  const navigate = useNavigate();
   const { visible } = useLayoutPane();
   const scrolledOff = useLayoutStore(
     (state) => tabId !== null && state.scrolledOffTabIds.has(tabId),
@@ -69,6 +75,39 @@ export function ThreadRouteView({
     draftId === null ? null : store.getPromotedDraftRedirect(draftId),
   );
   const serverThreadRef = target.kind === "server" ? target.threadRef : null;
+  const currentCaptain = useCaptain(serverThreadRef);
+  const replacementThreadId = useCaptainPrimaryReplacement(serverThreadRef);
+  const [rollover, setRollover] = useState(EMPTY_CAPTAIN_ROUTE_ROLLOVER);
+  const routeRollover = trackCaptainRouteRollover(
+    rollover,
+    serverThreadRef,
+    currentCaptain?.archivedAt === null,
+    replacementThreadId,
+  );
+  if (routeRollover !== rollover) setRollover(routeRollover);
+  const following = routeRollover.following;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- moves the draft and follows a Duet's live rollover in the workspace and URL
+  useEffect(() => {
+    if (
+      following === null ||
+      serverThreadRef === null ||
+      (tabId === null && (!focused || background))
+    )
+      return;
+    useComposerDraftStore.getState().moveComposerContent(serverThreadRef, following);
+    if (tabId !== null) {
+      useLayoutStore.getState().replaceTabContent(tabId, {
+        kind: "chat",
+        target: { kind: "server", threadRef: following },
+      });
+    } else {
+      void navigate({
+        to: "/$environmentId/$threadId",
+        params: buildThreadRouteParams(following),
+        replace: true,
+      });
+    }
+  }, [background, focused, following, navigate, serverThreadRef, tabId]);
   const serverThreadShell = useQuietThreadShell(serverThreadRef);
   const shellStatus = useEnvironmentShellStatus(serverThreadRef?.environmentId ?? null);
   const bootstrapComplete = isThreadRouteSnapshotAuthoritative(shellStatus);
@@ -204,6 +243,7 @@ export function ThreadRouteView({
         key={nextHandoffKey?.key}
         environmentId={target.threadRef.environmentId}
         threadId={target.threadRef.threadId}
+        earlierConversationJustEnded={routeRollover.followedFrom}
         routeKind="server"
       />
     );

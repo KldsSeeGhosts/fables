@@ -1382,6 +1382,35 @@ function updateComposerDrafts(
   schedulePersistComposerState();
 }
 
+export async function moveThreadComposerDraft(from: string, to: string): Promise<void> {
+  await waitForComposerDraftsLoaded();
+  updateComposerDrafts((current) => {
+    const source = current[from];
+    const destination = normalizeDraft(current[to]);
+    if (
+      source === undefined ||
+      destination.text ||
+      destination.attachments.length > 0 ||
+      destination.context !== undefined
+    )
+      return current;
+    const { text, attachments, context, importedShareIds, ...sourceSettings } = source;
+    if (!text && attachments.length === 0 && context === undefined) return current;
+    const withSourceCleared = withComposerDraft(current, from, {
+      ...sourceSettings,
+      text: "",
+      attachments: [],
+    });
+    return withComposerDraft(withSourceCleared, to, {
+      ...destination,
+      text,
+      attachments,
+      ...(context === undefined ? {} : { context }),
+      ...(importedShareIds === undefined ? {} : { importedShareIds }),
+    });
+  });
+}
+
 export function setStickyComposerModelSelection(modelSelection: ModelSelection): void {
   appAtomRegistry.set(stickyComposerModelSelectionAtom, modelSelection);
   schedulePersistComposerState();
