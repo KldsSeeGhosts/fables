@@ -99,10 +99,8 @@ function convertMenuAction(
   if (typeName === "NativeHeaderToolbarMenu") {
     return {
       type: "submenu",
-      label:
-        typeof element.props.title === "string"
-          ? element.props.title
-          : labelFromChildren(element.props.children),
+      // An untitled group (an inline section) has no header; its children are items, not a label.
+      label: typeof element.props.title === "string" ? element.props.title : "",
       icon: iconFromProp(element.props.icon),
       inline: Boolean(element.props.inline),
       items: collectMenuItems(element.props.children, register),
