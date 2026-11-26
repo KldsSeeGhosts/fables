@@ -141,7 +141,7 @@ git grep -n 'makeCodexMaintenanceResolver' -- apps/server/src/provider/Drivers/c
 
 Owners: `apps/web/src/components/chat/ContextWindowMeter.tsx`, `apps/web/src/components/chat/compaction.logic.ts`, `apps/web/src/components/chat/ThreadDetailsUsage.tsx`, `packages/client-runtime/src/state/contextWindow.ts`, context breakdown fields in `packages/contracts/src/`, and `apps/server/src/provider/agentContextBudget.json`.
 
-Must survive: the details panel context meter, provider-reported category breakdowns, fallback cache and reasoning segments, compact accessibility labels, and the adjusted MCP tool-list budget caused by KSG's added tools.
+Must survive: the details panel context meter, provider-reported category breakdowns, fallback cache and reasoning segments, compact accessibility labels, and the adjusted MCP tool-list budget caused by KSG's added tools. In `agentContextBudget.json`, keep upstream's `codexAdditionalContextBytes` and preserve KSG's larger `mcpToolListJsonBytes` unless the Captain MCP tool manifest changed enough to require recalibration.
 
 Checks:
 

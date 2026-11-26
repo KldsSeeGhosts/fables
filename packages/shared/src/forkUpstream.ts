@@ -100,7 +100,10 @@ When a merge stops with conflicts, run git status --short and keep the complete 
 3. Preserve the inventory behavior and the intent of the KSG patch. Upstream wins only outside that intent.
 4. If upstream moved the code, reapply the KSG behavior at the new location. Never drop a KSG patch merely to make the conflict disappear.
 5. KSG databases already recorded Captain migrations 112 through 115. When upstream adds migrations in that range, add four to the upstream ID in both filename and manifest entry. Do not renumber the Captain migrations.
-6. If the correct resolution is uncertain, stop with MERGE BLOCKED, name the path and the choices, and ask for a decision. Do not guess.
+6. For a modify/delete conflict, do not choose deletion or restoration by reflex. If KSG deleted the file, find its replacement, port upstream's behavior fix there, and delete only when the replacement already covers it. If upstream deleted the file, accept deletion only after identifying the replacement or proving the file is obsolete.
+7. For generated translation catalog conflicts, finish the source-code conflicts first, regenerate the affected catalogs with \`(cd apps/web && vp run i18n:generate)\` or \`(cd apps/mobile && vp run i18n:generate)\`, and use the generated result. Do not hand-pick translation keys one side at a time.
+8. For \`apps/server/src/provider/agentContextBudget.json\`, keep upstream's \`codexAdditionalContextBytes\` and preserve KSG's larger \`mcpToolListJsonBytes\` unless the Captain MCP tool manifest changed enough to require recalibration. Record the numbers in the report.
+9. If the correct resolution is uncertain, stop with MERGE BLOCKED, name the path and the choices, and ask for a decision. Do not guess.
 
 ## 4. Required checks before reporting success
 
