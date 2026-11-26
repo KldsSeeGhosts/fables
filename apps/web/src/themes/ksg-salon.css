@@ -293,41 +293,8 @@ html:root[data-theme-id="ksg-salon"] {
     background: var(--duet-panel-fill);
   }
 
-  [data-duet-digest-card] {
-    border-color: var(--duet-hairline);
-    background: var(--duet-overview-fill);
-    box-shadow: none;
-  }
-
-  [data-duet-digest-preview] {
-    position: relative;
-    max-height: 11rem;
-    color: var(--muted-foreground);
-    font-size: 0.8125rem;
-    line-height: 1.35rem;
-  }
-
-  [data-duet-digest-preview]::after {
-    content: "";
-    position: absolute;
-    inset-inline: 0;
-    bottom: 0;
-    height: 2.5rem;
-    pointer-events: none;
-    background: linear-gradient(to bottom, transparent, var(--duet-overview-fill));
-  }
-
-  [data-duet-digest-preview] .chat-markdown {
-    font-size: inherit;
-    line-height: inherit;
-  }
-
-  [data-duet-digest-preview] .chat-markdown > :first-child {
-    margin-top: 0;
-  }
-
-  [data-duet-digest-preview] .chat-markdown > :last-child {
-    margin-bottom: 0;
+  [data-duet-brief-body] {
+    border-inline-start-color: color-mix(in srgb, var(--duet-ink) 45%, transparent);
   }
 
   [data-duet-task-status="needs-input"] {
@@ -389,13 +356,13 @@ html:root[data-theme-id="ksg-salon"] {
   }
 
   @media (prefers-reduced-motion: reduce) {
-    [data-duet-overview-card],
-    [data-duet-digest-card] {
+    [data-duet-overview-card] {
       transition: none;
     }
   }
 
-  [data-duet-stream="channel"] .chat-markdown a {
+  [data-duet-stream="channel"] .chat-markdown a,
+  [data-duet-brief] .chat-markdown a {
     color: var(--duet-link);
     text-decoration-line: underline;
     text-decoration-thickness: 1px;

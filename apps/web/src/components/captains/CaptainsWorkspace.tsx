@@ -40,7 +40,7 @@ export function CaptainsWorkspace() {
             <h1 className="truncate">{isDuet ? <T>Duets</T> : <T>Captains</T>}</h1>
           </SettingsTabNotch>
         </SettingsPaneHeader>
-        <div className="scrollbar-gutter-both min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <div className="@container/duets-page scrollbar-gutter-both min-h-0 min-w-0 flex-1 overflow-y-auto">
           <CaptainsInbox
             environments={environments}
             shells={shells}

@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
-import type { Captain, CaptainDocument, EnvironmentId, ScheduledTask } from "@t3tools/contracts";
+import type { Captain, EnvironmentId, ScheduledTask } from "@t3tools/contracts";
 import { T, useGT } from "gt-react";
 import { SunriseIcon } from "lucide-react";
 import { useId, useState } from "react";
@@ -16,15 +16,6 @@ import { captainMorningBriefTaskId, useCaptainMorningBrief } from "./captainMorn
 import { captainCommandError } from "./useCaptain";
 
 const DEFAULT_BRIEF_TIME = "08:00";
-
-/** The first lines of a digest as plain text, for previews. */
-export function captainDigestPreview(document: CaptainDocument | undefined) {
-  return (document?.content ?? "")
-    .split("\n")
-    .map((line) => line.replace(/^\s*(#{1,6}\s+|[-*+]\s+|>\s?)/u, "").trim())
-    .filter((line) => line !== "")
-    .join(" ");
-}
 
 export const captainMorningBriefTask = (
   tasks: ReadonlyArray<ScheduledTask>,
