@@ -175,9 +175,9 @@ jobs:
           git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
           git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
           git sparse-checkout set --no-cone '/*' '!/.repos/'
-          git -c checkout.workers=0 checkout --detach FETCH_HEAD
-          # Self-hosted runners keep the workspace between jobs; drop leftovers
-          # (dist/, node_modules/) from earlier runs to match a fresh checkout.
+          # Self-hosted runners keep the workspace between jobs. Discard release
+          # version bumps at checkout and clean leftover build files afterward.
+          git -c checkout.workers=0 checkout --force --detach FETCH_HEAD
           git clean -fdx
 
       # pnpm checks the lockfile and policy before reusing this result. A missing
