@@ -1,7 +1,11 @@
+import "~/index.css";
+
 import {
+  CaptainId,
   EnvironmentId,
   ProjectId,
   ThreadId,
+  type Captain,
   type ScopedThreadRef,
   type ThreadPullRequestLink,
 } from "@t3tools/contracts";
@@ -82,8 +86,10 @@ vi.mock(import("~/state/vcs"), async (importOriginal) => {
 });
 
 import { render } from "../../../test/render";
+import { setAppearanceMode, setTheme } from "../../hooks/useTheme";
 import { useRightPanelStore } from "../../rightPanelStore";
 import { PopoverCreateHandle } from "../ui/popover";
+import { CaptainHeaderTitleMenu } from "./CaptainHeaderHero";
 import { ChatCanvasContext } from "./ChatCanvasContext";
 import { resolveChatCanvasLayout } from "./chatCanvasLayout";
 import { ThreadDetailsPanel } from "./ThreadDetailsPanel";
@@ -93,6 +99,21 @@ const threadRef: ScopedThreadRef = {
   environmentId: EnvironmentId.make("environment"),
   threadId: ThreadId.make("thread"),
 };
+const captain = {
+  id: CaptainId.make("maria"),
+  primaryThreadId: ThreadId.make("captain:maria:0"),
+  earlierThreadIds: [],
+  name: "Maria",
+  role: "Coordinator",
+  instructions: "",
+  avatar: { preset: "compass", color: "violet" },
+  scopedProjectIds: [],
+  reportPolicy: "context",
+  coordinatorOnly: false,
+  createdAt: "2026-11-24T00:00:00.000Z",
+  updatedAt: "2026-11-24T00:00:00.000Z",
+  archivedAt: null,
+} satisfies Captain;
 const container = { width: 1200, height: 800 };
 const placement = {
   x: 928 - THREAD_DETAILS_CARD_GAP,
@@ -144,11 +165,13 @@ function Panel({
   fixture,
   draftEnvMode,
   onMachines = false,
+  inline = true,
 }: {
   fixture: ReturnType<typeof setup>;
   /** Renders an unsent draft in this mode instead of a started thread. */
   draftEnvMode?: "local" | "worktree";
   onMachines?: boolean;
+  inline?: boolean;
 }) {
   const noop = () => {};
   const scriptResult = async () => ({ ok: true }) as never;
@@ -162,7 +185,7 @@ function Panel({
         measureDetailsCard: noop,
         detailsCardTopInset: 0,
         preferredDetailsCard: placement,
-        detailsCardPlacement: placement,
+        detailsCardPlacement: inline ? placement : null,
       }}
     >
       <ThreadDetailsPanel
@@ -208,6 +231,62 @@ function Panel({
     </ChatCanvasContext>
   );
 }
+
+it.each([
+  ["light", "inline"],
+  ["light", "popover"],
+  ["dark", "inline"],
+  ["dark", "popover"],
+] as const)(
+  "matches the Duet menu and paints a workspace tray in %s %s",
+  async (mode, placement) => {
+    setTheme("ksg-salon");
+    setAppearanceMode(mode);
+    try {
+      using fixture = setup({ workspaceRoot: "/work/plain", folder: "/work/plain" });
+      useRightPanelStore.getState().setThreadPanelOpen(threadRef, placement, true);
+      await using screen = await render(
+        <>
+          <CaptainHeaderTitleMenu
+            captain={captain}
+            threadRef={{
+              environmentId: threadRef.environmentId,
+              threadId: captain.primaryThreadId,
+            }}
+            layoutTabId={null}
+            onOpenThread={() => {}}
+            onContextMenu={() => {}}
+          />
+          <Panel fixture={fixture} inline={placement === "inline"} />
+        </>,
+      );
+      const panel = page.getByRole(placement === "inline" ? "region" : "dialog", {
+        name: "Thread details",
+      });
+      await expect.element(panel).toBeVisible();
+      const surface =
+        placement === "inline"
+          ? panel.element()
+          : panel.element().querySelector('[data-thread-details-panel="popover"]')!;
+      const { background, border, boxShadow } = getComputedStyle(surface);
+      const workspace = panel.getByRole("region", { name: "Workspace" });
+      const trayBackground = getComputedStyle(workspace.element()).backgroundColor;
+
+      await screen.getByRole("button", { name: "Duet menu for Maria" }).click();
+      const menu = page.getByRole("menu");
+      await expect.element(menu).toBeVisible();
+      const menuStyle = getComputedStyle(menu.element());
+      expect(background).toBe(menuStyle.background);
+      expect(border).toBe(menuStyle.border);
+      expect(boxShadow).toBe(menuStyle.boxShadow);
+      expect(trayBackground).not.toBe("rgba(0, 0, 0, 0)");
+      expect(background).not.toContain(trayBackground);
+    } finally {
+      setTheme("system");
+      setAppearanceMode("system");
+    }
+  },
+);
 
 it("offers no git controls in a No project thread, but shows its linked pull request", async () => {
   using fixture = setup({
