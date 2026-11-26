@@ -12,7 +12,11 @@ import {
   type UsageLimitSourceSnapshot,
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
-import { hubRoutes, usageLimitHubsAtEndpoint } from "@t3tools/shared/usageLimits";
+import {
+  hubRoutes,
+  usageLimitHubsAtEndpoint,
+  usageLimitsForModel,
+} from "@t3tools/shared/usageLimits";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -332,7 +336,8 @@ export function hubPoolResetAt(
   for (const account of sources.flatMap((source) => source.accounts).filter(routes)) {
     // An unread account may be the one still blocked, so its refill is unknown.
     if (account.usageLimits.unavailable) return null;
-    const spent = account.usageLimits.windows.filter(
+    const { windows } = usageLimitsForModel(account.driver, account.usageLimits, model);
+    const spent = windows.filter(
       (window) => window.usedPercent >= 100 && windowLimitsModel(window, model),
     );
     if (spent.length === 0) return null;

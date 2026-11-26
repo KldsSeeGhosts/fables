@@ -536,6 +536,30 @@ it.each([
     expected: at(1),
   },
   {
+    name: "Claude on Antigravity waits only for the Claude quota",
+    accounts: [
+      {
+        driver: "antigravity",
+        models: ["claude-opus-4-6-thinking"],
+        windows: [spent("3p-5h", 1), spent("gemini-5h", 24)],
+      },
+    ],
+    model: "claude-opus-4-6-thinking",
+    expected: at(1),
+  },
+  {
+    name: "a spent Gemini quota alone yields no reset for Claude on Antigravity",
+    accounts: [
+      {
+        driver: "antigravity",
+        models: ["claude-opus-4-6-thinking"],
+        windows: [spent("gemini-5h", 24)],
+      },
+    ],
+    model: "claude-opus-4-6-thinking",
+    expected: null,
+  },
+  {
     name: "a hub thinking suffix routes by its base model",
     accounts: [
       { driver: "codex", models: ["gpt-5.2"], windows: [spent("five_hour", 3)] },
@@ -583,6 +607,18 @@ it.each([
     ],
     model: "claude-sonnet-4-6",
     expected: at(1),
+  },
+  {
+    name: "an Argon model waits only for the Argon quota",
+    accounts: [
+      {
+        driver: "antigravity",
+        models: ["gemini-4-argon-high"],
+        windows: [spent("gemini-argon-5h", 2), spent("gemini-carbon-weekly", 96)],
+      },
+    ],
+    model: "gemini-4-argon-high",
+    expected: at(2),
   },
 ])("hub pool reset: $name", ({ accounts, model, expected }) => {
   expect(
