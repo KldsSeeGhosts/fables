@@ -61,7 +61,7 @@ const CONTEXT_BREAKDOWN_LABELS: Record<ContextBreakdownKind, string> = {
   system_prompt: msg("System prompt"),
   system_tools: msg("System tools"),
   mcp_tools: msg("MCP tools"),
-  t3_tools: msg("T3 Code tools"),
+  t3_tools: msg("Fables tools"),
   memory_files: msg("Memory files"),
   skills: msg("Skills"),
   custom_agents: msg("Custom agents"),

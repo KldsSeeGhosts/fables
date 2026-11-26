@@ -660,7 +660,7 @@ function QueuedMessage(props: {
     <>
       {attribution === "t3code" ? (
         <p className="me-1 text-micro text-dim-foreground">
-          <T>Sent by T3 Code</T>
+          <T>Sent by Fables</T>
         </p>
       ) : null}
       {presentation?.guestName === undefined ? null : (

@@ -49,8 +49,8 @@ function BootSplash() {
   const gt = useGT();
   return (
     <div id="boot-shell">
-      <div id="boot-shell-card" aria-label={gt("{product} splash screen", { product: "T3 Code" })}>
-        <img id="boot-shell-logo" src="/apple-touch-icon.png" alt="T3 Code" />
+      <div id="boot-shell-card" aria-label={gt("{product} splash screen", { product: "Fables" })}>
+        <img id="boot-shell-logo" src="/apple-touch-icon.png" alt="Fables" />
       </div>
     </div>
   );

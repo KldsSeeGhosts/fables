@@ -53,7 +53,7 @@ function MobileClientRow({ device }: { readonly device: RelayClientDeviceRecord 
               </TooltipTrigger>
               <TooltipPopup>
                 {device.appVersion
-                  ? gt("T3 Code {version}", { version: device.appVersion })
+                  ? gt("Fables {version}", { version: device.appVersion })
                   : gt("App version unavailable")}
               </TooltipPopup>
             </Tooltip>
@@ -115,7 +115,7 @@ function EmptyMobileClients() {
         </EmptyTitle>
         <EmptyDescription>
           <T>
-            Install T3 Code on your phone and sign in to T3 Connect to get push notifications and
+            Install Fables on your phone and sign in to T3 Connect to get push notifications and
             Live Activities.
           </T>
         </EmptyDescription>

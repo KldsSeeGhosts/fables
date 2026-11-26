@@ -15,7 +15,7 @@ const nextFork = "v0.0.46-nightly.20261014.1001";
 function published(tag, overrides = {}) {
   return {
     tag_name: tag,
-    name: `KSG Code ${tag.slice(1)}`,
+    name: `Fables ${tag.slice(1)}`,
     draft: false,
     published_at: "2026-10-15T00:00:00Z",
     ...overrides,
@@ -58,11 +58,12 @@ function fixture(t) {
   return { cwd, git, commit, notes };
 }
 
-test("lists direct KSG commits since the last release without upstream or old KSG changes", (t) => {
+test("uses a published KSG Code release as the baseline for the first Fables release", (t) => {
   const { commit, notes } = fixture(t);
   const sha = commit("feat(settings): add upstream nightly checks");
   commit("fix(providers): preserve custom model options");
-  const body = notes();
+  const body = notes({ releases: [published(fork1, { name: `KSG Code ${fork1.slice(1)}` })] });
+  assert.match(body, /### Fables/);
   assert.match(body, /Feature: settings: add upstream nightly checks/);
   assert.match(body, /Fix: providers: preserve custom model options/);
   assert.ok(body.includes(`https://github.com/example/ksgcode/commit/${sha}`));
@@ -92,7 +93,7 @@ test("separates newly included upstream changes from KSG changes", (t) => {
   git("merge", "--no-ff", "-m", "Sync upstream nightly", "upstream");
   const forkSha = commit("feat(web): add KSG artwork");
   const body = notes({ tag: nextFork, upstreamTag: upstream2 });
-  const [upstreamSection, forkSection] = body.split("### KSG Code");
+  const [upstreamSection, forkSection] = body.split("### Fables");
   assert.match(upstreamSection, /### Upstream T3 Code/);
   assert.match(upstreamSection, /Fix: server: reconnect remote sessions/);
   assert.ok(upstreamSection.includes(`pingdotgg/t3code/commit/${upstreamSha}`));
@@ -171,7 +172,7 @@ test("the first release includes fork history but not all upstream history", (t)
 test("rebuilds report no new KSG changes instead of a comparison-only changelog", (t) => {
   const { notes } = fixture(t);
   const body = notes();
-  assert.match(body, /Rebuilt KSG Code; no new application changes/);
+  assert.match(body, /Rebuilt Fables; no new application changes/);
   assert.doesNotMatch(body, /existing KSG feature|### Upstream/);
 });
 
@@ -227,7 +228,7 @@ test("generated notes display real changes in the desktop popover, prioritizing 
   assert.equal(group.totalItems, 12);
   assert.equal(group.items.length, 8);
   assert.match(group.items[0], /Feature: settings: add upstream nightly checks/);
-  assert.doesNotMatch(group.items.join("\n"), /Compare:|Full Changelog|###|### KSG Code/);
+  assert.doesNotMatch(group.items.join("\n"), /Compare:|Full Changelog|###|### Fables/);
 });
 
 test("rejects inconsistent version metadata and an upstream tag not merged into the release", (t) => {

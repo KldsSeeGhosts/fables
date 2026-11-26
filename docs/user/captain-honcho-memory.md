@@ -16,6 +16,6 @@ Create `~/.config/ksg-code/honcho.json`, or set `T3CODE_HONCHO_CONFIG` to anothe
 }
 ```
 
-`tokenFile` must contain only the workspace bearer token. Keep that file private. KSG Code logs a warning if it cannot read the configured file or token, or if either is invalid. With no default config file, Honcho memory stays off.
+`tokenFile` must contain only the workspace bearer token. Keep that file private. Fables logs a warning if it cannot read the configured file or token, or if either is invalid. With no default config file, Honcho memory stays off.
 
 Restart the KSG server after adding the file. Mirroring runs in the background. The Captain continues with its local briefing if Honcho fails or takes longer than two seconds to respond.

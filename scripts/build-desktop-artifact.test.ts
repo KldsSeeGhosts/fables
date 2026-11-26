@@ -31,7 +31,6 @@ import {
   readWorkspaceConfig,
   createBuildConfig,
   DESKTOP_FILE_EXCLUSIONS,
-  resolveDesktopProductName,
   InvalidMacPasskeyRpDomainError,
   InvalidMacPasskeyPublishableKeyError,
   UnsupportedDesktopBuildArchitectureError,
@@ -517,11 +516,6 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }),
   );
 
-  it("names the KSG Code fork's desktop package the same on every channel", () => {
-    assert.equal(resolveDesktopProductName("0.0.17"), "KSG Code");
-    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "KSG Code");
-  });
-
   it.effect("omits update feeds for pull request preview builds", () =>
     Effect.gen(function* () {
       const preview = yield* createBuildConfig(
@@ -657,7 +651,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }),
   );
 
-  it.effect("keeps the fork's product name in the macOS installer", () =>
+  it.effect("brands the macOS installer without renaming the installed bundle or executable", () =>
     Effect.gen(function* () {
       const mac = yield* createBuildConfig(
         "mac",
@@ -668,9 +662,43 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         undefined,
         undefined,
       );
-      assert.equal(mac.productName, "KSG Code");
+      assert.equal(mac.productName, "Fables");
+      assert.propertyVal(mac.mac, "executableName", "KSG Code");
       assert.equal(mac.artifactName, "KSG-Code-${version}-${arch}.${ext}");
-      assert.propertyVal(mac.dmg, "title", "KSG Code 1.2.3 Installer");
+      assert.propertyVal(mac.dmg, "title", "Fables 1.2.3 Installer");
+    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
+  it.effect("keeps updater paths stable in Windows and Linux packages", () =>
+    Effect.gen(function* () {
+      const win = yield* createBuildConfig(
+        "win",
+        "nsis",
+        "1.2.3",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+      assert.equal(win.productName, "Fables");
+      assert.equal(win.appId, "com.t3tools.t3code");
+      assert.propertyVal(win.win, "executableName", "KSG Code");
+      assert.equal(win.artifactName, "KSG-Code-${version}-${arch}.${ext}");
+
+      const linux = yield* createBuildConfig(
+        "linux",
+        "AppImage",
+        "1.2.3-nightly.20260413.42",
+        false,
+        true,
+        undefined,
+        undefined,
+      );
+      assert.equal(linux.productName, "KSG Code");
+      assert.equal(linux.appId, win.appId);
+      assert.nestedPropertyVal(linux, "linux.desktop.entry.Name", "Fables");
+      assert.propertyVal(linux.linux, "executableName", "t3code");
+      assert.propertyVal(linux.appImage, "artifactName", "T3-Code-Nightly-${arch}.${ext}");
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 

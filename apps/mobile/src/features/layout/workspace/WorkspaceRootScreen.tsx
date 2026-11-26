@@ -77,7 +77,7 @@ function WorkspaceRootTitle(props: {
           ) : (
             <CompactBrandTitle
               accessibilityLabel={gt("{product}, {title}", {
-                product: isDuet ? "KSG Duet" : "T3 Code",
+                product: isDuet ? "KSG Duet" : "Fables",
                 title: tabTitle,
               })}
               fit

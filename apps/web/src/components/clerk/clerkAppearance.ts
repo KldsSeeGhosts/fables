@@ -5,7 +5,7 @@ import type { ClerkProviderProps } from "@clerk/react";
  * own rules without `!important`. */
 const CLERK_CSS_LAYER = "clerk";
 
-// Shared recipes, so every Clerk control reads as the matching T3 Code control.
+// Shared recipes, so every Clerk control reads as the matching Fables control.
 const primaryButton =
   "h-9 sm:h-8 rounded-control surface-lit text-label text-primary-foreground hover:surface-lit-hover focus-visible:outline-2 focus-visible:outline-ring after:hidden before:hidden";
 // UserProfile reuses formButtonPrimary for destructive confirmations.

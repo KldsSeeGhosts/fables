@@ -223,7 +223,7 @@ export function ServerUpdatesAction({
         const confirmed =
           (await requestConfirmDialog(
             gt(
-              "Update the T3 Code desktop apps on {servers}? They will close and relaunch on those machines.",
+              "Update the Fables desktop apps on {servers}? They will close and relaunch on those machines.",
               { servers: desktopTargets.map((target) => target.serverLabel).join(", ") },
             ),
             { initialFocus: "confirm" },
@@ -356,7 +356,7 @@ export function ServerUpdateAction({
       const confirmed =
         (await requestConfirmDialog(
           gt(
-            "Update the T3 Code desktop app that runs the {serverLabel}? It will close and relaunch on that machine.",
+            "Update the Fables desktop app that runs the {serverLabel}? It will close and relaunch on that machine.",
             { serverLabel },
           ),
           { initialFocus: "confirm" },

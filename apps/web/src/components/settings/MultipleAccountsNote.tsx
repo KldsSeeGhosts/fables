@@ -37,7 +37,7 @@ export function MultipleAccountsNote({
       <AlertDescription>
         <p>
           <T>
-            We do not recommend managing multiple <Var>{providerName}</Var> accounts in T3 Code.{" "}
+            We do not recommend managing multiple <Var>{providerName}</Var> accounts in Fables.{" "}
             <InlineButton
               render={<a href={MULTIPLE_ACCOUNTS_FAQ_URL} target="_blank" rel="noreferrer" />}
             >

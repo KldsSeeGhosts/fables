@@ -250,7 +250,7 @@ function UnknownWhenVariableWarning({
   return (
     <WarningTooltipIcon label={label} focusable={focusable} className="size-4.5">
       <T>
-        T3 Code does not recognize this condition yet. It can still be saved, but it may not match
+        Fables does not recognize this condition yet. It can still be saved, but it may not match
         unless the runtime provides it.
       </T>
     </WarningTooltipIcon>
@@ -1652,7 +1652,7 @@ function KeybindingsList(props: KeybindingsListProps) {
 }
 
 const BROWSER_KEYBINDING_WARNING = msg(
-  "Some shortcuts may be claimed by the browser before T3 Code sees them. Use the desktop app for better keybinding support.",
+  "Some shortcuts may be claimed by the browser before Fables sees them. Use the desktop app for better keybinding support.",
 );
 
 function keybindingAnchorIds(rows: ReturnType<typeof buildKeybindingRows>) {

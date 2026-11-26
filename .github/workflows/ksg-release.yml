@@ -1,6 +1,6 @@
 name: KSG Release
 
-# KSG Code fork (see AGENTS.md): publishes a nightly release of ksg/dev for
+# Fables fork (see AGENTS.md): publishes a nightly release of ksg/dev for
 # macOS arm64, Linux x64 and Windows x64. Each platform build reuses upstream's
 # release-desktop.yml, so build changes arrive with each upstream sync.
 
@@ -14,7 +14,7 @@ on:
         description: Runner label for the macOS build, such as a one-shot self-hosted runner.
         default: ksg-local
       mac_launch_check:
-        description: Launch the built app. Turn off on a machine already running KSG Code, which shares its Electron profile.
+        description: Launch the built app. Turn off on a machine already running Fables, which shares its Electron profile.
         type: boolean
         default: true
 
@@ -279,5 +279,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --prerelease \
-            --title "KSG Code $VERSION" \
+            --title "Fables $VERSION" \
             --notes-file "$RUNNER_TEMP/ksg-release-notes.md"

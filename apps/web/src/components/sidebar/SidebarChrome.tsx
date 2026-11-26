@@ -78,7 +78,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
   return (
     <Link
       data-app-brand=""
-      aria-label={gt("T3 Code home")}
+      aria-label={gt("Fables home")}
       className={cn(
         "pointer-events-auto relative z-10 hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md outline-hidden ring-ring [-webkit-app-region:no-drag] focus-visible:ring-2 focus-visible:ring-inset md:flex",
         onBackdrop ? "text-white light:text-foreground" : "text-foreground",

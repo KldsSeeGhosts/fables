@@ -2,10 +2,46 @@
 
 > For KSG maintainers. The always-on rules are in [AGENTS.md](../../AGENTS.md#ksg-fork-rules).
 
-KSG Code follows [T3 Code](https://github.com/pingdotgg/t3code), with its own
+Fables follows [T3 Code](https://github.com/pingdotgg/t3code), with its own
 updates, branding, signing, and customizations. The CLI remains `t3`, state
 remains in `~/.t3`, and the app ID remains `com.t3tools.t3code`. KSG and upstream
 share state and must not run side by side.
+
+## Desktop display name and update paths
+
+Fables is the display name. The existing artifact names, app ID, updater
+manifests, signing settings, and Electron profile paths are part of the
+distribution and stay stable across the rename.
+
+- **macOS.** electron-builder's `out/appInfo.js` derives the package filename
+  from `mac.executableName`. `out/macPackager.js` and
+  `out/electron/electronMac.js` use it for the bundle and binaries, and use
+  `productName` for the display name in Info.plist. Keep
+  `/Applications/KSG Code.app` and its executable name. electron-updater's
+  `out/MacUpdater.js` gives the ZIP to Electron's native updater. Squirrel.Mac
+  matches the running bundle ID and verifies the signature. When the installed
+  bundle's basename matches its executable name, ShipIt can rename the
+  destination to match the ZIP before replacing it. Keeping the ZIP's bundle
+  name preserves the installed path and any shortcuts to it. A custom bundle
+  name chosen by the user stays in place. See
+  [SQRLUpdater.m](https://github.com/Squirrel/Squirrel.Mac/blob/fffea30e4a339a7f7d69a3391314b72548d209bd/Squirrel/SQRLUpdater.m)
+  and [SQRLInstaller.m](https://github.com/Squirrel/Squirrel.Mac/blob/fffea30e4a339a7f7d69a3391314b72548d209bd/Squirrel/SQRLInstaller.m).
+- **Windows.** Keep `win.executableName` on the existing filename.
+  electron-updater's `out/NsisUpdater.js` launches the NSIS installer.
+  electron-builder's `out/targets/nsis/NsisTarget.js` derives the install
+  GUID from the app ID. `templates/nsis/multiUser.nsh` reads that registry
+  key's `InstallLocation`, and `templates/nsis/include/installer.nsh` renames
+  existing Desktop and Start Menu shortcuts to the new product name. Their
+  executable target and AppUserModelID stay valid.
+- **Linux.** Keep the builder's product name for the Debian install path.
+  `out/targets/FpmTarget.js` and `out/targets/LinuxTargetHelper.js` derive
+  that path from the sanitized product name. Override the desktop entry's
+  `Name` and use Fables in the package metadata. Keep the `t3code` binary
+  and the published AppImage filenames. In `out/AppImageUpdater.js`,
+  electron-updater replaces the file at `APPIMAGE` when its basename is
+  unversioned or matches the download. For a different versioned basename,
+  it removes the old file and installs the download beside it under the
+  download's basename.
 
 ## Syncing with upstream
 
@@ -72,6 +108,9 @@ KSG iOS updates use `@kidsseeghosts/ksg-code`. Install a preview IPA built
 with this project and its `preview` channel before publishing updates to it.
 Publish JavaScript-only changes as an update when the native fingerprint
 matches. Native changes that alter the fingerprint require a new IPA.
+Expo prebuild uses the Fables app name for the iOS `CFBundleDisplayName`
+and the Android `app_name` resource. Install a new native build to update the
+launcher label. Use the same bundle ID, EAS project, and update channel.
 
 From `apps/mobile`, publish an iOS preview update with the same build-time
 settings as the IPA. Read `EXPO_TOKEN` from a file outside the repository.

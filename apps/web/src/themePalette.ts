@@ -470,7 +470,7 @@ const STOCK_SHELL_COLORS = {
 } as const;
 const stockThemeColors: Partial<Record<ThemeAppearance, ThemeColors>> = {};
 
-/** The stock "T3 Code" look as a palette: what HTML renders paint and its theme file carries. */
+/** The stock "Fables" look as a palette: what HTML renders paint and its theme file carries. */
 export function getStockThemeColors(appearance: ThemeAppearance): ThemeColors {
   return (stockThemeColors[appearance] ??= {
     ...getStandardThemeColors(appearance),

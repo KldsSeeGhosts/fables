@@ -143,7 +143,7 @@ function UpdateEverythingDialogContent({
           <span className="flex flex-col gap-1">
             {version !== null ? (
               <span>
-                T3 Code <span className="font-mono text-meta">{version}</span>
+                Fables <span className="font-mono text-meta">{version}</span>
               </span>
             ) : null}
             {providerCount > 0 ? (
@@ -177,7 +177,7 @@ function UpdateEverythingDialogContent({
               <span role="columnheader">
                 <T>Machine</T>
               </span>
-              <span role="columnheader">T3 Code</span>
+              <span role="columnheader">Fables</span>
               <span role="columnheader">
                 <T>Providers</T>
               </span>

@@ -35,7 +35,7 @@ on:
         required: false
       AZURE_TRUSTED_SIGNING_PUBLISHER_NAME:
         required: false
-      # KSG Code fork: self-signed macOS signing (see AGENTS.md, Releases and macOS signing).
+      # Fables fork: self-signed macOS signing (see AGENTS.md, Releases and macOS signing).
       KSG_MACOS_P12:
         required: false
       KSG_MACOS_P12_PASSWORD:
@@ -696,7 +696,7 @@ jobs:
           AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME }}
           AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME }}
           AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
-          # KSG Code fork: personal macOS signing (see AGENTS.md, Releases and macOS signing).
+          # Fables fork: personal macOS signing (see AGENTS.md, Releases and macOS signing).
           KSG_MACOS_P12: ${{ secrets.KSG_MACOS_P12 }}
           KSG_MACOS_P12_PASSWORD: ${{ secrets.KSG_MACOS_P12_PASSWORD }}
           KSG_MACOS_DEVELOPMENT_P12: ${{ secrets.KSG_MACOS_DEVELOPMENT_P12 }}
@@ -772,7 +772,7 @@ jobs:
               echo "macOS Apple Development signing enabled (personal fleet, not notarized)."
               args+=(--signed)
             elif has_all "$KSG_MACOS_P12" "$KSG_MACOS_P12_PASSWORD"; then
-              # KSG Code fork: sign with the self-signed certificate (see AGENTS.md, Releases and macOS signing).
+              # Fables fork: sign with the self-signed certificate (see AGENTS.md, Releases and macOS signing).
               keychain="$RUNNER_TEMP/ksg-signing.keychain-db"
               keychain_password="$(openssl rand -hex 16)"
               printf '%s' "$KSG_MACOS_P12" | base64 --decode > "$RUNNER_TEMP/ksg.p12"

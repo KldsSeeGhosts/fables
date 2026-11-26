@@ -113,7 +113,7 @@ function ProjectChooser() {
           icon={<FolderOpenIcon />}
           title={gt("No projects yet")}
           description={gt(
-            "A project is a folder T3 Code works in. Add one to set its name, icon, checkouts and actions here.",
+            "A project is a folder Fables works in. Add one to set its name, icon, checkouts and actions here.",
           )}
         >
           <div className="flex flex-wrap justify-center gap-2">

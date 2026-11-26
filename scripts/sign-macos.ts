@@ -7,7 +7,7 @@ import { sign as signApplication, type SignOptions } from "@electron/osx-sign";
 const execFile = NodeUtil.promisify(NodeChildProcess.execFile);
 
 /**
- * KSG Code fork: the SHA-1 of the self-signed identity in CSC_KEYCHAIN, a
+ * Fables fork: the SHA-1 of the self-signed identity in CSC_KEYCHAIN, a
  * keychain holding only the imported .p12. codesign accepts the identity even
  * though macOS does not trust the certificate.
  */

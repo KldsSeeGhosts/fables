@@ -389,14 +389,14 @@ function describePairingFailure(error: unknown): PairingFailure {
         ? {
             title: m(msg("Server error (HTTP {status})", { status: error.status })),
             message: m(
-              msg("This T3 Code server answered with an error. Try again, or check its logs."),
+              msg("This Fables server answered with an error. Try again, or check its logs."),
             ),
           }
         : {
             title: m(msg("Server unreachable")),
             message: m(
               msg(
-                "Could not reach this T3 Code server. Check that it is running and reachable from this browser.",
+                "Could not reach this Fables server. Check that it is running and reachable from this browser.",
               ),
             ),
           };

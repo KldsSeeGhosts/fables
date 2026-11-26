@@ -179,7 +179,7 @@ export function RelayClientInstallDialog() {
               </p>
               <p className="mt-1 text-body leading-relaxed text-muted-foreground">
                 <T>
-                  T3 Code will download and install version{" "}
+                  Fables will download and install version{" "}
                   <Var>{view.status === "confirming" ? view.version : ""}</Var> locally.
                 </T>
               </p>

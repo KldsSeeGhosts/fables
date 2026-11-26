@@ -155,7 +155,7 @@ export function PullRequestListEmptyState({
         <PageEmptyTile
           icon={<ServerIcon />}
           title={<T context="where the host sign-in lives">On this server</T>}
-          description={<T>Uses the host's sign-in where T3 Code runs.</T>}
+          description={<T>Uses the host's sign-in where Fables runs.</T>}
         />
       </PullRequestPageEmpty>
     );
@@ -178,7 +178,7 @@ export function PullRequestListEmptyState({
         <PageEmptyTile
           icon={<ServerIcon />}
           title={<T context="where the host sign-in lives">On this server</T>}
-          description={<T>Sign in where T3 Code runs, not in this browser.</T>}
+          description={<T>Sign in where Fables runs, not in this browser.</T>}
         />
         <PageEmptyTile
           icon={<SettingsIcon />}

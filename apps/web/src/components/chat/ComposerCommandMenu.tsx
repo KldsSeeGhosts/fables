@@ -141,7 +141,7 @@ function composerCommandItemGroup(
 ): { key: string; label: string } {
   switch (item.type) {
     case "slash-command":
-      return { key: "t3code", label: "T3 Code" };
+      return { key: "t3code", label: "Fables" };
     case "provider-slash-command":
       return { key: `provider:${item.provider}`, label: providerLabel(item.provider, resolve) };
     case "skill": {
