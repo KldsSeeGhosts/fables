@@ -1502,6 +1502,7 @@ it("follows a live Duet rollover in a tab and opens a past conversation explicit
   await expect.element(screen.getByText("Earlier conversation", { exact: true })).toBeVisible();
   await expect.element(screen.getByText("context full", { exact: true })).toBeVisible();
   await expect.element(screen.getByText(`${old.id}: question 0`)).toBeVisible();
+  await expect.element(screen.getByText(`Answer 0 for ${old.id}.`, { exact: true })).toBeVisible();
   expect(isThreadSubscribed(old.id)).toBe(true);
 
   const primaryRef = scopeThreadRef(ENVIRONMENT_ID, primary.id);

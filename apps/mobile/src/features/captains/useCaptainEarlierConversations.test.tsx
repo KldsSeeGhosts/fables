@@ -2,6 +2,7 @@ import { expect, it, vi } from "vite-plus/test";
 import {
   CaptainId,
   EnvironmentId,
+  RunId,
   ThreadId,
   type Captain,
   type OrchestrationV2ProjectedTurnItem,
@@ -9,6 +10,7 @@ import {
 import * as DateTime from "effect/DateTime";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { deriveThreadFeedPresentation } from "../../lib/threadActivity";
 
 const subscriptionCalls = vi.hoisted(() => ({
   ids: [] as ThreadId[],
@@ -20,10 +22,21 @@ vi.mock(import("../../state/threads"), async () => {
   const Option = await import("effect/Option");
   const fixture =
     await import("../../../../../packages/client-runtime/src/state/orchestrationV2TestFixtures");
-  const row = fixture.v2MessageRow("Earlier captain prompt", 0);
+  const prompt = fixture.v2MessageRow("Earlier captain prompt", 0);
+  const reply = fixture.v2MessageRow("Earlier captain reply", 1);
+  const runId = RunId.make("earlier-captain-run");
+  if (reply.item.type !== "user_message") throw new Error("Expected a message fixture");
+  const visibleTurnItems = [
+    { ...prompt, item: { ...prompt.item, runId } },
+    {
+      ...reply,
+      position: 1,
+      item: { ...reply.item, runId, type: "assistant_message", streaming: false },
+    },
+  ] satisfies ReadonlyArray<OrchestrationV2ProjectedTurnItem>;
   const projection = {
     ...fixture.v2Projection,
-    visibleTurnItems: [row] as ReadonlyArray<OrchestrationV2ProjectedTurnItem>,
+    visibleTurnItems,
   };
   return {
     useEnvironmentThread: (_environment: EnvironmentId | null, id: ThreadId | null) => {
@@ -74,13 +87,15 @@ const threadRef = { environmentId, threadId: captain.primaryThreadId };
 
 function Probe({ followedFrom }: { followedFrom?: ThreadId | undefined } = {}) {
   const earlier = useCaptainEarlierConversations({ threadRef, captain, followedFrom });
-  const visible = earlier.entries.flatMap((entry) => {
-    if (entry.type === "message") return [entry.message.text];
-    if (entry.type === "conversation-divider") {
-      return [`divider:${entry.label}:${entry.detail ?? "manual"}`];
-    }
-    return [];
-  });
+  const visible = deriveThreadFeedPresentation(earlier.entries, null, new Set()).flatMap(
+    (entry) => {
+      if (entry.type === "message") return [entry.message.text];
+      if (entry.type === "conversation-divider") {
+        return [`divider:${entry.label}:${entry.detail ?? "manual"}`];
+      }
+      return [];
+    },
+  );
   return (
     <div>
       <button type="button" onClick={earlier.expand}>
@@ -113,6 +128,7 @@ it("loads an earlier Duet conversation only when requested and marks why it ende
     });
 
     expect(output()).toContain("Earlier captain prompt");
+    expect(output()).toContain("Earlier captain reply");
     expect(output()).toContain("divider:Earlier conversation:context full");
     expect(subscriptionCalls.ids).toContain(captain.earlierThreadIds[0]);
   } finally {

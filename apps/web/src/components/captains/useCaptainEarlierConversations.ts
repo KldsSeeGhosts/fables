@@ -9,7 +9,6 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { threadKey } from "@t3tools/client-runtime/state/entities";
-import { isCompleteTurnItemRow } from "@t3tools/client-runtime/state/threads";
 
 import type { EnvironmentThreadState } from "@t3tools/client-runtime/state/threads";
 import { useEnvironmentThread, useEnvironmentThreadRetry } from "../../state/threads";
@@ -81,11 +80,9 @@ export function useCaptainEarlierConversations(input: {
       const state = conversation === oldest ? detailState : snapshots[index];
       const projection = state && Option.isSome(state.data) ? state.data.value : null;
       if (projection !== null) {
-        const visibleTurnItems = projection.visibleTurnItems
-          .filter(isCompleteTurnItemRow)
-          .map((item) =>
-            item.visibility === "local" ? { ...item, visibility: "inherited" as const } : item,
-          );
+        const visibleTurnItems = projection.visibleTurnItems.map((item) =>
+          item.visibility === "local" ? { ...item, visibility: "inherited" as const } : item,
+        );
         result.push(
           ...deriveTimelineEntriesFromVisibleTurnItemsWithState({
             visibleTurnItems,
