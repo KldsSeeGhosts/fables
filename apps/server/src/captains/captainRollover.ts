@@ -72,9 +72,9 @@ const CONTEXT_OVERFLOW_CODES = new Set([
   "rapid_refill_breaker",
 ]);
 const CONTEXT_OVERFLOW_MESSAGE =
-  /\b(?:maximum context (?:length|window|size)|context (?:window|length) (?:limit )?(?:exceed(?:ed|s)?|full|overflow)|(?:exceeds?|exceeded) (?:the )?(?:(?:model(?:'s)?|maximum) )?context (?:window|length)|prompt (?:is )?too long|too many (?:input )?tokens)\b/i;
+  /\b(?:maximum context (?:length|window|size)|context (?:window|length) (?:limit )?(?:exceed(?:ed|s)?|full|overflow)|(?:exceeds?|exceeded) (?:the )?(?:(?:model(?:'s)?|maximum) )?context (?:window|length)|prompt (?:is )?too long|too many (?:input )?tokens|input token count[^.\n]*exceeds the maximum number of tokens|context refilled too quickly after compaction)\b/i;
 const COMPACTION_FAILURE_MESSAGE =
-  /\b(?:(?:context )?compaction (?:has )?failed|failed to compact (?:the )?(?:context|conversation))\b/i;
+  /\b(?:(?:context )?compact(?:ion)? (?:has )?failed|failed to compact (?:the )?(?:context|conversation))\b/i;
 
 const failureReason = (failure: OrchestrationV2ProviderFailure) => {
   const code = failure.code?.toLowerCase() ?? "";
@@ -127,7 +127,7 @@ const reachedThreshold = (records: CaptainRolloverThreadRecords, run: RolloverRu
     return false;
   if (
     stored?.compactsAutomatically === true ||
-    usage?.autoCompactThreshold !== undefined ||
+    usage.autoCompactThreshold !== undefined ||
     PROVIDER_NATIVE_AUTOMATIC_COMPACTION_DRIVERS.has(providerThread.driver)
   )
     return false;

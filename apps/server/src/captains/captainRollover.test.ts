@@ -94,6 +94,7 @@ const records = (overrides?: Partial<CaptainRolloverThreadRecords>): CaptainRoll
   }) as CaptainRolloverThreadRecords;
 
 const harness = (initialRecords: CaptainRolloverThreadRecords) => {
+  let threadRecords = initialRecords;
   let captain = captainAt(firstThreadId);
   const resets: CaptainResetInput[] = [];
   const sends: CaptainRolloverSendInput[] = [];
@@ -104,7 +105,7 @@ const harness = (initialRecords: CaptainRolloverThreadRecords) => {
           ? captain
           : undefined,
       ),
-    getThreadRecords: () => Effect.succeed(initialRecords),
+    getThreadRecords: () => Effect.sync(() => threadRecords),
     resetConversation: (input: CaptainResetInput) =>
       Effect.sync(() => {
         resets.push(input);
@@ -120,7 +121,14 @@ const harness = (initialRecords: CaptainRolloverThreadRecords) => {
         sends.push(input);
       }),
   };
-  return { dependencies, resets, sends, captain: () => captain };
+  return {
+    dependencies,
+    resets,
+    sends,
+    setRecords: (next: CaptainRolloverThreadRecords) => {
+      threadRecords = next;
+    },
+  };
 };
 
 it.effect("rolls an overflow failure over once and resends the failed message once", () =>
@@ -154,6 +162,12 @@ it.effect("recognizes structured overflow codes and failed compaction errors", (
       ["prompt_too_long", "Request rejected", "context_overflow"],
       ["compaction_failed", "Request rejected", "compaction_failed"],
       [null, "The prompt is too long", "context_overflow"],
+      [
+        null,
+        "The input token count (100001) exceeds the maximum number of tokens allowed.",
+        "context_overflow",
+      ],
+      [null, "Pi compact failed.", "compaction_failed"],
     ] as const) {
       const h = harness(
         records({
@@ -234,16 +248,16 @@ it.effect("waits for active crew tasks before a threshold rollover", () =>
       providerTurns,
       subagents: [{ origin: "app_owned", status: "completed" } as never],
     });
-    const done = harness(finished);
-    const result = yield* handleCaptainTurnEnd(done.dependencies, {
+    h.setRecords(finished);
+    const result = yield* handleCaptainTurnEnd(h.dependencies, {
       threadId: firstThreadId,
-      run: { ...run, status: "completed" },
+      run: { ...run, id: RunId.make("run:crew-finished"), status: "completed" },
     });
     assert.equal(result._tag, "rolled-over");
     if (result._tag !== "rolled-over") return;
     assert.equal(result.reason, "threshold");
-    assert.lengthOf(done.resets, 1);
-    assert.lengthOf(done.sends, 0);
+    assert.lengthOf(h.resets, 1);
+    assert.lengthOf(h.sends, 0);
   }),
 );
 
