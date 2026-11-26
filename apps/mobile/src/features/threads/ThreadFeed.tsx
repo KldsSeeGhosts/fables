@@ -364,6 +364,8 @@ export interface ThreadFeedHistoryControls {
   readonly onLoadEarlier: () => void;
   /** Loads earlier history down to the entry, in one request. */
   readonly onLoadThrough: (entryId: string) => void;
+  readonly label?: string;
+  readonly loadingLabel?: string;
 }
 
 export interface ThreadFeedProps {
@@ -2085,6 +2087,16 @@ function renderFeedEntry(
         label={entry.label}
         providerStartingLabel={entry.providerStartingLabel}
         providerStartingDriver={entry.providerStartingDriver}
+      />
+    );
+  }
+
+  if (entry.type === "conversation-divider") {
+    return (
+      <ThreadContextDivider
+        label={entry.detail === undefined ? entry.label : `${entry.label} · ${entry.detail}`}
+        icon="arrow.clockwise"
+        iconColor={iconSubtleColor}
       />
     );
   }
@@ -4433,9 +4445,13 @@ function ThreadFeedLoadEarlierControl(props: ThreadFeedHistoryControls) {
       {props.hasMoreHistory ? (
         <View className="self-center">
           <Button
-            label={props.loading ? gt("Loading earlier activity…") : gt("Load earlier activity")}
+            label={
+              props.loading
+                ? (props.loadingLabel ?? gt("Loading earlier activity…"))
+                : (props.label ?? gt("Load earlier activity"))
+            }
             tone="secondary"
-            accessibilityLabel={gt("Load earlier activity")}
+            accessibilityLabel={props.label ?? gt("Load earlier activity")}
             disabled={props.loading}
             onPress={props.onLoadEarlier}
             icon="chevron.up"

@@ -68,7 +68,11 @@ import {
 } from "../lib/composerImages";
 import { retainComposerAttachmentFileForPreview } from "../lib/composerAttachmentPreviewRetention";
 import { scopedThreadKey } from "../lib/scopedEntities";
-import { buildThreadFeed, createThreadFeedCache } from "../lib/threadActivity";
+import {
+  buildThreadFeed,
+  createThreadFeedCache,
+  type ThreadFeedEntry,
+} from "../lib/threadActivity";
 import {
   acknowledgedThreadMessagesAtom,
   pruneCaughtUpAcknowledgedThreadMessages,
@@ -226,6 +230,7 @@ export function useThreadComposerState(input: {
     message: SideChatMessage,
     settings: { readonly runtimeMode: RuntimeMode; readonly modelSelection: ModelSelection },
   ) => Promise<boolean>;
+  readonly earlierFeed?: ReadonlyArray<ThreadFeedEntry>;
 }) {
   const {
     selectedThread: selectedThreadShell,
@@ -304,7 +309,7 @@ export function useThreadComposerState(input: {
       !selectedThreadMessages?.some((message) => message.id === pendingCreationMessage.messageId)
         ? [pendingThreadCreationMessage(pendingCreationMessage)]
         : [];
-    const feed = buildThreadFeed(selectedThreadVisibleTurnItems, {
+    const currentFeed = buildThreadFeed(selectedThreadVisibleTurnItems, {
       anchoredMessages: pendingCreation,
       attempts: selectedThreadAttempts,
       nodes: selectedThreadNodes,
@@ -312,6 +317,10 @@ export function useThreadComposerState(input: {
       resolve,
       locale,
     });
+    const feed =
+      input.earlierFeed === undefined || input.earlierFeed.length === 0
+        ? currentFeed
+        : [...input.earlierFeed, ...currentFeed];
     const pendingAcknowledgments = selectPendingAcknowledgedMessages(acknowledgedMessages, {
       threadKey: selectedThreadKey,
       queuedMessages: selectedThreadQueuedMessages,

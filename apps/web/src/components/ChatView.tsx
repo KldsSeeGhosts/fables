@@ -381,7 +381,8 @@ import { useProactivePanels } from "../hooks/useProactivePanels";
 import { useIncrementalTimelineEntries } from "../hooks/useIncrementalTimelineEntries";
 import type { ComposerBannerStackItem } from "./chat/ComposerBannerStack";
 import { modelFallbackBannerItem } from "./chat/ComposerUsageLimits";
-import { CaptainContextResetNotice } from "./captains/CaptainContextResetNotice";
+import { useCaptain } from "./captains/useCaptain";
+import { useCaptainEarlierConversations } from "./captains/useCaptainEarlierConversations";
 import { ComposerSurface } from "./chat/ComposerSurface";
 import { resolveThreadSyncPhase } from "../threadSync";
 import { hasAvailableCompactionProvider } from "./chat/compaction.logic";
@@ -626,24 +627,56 @@ export default function ChatView(props: ChatViewProps) {
   );
   const serverVisibleTurnItems = useQuietThreadVisibleTurnItems(routeThreadDetailRef);
   const serverThreadHistory = useThreadHistory(routeThreadDetailRef);
+  const captain = useCaptain(routeThreadDetailRef);
+  const captainEarlier = useCaptainEarlierConversations({
+    threadRef: routeThreadDetailRef,
+    captain,
+  });
   const threadHistoryControls = (() => {
-    if (routeThreadDetailRef === null || !shouldShowLoadEarlierControl(serverThreadHistory)) {
-      return undefined;
+    if (routeThreadDetailRef !== null && shouldShowLoadEarlierControl(serverThreadHistory)) {
+      return {
+        hasMoreHistory: serverThreadHistory.hasMoreHistory,
+        loading: serverThreadHistory.loading,
+        error: serverThreadHistory.error,
+        onLoadEarlier: (throughEntryId) => {
+          void loadEarlierThreadHistory({
+            environmentId: routeThreadDetailRef.environmentId,
+            input: {
+              threadId: routeThreadDetailRef.threadId,
+              ...(throughEntryId === undefined ? {} : { throughEntryId }),
+            },
+          });
+        },
+      };
     }
-    return {
-      hasMoreHistory: serverThreadHistory.hasMoreHistory,
-      loading: serverThreadHistory.loading,
-      error: serverThreadHistory.error,
-      onLoadEarlier: (throughEntryId) => {
-        void loadEarlierThreadHistory({
-          environmentId: routeThreadDetailRef.environmentId,
-          input: {
-            threadId: routeThreadDetailRef.threadId,
-            ...(throughEntryId === undefined ? {} : { throughEntryId }),
-          },
-        });
-      },
-    };
+    if (captainEarlier.unexpandedCount > 0 || captainEarlier.loading) {
+      return {
+        hasMoreHistory: true,
+        loading: captainEarlier.loading,
+        error: null,
+        label: gt("Show earlier conversation"),
+        loadingLabel: gt("Loading earlier conversation…"),
+        onLoadEarlier: captainEarlier.expand,
+      };
+    }
+    const oldestExpanded = captainEarlier.oldestExpanded;
+    if (oldestExpanded?.state && shouldShowLoadEarlierControl(oldestExpanded.state.history)) {
+      return {
+        hasMoreHistory: oldestExpanded.state.history.hasMoreHistory,
+        loading: oldestExpanded.state.history.loading,
+        error: oldestExpanded.state.history.error,
+        onLoadEarlier: (throughEntryId) => {
+          void loadEarlierThreadHistory({
+            environmentId: oldestExpanded.ref.environmentId,
+            input: {
+              threadId: oldestExpanded.ref.threadId,
+              ...(throughEntryId === undefined ? {} : { throughEntryId }),
+            },
+          });
+        },
+      };
+    }
+    return undefined;
   })() as MessagesTimelineHistoryControls | undefined;
   const committedServerMessageIds = deriveCommittedServerUserMessageIds(serverVisibleTurnItems);
   // Queued messages have no turn item until starting, so cancellation must retire their optimistic rows
@@ -1763,7 +1796,9 @@ export default function ChatView(props: ChatViewProps) {
         message,
       }) as const,
   );
-  const timelineEntries = isServerThread ? serverTimelineEntries : draftTimelineEntries;
+  const timelineEntries = isServerThread
+    ? [...captainEarlier.entries, ...serverTimelineEntries]
+    : draftTimelineEntries;
   const timelineMessages = timelineEntries.flatMap((entry) =>
     entry.kind === "message" ? [entry.message] : [],
   );
@@ -4051,11 +4086,6 @@ export default function ChatView(props: ChatViewProps) {
                     }
                   >
                     <ComposerSurface.Shell contextRow={showComposerContextStrip}>
-                      <CaptainContextResetNotice
-                        threadRef={isServerThread ? activeThreadRef : null}
-                        contextWindow={activeContextWindow ?? null}
-                        onOpenThread={onOpenRelatedThreadStable}
-                      />
                       <div
                         ref={setComposerRequestCardHost}
                         data-chat-composer-request-host="true"

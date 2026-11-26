@@ -12,7 +12,12 @@ import {
   createThreadEnvironmentAtoms,
   createThreadFamilyAtoms,
 } from "@t3tools/client-runtime/state/threads";
-import type { EnvironmentId, OrchestrationV2ThreadShell, ThreadId } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  OrchestrationV2ThreadShell,
+  ScopedThreadRef,
+  ThreadId,
+} from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
 
@@ -33,6 +38,34 @@ export const olderSettledThreads = createOlderSettledThreadAtoms(
 export const threadEnvironment: ReturnType<typeof createThreadEnvironmentAtoms> =
   createThreadEnvironmentAtoms(connectionAtomRuntime, threadFamilies.snapshotAtom);
 const environmentThreads = createEnvironmentThreadStateAtoms(connectionAtomRuntime);
+
+const EMPTY_THREAD_STATE_LIST_ATOM = Atom.make<ReadonlyArray<EnvironmentThreadState>>(
+  Object.freeze([]),
+).pipe(Atom.withLabel("web-environment-thread-list:empty"));
+
+const environmentThreadStateListAtom = Atom.family((refsJson: string) =>
+  Atom.make((get): ReadonlyArray<EnvironmentThreadState> => {
+    const refs = JSON.parse(refsJson) as ReadonlyArray<ScopedThreadRef>;
+    return refs.map((ref) =>
+      AsyncResult.getOrElse(
+        get(environmentThreads.stateAtom(ref.environmentId, ref.threadId)),
+        () => EMPTY_ENVIRONMENT_THREAD_STATE,
+      ),
+    );
+  }).pipe(Atom.withLabel(`web-environment-thread-list:${refsJson}`)),
+);
+
+/** Subscribes to a caller-chosen list of thread details without sending their history up front. */
+export function useEnvironmentThreads(
+  refs: ReadonlyArray<ScopedThreadRef>,
+): ReadonlyArray<EnvironmentThreadState> {
+  return useAtomValue(
+    refs.length === 0
+      ? EMPTY_THREAD_STATE_LIST_ATOM
+      : environmentThreadStateListAtom(JSON.stringify(refs)),
+  );
+}
+
 export const environmentThreadDetails = createEnvironmentThreadDetailAtoms(
   environmentThreads.stateAtom,
 );

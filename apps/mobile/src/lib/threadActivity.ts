@@ -216,6 +216,13 @@ export type ThreadFeedEntry = ThreadFeedEntryContent & {
 type ThreadFeedEntryContent =
   | Extract<RawThreadFeedEntry, { type: "message" | "html-render" | "sent-message" | "mcp-app" }>
   | {
+      readonly type: "conversation-divider";
+      readonly id: string;
+      readonly createdAt: string;
+      readonly label: string;
+      readonly detail?: string;
+    }
+  | {
       readonly type: "activity-group";
       readonly id: string;
       readonly createdAt: string;
@@ -1525,7 +1532,8 @@ function staysOutOfFold(entry: ThreadFeedEntry): boolean {
 }
 
 function feedEntryRunId(entry: ThreadFeedEntry): RunId | null {
-  return entry.type === "message" ? (entry.message.runId ?? null) : entry.runId;
+  if (entry.type === "message") return entry.message.runId ?? null;
+  return entry.type === "conversation-divider" ? null : entry.runId;
 }
 
 function isUserMessageEntry(entry: ThreadFeedEntry | undefined): boolean {
