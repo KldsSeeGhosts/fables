@@ -2,6 +2,7 @@ import { page, userEvent } from "vite-plus/test/browser";
 import { describe, expect, it, vi } from "vite-plus/test";
 import type { ReactNode } from "react";
 
+import "~/index.css";
 import { render } from "../../test/render";
 
 vi.mock(import("../state/server"), async (original) => {
@@ -21,6 +22,31 @@ vi.mock(import("../layout/WorkspacePlane"), () => ({
 }));
 
 import { AppSidebarLayout } from "./AppSidebarLayout";
+
+it("collapses the app sidebar by dragging its rail and restores it from the edge", async () => {
+  await page.viewport(1280, 800);
+  await using screen = await render(
+    <AppSidebarLayout>
+      <div />
+    </AppSidebarLayout>,
+  );
+  const sidebar = screen.container.querySelector<HTMLElement>('[data-slot="sidebar"]')!;
+  const rail = sidebar.querySelector<HTMLElement>('[data-sidebar="rail"]')!;
+  expect(sidebar.dataset.state).toBe("expanded");
+  await userEvent.dragAndDrop(rail, document.body, {
+    targetPosition: { x: 1, y: 400 },
+    force: true,
+  });
+  await vi.waitFor(() => expect(sidebar.dataset.state).toBe("collapsed"));
+  const handle = screen.container.querySelector<HTMLElement>(
+    '[data-slot="sidebar-restore-handle"]',
+  )!;
+  await userEvent.dragAndDrop(handle, document.body, {
+    targetPosition: { x: 300, y: 400 },
+    force: true,
+  });
+  await vi.waitFor(() => expect(sidebar.dataset.state).toBe("expanded"));
+});
 
 describe("sidebar toggle shortcut", () => {
   it("leaves the key to a focused terminal when its rule excludes terminalFocus, and swallows held repeats", async () => {

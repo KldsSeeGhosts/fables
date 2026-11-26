@@ -646,6 +646,7 @@ export function AppSidebarLayout({
                 // Light, black chrome paints the sidebar with the dark tokens (index.css).
                 data-chrome-scope=""
                 resizable={{
+                  collapseOnResize: true,
                   maxWidth: sidebarMaximumWidth,
                   minWidth: sidebarMinimumWidth,
                   shouldAcceptWidth: ({ currentWidth, nextWidth, wrapper }) =>
