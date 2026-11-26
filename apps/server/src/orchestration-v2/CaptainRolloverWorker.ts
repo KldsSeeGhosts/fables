@@ -40,13 +40,16 @@ export const layer = Layer.effectDiscard(
                 getThreadRecords: (threadId, run) =>
                   threads.getThreadRecords(
                     threadId,
-                    ["messages", "turnItems", "providerThreads", "subagents"],
+                    ["messages", "turnItems", "providerThreads", "providerTurns", "subagents"],
                     {
                       messageIds: [run.userMessageId],
                       turnItemRunId: run.id,
                       turnItemTypes: ["error", "compaction"],
                       providerThreadIds:
                         run.providerThreadId === null ? [] : [run.providerThreadId],
+                      providerTurnThreadIds:
+                        run.providerThreadId === null ? [] : [run.providerThreadId],
+                      latestProviderTurnUsageOnly: true,
                       omitSettledSubagents: true,
                     },
                   ),

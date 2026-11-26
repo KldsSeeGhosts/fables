@@ -13,6 +13,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as DateTime from "effect/DateTime";
 
 import type { ThreadManagementSendInput } from "../orchestration-v2/ThreadManagementService.ts";
 
@@ -27,6 +28,7 @@ export interface CaptainRolloverThreadRecords {
   readonly thread: Pick<OrchestrationV2ThreadProjection["thread"], "id" | "projectId">;
   readonly messages: ReadonlyArray<OrchestrationV2ConversationMessage>;
   readonly turnItems: ReadonlyArray<OrchestrationV2TurnItem>;
+  readonly providerTurns: OrchestrationV2ThreadProjection["providerTurns"];
   readonly providerThreads: OrchestrationV2ThreadProjection["providerThreads"];
   readonly subagents: OrchestrationV2ThreadProjection["subagents"];
 }
@@ -105,10 +107,15 @@ const immediateTrigger = (
   return reason;
 };
 
-const reachedThreshold = (
-  providerThread: OrchestrationV2ThreadProjection["providerThreads"][number] | undefined,
-) => {
-  const usage = providerThread?.contextUsage;
+const reachedThreshold = (records: CaptainRolloverThreadRecords, run: RolloverRun) => {
+  const providerThread = records.providerThreads.find(
+    (thread) => thread.id === run.providerThreadId,
+  );
+  const live = records.providerTurns.find(
+    (turn) => turn.providerThreadId === run.providerThreadId,
+  )?.tokenUsage;
+  const stored = providerThread?.contextUsage;
+  const usage = live ?? stored;
   const maxTokens = usage?.maxTokens;
   if (
     providerThread === undefined ||
@@ -119,12 +126,20 @@ const reachedThreshold = (
   )
     return false;
   if (
-    usage.compactsAutomatically === true ||
-    usage.autoCompactThreshold !== undefined ||
+    stored?.compactsAutomatically === true ||
+    usage?.autoCompactThreshold !== undefined ||
     PROVIDER_NATIVE_AUTOMATIC_COMPACTION_DRIVERS.has(providerThread.driver)
   )
     return false;
-  return usage.usedTokens / maxTokens >= CONTEXT_USAGE_ROLLOVER_RATIO;
+  const usageTime = live?.updatedAt ?? DateTime.formatIso(providerThread.updatedAt);
+  const resetUsage = records.turnItems.some(
+    (item) =>
+      item.type === "compaction" &&
+      item.status === "completed" &&
+      item.providerThreadId === providerThread.id &&
+      DateTime.toEpochMillis(item.completedAt ?? item.updatedAt) > Date.parse(usageTime),
+  );
+  return !resetUsage && usage.usedTokens / maxTokens >= CONTEXT_USAGE_ROLLOVER_RATIO;
 };
 
 export const hasActiveCaptainCrew = (subagents: CaptainRolloverThreadRecords["subagents"]) =>
@@ -175,10 +190,7 @@ export const handleCaptainTurnEnd = Effect.fn("CaptainRollover.handleTurnEnd")(f
   if (immediate !== null) {
     reason = immediate;
   } else {
-    const providerThread = records.providerThreads.find(
-      (thread) => thread.id === run.providerThreadId,
-    );
-    if (!reachedThreshold(providerThread)) return { _tag: "no-trigger" };
+    if (!reachedThreshold(records, run)) return { _tag: "no-trigger" };
     if (hasActiveCaptainCrew(records.subagents)) return { _tag: "deferred-for-crew" };
     reason = "threshold";
   }
@@ -191,8 +203,7 @@ export const handleCaptainTurnEnd = Effect.fn("CaptainRollover.handleTurnEnd")(f
             message.id === run.userMessageId &&
             message.runId === run.id &&
             message.role === "user" &&
-            message.notification === undefined &&
-            message.text.trim().toLowerCase() !== "/compact",
+            message.notification === undefined,
         );
   const reset = yield* dependencies.resetConversation({
     captainId: captain.id,

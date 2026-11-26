@@ -88,6 +88,7 @@ const records = (overrides?: Partial<CaptainRolloverThreadRecords>): CaptainRoll
     messages: [userMessage()],
     turnItems: [errorItem()],
     providerThreads: [],
+    providerTurns: [],
     subagents: [],
     ...overrides,
   }) as CaptainRolloverThreadRecords;
@@ -181,7 +182,7 @@ it.effect("keeps a completed turn with an earlier provider error in the same con
   }),
 );
 
-it.effect("rolls a compaction failure over without replaying /compact", () =>
+it.effect("rolls a compaction failure over and replays the user command once", () =>
   Effect.gen(function* () {
     const h = harness(
       records({
@@ -193,9 +194,10 @@ it.effect("rolls a compaction failure over without replaying /compact", () =>
     assert.equal(result._tag, "rolled-over");
     if (result._tag !== "rolled-over") return;
     assert.equal(result.reason, "compaction_failed");
-    assert.isFalse(result.resent);
+    assert.isTrue(result.resent);
     assert.lengthOf(h.resets, 1);
-    assert.lengthOf(h.sends, 0);
+    assert.lengthOf(h.sends, 1);
+    assert.equal(h.sends[0]?.text, "/compact");
   }),
 );
 
@@ -206,12 +208,19 @@ it.effect("waits for active crew tasks before a threshold rollover", () =>
         id: providerThreadId,
         appThreadId: firstThreadId,
         driver: "kiro",
-        contextUsage: { usedTokens: 85_000, maxTokens: 100_000 },
-        updatedAt: "2026-01-01T00:00:00.000Z",
+        contextUsage: null,
+      },
+    ] as never;
+    const providerTurns = [
+      {
+        providerThreadId,
+        tokenUsage: { usedTokens: 85_000, maxTokens: 100_000, updatedAt: "2026-01-01T00:00:00Z" },
       },
     ] as never;
     const subagent = { origin: "app_owned", status: "running" } as never;
-    const h = harness(records({ turnItems: [], providerThreads, subagents: [subagent] }));
+    const h = harness(
+      records({ turnItems: [], providerThreads, providerTurns, subagents: [subagent] }),
+    );
     const deferred = yield* handleCaptainTurnEnd(h.dependencies, {
       threadId: firstThreadId,
       run,
@@ -222,6 +231,7 @@ it.effect("waits for active crew tasks before a threshold rollover", () =>
     const finished = records({
       turnItems: [],
       providerThreads,
+      providerTurns,
       subagents: [{ origin: "app_owned", status: "completed" } as never],
     });
     const done = harness(finished);
