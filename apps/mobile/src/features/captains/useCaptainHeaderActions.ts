@@ -36,23 +36,23 @@ export function useCaptainHeaderActions(
   );
   if (captain === null || thread === null) return [];
   const params = { environmentId: String(thread.environmentId), captainId: String(captain.id) };
-  return [
-    {
-      accessibilityLabel: gt("{name} brief", { name: captain.name }),
-      icon: "doc.text",
-      separateBackground: false,
-      onPress: () => navigation.navigate("CaptainBrief", params),
-    },
-    {
-      accessibilityLabel:
-        attention > 0
-          ? gt("Tasks, {count} waiting on you", { count: attention })
-          : isDuet
-            ? gt("Duet tasks")
-            : gt("Captain tasks"),
-      icon: attention > 0 ? "bell.badge" : "list.number",
-      separateBackground: false,
-      onPress: () => navigation.navigate("CaptainTasks", params),
-    },
-  ];
+  const brief: AppBarAction = {
+    accessibilityLabel: gt("{name} brief", { name: captain.name }),
+    icon: "doc.text",
+    separateBackground: false,
+    onPress: () => navigation.navigate("CaptainBrief", params),
+  };
+  const tasks: AppBarAction = {
+    accessibilityLabel:
+      attention > 0
+        ? gt("Tasks, {count} waiting on you", { count: attention })
+        : isDuet
+          ? gt("Duet tasks")
+          : gt("Captain tasks"),
+    icon: attention > 0 ? "bell.badge" : "list.number",
+    separateBackground: false,
+    onPress: () => navigation.navigate("CaptainTasks", params),
+  };
+  // The Duet shell leads with Tasks, as desktop's header does.
+  return isDuet ? [tasks, brief] : [brief, tasks];
 }

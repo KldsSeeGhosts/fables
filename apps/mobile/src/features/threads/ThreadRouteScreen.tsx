@@ -120,6 +120,7 @@ import {
   threadRouteIsHydrating,
   threadRouteOpensDraft,
 } from "./thread-route-hydration";
+import { DuetConversationOrb } from "../captains/DuetConversationOrb";
 import { ThreadHeader } from "./ThreadHeader";
 import { resumeThread } from "./resume-thread";
 import {
@@ -1144,6 +1145,12 @@ function ThreadRouteContent(
           onSubmitUserInput={requests.onSubmitUserInput}
           onDismissUserInput={requests.onDismissUserInput}
         />
+        {props.inspectorPresentation ? null : (
+          <DuetConversationOrb
+            environmentId={selectedThread.environmentId}
+            threadId={selectedThread.id}
+          />
+        )}
       </>
     </>
   );
