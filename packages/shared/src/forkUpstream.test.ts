@@ -92,17 +92,32 @@ describe("published upstream nightlies", () => {
     expect(upstreamReviewUrl("0.0.46-nightly.20261014.3132", "0.0.46-nightly.20261014.3132")).toBe(
       "https://github.com/pingdotgg/t3code/releases/tag/v0.0.46-nightly.20261014.3132",
     );
-    expect(upstreamMergePrompt("0.0.46-nightly.20261014.3132")).toContain(
+  });
+
+  it("guards the sync against unpublished tags, an ahead mirror, and an unapproved push", () => {
+    const prompt = upstreamMergePrompt("0.0.46-nightly.20261014.3132");
+    expect(prompt).toContain(
       "published upstream nightly v0.0.46-nightly.20261014.3132 from pingdotgg/t3code",
     );
-    expect(upstreamMergePrompt("0.0.46-nightly.20261014.3132")).toContain(
-      "Follow the KSG fork rules and upstream sync procedure in AGENTS.md.",
+    expect(prompt).toContain("repos/pingdotgg/t3code/releases/tags/$tag");
+    expect(prompt).toContain(".draft == false and .published_at != null");
+    expect(prompt).toContain("refs/tags/v*:refs/tags/upstream/v*");
+    expect(prompt).toContain('git merge-base --is-ancestor HEAD "$upstream_ref"');
+    expect(prompt).toMatch(
+      /git merge --ff-only "\$upstream_ref"[\s\S]*git merge --no-edit upstream[\s\S]*git merge --no-edit ksg\/passthrough/,
     );
-    expect(upstreamMergePrompt("0.0.46-nightly.20261014.3132")).toContain(
-      "Once the sync is complete and checks pass, push upstream, ksg/passthrough, and ksg/dev to origin to trigger a KSG release.",
+    expect(prompt).toContain("Do not push unless the user explicitly approves in a later message.");
+  });
+
+  it("requires review of semantic conflicts, generated catalogs, and migration IDs", () => {
+    const prompt = upstreamMergePrompt("0.0.46-nightly.20261014.3132");
+    expect(prompt).toContain("docs/operations/ksg-customization-inventory.md");
+    expect(prompt).toMatch(/MERGE BLOCKED.+modify\/delete.+ThreadRouteScreen\.tsx.+multi-hunk/);
+    expect(prompt).toContain(
+      "Add four to every newly integrated upstream migration ID 112 or higher",
     );
-    expect(upstreamMergePrompt("0.0.46-nightly.20261014.3132")).toContain(
-      "Verify the release publishes successfully.",
-    );
+    expect(prompt).toContain("vp run i18n:generate");
+    expect(prompt).toContain("vp run i18n:check");
+    expect(prompt).toContain("path | branch layer | resolution | evidence or check");
   });
 });
