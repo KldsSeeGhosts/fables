@@ -12,7 +12,9 @@ share state and must not run side by side.
 Choose a published upstream release, not a tag from the fork's mixed tag list.
 Settings → About shows the installed build's included upstream
 nightly and offers a review link and merge prompt when a newer one exists.
-Checking never merges, publishes, or installs anything.
+Checking never merges, publishes, or installs anything. Use the
+[KSG customization inventory](ksg-customization-inventory.md) while resolving
+each merge layer.
 
 These commands assume a single checkout. If a branch already has a worktree,
 run its merge commands there instead of switching or force-moving it. Start
@@ -35,10 +37,15 @@ vp i
 
 Review the selected release and both merge layers. Inspect
 `git diff upstream ksg/passthrough` for distribution patches and
-`git diff ksg/passthrough ksg/dev` for customizations. Upstream wins outside
-their intent. If code moved, reapply the intent where it moved; never drop a
-patch to resolve a conflict. Run focused tests and affected package typechecks.
-Branches move forward by merges, never rebases or force-pushes.
+`git diff ksg/passthrough ksg/dev` for customizations. Use the
+[customization inventory](ksg-customization-inventory.md) to identify the
+owning files, required behavior, and cheap post-merge checks. Upstream wins
+outside the inventory's intent. If code moved, reapply the intent where it
+moved; never drop a patch to resolve a conflict. Stop and report when a
+conflict makes that intent unclear rather than guessing. Run focused tests and
+affected package typechecks. Branches move forward by merges, never rebases or
+force-pushes.
+
 KSG databases already recorded Captain migrations 112–115. When syncing later
 upstream migrations, add four to the upstream ID in the filename and manifest.
 
