@@ -3,6 +3,8 @@ import { createMemoryHistory } from "@tanstack/react-router";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   AgentSessionImportProjectChangedError,
+  CaptainId,
+  type Captain,
   EnvironmentId,
   IssueTrackerKind,
   ORCHESTRATION_V2_WS_METHODS,
@@ -27,6 +29,7 @@ import type * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 import * as Effect from "effect/Effect";
+import * as Stream from "effect/Stream";
 import { expect, it, onTestFinished, vi } from "vite-plus/test";
 import { cdp, page, userEvent } from "vite-plus/test/browser";
 
@@ -58,6 +61,7 @@ import {
   hasPendingAssetUrl,
   fakeDriver,
   installFakeEnvironment,
+  isThreadSubscribed,
   rejectPendingCommand,
   threadWithHistory,
   threadWithQuestion,
@@ -157,6 +161,59 @@ function appContainer() {
   container.style.cssText = "height: 100dvh; width: 100%;";
   return container;
 }
+
+it("follows the Duet primary and loads earlier conversations only on demand", async () => {
+  const old = threadWithHistory("captain:maria:1", 1);
+  const primary = threadWithHistory("captain:maria:2", 1);
+  const captain = {
+    id: CaptainId.make("maria"),
+    primaryThreadId: primary.id,
+    earlierThreadIds: [old.id],
+    earlierThreadEndReasons: ["context_overflow"],
+    name: "Maria",
+    role: "Coordinator",
+    instructions: "",
+    avatar: { preset: "compass", color: "violet" },
+    scopedProjectIds: [],
+    reportPolicy: "context",
+    coordinatorOnly: false,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    archivedAt: null,
+  } satisfies Captain;
+  using _environment = installFakeEnvironment([old, primary], { supportsCaptains: true });
+  using _captains = answerRpc(WS_METHODS.captainsSubscribe, () =>
+    Stream.succeed({ captains: [captain], documents: [], memories: [] }).pipe(
+      Stream.concat(Stream.never),
+    ),
+  );
+  appAtomRegistry.reset();
+  __setClientSettingsForTests({
+    ...DEFAULT_CLIENT_SETTINGS,
+    onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
+  });
+  const router = getRouter(
+    createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${old.id}`] }),
+  );
+  await router.load();
+  await using screen = await render(<AppRoot router={router} />, {
+    container: appContainer(),
+    router: false,
+  });
+
+  const showEarlier = screen.getByRole("button", { name: "Show earlier conversation" });
+  await expect.element(showEarlier).toBeVisible();
+  expect(router.state.location.pathname).toBe(
+    `/${ENVIRONMENT_ID}/${encodeURIComponent(primary.id)}`,
+  );
+  expect(isThreadSubscribed(old.id)).toBe(false);
+  await userEvent.click(showEarlier);
+
+  await expect.element(screen.getByText("Earlier conversation", { exact: true })).toBeVisible();
+  await expect.element(screen.getByText("context full", { exact: true })).toBeVisible();
+  await expect.element(screen.getByText(`${old.id}: question 0`)).toBeVisible();
+  expect(isThreadSubscribed(old.id)).toBe(true);
+});
 
 it("opens a linked Linear issue from an inactive thread's sidebar badge", async () => {
   const style = document.createElement("style");

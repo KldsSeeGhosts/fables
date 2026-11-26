@@ -9,6 +9,7 @@ import { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setu
 import { AppBar } from "../../components/ui/AppBar";
 import {
   StackActions,
+  useIsFocused,
   useNavigation,
   useRoute,
   type StaticScreenProps,
@@ -95,7 +96,7 @@ import { useSelectedThreadGitState } from "../../state/use-selected-thread-git-s
 import { useSelectedThreadRequests } from "../../state/use-selected-thread-requests";
 import { useSelectedThreadWorktree } from "../../state/use-selected-thread-worktree";
 import { useThreadComposerState } from "../../state/use-thread-composer-state";
-import { useCaptainOfThread } from "../captains/useCaptainsDirectory";
+import { useCaptainOfThread, useCaptainPrimaryReplacement } from "../captains/useCaptainsDirectory";
 import { useCaptainEarlierConversations } from "../captains/useCaptainEarlierConversations";
 import { resolveMergeBackTargetThreadId } from "@t3tools/client-runtime/state/thread-relationships";
 import { resolveLatestMergeBackRun } from "@t3tools/client-runtime/state/thread-workflows";
@@ -269,6 +270,17 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
   const { onReconnectEnvironment } = useRemoteConnections();
   const navigation = useNavigation();
   const routeName = useRoute().name;
+  const isFocused = useIsFocused();
+  const replacementThreadId = useCaptainPrimaryReplacement(
+    environmentId,
+    threadIdRaw === null ? null : ThreadId.make(threadIdRaw),
+  );
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the focused route on the Duet's live primary conversation
+  useEffect(() => {
+    if (isFocused && replacementThreadId !== undefined) {
+      navigation.setParams({ threadId: replacementThreadId });
+    }
+  }, [isFocused, navigation, replacementThreadId]);
   const routeConnectionState =
     routeEnvironmentRuntime?.connectionState ?? (environmentId ? "available" : connectionState);
   const routeThreadKey =
@@ -300,7 +312,7 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
       content
     );
 
-  if (environmentId === null || threadIdRaw === null) {
+  if (environmentId === null || threadIdRaw === null || replacementThreadId !== undefined) {
     return withInspectorHeader(<OpeningThreadLoadingScreen />);
   }
 
@@ -473,17 +485,6 @@ function ThreadRouteContent(
         },
       };
     }
-    if (captainEarlier.unexpandedCount > 0 || captainEarlier.loading) {
-      return {
-        hasMoreHistory: true,
-        loading: captainEarlier.loading,
-        error: null,
-        label: gt("Show earlier conversation"),
-        loadingLabel: gt("Loading earlier conversation…"),
-        onLoadEarlier: captainEarlier.expand,
-        onLoadThrough: captainEarlier.expand,
-      };
-    }
     const oldestExpanded = captainEarlier.oldestExpanded;
     if (oldestExpanded?.state) {
       const earlierHistory = oldestExpanded.state.history;
@@ -506,6 +507,17 @@ function ThreadRouteContent(
           },
         };
       }
+    }
+    if (captainEarlier.unexpandedCount > 0 || captainEarlier.loading) {
+      return {
+        hasMoreHistory: true,
+        loading: captainEarlier.loading,
+        error: null,
+        label: gt("Show earlier conversation"),
+        loadingLabel: gt("Loading earlier conversation…"),
+        onLoadEarlier: captainEarlier.expand,
+        onLoadThrough: captainEarlier.expand,
+      };
     }
     return undefined;
   })();

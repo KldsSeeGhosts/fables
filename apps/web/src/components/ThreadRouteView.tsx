@@ -12,6 +12,7 @@ import { Navigate, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import ChatView from "./ChatView";
+import { useCaptainPrimaryReplacement } from "./captains/useCaptain";
 import { BackgroundThreadContext, HiddenThreadContext } from "./chat/backgroundThread";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { closeLayoutThread } from "../layout/layoutActions";
@@ -76,6 +77,24 @@ export function ThreadRouteView({
     draftId === null ? null : store.getPromotedDraftRedirect(draftId),
   );
   const serverThreadRef = target.kind === "server" ? target.threadRef : null;
+  const replacementThreadId = useCaptainPrimaryReplacement(serverThreadRef);
+  const replacementEnvironmentId = serverThreadRef?.environmentId;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- follows the Duet's live primary conversation in the workspace tab
+  useEffect(() => {
+    if (
+      tabId === null ||
+      replacementThreadId === undefined ||
+      replacementEnvironmentId === undefined
+    )
+      return;
+    useLayoutStore.getState().replaceTabContent(tabId, {
+      kind: "chat",
+      target: {
+        kind: "server",
+        threadRef: scopeThreadRef(replacementEnvironmentId, replacementThreadId),
+      },
+    });
+  }, [tabId, replacementThreadId, replacementEnvironmentId]);
   const serverThreadShell = useQuietThreadShell(serverThreadRef);
   const shellStatus = useEnvironmentShellStatus(serverThreadRef?.environmentId ?? null);
   const environmentThreadRefs = useEnvironmentThreadRefs(serverThreadRef?.environmentId ?? null);
@@ -157,7 +176,7 @@ export function ThreadRouteView({
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears pending file drops and navigates the router home once a server thread is confirmed missing
   useEffect(() => {
-    if (target.kind !== "server" || !shellLive) {
+    if (target.kind !== "server" || !shellLive || replacementThreadId !== undefined) {
       return;
     }
     if (renderState === "missing") {
@@ -171,7 +190,16 @@ export function ThreadRouteView({
         void navigate({ to: "/", replace: true });
       }
     }
-  }, [background, environmentHasAnyThreads, navigate, renderState, shellLive, tabId, target]);
+  }, [
+    background,
+    environmentHasAnyThreads,
+    navigate,
+    renderState,
+    replacementThreadId,
+    shellLive,
+    tabId,
+    target,
+  ]);
 
   let view: React.ReactNode = null;
   let redirect: React.ReactNode = null;
@@ -226,6 +254,18 @@ export function ThreadRouteView({
       );
     } else {
       redirect = <Navigate to="/" replace />;
+    }
+  } else if (replacementThreadId !== undefined) {
+    if (tabId === null) {
+      redirect = (
+        <Navigate
+          to="/$environmentId/$threadId"
+          params={buildThreadRouteParams(
+            scopeThreadRef(target.threadRef.environmentId, replacementThreadId),
+          )}
+          replace
+        />
+      );
     }
   } else if (hiddenByTagFilter) {
     redirect = <Navigate to="/" replace />;

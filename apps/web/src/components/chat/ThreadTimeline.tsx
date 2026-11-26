@@ -22,6 +22,7 @@ export function ThreadTimeline({
   threadDetailRef,
   entriesInput,
   draftEntries,
+  earlierConversationEntries,
   activeThreadKey,
   syncing,
   detailLoading,
@@ -32,6 +33,7 @@ export function ThreadTimeline({
   entriesInput: Omit<TimelineEntriesInput, "visibleTurnItems">;
   /** A local draft's optimistic rows; null for a server thread. */
   draftEntries: ReadonlyArray<TimelineEntry> | null;
+  earlierConversationEntries: ReadonlyArray<TimelineEntry>;
   activeThreadKey: string | null;
   syncing: boolean;
   detailLoading: boolean;
@@ -71,12 +73,17 @@ export function ThreadTimeline({
     handoffEntry?.kind === "event" && handoffEntry.projectedItem.item.type === "handoff"
       ? resolveHandoffEndpoints(handoffEntry.projectedItem.item, timelineProps.runs)
       : undefined;
+  const currentEntries = handoffEntry
+    ? displayedEntries.filter((entry) => entry !== handoffEntry)
+    : displayedEntries;
   return (
     <MessagesTimeline
       {...timelineProps}
       syncing={syncing}
       timelineEntries={
-        handoffEntry ? displayedEntries.filter((entry) => entry !== handoffEntry) : displayedEntries
+        earlierConversationEntries.length === 0
+          ? currentEntries
+          : [...earlierConversationEntries, ...currentEntries]
       }
       parentThreadLink={
         handoff && timelineProps.parentThreadLink

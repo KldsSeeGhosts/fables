@@ -1,5 +1,8 @@
 import { useAtomValue } from "@effect/atom-react";
-import { captainForThread } from "@t3tools/client-runtime/state/captains";
+import {
+  captainForEarlierConversation,
+  captainForThread,
+} from "@t3tools/client-runtime/state/captains";
 import {
   squashAtomCommandFailure,
   type AtomCommandResult,
@@ -37,6 +40,15 @@ export function useCaptain(threadRef: ScopedThreadRef | null) {
     threadRef && isCaptainThreadId(threadRef.threadId) ? threadRef.environmentId : null,
   );
   return threadRef === null ? undefined : captainForThread(query.data, threadRef.threadId);
+}
+
+export function useCaptainPrimaryReplacement(threadRef: ScopedThreadRef | null) {
+  const query = useCaptains(
+    threadRef && isCaptainThreadId(threadRef.threadId) ? threadRef.environmentId : null,
+  );
+  return threadRef === null
+    ? undefined
+    : captainForEarlierConversation(query.data, threadRef.threadId)?.primaryThreadId;
 }
 
 export function captainCommandError<A, E>(
