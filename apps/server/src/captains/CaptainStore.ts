@@ -217,7 +217,19 @@ const make = Effect.gen(function* () {
   }, Effect.catch(captainUnavailable));
 
   const remove = Effect.fn("CaptainStore.remove")(function* (id: CaptainId) {
-    yield* sql`DELETE FROM captains WHERE id = ${id}`;
+    yield* transact(
+      Effect.gen(function* () {
+        yield* sql`
+            DELETE FROM captain_rollover_resends WHERE thread_id IN (
+              SELECT primary_thread_id FROM captains WHERE id = ${id}
+              UNION ALL
+              SELECT earlier.value FROM captains, json_each(captains.earlier_thread_ids) AS earlier
+              WHERE captains.id = ${id}
+            )
+          `;
+        yield* sql`DELETE FROM captains WHERE id = ${id}`;
+      }),
+    );
     yield* notify(id);
   }, Effect.catch(captainUnavailable));
 

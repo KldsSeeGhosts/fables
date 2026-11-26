@@ -21,6 +21,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
+import type * as SqlClient from "effect/sql/SqlClient";
 import * as TestClock from "effect/testing/TestClock";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 
@@ -74,7 +75,8 @@ const makeFixture = Effect.fn("CaptainRolloverWorkerTest.makeFixture")(function*
   const firstSend = yield* Deferred.make<void>();
   const nextSent = yield* Deferred.make<ThreadManagement.ThreadManagementSendInput>();
   const sends: ThreadManagement.ThreadManagementSendInput[] = [];
-  let failNext = false;
+  let sendsToFail = 0;
+  let missingText: string | undefined;
   const testServices = Layer.unwrap(
     Effect.gen(function* () {
       const sink = yield* EventSink.EventSinkV2;
@@ -86,12 +88,18 @@ const makeFixture = Effect.fn("CaptainRolloverWorkerTest.makeFixture")(function*
             projections.getThreadRecords(id, fields, filter).pipe(Effect.orDie),
           sendToThread: (input) =>
             Effect.gen(function* () {
-              if (failNext) {
-                failNext = false;
+              if (sendsToFail > 0) {
+                sendsToFail--;
                 yield* Deferred.succeed(firstSend, undefined);
                 return yield* new ThreadManagement.ThreadManagementWorktreeRestoreError({
                   threadId: input.threadId,
                   cause: "temporary workspace error",
+                });
+              }
+              if (input.text === missingText) {
+                return yield* new ThreadManagement.ThreadManagementThreadNotFoundError({
+                  projectId: input.projectId,
+                  threadId: input.threadId,
                 });
               }
               sends.push(input);
@@ -142,7 +150,13 @@ const makeFixture = Effect.fn("CaptainRolloverWorkerTest.makeFixture")(function*
       );
     }),
   );
-  const persistence = observeRunUpdates
+  const persistence: Layer.Layer<
+    | EventSink.EventSinkV2
+    | ProjectionStore.ProjectionStoreV2
+    | ThreadCommandExecutor.ThreadCommandExecutor,
+    Error,
+    SqlClient.SqlClient
+  > = observeRunUpdates
     ? Layer.merge(
         ProjectionStore.layer,
         ProviderReplayHarness.layerWithRegistry(
@@ -187,8 +201,11 @@ const makeFixture = Effect.fn("CaptainRolloverWorkerTest.makeFixture")(function*
     sends,
     firstSend,
     nextSent,
-    failNext: () => {
-      failNext = true;
+    failNext: (count = 1) => {
+      sendsToFail = count;
+    },
+    rejectMissing: (text: string) => {
+      missingText = text;
     },
   };
 });
@@ -504,6 +521,7 @@ it.effect("commits the failed prompt and reordered follow-ups before retrying th
         ],
       });
       fixture.failNext();
+      fixture.rejectMissing("Prompt 2");
       const reaction = yield* commands
         .handleCaptainTurnEnd(threadId, failed)
         .pipe(Effect.forkScoped);
@@ -526,14 +544,14 @@ it.effect("commits the failed prompt and reordered follow-ups before retrying th
       yield* Fiber.join(reaction);
       assert.deepEqual(
         fixture.sends.map((entry) => entry.commandId),
-        pending.map((entry) => entry.commandId),
+        [pending[0]?.commandId, pending[2]?.commandId],
       );
       assert.deepEqual(yield* store.pendingRolloverResends(undefined), []);
     }).pipe(Effect.provide(CaptainRolloverWorker.layer.pipe(Layer.provideMerge(fixture.base))));
   }),
 );
 
-it.effect("drains a durable resend when the rollover worker starts", () =>
+it.effect("recovers a durable resend after the rollover worker's immediate retries fail", () =>
   Effect.gen(function* () {
     const fixture = yield* makeFixture();
     yield* Effect.gen(function* () {
@@ -553,10 +571,53 @@ it.effect("drains a durable resend when the rollover worker starts", () =>
       assert.equal(pending?.text, "Recover this prompt");
       assert.deepEqual(fixture.sends, []);
 
-      const recovered = yield* Deferred.await(fixture.nextSent).pipe(
-        Effect.provide(CaptainRolloverWorker.layer),
-      );
+      fixture.failNext(4);
+      const recovered = yield* Effect.gen(function* () {
+        yield* Deferred.await(fixture.firstSend);
+        yield* TestClock.adjust("700 millis");
+        assert.deepEqual(fixture.sends, []);
+        assert.deepEqual(yield* store.pendingRolloverResends(reset.primaryThreadId), [pending]);
+        yield* TestClock.adjust("5 seconds");
+        return yield* Deferred.await(fixture.nextSent);
+      }).pipe(Effect.provide(CaptainRolloverWorker.layer));
       assert.deepEqual(recovered, pending);
+    }).pipe(Effect.provide(fixture.base));
+  }),
+);
+
+it.effect("removes pending resends for all conversations when deleting a Captain", () =>
+  Effect.gen(function* () {
+    const fixture = yield* makeFixture();
+    yield* Effect.gen(function* () {
+      const captains = yield* CaptainService.CaptainService;
+      const store = yield* CaptainStore.CaptainStore;
+      const persistResend = (
+        captain: { id: CaptainId; primaryThreadId: ThreadId },
+        text: string,
+      ) => {
+        const run = makeRun(captain.primaryThreadId, 1, "failed");
+        return captains.resetConversation(
+          {
+            captainId: captain.id,
+            expectedThreadId: captain.primaryThreadId,
+            reason: "context_overflow",
+          },
+          { run, failedMessage: message(run, text) },
+        );
+      };
+      const removed = yield* captains.create(newCaptain("remove-resends"));
+      const first = yield* persistResend(removed, "From the earlier conversation");
+      yield* persistResend(first, "From the current conversation");
+      const other = yield* captains.create(newCaptain("keep-resends"));
+      yield* persistResend(other, "From the other Captain");
+      assert.lengthOf(yield* store.pendingRolloverResends(undefined), 3);
+
+      yield* captains.delete({ captainId: removed.id });
+      const pending = yield* store.pendingRolloverResends(undefined);
+      assert.deepEqual(
+        pending.map((row) => row.text),
+        ["From the other Captain"],
+      );
     }).pipe(Effect.provide(fixture.base));
   }),
 );
