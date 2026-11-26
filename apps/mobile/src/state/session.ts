@@ -65,24 +65,40 @@ export function useEnvironmentScopeDenied(
   );
 }
 
+function useEnvironmentsWhere(
+  environments: ReadonlyArray<{ readonly environmentId: EnvironmentId }>,
+  scope: AuthEnvironmentScope,
+  matches: typeof sessionHasScope,
+): ReadonlySet<EnvironmentId> {
+  const matchingEnvironments = useMemo(
+    () =>
+      Atom.make((get) => {
+        const matching = new Set<EnvironmentId>();
+        for (const { environmentId } of environments) {
+          if (matches(get(environmentSession.sessionStateAtom(environmentId)), scope)) {
+            matching.add(environmentId);
+          }
+        }
+        return matching;
+      }),
+    [environments, scope, matches],
+  );
+  return useAtomValue(matchingEnvironments);
+}
+
 export function useEnvironmentsWithScope(
   environments: ReadonlyArray<{ readonly environmentId: EnvironmentId }>,
   scope: AuthEnvironmentScope,
 ): ReadonlySet<EnvironmentId> {
-  const permittedEnvironments = useMemo(
-    () =>
-      Atom.make((get) => {
-        const permitted = new Set<EnvironmentId>();
-        for (const { environmentId } of environments) {
-          if (sessionHasScope(get(environmentSession.sessionStateAtom(environmentId)), scope)) {
-            permitted.add(environmentId);
-          }
-        }
-        return permitted;
-      }),
-    [environments, scope],
-  );
-  return useAtomValue(permittedEnvironments);
+  return useEnvironmentsWhere(environments, scope, sessionHasScope);
+}
+
+/** Environments whose host has answered without the scope; ones not yet asked are left out. */
+export function useEnvironmentsDenyingScope(
+  environments: ReadonlyArray<{ readonly environmentId: EnvironmentId }>,
+  scope: AuthEnvironmentScope,
+): ReadonlySet<EnvironmentId> {
+  return useEnvironmentsWhere(environments, scope, sessionDeniesScope);
 }
 
 export function readEnvironmentScope(
