@@ -95,6 +95,8 @@ import { useSelectedThreadGitState } from "../../state/use-selected-thread-git-s
 import { useSelectedThreadRequests } from "../../state/use-selected-thread-requests";
 import { useSelectedThreadWorktree } from "../../state/use-selected-thread-worktree";
 import { useThreadComposerState } from "../../state/use-thread-composer-state";
+import { useCaptainOfThread } from "../captains/useCaptainsDirectory";
+import { useCaptainEarlierConversations } from "../captains/useCaptainEarlierConversations";
 import { resolveMergeBackTargetThreadId } from "@t3tools/client-runtime/state/thread-relationships";
 import { resolveLatestMergeBackRun } from "@t3tools/client-runtime/state/thread-workflows";
 import { threadEnvironment } from "../../state/threads";
@@ -393,7 +395,18 @@ function ThreadRouteContent(
   const selectedThreadDetail = Option.getOrNull(selectedThreadDetailState.data);
   const { selectedThreadCwd } = useSelectedThreadWorktree();
   const startSideChat = useStartSideChat();
-  const composer = useThreadComposerState({ startSideChat });
+  const captain = useCaptainOfThread(
+    selectedThreadDetailRef?.environmentId ?? null,
+    selectedThreadDetailRef?.threadId ?? null,
+  );
+  const captainEarlier = useCaptainEarlierConversations({
+    threadRef: selectedThreadDetailRef,
+    captain,
+  });
+  const composer = useThreadComposerState({
+    startSideChat,
+    earlierFeed: captainEarlier.entries,
+  });
   const gitState = useSelectedThreadGitState();
   const gitActions = useSelectedThreadGitActions();
   const requests = useSelectedThreadRequests();
@@ -441,26 +454,60 @@ function ThreadRouteContent(
     if (!selectedThread) {
       return undefined;
     }
-    if (!history.hasMoreHistory && history.error === null) {
-      return undefined;
+    if (history.hasMoreHistory || history.error !== null) {
+      return {
+        hasMoreHistory: history.hasMoreHistory,
+        loading: history.loading,
+        error: history.error === null ? null : threadErrorText(history.error, m),
+        onLoadEarlier: () => {
+          void loadEarlierHistory({
+            environmentId: selectedThread.environmentId,
+            input: { threadId: selectedThread.id },
+          });
+        },
+        onLoadThrough: (throughEntryId: string) => {
+          void loadEarlierHistory({
+            environmentId: selectedThread.environmentId,
+            input: { threadId: selectedThread.id, throughEntryId },
+          });
+        },
+      };
     }
-    return {
-      hasMoreHistory: history.hasMoreHistory,
-      loading: history.loading,
-      error: history.error === null ? null : threadErrorText(history.error, m),
-      onLoadEarlier: () => {
-        void loadEarlierHistory({
-          environmentId: selectedThread.environmentId,
-          input: { threadId: selectedThread.id },
-        });
-      },
-      onLoadThrough: (throughEntryId: string) => {
-        void loadEarlierHistory({
-          environmentId: selectedThread.environmentId,
-          input: { threadId: selectedThread.id, throughEntryId },
-        });
-      },
-    };
+    if (captainEarlier.unexpandedCount > 0 || captainEarlier.loading) {
+      return {
+        hasMoreHistory: true,
+        loading: captainEarlier.loading,
+        error: null,
+        label: gt("Show earlier conversation"),
+        loadingLabel: gt("Loading earlier conversation…"),
+        onLoadEarlier: captainEarlier.expand,
+        onLoadThrough: captainEarlier.expand,
+      };
+    }
+    const oldestExpanded = captainEarlier.oldestExpanded;
+    if (oldestExpanded?.state) {
+      const earlierHistory = oldestExpanded.state.history;
+      if (earlierHistory.hasMoreHistory || earlierHistory.error !== null) {
+        return {
+          hasMoreHistory: earlierHistory.hasMoreHistory,
+          loading: earlierHistory.loading,
+          error: earlierHistory.error === null ? null : threadErrorText(earlierHistory.error, m),
+          onLoadEarlier: () => {
+            void loadEarlierHistory({
+              environmentId: oldestExpanded.ref.environmentId,
+              input: { threadId: oldestExpanded.ref.threadId },
+            });
+          },
+          onLoadThrough: (throughEntryId: string) => {
+            void loadEarlierHistory({
+              environmentId: oldestExpanded.ref.environmentId,
+              input: { threadId: oldestExpanded.ref.threadId, throughEntryId },
+            });
+          },
+        };
+      }
+    }
+    return undefined;
   })();
   const navigation = useNavigation();
   const selectDetail = useSelectWorkspaceDetail();

@@ -1,4 +1,4 @@
-import type { Captain, ThreadId } from "@t3tools/contracts";
+import type { Captain, CaptainConversationEndReason, ThreadId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -43,6 +43,7 @@ export interface CaptainHandoffFacts extends CaptainOpenLoops {
   readonly lastUserMessage?: string | undefined;
   readonly lastAssistantMessage?: string | undefined;
   readonly scheduledTaskCount?: number | undefined;
+  readonly resetReason?: CaptainConversationEndReason | undefined;
 }
 
 const truncate = (text: string, length: number) =>
@@ -94,6 +95,19 @@ const openLoopParts = (facts: CaptainOpenLoops) => {
   return parts;
 };
 
+const resetReasonText = (reason: CaptainConversationEndReason | undefined) => {
+  switch (reason) {
+    case "context_overflow":
+      return "This conversation ended because the context window overflowed. The new conversation continues from this handoff.";
+    case "compaction_failed":
+      return "This conversation ended because context compaction failed. The new conversation continues from this handoff.";
+    case "threshold":
+      return "This conversation ended because it reached the context rollover threshold. The new conversation continues from this handoff.";
+    default:
+      return undefined;
+  }
+};
+
 const formatLoopSection = (input: {
   readonly heading: string;
   readonly facts: CaptainOpenLoops;
@@ -101,9 +115,12 @@ const formatLoopSection = (input: {
   readonly lastUserMessage?: string | undefined;
   readonly lastAssistantMessage?: string | undefined;
   readonly scheduledTaskCount?: number | undefined;
+  readonly resetReason?: CaptainConversationEndReason | undefined;
   readonly omittedLine?: string;
 }) => {
   const parts = [input.heading, ...openLoopParts(input.facts)];
+  const resetReason = resetReasonText(input.resetReason);
+  if (resetReason !== undefined) parts.push(`### Reset reason\n- ${resetReason}`);
   const lastUserMessage = quoteBlock(input.lastUserMessage ?? "", 500);
   if (lastUserMessage !== "") {
     parts.push(`### Last user message\n${lastUserMessage}`);
@@ -138,6 +155,7 @@ export const formatCaptainHandoff = (facts: CaptainHandoffFacts) =>
     lastUserMessage: facts.lastUserMessage,
     lastAssistantMessage: facts.lastAssistantMessage,
     scheduledTaskCount: facts.scheduledTaskCount,
+    resetReason: facts.resetReason,
   });
 
 export const formatCaptainCompactionOpenLoops = (facts: CaptainOpenLoops) =>
@@ -264,6 +282,7 @@ export const readOpenLoops = Effect.fn("CaptainHandoff.readOpenLoops")(function*
 export const prepare = Effect.fn("CaptainHandoff.prepare")(function* (input: {
   readonly captain: Captain;
   readonly previousThreadId: ThreadId;
+  readonly resetReason?: CaptainConversationEndReason | undefined;
 }) {
   const { captain, previousThreadId } = input;
   const sql = yield* SqlClient.SqlClient;
@@ -292,6 +311,7 @@ export const prepare = Effect.fn("CaptainHandoff.prepare")(function* (input: {
     lastUserMessage: lastUserRow?.text ?? undefined,
     lastAssistantMessage: lastAssistantRow?.text ?? undefined,
     scheduledTaskCount: scheduledTasks?.count ?? 0,
+    resetReason: input.resetReason,
   });
 });
 

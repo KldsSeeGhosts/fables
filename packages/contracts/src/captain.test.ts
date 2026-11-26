@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Schema } from "effect";
 
-import { Captain } from "./captain.ts";
+import { Captain, captainEarlierConversations } from "./captain.ts";
 
 const decodeCaptain = Schema.decodeUnknownSync(Captain);
 
@@ -26,5 +26,30 @@ describe("Captain", () => {
     expect(decodeCaptain({ ...olderServerCaptain, coordinatorOnly: true }).coordinatorOnly).toBe(
       true,
     );
+  });
+
+  it("decodes Captains without end reasons and derives manual endings", () => {
+    const decoded = decodeCaptain({
+      ...olderServerCaptain,
+      earlierThreadIds: ["captain:maria:0"],
+      primaryThreadId: "captain:maria:1",
+    });
+    expect(decoded.earlierThreadEndReasons).toBeUndefined();
+    expect(captainEarlierConversations(decoded)).toEqual([
+      { threadId: "captain:maria:0", endReason: "manual" },
+    ]);
+  });
+
+  it("keeps end reasons aligned with earlier conversations", () => {
+    const decoded = decodeCaptain({
+      ...olderServerCaptain,
+      earlierThreadIds: ["captain:maria:0", "captain:maria:1"],
+      earlierThreadEndReasons: ["context_overflow", "threshold"],
+      primaryThreadId: "captain:maria:2",
+    });
+    expect(captainEarlierConversations(decoded)).toEqual([
+      { threadId: "captain:maria:0", endReason: "context_overflow" },
+      { threadId: "captain:maria:1", endReason: "threshold" },
+    ]);
   });
 });
