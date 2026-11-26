@@ -31,9 +31,13 @@ export const make = Effect.gen(function* () {
     ) {
       return yield* deletion.withPermit(effect);
     }),
-    setCaptainTurnEndHandler: (handler) => Ref.set(captainTurnEnd, handler),
-    handleCaptainTurnEnd: (threadId, run) =>
-      Ref.get(captainTurnEnd).pipe(Effect.flatMap((handler) => handler(threadId, run))),
+    setCaptainTurnEndHandler: Effect.fn("ThreadCommandExecutor.setCaptainTurnEndHandler")(
+      (handler: CaptainTurnEndHandler) => Ref.set(captainTurnEnd, handler),
+    ),
+    handleCaptainTurnEnd: Effect.fn("ThreadCommandExecutor.handleCaptainTurnEnd")(
+      (threadId: ThreadId, run: OrchestrationV2Run) =>
+        Ref.get(captainTurnEnd).pipe(Effect.flatMap((handler) => handler(threadId, run))),
+    ),
   });
 });
 

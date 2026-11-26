@@ -88,7 +88,7 @@ export const layer = Layer.effectDiscard(
       commands.setCaptainTurnEndHandler(() => Effect.void),
     );
     yield* forkParked(
-      store.pendingRolloverResends().pipe(
+      store.pendingRolloverResends(undefined).pipe(
         Effect.flatMap((rows) =>
           Effect.forEach(new Set(rows.map((row) => row.threadId)), drain, {
             concurrency: 4,

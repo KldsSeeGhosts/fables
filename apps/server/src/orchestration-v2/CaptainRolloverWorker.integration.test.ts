@@ -143,6 +143,7 @@ const makeFixture = Effect.fn("CaptainRolloverWorkerTest.makeFixture")(function*
         ThreadCommandExecutor.layer,
         testServices,
         Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
+          namedProjectsRoot: "/unused",
           ensureScratchProject: Effect.succeed({ projectId }),
         }),
         Layer.mock(ProjectService.ProjectService)({}),
@@ -486,7 +487,7 @@ it.effect("commits the failed prompt and reordered follow-ups before retrying th
         fixture.sends.map((entry) => entry.commandId),
         pending.map((entry) => entry.commandId),
       );
-      assert.deepEqual(yield* store.pendingRolloverResends(), []);
+      assert.deepEqual(yield* store.pendingRolloverResends(undefined), []);
     }).pipe(Effect.provide(CaptainRolloverWorker.layer.pipe(Layer.provideMerge(fixture.base))));
   }),
 );

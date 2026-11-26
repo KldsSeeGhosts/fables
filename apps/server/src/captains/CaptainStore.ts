@@ -200,7 +200,7 @@ const make = Effect.gen(function* () {
   }, Effect.catch(captainUnavailable));
 
   const pendingRolloverResends = Effect.fn("CaptainStore.pendingRolloverResends")(function* (
-    threadId?: ThreadId,
+    threadId: ThreadId | undefined,
   ) {
     const rows = yield* sql<{ readonly payload: string }>`
         SELECT payload_json AS payload FROM captain_rollover_resends
