@@ -12,6 +12,7 @@ import {
   isLayoutPageContent,
   openLayoutGhostChat,
   openLayoutTab,
+  pruneInactiveDuetPreviews,
   replaceFocusedLayoutContent,
   replaceLayoutTabContent,
   selectFocusedTab,
@@ -187,6 +188,7 @@ export function useLayoutRouteSync(
     setSync({ ...sync, settled: true });
   }
   const derived = sync.settled || layout !== request.base ? layout : request.derived;
+  const shown = duetSingleFocus ? pruneInactiveDuetPreviews(derived) : derived;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Mark the document route as shown after its first committed mount so later renders do not repeat reload restoration.
   useEffect(() => {
     documentRouteShown = true;
@@ -213,6 +215,12 @@ export function useLayoutRouteSync(
     }
     if (newTab && content) useLayoutStore.getState().clearNewTabRequest();
   }, [appModalPaused, duetSingleFocus, request, routeKey]);
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Persist the Duet layout shown after a route, direct tab focus, theme change or reload.
+  useLayoutEffect(() => {
+    if (shown === derived) return;
+    useLayoutStore.getState().commitDerived(derived, shown, pruneInactiveDuetPreviews);
+  }, [derived, shown]);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to layout focus changes and keeps the router URL aligned with the focused tab
   useEffect(() => {
@@ -279,5 +287,5 @@ export function useLayoutRouteSync(
     }
   }, [navigate, readAppModalPaused]);
 
-  return appModalPaused ? layout : derived;
+  return appModalPaused ? layout : shown;
 }

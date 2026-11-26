@@ -8,21 +8,15 @@ import { parseThreadKey, threadKey } from "@t3tools/client-runtime/state/entitie
 import { visibilityParentKey } from "@t3tools/client-runtime/state/threads";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import * as Option from "effect/Option";
-import { Navigate, useNavigate } from "@tanstack/react-router";
+import { Navigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import ChatView from "./ChatView";
 import { BackgroundThreadContext, HiddenThreadContext } from "./chat/backgroundThread";
 import { useComposerDraftStore } from "../composerDraftStore";
-import { closeLayoutThread } from "../layout/layoutActions";
 import { useLayoutPane } from "../layout/layoutPaneContext";
 import { useLayoutStore } from "../layout/layoutStore";
-import { useSidebarPendingFileDropStore } from "../sidebarPendingFileDropStore";
-import {
-  useEnvironmentThreadRefs,
-  useAnyEnvironmentHiding,
-  useQuietThreadShell,
-} from "../state/entities";
+import { useAnyEnvironmentHiding, useQuietThreadShell } from "../state/entities";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { useEnvironmentShellStatus } from "../state/shell";
 import { environmentThreadShells, threadFamilies, useEnvironmentThread } from "../state/threads";
@@ -63,7 +57,6 @@ export function ThreadRouteView({
   focused?: boolean;
   background?: boolean;
 }) {
-  const navigate = useNavigate();
   const { visible } = useLayoutPane();
   const scrolledOff = useLayoutStore(
     (state) => tabId !== null && state.scrolledOffTabIds.has(tabId),
@@ -78,11 +71,7 @@ export function ThreadRouteView({
   const serverThreadRef = target.kind === "server" ? target.threadRef : null;
   const serverThreadShell = useQuietThreadShell(serverThreadRef);
   const shellStatus = useEnvironmentShellStatus(serverThreadRef?.environmentId ?? null);
-  const environmentThreadRefs = useEnvironmentThreadRefs(serverThreadRef?.environmentId ?? null);
   const bootstrapComplete = isThreadRouteSnapshotAuthoritative(shellStatus);
-  // The cached snapshot can predate a thread made just before a reload; only
-  // the server's own snapshot can say a thread is gone.
-  const shellLive = shellStatus === "live";
   const draftThread = useComposerDraftStore((store) =>
     serverThreadRef ? store.getDraftThreadByRef(serverThreadRef) : null,
   );
@@ -109,9 +98,6 @@ export function ThreadRouteView({
   if (nextHandoffKey !== handoffKey) {
     setHandoffKey(nextHandoffKey);
   }
-  const environmentHasDraftThreads = useComposerDraftStore((store) =>
-    serverThreadRef ? store.hasDraftThreadsInEnvironment(serverThreadRef.environmentId) : false,
-  );
   // Until the shell lists the thread, its own load (HTTP, then the socket)
   // decides whether it exists. Read only then: once listed, ChatView keeps
   // this stream open and its updates need not re-render the route.
@@ -153,26 +139,6 @@ export function ThreadRouteView({
     unlistedThreadDetail,
     draftThreadExists: draftThread !== null,
   });
-  const environmentHasAnyThreads = environmentThreadRefs.length > 0 || environmentHasDraftThreads;
-
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears pending file drops and navigates the router home once a server thread is confirmed missing
-  useEffect(() => {
-    if (target.kind !== "server" || !shellLive) {
-      return;
-    }
-    if (renderState === "missing") {
-      const { clearPendingFileDropsForThread } = useSidebarPendingFileDropStore.getState();
-      clearPendingFileDropsForThread(target.threadRef);
-      if (tabId !== null) {
-        closeLayoutThread(target.threadRef);
-        return;
-      }
-      if (!background && environmentHasAnyThreads) {
-        void navigate({ to: "/", replace: true });
-      }
-    }
-  }, [background, environmentHasAnyThreads, navigate, renderState, shellLive, tabId, target]);
-
   let view: React.ReactNode = null;
   let redirect: React.ReactNode = null;
   if (target.kind === "draft") {
