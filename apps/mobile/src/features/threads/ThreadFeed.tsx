@@ -1,3 +1,8 @@
+import {
+  ThreadFeedLoadEarlierControl,
+  ThreadFeedPlaceholder,
+  type ThreadFeedHistoryControls,
+} from "./ThreadFeedPlaceholder";
 import { CollapsibleUserMessageBody } from "./CollapsibleUserMessageBody";
 import { msg, T, useGT, useLocale, useMessages } from "gt-react-native";
 import { m } from "../../i18n/messages";
@@ -357,16 +362,7 @@ function isFreshTimestamp(input: string): boolean {
   return Number.isFinite(timestamp) && Date.now() - timestamp < FRESH_ENTRY_WINDOW_MS;
 }
 
-export interface ThreadFeedHistoryControls {
-  readonly hasMoreHistory: boolean;
-  readonly loading: boolean;
-  readonly error: string | null;
-  readonly onLoadEarlier: () => void;
-  /** Loads earlier history down to the entry, in one request. */
-  readonly onLoadThrough: (entryId: string) => void;
-  readonly label?: string;
-  readonly loadingLabel?: string;
-}
+export type { ThreadFeedHistoryControls } from "./ThreadFeedPlaceholder";
 
 export interface ThreadFeedProps {
   readonly toolCallVisibility?: ToolCallVisibility;
@@ -2929,35 +2925,6 @@ function UserMessageMarkdownContent(props: UserMessageContentProps) {
   );
 }
 
-function ThreadFeedPlaceholder(props: {
-  readonly bottomInset: number;
-  readonly detail: string;
-  readonly horizontalPadding: number;
-  readonly title: string;
-  readonly topInset: number;
-}) {
-  return (
-    <View
-      style={{
-        flex: 1,
-        flexGrow: 1,
-        alignItems: "center",
-        justifyContent: "center",
-        paddingTop: props.topInset,
-        paddingBottom: props.bottomInset,
-        paddingHorizontal: props.horizontalPadding + 24,
-      }}
-    >
-      <View className="max-w-[320px] items-center gap-2">
-        <Text className="text-center font-t3-bold text-lg text-foreground">{props.title}</Text>
-        <Text className="text-center text-sm leading-normal text-foreground-secondary">
-          {props.detail}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
 // A hook's return value is frozen to the compiler, so ThreadFeed's later
 // hooks can't drag this derivation into an uncached scope.
 function useThreadFeedPresentation(
@@ -4280,6 +4247,15 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     );
   }
 
+  const showEmptyState =
+    presentedFeed.length === 0 &&
+    !props.worktreeSetup &&
+    props.activeWorkStartedAt === null &&
+    props.contentPresentation.kind === "ready";
+  // LegendList bottom-aligns the header when it has no rows, under the composer.
+  const emptyHistoryControls =
+    showEmptyState && !props.preparingWorktree ? props.historyControls : undefined;
+
   return (
     <PresentationSource identifier={fileShareSourceIdentifier} style={{ flex: 1 }}>
       <View className="flex-1" onLayout={handleViewportLayout}>
@@ -4370,7 +4346,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
                 ) : setupAnchorIndex < 0 && props.preparingWorktree ? (
                   <WorktreePreparingHeader />
                 ) : null}
-                {props.historyControls ? (
+                {props.historyControls && !emptyHistoryControls ? (
                   <ThreadFeedLoadEarlierControl {...props.historyControls} />
                 ) : null}
               </>
@@ -4401,12 +4377,9 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             }}
           />
         </View>
-        {presentedFeed.length === 0 &&
-        !props.worktreeSetup &&
-        props.activeWorkStartedAt === null &&
-        props.contentPresentation.kind === "ready" ? (
+        {showEmptyState ? (
           <View
-            pointerEvents="none"
+            pointerEvents={emptyHistoryControls ? "box-none" : "none"}
             style={[StyleSheet.absoluteFill, { left: contentLeftInset, right: contentRightInset }]}
           >
             <ThreadFeedPlaceholder
@@ -4417,6 +4390,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
               topInset={topContentInset}
               bottomInset={bottomContentInset}
               horizontalPadding={horizontalPadding}
+              historyControls={emptyHistoryControls}
             />
           </View>
         ) : null}
@@ -4432,41 +4406,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     </PresentationSource>
   );
 });
-
-function ThreadFeedLoadEarlierControl(props: ThreadFeedHistoryControls) {
-  const gt = useGT();
-  const theme = useUniwindTheme();
-  const mutedColor = theme["--color-icon-subtle"];
-  if (!props.hasMoreHistory && props.error === null) {
-    return null;
-  }
-  return (
-    <View className="mb-3 items-center gap-1.5 px-2">
-      {props.hasMoreHistory ? (
-        <View className="self-center">
-          <Button
-            label={
-              props.loading
-                ? (props.loadingLabel ?? gt("Loading earlier activity…"))
-                : (props.label ?? gt("Load earlier activity"))
-            }
-            tone="secondary"
-            accessibilityLabel={props.label ?? gt("Load earlier activity")}
-            disabled={props.loading}
-            onPress={props.onLoadEarlier}
-            icon="chevron.up"
-            loading={props.loading}
-          />
-        </View>
-      ) : null}
-      {props.error !== null ? (
-        <Text className="text-center text-xs" style={{ color: mutedColor }}>
-          {props.error}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
 
 function MessageImageGalleryScope(props: {
   entry: ThreadFeedRow;

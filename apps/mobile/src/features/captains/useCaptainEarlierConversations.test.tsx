@@ -8,9 +8,26 @@ import {
   type OrchestrationV2ProjectedTurnItem,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
-import { act } from "react";
+import { act, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { deriveThreadFeedPresentation } from "../../lib/threadActivity";
+import { ThreadFeedPlaceholder } from "../threads/ThreadFeedPlaceholder";
+
+vi.mock("react-native", () => ({
+  View: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock("../../components/ui/AppText", () => ({
+  AppText: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+}));
+
+vi.mock("../../components/ui/Button", () => ({
+  Button: (props: { label: string; disabled: boolean; onPress: () => void }) => (
+    <button type="button" disabled={props.disabled} onClick={props.onPress}>
+      {props.label}
+    </button>
+  ),
+}));
 
 const subscriptionCalls = vi.hoisted(() => ({
   ids: [] as ThreadId[],
@@ -98,20 +115,29 @@ function Probe({ followedFrom }: { followedFrom?: ThreadId | undefined } = {}) {
   );
   return (
     <div>
-      <button type="button" onClick={earlier.expand}>
-        Show earlier conversation
-      </button>
-      {earlier.failed ? (
-        <button type="button" onClick={earlier.retry}>
-          Retry
-        </button>
+      {visible.length === 0 ? (
+        <ThreadFeedPlaceholder
+          title="No conversation yet"
+          detail="Ask the agent to inspect the repo."
+          topInset={0}
+          bottomInset={80}
+          horizontalPadding={16}
+          historyControls={{
+            hasMoreHistory: earlier.unexpandedCount > 0 || earlier.failed,
+            loading: earlier.loading,
+            error: earlier.failed ? "Could not load earlier conversation." : null,
+            label: earlier.failed ? "Retry" : "Show earlier conversation",
+            onLoadEarlier: earlier.failed ? earlier.retry : earlier.expand,
+            onLoadThrough: earlier.expand,
+          }}
+        />
       ) : null}
       <output>{visible.join("\n")}</output>
     </div>
   );
 }
 
-it("loads an earlier Duet conversation only when requested and marks why it ended", async () => {
+it("shows the history pill above an empty Duet's message and loads the earlier conversation on press", () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   subscriptionCalls.ids.length = 0;
   subscriptionCalls.failed = false;
@@ -123,9 +149,15 @@ it("loads an earlier Duet conversation only when requested and marks why it ende
     expect(output()).toBe("");
     expect(subscriptionCalls.ids).toEqual([]);
 
-    act(() => {
-      container.querySelector("button")?.click();
-    });
+    const pill = container.querySelector("button");
+    const emptyStateTitle = container.querySelector("span");
+    expect(pill?.textContent).toBe("Show earlier conversation");
+    expect(emptyStateTitle?.textContent).toBe("No conversation yet");
+    expect(pill!.compareDocumentPosition(emptyStateTitle!) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+
+    act(() => pill!.click());
 
     expect(output()).toContain("Earlier captain prompt");
     expect(output()).toContain("Earlier captain reply");
