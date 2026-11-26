@@ -7,6 +7,7 @@ import {
   EventId,
   MessageId,
   NodeId,
+  ProviderInstanceId,
   ProviderThreadId,
   ProviderTurnId,
   RunId,
@@ -83,6 +84,7 @@ const token = [
 const configPath = "/test/honcho.json";
 const tokenPath = "/test/honcho-token";
 const providerThreadId = ProviderThreadId.make("claude-thread");
+const providerInstanceId = ProviderInstanceId.make("claude");
 const markerThread = ThreadId.make("ordinary-marker");
 const mainTurn = ProviderTurnId.make("unmarked-answer");
 const markedTurn = ProviderTurnId.make("marked-answer");
@@ -147,11 +149,36 @@ const itemEvent = (item: OrchestrationV2TurnItem, eventId = String(item.id)) => 
 const providerTurnEvents = (
   id: ProviderTurnId,
   ordinal: number,
+  prompt: ReturnType<typeof userItem>,
   kind: "root_turn" | "subagent" = "root_turn",
 ) => {
-  const threadId = captain.primaryThreadId;
+  const threadId = prompt.threadId;
   const nodeId = NodeId.make(`node:${id}`);
+  const runId = RunId.make(`run:${id}`);
   return [
+    {
+      id: EventId.make(`run-created:${id}`),
+      type: "run.created",
+      threadId,
+      occurredAt: now,
+      payload: {
+        id: runId,
+        threadId,
+        ordinal,
+        providerInstanceId,
+        modelSelection: { instanceId: providerInstanceId, model: "claude" },
+        providerThreadId,
+        userMessageId: prompt.messageId,
+        rootNodeId: nodeId,
+        activeAttemptId: null,
+        status: "running",
+        requestedAt: now,
+        startedAt: now,
+        completedAt: null,
+        checkpointId: null,
+        contextHandoffId: null,
+      },
+    },
     {
       id: EventId.make(`root:${id}`),
       type: "node.updated",
@@ -160,7 +187,7 @@ const providerTurnEvents = (
       payload: {
         id: nodeId,
         threadId,
-        runId: null,
+        runId,
         parentNodeId: null,
         rootNodeId: nodeId,
         kind,
@@ -192,7 +219,7 @@ const providerTurnEvents = (
         completedAt: now,
       },
     },
-  ] satisfies ReadonlyArray<OrchestrationV2DomainEvent>;
+  ] as const satisfies ReadonlyArray<OrchestrationV2DomainEvent>;
 };
 
 type BuildResponse = (
@@ -204,6 +231,7 @@ const fixture = <R = never, E = never>(
   input: {
     readonly eventLayer?: Layer.Layer<R, E>;
     readonly config?: string | null;
+    readonly configuredPath?: string;
     readonly baseUrl?: string;
     readonly token?: string | null;
     readonly readToken?: Effect.Effect<string, PlatformError.PlatformError>;
@@ -216,6 +244,7 @@ const fixture = <R = never, E = never>(
     readonly authorization: string | undefined;
   }> = [];
   let tokenReads = 0;
+  let configReads = 0;
   const http = HttpClient.make((request, url, signal) => {
     const body =
       request.body._tag === "Uint8Array" ? new TextDecoder().decode(request.body.body) : "";
@@ -241,6 +270,8 @@ const fixture = <R = never, E = never>(
     if (path === tokenPath) {
       tokenReads++;
       if (input.readToken !== undefined) return input.readToken;
+    } else {
+      configReads++;
     }
     const value = path === tokenPath ? (input.token === undefined ? token : input.token) : config;
     return value === null
@@ -275,7 +306,7 @@ const fixture = <R = never, E = never>(
         Layer.succeed(HttpClient.HttpClient, http),
         Layer.succeed(HostProcess.Environment, {
           HOME: "/honcho-fixture",
-          ...(config === null ? {} : { T3CODE_HONCHO_CONFIG: configPath }),
+          T3CODE_HONCHO_CONFIG: input.configuredPath ?? (config === null ? undefined : configPath),
         }),
         store,
         Layer.mock(ProjectService.ProjectService)({}),
@@ -286,6 +317,7 @@ const fixture = <R = never, E = never>(
   return {
     requests,
     layer,
+    configReads: () => configReads,
     tokenReads: () => tokenReads,
     posts: () => requests.filter(({ pathname }) => pathname.endsWith("/messages")),
   };
@@ -351,20 +383,22 @@ const stalledResponse =
       return new Response(body, { headers: { "content-type": "application/json" } });
     });
 
-it.effect("logs missing default config at debug and rejects malformed config and unsafe URLs", () =>
+it.effect("uses a quiet config opt-out and logs missing or invalid config by severity", () =>
   Effect.gen(function* () {
     const problems = [
-      { config: null, level: "Debug" },
-      { config: "{", level: "Warn" },
+      { configuredPath: "disabled", levels: [] },
+      { config: null, levels: ["Debug"] },
+      { config: null, configuredPath: configPath, levels: ["Warn"] },
+      { config: "{", levels: ["Warn"] },
       ...[
         "not a URL",
         "http://user:pass@honcho.test",
         "http://honcho.test/?",
         "http://honcho.test/#",
-      ].map((baseUrl) => ({ baseUrl, level: "Warn" })),
+      ].map((baseUrl) => ({ baseUrl, levels: ["Warn"] })),
     ];
     for (const problem of problems) {
-      const { layer, requests, tokenReads } = fixture(problem);
+      const { layer, requests, configReads, tokenReads } = fixture(problem);
       const levels: string[] = [];
       yield* Effect.gen(function* () {
         const service = yield* CaptainHonchoMemory.CaptainHonchoMemory;
@@ -376,7 +410,8 @@ it.effect("logs missing default config at debug and rejects malformed config and
         Effect.withLogger(Logger.make(({ logLevel }) => levels.push(logLevel))),
         Effect.provideService(References.MinimumLogLevel, "Debug"),
       );
-      assert.deepStrictEqual(levels, [problem.level]);
+      assert.deepStrictEqual(levels, problem.levels);
+      assert.equal(configReads(), problem.levels.length);
       assert.lengthOf(requests, 0);
       assert.equal(tokenReads(), 0);
     }
@@ -422,27 +457,15 @@ it.effect("mirrors only user-authored messages and the final root answers from t
     yield* Effect.gen(function* () {
       const service = yield* CaptainHonchoMemory.CaptainHonchoMemory;
       const user = userItem("Welcome", { text: "x".repeat(25_000) });
-      const automated = [
-        userItem("scheduled", { scheduledTaskId: ScheduledTaskId.make("task") }),
-        userItem("cross-thread", { senderThreadId: ThreadId.make("other") }),
-        userItem("linked", {
-          linkedSender: {
-            threadId: ThreadId.make("other"),
-            environmentId: EnvironmentId.make("linked"),
-            title: "Linked",
-          },
-        }),
-        userItem("compaction", { idleCompaction: "onReturn" }),
-        userItem("workflow", { workflowScript: true }),
-        userItem("retry", { retryOfRunId: RunId.make("earlier-run") }),
-        userItem("agent", { createdBy: "agent" }),
-        userItem("retired", { threadId: earlier }),
-        userItem("ordinary", { threadId: ThreadId.make("ordinary") }),
-      ];
+      const [mainRun, mainRoot, mainCompleted] = providerTurnEvents(mainTurn, 1, user);
+      const mainPrompt = { ...user, runId: mainRun.payload.id, nodeId: mainRoot.payload.id };
       yield* publish([
-        itemEvent(user),
-        itemEvent(user, "duplicate-user"),
-        ...automated.map((item) => itemEvent(item)),
+        mainRun,
+        mainRoot,
+        itemEvent(mainPrompt),
+        itemEvent(mainPrompt, "duplicate-user"),
+        itemEvent(userItem("retired", { threadId: earlier })),
+        itemEvent(userItem("ordinary", { threadId: ThreadId.make("ordinary") })),
         itemEvent(assistantItem("Before a tool call", mainTurn, 2)),
         itemEvent({
           ...baseItem("tool", captain.primaryThreadId, 3),
@@ -457,21 +480,33 @@ it.effect("mirrors only user-authored messages and the final root answers from t
       yield* service.drain;
       assert.lengthOf(posts(), 1);
 
-      const [mainRoot, mainCompleted] = providerTurnEvents(mainTurn, 1);
-      const [markedRoot, markedCompleted] = providerTurnEvents(markedTurn, 2);
-      const [childRoot, childCompleted] = providerTurnEvents(childTurn, 3, "subagent");
+      const markedPrompt = userItem("Start");
+      const [markedRun, markedRoot, markedCompleted] = providerTurnEvents(
+        markedTurn,
+        2,
+        markedPrompt,
+      );
+      const [childRun, childRoot, childCompleted] = providerTurnEvents(
+        childTurn,
+        3,
+        user,
+        "subagent",
+      );
       yield* publish([
-        mainRoot!,
         itemEvent(assistantItem("Fallback final answer", mainTurn, 4)),
         itemEvent(assistantItem("Async output", mainTurn, 4, { delivery: "async" })),
-        mainCompleted!,
-        markedRoot!,
-        itemEvent(assistantItem("Marked final answer", markedTurn, 5, { phase: "final_answer" })),
-        itemEvent(assistantItem("Later unmarked text", markedTurn, 6)),
-        markedCompleted!,
-        childRoot!,
+        mainCompleted,
+        markedRun,
+        markedRoot,
+        itemEvent({ ...markedPrompt, runId: markedRun.payload.id, nodeId: markedRoot.payload.id }),
+        itemEvent(assistantItem("Pre-steer answer", markedTurn, 1, { phase: "final_answer" })),
+        itemEvent(assistantItem("Answer to the steer", markedTurn, 3)),
+        itemEvent(assistantItem("Later commentary", markedTurn, 4, { phase: "commentary" })),
+        markedCompleted,
+        childRun,
+        childRoot,
         itemEvent(assistantItem("Crew answer", childTurn, 7, { phase: "final_answer" })),
-        childCompleted!,
+        childCompleted,
       ]);
       yield* service.drain;
 
@@ -490,7 +525,8 @@ it.effect("mirrors only user-authored messages and the final root answers from t
         [
           [[`${"x".repeat(23_999)}…`, "user"]],
           [["Fallback final answer", "duet_maria"]],
-          [["Marked final answer", "duet_maria"]],
+          [["Start", "user"]],
+          [["Answer to the steer", "duet_maria"]],
         ],
       );
       assert.isTrue(requests.every(({ authorization }) => authorization === `Bearer ${token}`));
@@ -498,6 +534,115 @@ it.effect("mirrors only user-authored messages and the final root answers from t
         requests.filter(({ pathname }) => pathname.endsWith("/sessions")),
         1,
       );
+    }).pipe(Effect.provide(layer));
+  }),
+);
+
+it.effect("mirrors neither prompts nor replies from automated runs", () =>
+  Effect.gen(function* () {
+    const { eventLayer, publish } = yield* eventFixture;
+    const { layer, requests } = fixture({ eventLayer });
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainHonchoMemory.CaptainHonchoMemory;
+      const automated = [
+        userItem("scheduled", { scheduledTaskId: ScheduledTaskId.make("task") }),
+        userItem("cross-thread", { senderThreadId: ThreadId.make("other") }),
+        userItem("linked", {
+          linkedSender: {
+            threadId: ThreadId.make("other"),
+            environmentId: EnvironmentId.make("linked"),
+            title: "Linked",
+          },
+        }),
+        userItem("compaction", { idleCompaction: "onReturn" }),
+        userItem("workflow", { workflowScript: true }),
+        userItem("retry", { retryOfRunId: RunId.make("earlier-run") }),
+        userItem("agent", { createdBy: "agent" }),
+      ];
+      yield* publish(
+        automated.flatMap((prompt, index) => {
+          const turnId = ProviderTurnId.make(`automated:${prompt.id}`);
+          const [run, root, completed] = providerTurnEvents(turnId, index + 1, prompt);
+          return [
+            run,
+            root,
+            itemEvent({ ...prompt, runId: run.payload.id, nodeId: root.payload.id }),
+            itemEvent(assistantItem(`Reply to ${prompt.id}`, turnId, 2)),
+            completed,
+          ];
+        }),
+      );
+      yield* service.drain;
+      assert.lengthOf(requests, 0);
+    }).pipe(Effect.provide(layer));
+  }),
+);
+
+it.effect("evicts the least recently seen mirror key at the dedupe cap", () =>
+  Effect.gen(function* () {
+    const { eventLayer, publish } = yield* eventFixture;
+    const { layer, posts } = fixture({ eventLayer });
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainHonchoMemory.CaptainHonchoMemory;
+      const cap = 4096;
+      const batchSize = 128;
+      const item = (index: number) => userItem(`message:${index}`);
+      for (let offset = 0; offset < cap; offset += batchSize) {
+        yield* publish(
+          Array.from({ length: batchSize }, (_, index) => itemEvent(item(offset + index))),
+        );
+        yield* service.drain;
+      }
+      assert.lengthOf(posts(), cap);
+
+      yield* publish([itemEvent(item(0), "touch-first"), itemEvent(item(cap))]);
+      yield* service.drain;
+      assert.lengthOf(posts(), cap + 1);
+
+      yield* publish([itemEvent(item(0), "replay-first"), itemEvent(item(1), "replay-second")]);
+      yield* service.drain;
+      assert.lengthOf(posts(), cap + 2);
+      assert.include(posts().at(-1)?.body, '"t3TurnItemId":"message:1"');
+    }).pipe(Effect.provide(layer));
+  }),
+);
+
+it.effect("can mirror a replay of a message dropped when the queue was full", () =>
+  Effect.gen(function* () {
+    const { eventLayer, publish } = yield* eventFixture;
+    const writing = yield* Deferred.make<void>();
+    const resume = yield* Deferred.make<void>();
+    const queueCapacity = 128;
+    const overflow = userItem("overflow");
+    const { layer, posts } = fixture({
+      eventLayer,
+      response: (request) =>
+        request.url.endsWith("/messages")
+          ? Deferred.succeed(writing, undefined).pipe(
+              Effect.andThen(Deferred.await(resume)),
+              Effect.as(Response.json([])),
+            )
+          : Effect.succeed(Response.json([])),
+    });
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainHonchoMemory.CaptainHonchoMemory;
+      yield* publish([itemEvent(userItem("in-flight"))]);
+      yield* Deferred.await(writing);
+      yield* publish([
+        ...Array.from({ length: queueCapacity }, (_, index) =>
+          itemEvent(userItem(`queued:${index}`)),
+        ),
+        itemEvent(overflow),
+      ]);
+      yield* Deferred.succeed(resume, undefined);
+      yield* service.drain;
+      assert.lengthOf(posts(), queueCapacity + 1);
+      assert.isFalse(posts().some(({ body }) => body.includes('"t3TurnItemId":"overflow"')));
+
+      yield* publish([itemEvent(overflow, "replay-overflow")]);
+      yield* service.drain;
+      assert.lengthOf(posts(), queueCapacity + 2);
+      assert.include(posts().at(-1)?.body, '"t3TurnItemId":"overflow"');
     }).pipe(Effect.provide(layer));
   }),
 );
@@ -670,12 +815,13 @@ it.effect(
   },
 );
 
-it.effect("treats a missing representation as empty, without a warning", () => {
+it.effect("treats missing representation and search scopes as empty, without a warning", () => {
   const { layer } = fixture({ response: () => Effect.succeed(Response.json({}, { status: 404 })) });
   const warnings: unknown[] = [];
   return Effect.gen(function* () {
     const service = yield* CaptainHonchoMemory.CaptainHonchoMemory;
     assert.isTrue(Option.isNone(yield* service.longTermMemory(captain)));
+    assert.deepStrictEqual(yield* service.search(captain, "pnpm"), []);
     assert.deepStrictEqual(warnings, []);
   }).pipe(
     Effect.provide(layer),

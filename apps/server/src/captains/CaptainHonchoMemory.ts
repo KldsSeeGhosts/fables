@@ -1,6 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - Honcho IDs need a small stable synchronous hash.
 import {
   isCaptainThreadId,
+  OrchestrationV2TurnItemJson,
   type Captain,
   type CaptainId,
   type OrchestrationV2StoredEvent,
@@ -54,6 +55,9 @@ const HonchoConfig = Schema.Struct({
   tokenFile: Schema.NonEmptyString,
 });
 const decodeHonchoConfig = Schema.decodeUnknownEffect(Schema.fromJsonString(HonchoConfig));
+const decodeTurnItem = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(OrchestrationV2TurnItemJson),
+);
 
 const RepresentationResponse = Schema.Struct({ representation: Schema.String });
 const MessageSearchResponse = Schema.Array(
@@ -221,28 +225,31 @@ const make = Effect.gen(function* () {
   const configPath = useDefaultPath
     ? path.join(environment.HOME?.trim() ?? "", ".config", "ksg-code", "honcho.json")
     : configuredPath;
-  const config = yield* fs.readFileString(configPath).pipe(
-    Effect.flatMap(decodeHonchoConfig),
-    Effect.flatMap((config) => {
-      const baseUrl = safeBaseUrl(config.baseUrl);
-      return baseUrl === undefined
-        ? Effect.fail("invalid_base_url" as const)
-        : Effect.succeed({ ...config, baseUrl });
-    }),
-    Effect.matchEffect({
-      onSuccess: Effect.succeedSome,
-      onFailure: (error) =>
-        (useDefaultPath &&
-        typeof error !== "string" &&
-        error._tag === "PlatformError" &&
-        error.reason._tag === "NotFound"
-          ? Effect.logDebug("Captain Honcho memory config was not found.")
-          : Effect.logWarning("Captain Honcho memory is disabled.", {
-              reason: "config_unavailable",
-            })
-        ).pipe(Effect.as(Option.none())),
-    }),
-  );
+  const config =
+    configuredPath === "disabled"
+      ? Option.none()
+      : yield* fs.readFileString(configPath).pipe(
+          Effect.flatMap(decodeHonchoConfig),
+          Effect.flatMap((config) => {
+            const baseUrl = safeBaseUrl(config.baseUrl);
+            return baseUrl === undefined
+              ? Effect.fail("invalid_base_url" as const)
+              : Effect.succeed({ ...config, baseUrl });
+          }),
+          Effect.matchEffect({
+            onSuccess: Effect.succeedSome,
+            onFailure: (error) =>
+              (useDefaultPath &&
+              typeof error !== "string" &&
+              error._tag === "PlatformError" &&
+              error.reason._tag === "NotFound"
+                ? Effect.logDebug("Captain Honcho memory config was not found.")
+                : Effect.logWarning("Captain Honcho memory is disabled.", {
+                    reason: "config_unavailable",
+                  })
+              ).pipe(Effect.as(Option.none())),
+          }),
+        );
 
   let tokenDisabled = false;
   const enabled = () => Option.isSome(config) && Option.isSome(http) && !tokenDisabled;
@@ -482,19 +489,36 @@ const make = Effect.gen(function* () {
     if (event.type !== "provider-turn.updated" || Option.isNone(sql)) return;
 
     const turn = event.payload;
+    const [prompt] = yield* sql.value<{ readonly payload_json: string }>`
+      SELECT prompt.payload_json
+      FROM orchestration_v2_projection_nodes AS root
+      JOIN orchestration_v2_projection_runs AS run
+        ON run.run_id = root.run_id AND run.thread_id = root.thread_id
+      JOIN orchestration_v2_projection_turn_items AS prompt
+        ON prompt.run_id = run.run_id AND prompt.thread_id = run.thread_id
+        AND prompt.type = 'user_message'
+        AND json_extract(prompt.payload_json, '$.messageId') = json_extract(run.payload_json, '$.userMessageId')
+      WHERE root.node_id = ${turn.nodeId} AND root.thread_id = ${event.threadId}
+        AND root.kind = 'root_turn'
+      LIMIT 1
+    `;
+    if (
+      prompt === undefined ||
+      !mirrorableUserMessage(yield* decodeTurnItem(prompt.payload_json))
+    ) {
+      return;
+    }
+
     const answers = yield* sql.value<{ readonly itemId: string; readonly text: string }>`
       SELECT item.turn_item_id AS itemId, json_extract(item.payload_json, '$.text') AS text
       FROM orchestration_v2_projection_turn_items AS item
-      JOIN orchestration_v2_projection_nodes AS root ON root.node_id = ${turn.nodeId}
-        AND root.thread_id = ${event.threadId} AND root.kind = 'root_turn'
       WHERE item.provider_turn_id = ${turn.id} AND item.thread_id = ${event.threadId}
         AND item.type = 'assistant_message' AND item.status = 'completed'
         AND item.parent_item_id IS NULL
         AND COALESCE(json_extract(item.payload_json, '$.streaming'), 0) = 0
         AND json_extract(item.payload_json, '$.delivery') IS NULL
         AND COALESCE(json_extract(item.payload_json, '$.phase'), 'final_answer') = 'final_answer'
-      ORDER BY json_extract(item.payload_json, '$.phase') IS NOT NULL DESC,
-        item.ordinal DESC, item.turn_item_id DESC
+      ORDER BY item.ordinal DESC
     `;
     const answer = answers.find(({ text }) => typeof text === "string" && text.trim() !== "");
     if (answer !== undefined) yield* enqueueMessage(captain, answer, "assistant", turn.id);
@@ -598,7 +622,7 @@ const make = Effect.gen(function* () {
           .map(({ content }) => content.trim())
           .filter((content) => content !== ""),
       ),
-      withoutFailure("search duet long-term memory", [] as ReadonlyArray<string>),
+      withoutFailure("search duet long-term memory", [] as ReadonlyArray<string>, 404),
     );
   });
 
