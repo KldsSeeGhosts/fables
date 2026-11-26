@@ -6,17 +6,15 @@ import {
   type CaptainId,
   type CaptainResetInput,
   type OrchestrationV2ConversationMessage,
-  type OrchestrationV2LinkedSender,
   type OrchestrationV2ProviderFailure,
   type OrchestrationV2Run,
   type OrchestrationV2ThreadProjection,
   type OrchestrationV2TurnItem,
-  type ProjectId,
-  type ScheduledTaskId,
   type ThreadId,
 } from "@t3tools/contracts";
-import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+
+import type { ThreadManagementSendInput } from "../orchestration-v2/ThreadManagementService.ts";
 
 const CONTEXT_USAGE_ROLLOVER_RATIO = 0.85;
 const ROLLOVER_RESEND_PREFIX = "captain-rollover:";
@@ -33,27 +31,18 @@ export interface CaptainRolloverThreadRecords {
   readonly subagents: OrchestrationV2ThreadProjection["subagents"];
 }
 
-export interface CaptainRolloverSendInput {
-  readonly projectId: ProjectId;
-  readonly commandId: CommandId;
-  readonly threadId: ThreadId;
-  readonly messageId: MessageId;
-  readonly text: string;
-  readonly attachments: OrchestrationV2ConversationMessage["attachments"];
-  readonly mode: "auto";
-  readonly createdBy: OrchestrationV2ConversationMessage["createdBy"];
-  readonly creationSource: OrchestrationV2ConversationMessage["creationSource"];
-  readonly scheduledTaskId?: ScheduledTaskId;
-  readonly senderThreadId?: ThreadId;
-  readonly linkedSender?: OrchestrationV2LinkedSender;
-}
+export type CaptainRolloverSendInput = ThreadManagementSendInput;
+
+type RolloverRun = Pick<
+  OrchestrationV2Run,
+  "id" | "status" | "providerThreadId" | "userMessageId" | "modelSelection" | "outputSchema"
+>;
 
 export interface CaptainRolloverDependencies {
-  readonly findCaptainByConversation: (
-    threadId: ThreadId,
-  ) => Effect.Effect<Captain | undefined, Error>;
+  readonly findCaptainPrimary: (threadId: ThreadId) => Effect.Effect<Captain | undefined, Error>;
   readonly getThreadRecords: (
     threadId: ThreadId,
+    run: RolloverRun,
   ) => Effect.Effect<CaptainRolloverThreadRecords, Error>;
   readonly resetConversation: (input: CaptainResetInput) => Effect.Effect<Captain, Error>;
   readonly sendToThread: (input: CaptainRolloverSendInput) => Effect.Effect<unknown, Error>;
@@ -70,52 +59,55 @@ export type CaptainRolloverResult =
       readonly resent: boolean;
     };
 
-const failureText = (failure: OrchestrationV2ProviderFailure) =>
-  `${failure.code ?? ""}\n${failure.message}`.toLowerCase();
+const CONTEXT_OVERFLOW_CODES = new Set([
+  "contextoverflowerror",
+  "contextoverflow",
+  "contextwindowexceeded",
+  "contextlengthexceeded",
+  "context_length_exceeded",
+  "context_window_exceeded",
+  "prompt_too_long",
+  "rapid_refill_breaker",
+]);
+const CONTEXT_OVERFLOW_MESSAGE =
+  /\b(?:maximum context (?:length|window|size)|context (?:window|length) (?:limit )?(?:exceed(?:ed|s)?|full|overflow)|(?:exceeds?|exceeded) (?:the )?(?:(?:model(?:'s)?|maximum) )?context (?:window|length)|prompt (?:is )?too long|too many (?:input )?tokens)\b/i;
+const COMPACTION_FAILURE_MESSAGE =
+  /\b(?:(?:context )?compaction (?:has )?failed|failed to compact (?:the )?(?:context|conversation))\b/i;
 
-const isContextOverflowFailure = (failure: OrchestrationV2ProviderFailure) => {
-  if (failure.code === "ContextOverflowError") return true;
-  const text = failureText(failure);
-  return (
-    text.includes("context window") ||
-    text.includes("context length") ||
-    text.includes("maximum context") ||
-    text.includes("prompt is too long") ||
-    text.includes("prompt too long") ||
-    text.includes("prompt exceeds") ||
-    text.includes("too many tokens")
-  );
-};
-
-const isFailedCompactionItem = (item: OrchestrationV2TurnItem) =>
-  item.type === "compaction" && item.status === "failed";
-
-const descendingOrdinal = (items: ReadonlyArray<OrchestrationV2TurnItem>) =>
-  [...items].sort((left, right) => right.ordinal - left.ordinal);
-
-const immediateTrigger = (
-  records: CaptainRolloverThreadRecords,
-  runId: OrchestrationV2Run["id"],
-) => {
-  for (const item of descendingOrdinal(records.turnItems)) {
-    if (item.runId !== runId) continue;
-    if (item.type === "error" && isContextOverflowFailure(item.failure)) {
-      return { reason: "context_overflow" as const, runId: item.runId };
-    }
-    if (isFailedCompactionItem(item)) {
-      return { reason: "compaction_failed" as const, runId: item.runId };
-    }
+const failureReason = (failure: OrchestrationV2ProviderFailure) => {
+  const code = failure.code?.toLowerCase() ?? "";
+  if (code === "compaction_failed" || COMPACTION_FAILURE_MESSAGE.test(failure.message)) {
+    return "compaction_failed" as const;
+  }
+  if (
+    failure.class === "provider_error" &&
+    (CONTEXT_OVERFLOW_CODES.has(code) || CONTEXT_OVERFLOW_MESSAGE.test(failure.message))
+  ) {
+    return "context_overflow" as const;
   }
   return null;
 };
 
-const thresholdTrigger = (records: CaptainRolloverThreadRecords) => {
-  const providerThread = records.providerThreads
-    .filter((thread) => thread.appThreadId === records.thread.id && thread.contextUsage != null)
-    .sort(
-      (left, right) =>
-        DateTime.toEpochMillis(right.updatedAt) - DateTime.toEpochMillis(left.updatedAt),
-    )[0];
+const immediateTrigger = (
+  items: ReadonlyArray<OrchestrationV2TurnItem>,
+  runId: OrchestrationV2Run["id"],
+) => {
+  let reason: CaptainConversationEndReason | null = null;
+  for (const item of items) {
+    if (item.runId !== runId || item.status !== "failed") continue;
+    if (item.type === "compaction") return "compaction_failed";
+    if (item.type === "error") {
+      const failure = failureReason(item.failure);
+      if (failure === "compaction_failed") return failure;
+      reason ??= failure;
+    }
+  }
+  return reason;
+};
+
+const reachedThreshold = (
+  providerThread: OrchestrationV2ThreadProjection["providerThreads"][number] | undefined,
+) => {
   const usage = providerThread?.contextUsage;
   const maxTokens = usage?.maxTokens;
   if (
@@ -125,20 +117,18 @@ const thresholdTrigger = (records: CaptainRolloverThreadRecords) => {
     maxTokens === undefined ||
     maxTokens <= 0
   )
-    return null;
+    return false;
   if (
     usage.compactsAutomatically === true ||
     usage.autoCompactThreshold !== undefined ||
     PROVIDER_NATIVE_AUTOMATIC_COMPACTION_DRIVERS.has(providerThread.driver)
   )
-    return null;
-  return usage.usedTokens / maxTokens >= CONTEXT_USAGE_ROLLOVER_RATIO
-    ? ({ reason: "threshold" as const } as const)
-    : null;
+    return false;
+  return usage.usedTokens / maxTokens >= CONTEXT_USAGE_ROLLOVER_RATIO;
 };
 
-const hasActiveCrewTasks = (records: CaptainRolloverThreadRecords) =>
-  records.subagents.some(
+export const hasActiveCaptainCrew = (subagents: CaptainRolloverThreadRecords["subagents"]) =>
+  subagents.some(
     (subagent) =>
       subagent.origin === "app_owned" &&
       (subagent.status === "idle" ||
@@ -147,95 +137,72 @@ const hasActiveCrewTasks = (records: CaptainRolloverThreadRecords) =>
         subagent.status === "waiting"),
   );
 
-const userMessageForRun = (
-  records: CaptainRolloverThreadRecords,
-  runId: OrchestrationV2Run["id"] | null,
-) => {
-  if (runId === null) return undefined;
-  return records.messages.find(
-    (message) =>
-      message.runId === runId &&
-      message.role === "user" &&
-      message.notification === undefined &&
-      !message.id.startsWith(ROLLOVER_RESEND_PREFIX),
-  );
-};
-
 const resendInput = (
   captain: Captain,
-  records: CaptainRolloverThreadRecords,
+  projectId: ThreadManagementSendInput["projectId"],
   message: OrchestrationV2ConversationMessage,
-  sourceRunId: OrchestrationV2Run["id"],
-): CaptainRolloverSendInput => {
-  const input: CaptainRolloverSendInput = {
-    projectId: records.thread.projectId,
-    commandId: CommandId.make(`${ROLLOVER_RESEND_PREFIX}${sourceRunId}`),
-    threadId: captain.primaryThreadId,
-    messageId: MessageId.make(`${ROLLOVER_RESEND_PREFIX}${sourceRunId}`),
-    text: message.text,
-    attachments: message.attachments,
-    mode: "auto",
-    createdBy: message.createdBy,
-    creationSource: message.creationSource,
-  };
-  const withScheduled =
-    message.scheduledTaskId === undefined
-      ? input
-      : { ...input, scheduledTaskId: message.scheduledTaskId };
-  const withSender =
-    message.senderThreadId === undefined
-      ? withScheduled
-      : { ...withScheduled, senderThreadId: message.senderThreadId };
-  return message.linkedSender === undefined
-    ? withSender
-    : { ...withSender, linkedSender: message.linkedSender };
-};
+  run: RolloverRun,
+): CaptainRolloverSendInput => ({
+  projectId,
+  commandId: CommandId.make(`${ROLLOVER_RESEND_PREFIX}${run.id}`),
+  threadId: captain.primaryThreadId,
+  messageId: MessageId.make(`${ROLLOVER_RESEND_PREFIX}${run.id}`),
+  text: message.text,
+  attachments: message.attachments,
+  mode: "queue",
+  modelSelection: run.modelSelection,
+  createdBy: message.createdBy,
+  creationSource: message.creationSource,
+  ...(run.outputSchema === undefined ? {} : { outputSchema: run.outputSchema }),
+  ...(message.scheduledTaskId === undefined ? {} : { scheduledTaskId: message.scheduledTaskId }),
+  ...(message.senderThreadId === undefined ? {} : { senderThreadId: message.senderThreadId }),
+  ...(message.linkedSender === undefined ? {} : { linkedSender: message.linkedSender }),
+});
 
-/** Evaluates one terminal Captain turn, rolls over when needed, and replays the failed user input. */
 export const handleCaptainTurnEnd = Effect.fn("CaptainRollover.handleTurnEnd")(function* (
   dependencies: CaptainRolloverDependencies,
-  input: { readonly threadId: ThreadId; readonly runId: OrchestrationV2Run["id"] },
+  input: { readonly threadId: ThreadId; readonly run: RolloverRun },
 ): Effect.fn.Return<CaptainRolloverResult, Error> {
-  const captain = yield* dependencies.findCaptainByConversation(input.threadId);
-  if (captain?.primaryThreadId !== input.threadId) return { _tag: "not-captain-primary" };
-  const records = yield* dependencies.getThreadRecords(input.threadId);
+  const { threadId, run } = input;
+  if (run.status !== "failed" && run.status !== "completed") return { _tag: "no-trigger" };
+  if (run.userMessageId.startsWith(ROLLOVER_RESEND_PREFIX)) return { _tag: "no-trigger" };
 
-  const immediate = immediateTrigger(records, input.runId);
-  const runIsRolloverResend =
-    immediate !== null &&
-    records.messages.some(
-      (message) =>
-        message.runId === immediate.runId &&
-        message.role === "user" &&
-        message.id.startsWith(ROLLOVER_RESEND_PREFIX),
-    );
+  const captain = yield* dependencies.findCaptainPrimary(threadId);
+  if (captain?.primaryThreadId !== threadId) return { _tag: "not-captain-primary" };
+  const records = yield* dependencies.getThreadRecords(threadId, run);
+  const immediate = run.status === "failed" ? immediateTrigger(records.turnItems, run.id) : null;
   let reason: CaptainConversationEndReason;
-  let sourceRunId: OrchestrationV2Run["id"] | null = null;
-  if (immediate !== null && !runIsRolloverResend) {
-    reason = immediate.reason;
-    sourceRunId = immediate.runId;
+  if (immediate !== null) {
+    reason = immediate;
   } else {
-    const threshold = thresholdTrigger(records);
-    if (threshold === null) return { _tag: "no-trigger" };
-    if (hasActiveCrewTasks(records)) return { _tag: "deferred-for-crew" };
-    reason = threshold.reason;
+    const providerThread = records.providerThreads.find(
+      (thread) => thread.id === run.providerThreadId,
+    );
+    if (!reachedThreshold(providerThread)) return { _tag: "no-trigger" };
+    if (hasActiveCaptainCrew(records.subagents)) return { _tag: "deferred-for-crew" };
+    reason = "threshold";
   }
 
+  const failedMessage =
+    immediate === null
+      ? undefined
+      : records.messages.find(
+          (message) =>
+            message.id === run.userMessageId &&
+            message.runId === run.id &&
+            message.role === "user" &&
+            message.notification === undefined &&
+            message.text.trim().toLowerCase() !== "/compact",
+        );
   const reset = yield* dependencies.resetConversation({
     captainId: captain.id,
-    expectedThreadId: input.threadId,
+    expectedThreadId: threadId,
     reason,
   });
-
-  const failedMessage = sourceRunId === null ? undefined : userMessageForRun(records, sourceRunId);
-  const resend =
-    failedMessage !== undefined &&
-    sourceRunId !== null &&
-    failedMessage.text.trim().toLowerCase() !== "/compact"
-      ? ({ message: failedMessage, runId: sourceRunId } as const)
-      : undefined;
-  if (resend !== undefined) {
-    yield* dependencies.sendToThread(resendInput(reset, records, resend.message, resend.runId));
+  if (failedMessage !== undefined) {
+    yield* dependencies.sendToThread(
+      resendInput(reset, records.thread.projectId, failedMessage, run),
+    );
   }
-  return { _tag: "rolled-over", captainId: reset.id, reason, resent: resend !== undefined };
+  return { _tag: "rolled-over", captainId: reset.id, reason, resent: failedMessage !== undefined };
 });

@@ -2,6 +2,8 @@ import { assert, it } from "@effect/vitest";
 import {
   CaptainId,
   MessageId,
+  ProviderThreadId,
+  ProviderInstanceId,
   ProjectId,
   RunId,
   ThreadId,
@@ -23,6 +25,14 @@ const captainId = CaptainId.make("maria");
 const firstThreadId = ThreadId.make("captain:maria:0");
 const secondThreadId = ThreadId.make("captain:maria:1");
 const runId = RunId.make("run:overflow");
+const providerThreadId = ProviderThreadId.make("provider-thread");
+const run = {
+  id: runId,
+  status: "failed",
+  userMessageId: MessageId.make("message:user"),
+  providerThreadId,
+  modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "model" },
+} as const;
 
 const captainAt = (threadId: ThreadId, earlierThreadIds: ReadonlyArray<ThreadId> = []) =>
   ({
@@ -87,7 +97,7 @@ const harness = (initialRecords: CaptainRolloverThreadRecords) => {
   const resets: CaptainResetInput[] = [];
   const sends: CaptainRolloverSendInput[] = [];
   const dependencies = {
-    findCaptainByConversation: (threadId: ThreadId) =>
+    findCaptainPrimary: (threadId: ThreadId) =>
       Effect.succeed(
         threadId === captain.primaryThreadId || captain.earlierThreadIds.includes(threadId)
           ? captain
@@ -115,7 +125,7 @@ const harness = (initialRecords: CaptainRolloverThreadRecords) => {
 it.effect("rolls an overflow failure over once and resends the failed message once", () =>
   Effect.gen(function* () {
     const h = harness(records());
-    const first = yield* handleCaptainTurnEnd(h.dependencies, { threadId: firstThreadId, runId });
+    const first = yield* handleCaptainTurnEnd(h.dependencies, { threadId: firstThreadId, run });
     assert.equal(first._tag, "rolled-over");
     if (first._tag !== "rolled-over") return;
     assert.equal(first.reason, "context_overflow");
@@ -129,10 +139,45 @@ it.effect("rolls an overflow failure over once and resends the failed message on
     assert.equal(h.sends[0]?.text, "Continue the migration.");
     assert.equal(h.sends[0]?.messageId, "captain-rollover:run:overflow");
 
-    const second = yield* handleCaptainTurnEnd(h.dependencies, { threadId: firstThreadId, runId });
+    const second = yield* handleCaptainTurnEnd(h.dependencies, { threadId: firstThreadId, run });
     assert.equal(second._tag, "not-captain-primary");
     assert.lengthOf(h.resets, 1);
     assert.lengthOf(h.sends, 1);
+  }),
+);
+
+it.effect("recognizes structured overflow codes and failed compaction errors", () =>
+  Effect.gen(function* () {
+    for (const [code, message, reason] of [
+      ["contextWindowExceeded", "Request rejected", "context_overflow"],
+      ["prompt_too_long", "Request rejected", "context_overflow"],
+      ["compaction_failed", "Request rejected", "compaction_failed"],
+      [null, "The prompt is too long", "context_overflow"],
+    ] as const) {
+      const h = harness(
+        records({
+          turnItems: [
+            errorItem({ failure: { class: "provider_error", code, message, retryable: null } }),
+          ],
+        }),
+      );
+      const result = yield* handleCaptainTurnEnd(h.dependencies, { threadId: firstThreadId, run });
+      assert.equal(result._tag, "rolled-over");
+      assert.equal(h.resets[0]?.reason, reason);
+      assert.lengthOf(h.sends, 1);
+    }
+  }),
+);
+
+it.effect("keeps a completed turn with an earlier provider error in the same conversation", () =>
+  Effect.gen(function* () {
+    const h = harness(records());
+    const result = yield* handleCaptainTurnEnd(h.dependencies, {
+      threadId: firstThreadId,
+      run: { ...run, status: "completed" },
+    });
+    assert.equal(result._tag, "no-trigger");
+    assert.lengthOf(h.resets, 0);
   }),
 );
 
@@ -144,7 +189,7 @@ it.effect("rolls a compaction failure over without replaying /compact", () =>
         turnItems: [compactionItem()],
       }),
     );
-    const result = yield* handleCaptainTurnEnd(h.dependencies, { threadId: firstThreadId, runId });
+    const result = yield* handleCaptainTurnEnd(h.dependencies, { threadId: firstThreadId, run });
     assert.equal(result._tag, "rolled-over");
     if (result._tag !== "rolled-over") return;
     assert.equal(result.reason, "compaction_failed");
@@ -158,6 +203,7 @@ it.effect("waits for active crew tasks before a threshold rollover", () =>
   Effect.gen(function* () {
     const providerThreads = [
       {
+        id: providerThreadId,
         appThreadId: firstThreadId,
         driver: "kiro",
         contextUsage: { usedTokens: 85_000, maxTokens: 100_000 },
@@ -168,7 +214,7 @@ it.effect("waits for active crew tasks before a threshold rollover", () =>
     const h = harness(records({ turnItems: [], providerThreads, subagents: [subagent] }));
     const deferred = yield* handleCaptainTurnEnd(h.dependencies, {
       threadId: firstThreadId,
-      runId,
+      run,
     });
     assert.equal(deferred._tag, "deferred-for-crew");
     assert.lengthOf(h.resets, 0);
@@ -181,7 +227,7 @@ it.effect("waits for active crew tasks before a threshold rollover", () =>
     const done = harness(finished);
     const result = yield* handleCaptainTurnEnd(done.dependencies, {
       threadId: firstThreadId,
-      runId,
+      run: { ...run, status: "completed" },
     });
     assert.equal(result._tag, "rolled-over");
     if (result._tag !== "rolled-over") return;
@@ -195,6 +241,7 @@ it.effect("does not roll over a provider with automatic compaction", () =>
   Effect.gen(function* () {
     const providerThreads = [
       {
+        id: providerThreadId,
         appThreadId: firstThreadId,
         driver: "codex",
         contextUsage: { usedTokens: 99_000, maxTokens: 100_000 },
@@ -202,7 +249,7 @@ it.effect("does not roll over a provider with automatic compaction", () =>
       },
     ] as never;
     const h = harness(records({ turnItems: [], providerThreads }));
-    const result = yield* handleCaptainTurnEnd(h.dependencies, { threadId: firstThreadId, runId });
+    const result = yield* handleCaptainTurnEnd(h.dependencies, { threadId: firstThreadId, run });
     assert.equal(result._tag, "no-trigger");
     assert.lengthOf(h.resets, 0);
   }),
@@ -213,7 +260,7 @@ it.effect("never rolls a non-Captain thread over", () =>
     const h = harness(records());
     const result = yield* handleCaptainTurnEnd(h.dependencies, {
       threadId: ThreadId.make("ordinary-thread"),
-      runId,
+      run,
     });
     assert.equal(result._tag, "not-captain-primary");
     assert.lengthOf(h.resets, 0);
@@ -228,7 +275,10 @@ it.effect("does not roll over again when the replayed message overflows", () =>
         messages: [userMessage({ id: MessageId.make("captain-rollover:run:first") })],
       }),
     );
-    const result = yield* handleCaptainTurnEnd(h.dependencies, { threadId: firstThreadId, runId });
+    const result = yield* handleCaptainTurnEnd(h.dependencies, {
+      threadId: firstThreadId,
+      run: { ...run, userMessageId: MessageId.make("captain-rollover:run:first") },
+    });
     assert.equal(result._tag, "no-trigger");
     assert.lengthOf(h.resets, 0);
     assert.lengthOf(h.sends, 0);
@@ -240,7 +290,7 @@ it.effect("ignores a compaction failure from an earlier run", () =>
     const h = harness(records({ turnItems: [compactionItem()] }));
     const result = yield* handleCaptainTurnEnd(h.dependencies, {
       threadId: firstThreadId,
-      runId: RunId.make("run:later-clean-turn"),
+      run: { ...run, id: RunId.make("run:later-clean-turn") },
     });
     assert.equal(result._tag, "no-trigger");
     assert.lengthOf(h.resets, 0);

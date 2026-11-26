@@ -114,7 +114,10 @@ const make = Effect.gen(function* () {
   });
 
   const save = Effect.fn("CaptainStore.save")(function* (captain: Captain) {
-    const row = yield* encodeCaptain(captain);
+    const row = yield* encodeCaptain({
+      ...captain,
+      earlierThreadEndReasons: captain.earlierThreadEndReasons ?? [],
+    });
     yield* sql`
       INSERT INTO captains (
         id, name, role, instructions, avatar, primary_thread_id, earlier_thread_ids,
