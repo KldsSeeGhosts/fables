@@ -246,7 +246,7 @@ const make = Effect.gen(function* () {
                   earlierThreadIds: [previousId, ...current.earlierThreadIds],
                   earlierThreadEndReasons: [
                     input.reason ?? "manual",
-                    ...current.earlierThreadEndReasons,
+                    ...(current.earlierThreadEndReasons ?? []),
                   ],
                   updatedAt: yield* timestamp,
                 });

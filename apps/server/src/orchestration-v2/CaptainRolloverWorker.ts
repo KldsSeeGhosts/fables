@@ -1,4 +1,4 @@
-import type { OrchestrationV2DomainEvent } from "@t3tools/contracts";
+import type { OrchestrationV2DomainEvent, RunId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
@@ -10,6 +10,8 @@ import { forkParked } from "../serverActivation.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ThreadManagement from "./ThreadManagementService.ts";
 
+const asError = (error: unknown) => (error instanceof Error ? error : new Error(String(error)));
+
 const terminalRunUpdated = (event: OrchestrationV2DomainEvent) =>
   event.type === "run.updated" &&
   (event.payload.status === "completed" ||
@@ -17,7 +19,7 @@ const terminalRunUpdated = (event: OrchestrationV2DomainEvent) =>
     event.payload.status === "interrupted" ||
     event.payload.status === "cancelled" ||
     event.payload.status === "rolled_back")
-    ? { threadId: event.threadId }
+    ? { threadId: event.threadId, runId: event.payload.id }
     : null;
 
 export const layer = Layer.effectDiscard(
@@ -27,33 +29,36 @@ export const layer = Layer.effectDiscard(
     const captainStore = yield* CaptainStore.CaptainStore;
     const threads = yield* ThreadManagement.ThreadManagementService;
 
-    const handle = (
-      threadId: Parameters<typeof captains.resetConversation>[0]["expectedThreadId"],
-    ) =>
+    const handle = (terminal: {
+      readonly threadId: Parameters<typeof captains.resetConversation>[0]["expectedThreadId"];
+      readonly runId: RunId;
+    }) =>
       handleCaptainTurnEnd(
         {
-          findCaptainByConversation: (threadId) => captainStore.findByConversation(threadId),
+          findCaptainByConversation: (threadId) =>
+            captainStore.findByConversation(threadId).pipe(Effect.mapError(asError)),
           getThreadRecords: (threadId) =>
-            threads.getThreadRecords(threadId, [
-              "messages",
-              "turnItems",
-              "providerThreads",
-              "subagents",
-            ]),
-          resetConversation: (input) => captains.resetConversation(input),
-          sendToThread: (input) => threads.sendToThread(input),
+            threads
+              .getThreadRecords(threadId, ["messages", "turnItems", "providerThreads", "subagents"])
+              .pipe(Effect.mapError(asError)),
+          resetConversation: (input) =>
+            captains.resetConversation(input).pipe(Effect.mapError(asError)),
+          sendToThread: (input) => threads.sendToThread(input).pipe(Effect.mapError(asError)),
         },
-        { threadId },
+        terminal,
       ).pipe(
         Effect.catchCause((cause) =>
-          Effect.logWarning("Captain automatic rollover failed.", { threadId, cause }),
+          Effect.logWarning("Captain automatic rollover failed.", {
+            threadId: terminal.threadId,
+            cause,
+          }),
         ),
       );
 
     yield* forkParked(
       Stream.runForEach(orchestrator.streamDomainEvents, (event) => {
         const terminal = terminalRunUpdated(event);
-        return terminal === null ? Effect.void : handle(terminal.threadId);
+        return terminal === null ? Effect.void : handle(terminal);
       }),
     );
   }),

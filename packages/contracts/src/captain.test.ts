@@ -34,7 +34,7 @@ describe("Captain", () => {
       earlierThreadIds: ["captain:maria:0"],
       primaryThreadId: "captain:maria:1",
     });
-    expect(decoded.earlierThreadEndReasons).toEqual([]);
+    expect(decoded.earlierThreadEndReasons).toBeUndefined();
     expect(captainEarlierConversations(decoded)).toEqual([
       { threadId: "captain:maria:0", endReason: "manual" },
     ]);

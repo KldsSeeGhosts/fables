@@ -94,7 +94,7 @@ export const captainEarlierConversations = (
 ) =>
   captain.earlierThreadIds.map((threadId, index) => ({
     threadId,
-    endReason: captain.earlierThreadEndReasons[index] ?? ("manual" as const),
+    endReason: captain.earlierThreadEndReasons?.[index] ?? ("manual" as const),
   }));
 
 const CaptainProfile = Schema.Struct({
@@ -113,9 +113,7 @@ export const Captain = Schema.Struct({
   id: CaptainId,
   primaryThreadId: ThreadId,
   earlierThreadIds: Schema.Array(ThreadId),
-  earlierThreadEndReasons: Schema.Array(CaptainConversationEndReason).pipe(
-    Schema.withDecodingDefaultKey(Effect.succeed([])),
-  ),
+  earlierThreadEndReasons: Schema.optionalKey(Schema.Array(CaptainConversationEndReason)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   archivedAt: Schema.NullOr(IsoDateTime),

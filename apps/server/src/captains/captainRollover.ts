@@ -6,11 +6,13 @@ import {
   type CaptainId,
   type CaptainResetInput,
   type OrchestrationV2ConversationMessage,
+  type OrchestrationV2LinkedSender,
   type OrchestrationV2ProviderFailure,
   type OrchestrationV2Run,
   type OrchestrationV2ThreadProjection,
   type OrchestrationV2TurnItem,
   type ProjectId,
+  type ScheduledTaskId,
   type ThreadId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -41,20 +43,20 @@ export interface CaptainRolloverSendInput {
   readonly mode: "auto";
   readonly createdBy: OrchestrationV2ConversationMessage["createdBy"];
   readonly creationSource: OrchestrationV2ConversationMessage["creationSource"];
-  readonly scheduledTaskId?: OrchestrationV2ConversationMessage["scheduledTaskId"];
+  readonly scheduledTaskId?: ScheduledTaskId;
   readonly senderThreadId?: ThreadId;
-  readonly linkedSender?: OrchestrationV2ConversationMessage["linkedSender"];
+  readonly linkedSender?: OrchestrationV2LinkedSender;
 }
 
 export interface CaptainRolloverDependencies {
   readonly findCaptainByConversation: (
     threadId: ThreadId,
-  ) => Effect.Effect<Captain | undefined, unknown>;
+  ) => Effect.Effect<Captain | undefined, Error>;
   readonly getThreadRecords: (
     threadId: ThreadId,
-  ) => Effect.Effect<CaptainRolloverThreadRecords, unknown>;
-  readonly resetConversation: (input: CaptainResetInput) => Effect.Effect<Captain, unknown>;
-  readonly sendToThread: (input: CaptainRolloverSendInput) => Effect.Effect<unknown, unknown>;
+  ) => Effect.Effect<CaptainRolloverThreadRecords, Error>;
+  readonly resetConversation: (input: CaptainResetInput) => Effect.Effect<Captain, Error>;
+  readonly sendToThread: (input: CaptainRolloverSendInput) => Effect.Effect<unknown, Error>;
 }
 
 export type CaptainRolloverResult =
@@ -91,8 +93,12 @@ const isFailedCompactionItem = (item: OrchestrationV2TurnItem) =>
 const descendingOrdinal = (items: ReadonlyArray<OrchestrationV2TurnItem>) =>
   [...items].sort((left, right) => right.ordinal - left.ordinal);
 
-const immediateTrigger = (records: CaptainRolloverThreadRecords) => {
+const immediateTrigger = (
+  records: CaptainRolloverThreadRecords,
+  runId: OrchestrationV2Run["id"],
+) => {
   for (const item of descendingOrdinal(records.turnItems)) {
+    if (item.runId !== runId) continue;
     if (item.type === "error" && isContextOverflowFailure(item.failure)) {
       return { reason: "context_overflow" as const, runId: item.runId };
     }
@@ -160,31 +166,41 @@ const resendInput = (
   records: CaptainRolloverThreadRecords,
   message: OrchestrationV2ConversationMessage,
   sourceRunId: OrchestrationV2Run["id"],
-): CaptainRolloverSendInput => ({
-  projectId: records.thread.projectId,
-  commandId: CommandId.make(`${ROLLOVER_RESEND_PREFIX}${sourceRunId}`),
-  threadId: captain.primaryThreadId,
-  messageId: MessageId.make(`${ROLLOVER_RESEND_PREFIX}${sourceRunId}`),
-  text: message.text,
-  attachments: message.attachments,
-  mode: "auto",
-  createdBy: message.createdBy,
-  creationSource: message.creationSource,
-  ...(message.scheduledTaskId === undefined ? {} : { scheduledTaskId: message.scheduledTaskId }),
-  ...(message.senderThreadId === undefined ? {} : { senderThreadId: message.senderThreadId }),
-  ...(message.linkedSender === undefined ? {} : { linkedSender: message.linkedSender }),
-});
+): CaptainRolloverSendInput => {
+  const input: CaptainRolloverSendInput = {
+    projectId: records.thread.projectId,
+    commandId: CommandId.make(`${ROLLOVER_RESEND_PREFIX}${sourceRunId}`),
+    threadId: captain.primaryThreadId,
+    messageId: MessageId.make(`${ROLLOVER_RESEND_PREFIX}${sourceRunId}`),
+    text: message.text,
+    attachments: message.attachments,
+    mode: "auto",
+    createdBy: message.createdBy,
+    creationSource: message.creationSource,
+  };
+  const withScheduled =
+    message.scheduledTaskId === undefined
+      ? input
+      : { ...input, scheduledTaskId: message.scheduledTaskId };
+  const withSender =
+    message.senderThreadId === undefined
+      ? withScheduled
+      : { ...withScheduled, senderThreadId: message.senderThreadId };
+  return message.linkedSender === undefined
+    ? withSender
+    : { ...withSender, linkedSender: message.linkedSender };
+};
 
 /** Evaluates one terminal Captain turn, rolls over when needed, and replays the failed user input. */
 export const handleCaptainTurnEnd = Effect.fn("CaptainRollover.handleTurnEnd")(function* (
   dependencies: CaptainRolloverDependencies,
-  input: { readonly threadId: ThreadId },
-): Effect.fn.Return<CaptainRolloverResult, unknown> {
+  input: { readonly threadId: ThreadId; readonly runId: OrchestrationV2Run["id"] },
+): Effect.fn.Return<CaptainRolloverResult, Error> {
   const captain = yield* dependencies.findCaptainByConversation(input.threadId);
   if (captain?.primaryThreadId !== input.threadId) return { _tag: "not-captain-primary" };
   const records = yield* dependencies.getThreadRecords(input.threadId);
 
-  const immediate = immediateTrigger(records);
+  const immediate = immediateTrigger(records, input.runId);
   const runIsRolloverResend =
     immediate !== null &&
     records.messages.some(
@@ -212,12 +228,14 @@ export const handleCaptainTurnEnd = Effect.fn("CaptainRollover.handleTurnEnd")(f
   });
 
   const failedMessage = sourceRunId === null ? undefined : userMessageForRun(records, sourceRunId);
-  const shouldResend =
+  const resend =
     failedMessage !== undefined &&
     sourceRunId !== null &&
-    failedMessage.text.trim().toLowerCase() !== "/compact";
-  if (shouldResend) {
-    yield* dependencies.sendToThread(resendInput(reset, records, failedMessage, sourceRunId));
+    failedMessage.text.trim().toLowerCase() !== "/compact"
+      ? ({ message: failedMessage, runId: sourceRunId } as const)
+      : undefined;
+  if (resend !== undefined) {
+    yield* dependencies.sendToThread(resendInput(reset, records, resend.message, resend.runId));
   }
-  return { _tag: "rolled-over", captainId: reset.id, reason, resent: shouldResend };
+  return { _tag: "rolled-over", captainId: reset.id, reason, resent: resend !== undefined };
 });
