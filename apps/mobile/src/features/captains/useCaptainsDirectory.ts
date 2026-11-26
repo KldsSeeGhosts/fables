@@ -7,14 +7,11 @@ import {
 import {
   AuthOrchestrationReadScope,
   isCaptainThreadId,
-  type Captain,
-  type CaptainSnapshot,
   type EnvironmentId,
   type ThreadId,
 } from "@t3tools/contracts";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
-import * as Option from "effect/Option";
-import { AsyncResult } from "effect/reactivity";
+import { useEffect } from "react";
 
 import { useEnvironmentServerConfig } from "../../state/entities";
 import { useEnvironments } from "../../state/environments";
@@ -22,62 +19,59 @@ import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { environmentThreadShells } from "../../state/threads";
 import { useAtomValueWhileVisible } from "../home/home-route-visibility";
-import { useEnvironmentScope, useEnvironmentsWithScope } from "../../state/session";
+import {
+  useEnvironmentScope,
+  useEnvironmentsDenyingScope,
+  useEnvironmentsWithScope,
+} from "../../state/session";
+import {
+  liveCaptainEnvironments,
+  resolveCaptainEnvironments,
+  type CaptainEnvironment,
+} from "./captainEnvironments";
+import { cachedCaptainsAtom, cachedCaptainsOf, persistCaptains } from "./captainsCache";
 
-/** Loading and failed environments are not empty ones, so lists say which they are. */
-export type CaptainEnvironmentStatus = "loading" | "failed" | "ready";
-
-export interface CaptainEnvironment {
-  readonly environmentId: EnvironmentId;
-  readonly label: string;
-  readonly status: CaptainEnvironmentStatus;
-  readonly snapshot: CaptainSnapshot | null;
-  readonly captains: ReadonlyArray<Captain>;
-}
+export type { CaptainEnvironment } from "./captainEnvironments";
 
 const NO_SHELLS: ReadonlyArray<EnvironmentThreadShell> = [];
-
-function environmentStatus(result: AsyncResult.AsyncResult<CaptainSnapshot, unknown> | undefined): {
-  readonly status: CaptainEnvironmentStatus;
-  readonly snapshot: CaptainSnapshot | null;
-} {
-  const snapshot = result === undefined ? null : Option.getOrNull(AsyncResult.value(result));
-  // A failed refresh keeps showing what was loaded before it.
-  if (snapshot !== null) return { status: "ready", snapshot };
-  return {
-    status: result !== undefined && AsyncResult.isFailure(result) ? "failed" : "loading",
-    snapshot,
-  };
-}
 
 /** Every connected environment that runs Captains, with its live Captains and their status. */
 export function useCaptainEnvironments(environmentId?: EnvironmentId | null) {
   const { environments } = useEnvironments();
-  const readable = useEnvironmentsWithScope(environments, AuthOrchestrationReadScope);
   const scope = environmentId ?? null;
-  const supporting = environments.filter(
-    (environment) =>
-      (scope === null || environment.environmentId === scope) &&
-      readable.has(environment.environmentId) &&
-      environment.serverConfig?.environment.capabilities.captains === true,
-  );
+  const candidates = environments
+    .filter((environment) => scope === null || environment.environmentId === scope)
+    .map((environment) => ({
+      environmentId: environment.environmentId,
+      label: environment.label,
+      captainsCapability: environment.serverConfig?.environment.capabilities.captains,
+    }));
+  const readable = useEnvironmentsWithScope(environments, AuthOrchestrationReadScope);
+  const denied = useEnvironmentsDenyingScope(environments, AuthOrchestrationReadScope);
   const live = useAtomValue(
     serverEnvironment.captainsLiveAcross(
-      JSON.stringify(supporting.map((environment) => environment.environmentId)),
+      JSON.stringify(
+        liveCaptainEnvironments(candidates, readable).map((candidate) => candidate.environmentId),
+      ),
     ),
   );
-  return supporting.map(({ environmentId: id, label }): CaptainEnvironment => {
-    const { status, snapshot } = environmentStatus(
-      live.find((entry) => entry.environmentId === id)?.result,
-    );
-    return {
-      environmentId: id,
-      label,
-      status,
-      snapshot,
-      captains: (snapshot?.captains ?? []).filter((captain) => captain.archivedAt === null),
-    };
-  });
+  const cached = useAtomValue(cachedCaptainsAtom, cachedCaptainsOf);
+  return resolveCaptainEnvironments({ candidates, readable, denied, live, cached });
+}
+
+// Snapshots already handed to the cache; an unchanged live list keeps its snapshot object.
+const persistedSnapshots = new WeakSet<object>();
+
+/** Saves each environment's live Captains so the next launch draws them before it connects. */
+function usePersistLiveCaptains(environments: ReadonlyArray<CaptainEnvironment>) {
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- writes live Captains to the on-device cache the next launch reads
+  useEffect(() => {
+    for (const { environmentId, snapshot } of environments) {
+      if (snapshot === null || persistedSnapshots.has(snapshot)) continue;
+      persistedSnapshots.add(snapshot);
+      persistCaptains(environmentId, snapshot.captains);
+    }
+  }, [environments]);
 }
 
 /**
@@ -105,7 +99,10 @@ export function useCaptainsDirectory(options?: {
  * equal. Thread lists leave these to the Captains section, as desktop's sidebar does.
  */
 export function useCaptainConversationKeys(): string {
-  return captainConversationKeys(useCaptainEnvironments());
+  const environments = useCaptainEnvironments();
+  // Home is the only caller, so each live list is saved from one place.
+  usePersistLiveCaptains(environments);
+  return captainConversationKeys(environments);
 }
 
 /** The active Captain a thread is the conversation of, or null for every other thread. */
