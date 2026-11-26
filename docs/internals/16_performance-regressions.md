@@ -64,7 +64,4 @@ avoidance without React Native's `preventShadowTreeCommitExhaustion`. Continuous
 (`withRepeat`) commit to the shadow tree every frame and can starve React's JS commits, freezing the
 screen (or aborting in dev with `ShadowTree.cpp: assertion failed`). Use React Native's `Animated`
 with `useNativeDriver: true` for looping animations that run beside heavy content (see
-[`thread-work-log.tsx`](../../apps/mobile/src/features/threads/thread-work-log.tsx) and the Duet
-orb in [`DuetCreature.tsx`](../../apps/mobile/src/features/captains/DuetCreature.tsx)). On Fabric it
-writes transform and opacity straight to the view without a commit. It drops an interpolation's
-`easing`, so put the easing on the timing.
+[`thread-work-log.tsx`](../../apps/mobile/src/features/threads/thread-work-log.tsx)).
