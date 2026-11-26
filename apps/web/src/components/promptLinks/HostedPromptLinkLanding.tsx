@@ -208,7 +208,7 @@ function HostedPromptLinkLanding({
           </Button>
         ) : null}
         <Button variant="ghost" render={<a href={DESKTOP_DOWNLOAD_URL} />}>
-          <T>Get Fables</T>
+          <T>Get upstream T3 Code</T>
         </Button>
       </div>
       <label className="mt-4 flex items-center gap-2 text-body text-muted-foreground">

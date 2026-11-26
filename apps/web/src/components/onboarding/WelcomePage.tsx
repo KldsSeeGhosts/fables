@@ -986,7 +986,7 @@ function PhoneSection({ environmentId }: { readonly environmentId: EnvironmentId
             <SmartphoneIcon className="size-4" />
           </RowIcon>
           <span className="min-w-0 flex-1 text-label text-foreground">
-            <T>Use Fables on your phone</T>
+            <T>Connect from your phone</T>
           </span>
           <CollapsibleTrigger render={<Button variant="ghost-muted" size="xs" />}>
             {open ? gt("Hide") : gt("Set up")}
@@ -998,7 +998,7 @@ function PhoneSection({ environmentId }: { readonly environmentId: EnvironmentId
             <ol className="min-w-0 flex-1 space-y-5">
               <PhoneStep step={1}>
                 <p className="text-body text-foreground">
-                  <T>Scan with your phone to get the app.</T>
+                  <T>Scan with your phone to get the T3 Code app.</T>
                 </p>
               </PhoneStep>
               <PhoneStep step={2}>
@@ -1012,7 +1012,7 @@ function PhoneSection({ environmentId }: { readonly environmentId: EnvironmentId
                 size={124}
                 level="M"
                 marginSize={2}
-                title={gt("Fables app for iPhone and Android")}
+                title={gt("T3 Code app for iPhone and Android")}
               />
             </div>
           </div>

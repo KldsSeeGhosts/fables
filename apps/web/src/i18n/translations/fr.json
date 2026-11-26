@@ -7099,7 +7099,7 @@
   "bd2304f25f6f999e": "{selected, plural, one {{selected} sélectionné sur {total}} other {{selected} sélectionnés sur {total}}}",
   "228cd9fd55a55070": "Impossible de vérifier à nouveau les projets. {error}",
   "1cc599c5f5874014": "Téléphone",
-  "1ce52db95fe55458": "Fables app for iPhone and Android",
+  "0f7c08d8284fee68": "T3 Code app for iPhone and Android",
   "431bee88ecc944e4": "Vérifier T3 Connect",
   "c747696796f64468": "T3 Connect est activé, mais l’app ne parvient pas à joindre cet ordinateur.",
   "96557a906f6167b9": "Connecté. Partagez cet ordinateur pour que l’app puisse le joindre.",
@@ -7180,8 +7180,8 @@
       "v": "v"
     }
   ],
-  "0862abac6f473faa": "Use Fables on your phone",
-  "37c66042ce1906da": "Scannez avec votre téléphone pour obtenir l’app.",
+  "0a7da8b53210bfce": "Connect from your phone",
+  "419e202d4109b507": "Scan with your phone to get the T3 Code app.",
   "1b4364ef89b07f35": "Impossible de vérifier T3 Connect.",
   "7b10d40dd15938e5": "Votre téléphone peut joindre cet ordinateur. Connectez-vous à l’app avec le même compte.",
   "8330812e7b81f020": "T3 Connect est activé pour cet ordinateur. Connectez-vous à l’app avec le même compte.",
@@ -7378,7 +7378,7 @@
   "fb8165cf69e8b46e": "Ouvrir dans l’app desktop",
   "74da45ffb53c3ab1": "Ce prompt contenait des caractères cachés, il est peut-être malveillant",
   "2053d7c11214c657": "Continuer ici",
-  "1b879c8ce81a2071": "Get Fables",
+  "d306047cf0219190": "Get upstream T3 Code",
   "d2e48075c05360e5": "Mémoriser mon choix",
   "32fc7d210cbbc615": "Le lien demandait {provider}, qui n’est pas configuré ici ; votre modèle par défaut est donc utilisé.",
   "9b92881caca4c843": "Le lien demandait {model}, que {provider} ne propose pas ici ; son modèle par défaut est donc utilisé.",

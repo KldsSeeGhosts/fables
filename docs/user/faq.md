@@ -45,7 +45,7 @@ Your agents run wherever Fables runs: your desktop, a server, a VPS. You connect
 
 ## How do I use Fables on my phone?
 
-Get the [iOS](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824) or [Android](https://play.google.com/store/apps/details?id=com.t3tools.t3code) app, then connect it to your computer with T3 Connect or a pairing link. The phone is a remote. Your computer does the work and needs to stay on. [Mobile setup](./install.md#mobile-app) · [Remote access](./remote-access.md)
+Follow [mobile setup](./install.md#mobile-app), then connect your phone to your computer with T3 Connect or a pairing link. Your computer runs the agents and needs to stay on. [Remote access](./remote-access.md)
 
 ## Why does T3 Connect keep disconnecting?
 
