@@ -306,6 +306,7 @@ export interface ThreadDetailScreenProps {
   readonly serverConfig: T3ServerConfig | null;
   readonly layoutVariant?: LayoutVariant;
   readonly usesAutomaticContentInsets?: boolean;
+  readonly topOverlayInset?: number;
   readonly onHeaderMaterialVisibilityChange?: (visible: boolean) => void;
   readonly onOpenConnectionEditor: () => void;
   readonly onChangeDraftMessage: (value: string) => void;
@@ -1612,6 +1613,7 @@ function ThreadDetailBody(
                       : estimatedOverlayHeight +
                         (showFloatingStatus ? FLOATING_WORKING_CONTROL_COVERAGE : FEED_END_GAP)
                   }
+                  topOverlayInset={props.topOverlayInset}
                   contentMaxWidth={contentMaxWidth}
                   historyControls={props.historyControls}
                   contentSideInsets={deriveContentSideInsets(nativeMetrics)}

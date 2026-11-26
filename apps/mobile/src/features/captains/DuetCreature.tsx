@@ -300,6 +300,10 @@ function MovingCreature(props: {
 }
 
 const FLOATING_ORB_SIZE = 44;
+const LIVE_PILL_HEIGHT = 28;
+const LIVE_PILL_OVERLAP = 10;
+/** The floating orb's height with its live pill, whether or not the pill shows. */
+export const DUET_FLOATING_ORB_HEIGHT = FLOATING_ORB_SIZE + LIVE_PILL_HEIGHT - LIVE_PILL_OVERLAP;
 
 /**
  * The floating orb over an open Duet conversation: the creature on its disc, and the live pill
@@ -331,8 +335,10 @@ export function DuetFloatingOrb(props: {
       </View>
       {props.live ? (
         <View
-          className="-mt-2.5 h-7 justify-center rounded-full px-3"
+          className="justify-center rounded-full px-3"
           style={{
+            height: LIVE_PILL_HEIGHT,
+            marginTop: -LIVE_PILL_OVERLAP,
             borderWidth: 1,
             borderColor: tokens.panelBorder,
             backgroundColor: tokens.panel,

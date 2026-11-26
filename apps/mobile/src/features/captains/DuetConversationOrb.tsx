@@ -4,13 +4,20 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/model
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
 import { useGT } from "gt-react-native";
-import { View } from "react-native";
+import { useId } from "react";
+import { StyleSheet, View } from "react-native";
+import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 
 import { useContentTopInset } from "../../components/ui/useBarInset";
 import { environmentThreadShells } from "../../state/threads";
-import { DuetFloatingOrb, type DuetCreatureState } from "./DuetCreature";
+import { DUET_FLOATING_ORB_HEIGHT, DuetFloatingOrb, type DuetCreatureState } from "./DuetCreature";
 import { useCaptainOfThread } from "./useCaptainsDirectory";
 import { useDuetShell } from "./useDuetShell";
+import { useDuetTokens } from "./useDuetTokens";
+
+const ORB_TOP_GAP = 2;
+/** The band the orb and its live pill take under the bar; the feed starts below it. */
+export const DUET_CONVERSATION_ORB_INSET = ORB_TOP_GAP + DUET_FLOATING_ORB_HEIGHT;
 
 const NO_SHELLS_ATOM = Atom.make<ReadonlyArray<EnvironmentThreadShell>>([]).pipe(
   Atom.withLabel("mobile-duet-orb:no-shells"),
@@ -22,6 +29,8 @@ export function DuetConversationOrb(props: {
   readonly threadId: ThreadId;
 }) {
   const gt = useGT();
+  const tokens = useDuetTokens();
+  const fadeId = `duet-orb-fade-${useId().replace(/[^A-Za-z0-9_-]/g, "-")}`;
   const isDuet = useDuetShell();
   const captain = useCaptainOfThread(
     isDuet ? props.environmentId : null,
@@ -51,8 +60,27 @@ export function DuetConversationOrb(props: {
   return (
     <View
       pointerEvents="none"
-      style={{ position: "absolute", top: topInset + 2, left: 0, right: 0, zIndex: 3 }}
+      style={{
+        position: "absolute",
+        top: topInset,
+        left: 0,
+        right: 0,
+        height: DUET_CONVERSATION_ORB_INSET,
+        paddingTop: ORB_TOP_GAP,
+        zIndex: 3,
+      }}
     >
+      {/* Static fade: text scrolling up dissolves into the surface before it reaches the orb. */}
+      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
+        <Defs>
+          <LinearGradient id={fadeId} x1="0%" x2="0%" y1="0%" y2="100%">
+            <Stop offset="0%" stopColor={tokens.background} stopOpacity={1} />
+            <Stop offset="55%" stopColor={tokens.background} stopOpacity={1} />
+            <Stop offset="100%" stopColor={tokens.background} stopOpacity={0} />
+          </LinearGradient>
+        </Defs>
+        <Rect width="100%" height="100%" fill={`url(#${fadeId})`} />
+      </Svg>
       <DuetFloatingOrb captain={captain} state={state} live={live} />
     </View>
   );

@@ -126,7 +126,8 @@ import {
   threadRouteIsHydrating,
   threadRouteOpensDraft,
 } from "./thread-route-hydration";
-import { DuetConversationOrb } from "../captains/DuetConversationOrb";
+import { DUET_CONVERSATION_ORB_INSET, DuetConversationOrb } from "../captains/DuetConversationOrb";
+import { useDuetShell } from "../captains/useDuetShell";
 import { ThreadHeader } from "./ThreadHeader";
 import { resumeThread } from "./resume-thread";
 import {
@@ -430,6 +431,7 @@ function ThreadRouteContent(
     selectedThreadDetailRef?.environmentId ?? null,
     selectedThreadDetailRef?.threadId ?? null,
   );
+  const showsDuetOrb = useDuetShell() && captain !== null && !props.inspectorPresentation;
   const captainEarlier = useCaptainEarlierConversations({
     threadRef: selectedThreadDetailRef,
     captain,
@@ -1208,6 +1210,7 @@ function ThreadRouteContent(
           dispatchingMessageId={composer.dispatchingQueuedMessageId}
           layoutVariant={layout.variant}
           usesAutomaticContentInsets={usesNativeHeaderGlass}
+          topOverlayInset={showsDuetOrb ? DUET_CONVERSATION_ORB_INSET : 0}
           onOpenConnectionEditor={handleOpenConnectionEditor}
           onChangeDraftMessage={composer.onChangeDraftMessage}
           onPickDraftMedia={composer.onPickDraftMedia}
@@ -1229,12 +1232,12 @@ function ThreadRouteContent(
           onSubmitUserInput={requests.onSubmitUserInput}
           onDismissUserInput={requests.onDismissUserInput}
         />
-        {props.inspectorPresentation ? null : (
+        {showsDuetOrb ? (
           <DuetConversationOrb
             environmentId={selectedThread.environmentId}
             threadId={selectedThread.id}
           />
-        )}
+        ) : null}
       </>
     </>
   );

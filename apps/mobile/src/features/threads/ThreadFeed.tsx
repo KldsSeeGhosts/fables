@@ -396,6 +396,8 @@ export interface ThreadFeedProps {
   readonly sendingWithKeyboard?: boolean;
   readonly fitShortFeedToViewport?: boolean;
   readonly contentBottomInset?: number;
+  /** Room for an overlay pinned under the bar, such as the Duet orb, above the first row. */
+  readonly topOverlayInset?: number;
   readonly historyControls?: ThreadFeedHistoryControls;
   readonly contentMaxWidth?: number;
   readonly contentSideInsets?: { readonly left: number; readonly right: number };
@@ -3172,8 +3174,9 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const usesNativeAutomaticInsets =
     props.usesAutomaticContentInsets === true && Platform.OS === "ios";
   // Without the native contentInset, a list-header spacer clears the bar the column lays content under.
-  const topContentInset = usesNativeAutomaticInsets ? 0 : columnTopInset;
-  const anchorTopInset = usesNativeAutomaticInsets ? barInset : topContentInset;
+  const topOverlayInset = props.topOverlayInset ?? 0;
+  const topContentInset = (usesNativeAutomaticInsets ? 0 : columnTopInset) + topOverlayInset;
+  const anchorTopInset = (usesNativeAutomaticInsets ? barInset : columnTopInset) + topOverlayInset;
 
   const theme = useUniwindTheme();
   const iconSubtleColor = theme["--color-icon-subtle"];
