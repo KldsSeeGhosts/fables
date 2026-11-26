@@ -209,6 +209,7 @@ const ANDROID_ICON_BY_SF_SYMBOL = {
   "doc.on.doc": IconCopy,
   "doc.text": IconFileText,
   "file.diff": IconFileDiff,
+  "plus.forwardslash.minus": IconFileDiff,
   ellipsis: IconDots,
   moon: IconMoon,
   "ellipsis.circle": IconDotsCircleHorizontal,

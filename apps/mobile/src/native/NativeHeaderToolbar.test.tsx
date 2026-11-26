@@ -259,3 +259,32 @@ it("isolates toolbar handlers and ignores retained actions after their toolbar u
   second.onPress?.();
   expect(onPress).not.toHaveBeenCalled();
 });
+
+it("gives an untitled inline group no header made of its children's text", () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  root = createRoot(document.createElement("div"));
+  act(() =>
+    root!.render(
+      <NativeHeaderToolbar placement="right">
+        <NativeHeaderToolbar.Menu title="More actions">
+          <NativeHeaderToolbar.Menu inline>
+            <NativeHeaderToolbar.MenuAction>Browser</NativeHeaderToolbar.MenuAction>
+            <NativeHeaderToolbar.Menu title="Terminal" icon="terminal">
+              <NativeHeaderToolbar.MenuAction>Open new terminal</NativeHeaderToolbar.MenuAction>
+            </NativeHeaderToolbar.Menu>
+          </NativeHeaderToolbar.Menu>
+        </NativeHeaderToolbar.Menu>
+      </NativeHeaderToolbar>,
+    ),
+  );
+  const [menu] = harness.renderedItems;
+  if (menu?.type !== "menu") throw new Error("Expected the native menu");
+  const [group] = menu.menu.items;
+  if (group?.type !== "submenu") throw new Error("Expected the inline group");
+  expect(group).toMatchObject({ label: "", inline: true });
+  expect(group.items[1]).toMatchObject({
+    type: "submenu",
+    label: "Terminal",
+    icon: { type: "sfSymbol", name: "terminal" },
+  });
+});

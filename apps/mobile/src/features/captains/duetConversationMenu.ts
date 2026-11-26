@@ -52,7 +52,14 @@ export function duetOverflowMenu(
         ]),
     ...(input.diff === null
       ? []
-      : [{ ...input.diff, id: "diff", title: resolve(msg("Diff")), icon: "file.diff" }]),
+      : [
+          {
+            ...input.diff,
+            id: "diff",
+            title: resolve(msg("Diff")),
+            icon: "plus.forwardslash.minus",
+          },
+        ]),
     ...(input.files === null ? [] : [input.files]),
   ];
   return {

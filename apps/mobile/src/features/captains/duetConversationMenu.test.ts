@@ -21,6 +21,14 @@ describe("duetOverflowMenu", () => {
       "files",
     ]);
     expect(menu.items[0]).toMatchObject({ title: "Run on", subtitle: "Mac Studio" });
+    // Native menus load these as SF Symbols; an app-only name such as "file.diff" draws nothing.
+    expect(menu.items.map((item) => item.icon)).toEqual([
+      "desktopcomputer",
+      "terminal",
+      "safari",
+      "plus.forwardslash.minus",
+      undefined,
+    ]);
   });
 
   it("leaves out what the thread has none of", () => {
