@@ -1,6 +1,6 @@
 # Captain long-term memory with Honcho
 
-Captains can use an optional Honcho memory server for long-term recall. When configured, the server mirrors Captain conversation messages to Honcho, adds a short long-term memory section to Captain briefings, and includes Honcho recall in `captain_memory_search` after the Captain's local memories.
+Captains can use an optional Honcho memory server for long-term recall. When configured, the server mirrors your messages and the Captain's final answers to Honcho, adds a short long-term memory section to Captain briefings, and includes Honcho recall in `captain_memory_search` after the Captain's local memories.
 
 This is off by default. Local Captain memories, NOTES.md, and ordinary threads are unchanged. Clients and mobile apps do not connect to Honcho directly.
 
@@ -16,6 +16,6 @@ Create `~/.config/ksg-code/honcho.json`, or set `T3CODE_HONCHO_CONFIG` to anothe
 }
 ```
 
-`tokenFile` must contain only the workspace bearer token. Keep that file private. If the config or token is missing or invalid, KSG Code logs one warning and leaves Honcho memory off.
+`tokenFile` must contain only the workspace bearer token. Keep that file private. KSG Code logs a warning if it cannot read the configured file or token, or if either is invalid. With no default config file, Honcho memory stays off.
 
-Restart the KSG server after adding the file. Mirroring and recall are best-effort: a Honcho failure never fails or blocks a Captain turn.
+Restart the KSG server after adding the file. Mirroring runs in the background. The Captain continues with its local briefing if Honcho fails or takes longer than two seconds to respond.
