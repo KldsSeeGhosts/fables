@@ -1,5 +1,6 @@
-const PROJECT_ID = "d763fcb8-d37c-41ea-a773-b54a0ab4a454";
-const APP_SCHEME = "t3-code";
+const PROJECT_ID = "0db5bfe2-75db-4fa0-a957-e2ef19fac1d8";
+const APP_SCHEME = "ksg-code";
+const LEGACY_PROJECT_ID = "d763fcb8-d37c-41ea-a773-b54a0ab4a454";
 
 function readState(body) {
   const match = /^<!-- mobile-preview(?:-(android|ios))? (\{.*\}) -->/.exec(body ?? "");
@@ -112,7 +113,7 @@ async function main({ env = process.env, request = github } = {}) {
           comment.user?.login === "github-actions[bot]" &&
           (readState(comment.body) !== null ||
             comment.body?.startsWith(
-              `<!-- continuous-deploy-fingerprint-projectId:${PROJECT_ID} -->`,
+              `<!-- continuous-deploy-fingerprint-projectId:${LEGACY_PROJECT_ID} -->`,
             )),
       ),
     );

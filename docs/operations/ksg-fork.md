@@ -64,6 +64,25 @@ releases, not npm. The desktop feed comes from `GITHUB_REPOSITORY` or
 providers, connected servers, then the local desktop last. Upstream merge
 checks must never replace the KSG installation with an upstream artifact.
 
+## Mobile updates
+
+KSG iOS updates use `@kidsseeghosts/ksg-code`. Install a preview IPA built
+with this project and its `preview` channel before publishing updates to it.
+Publish JavaScript-only changes as an update when the native fingerprint
+matches. Native changes that alter the fingerprint require a new IPA.
+
+From `apps/mobile`, publish an iOS preview update with the same build-time
+settings as the IPA. Read `EXPO_TOKEN` from a file outside the repository.
+
+```sh
+(
+  EXPO_TOKEN="$(cat /path/outside/repo/expo-token)" || exit 1
+  export EXPO_TOKEN
+  APP_VARIANT=preview eas update --channel preview --platform ios \
+    --environment preview --message "Describe the update" --non-interactive
+)
+```
+
 ## Release notes
 
 - Use descriptive conventional commit and PR titles that name the user-visible
