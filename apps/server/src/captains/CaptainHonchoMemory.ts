@@ -3,6 +3,7 @@ import {
   isCaptainThreadId,
   type Captain,
   type CaptainId,
+  type OrchestrationV2StoredEvent,
   type OrchestrationV2TurnItem,
   type ThreadId,
 } from "@t3tools/contracts";
@@ -16,8 +17,8 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as Predicate from "effect/Predicate";
 import * as Queue from "effect/Queue";
-import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -27,9 +28,10 @@ import {
   HttpClientRequest,
   type HttpClientResponse,
 } from "effect/http";
+import * as SqlClient from "effect/sql/SqlClient";
 
-import { forkParked } from "../serverActivation.ts";
 import * as EventSink from "../orchestration-v2/EventSink.ts";
+import { forkParked } from "../serverActivation.ts";
 import * as CaptainStore from "./CaptainStore.ts";
 
 const HONCHO_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -37,32 +39,40 @@ const HONCHO_TOKEN_PATTERN = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 const HONCHO_ID_MAX_LENGTH = 512;
 const HONCHO_MESSAGE_MAX_LENGTH = 24_000;
 const MIRROR_QUEUE_CAPACITY = 128;
+const PREPARED_SESSION_LIMIT = 512;
+const MIRRORED_ITEM_LIMIT = 4096;
 const MIRROR_TIMEOUT = "1500 millis";
 const MEMORY_TIMEOUT = "2 seconds";
 const USER_PEER_ID = "user";
 
 const HonchoConfig = Schema.Struct({
-  baseUrl: Schema.NonEmptyString.check(Schema.isPattern(/^https?:\/\/\S+$/i)),
+  baseUrl: Schema.NonEmptyString,
   workspaceId: Schema.NonEmptyString.check(
     Schema.isPattern(HONCHO_ID_PATTERN),
     Schema.isMaxLength(HONCHO_ID_MAX_LENGTH),
   ),
   tokenFile: Schema.NonEmptyString,
 });
-type HonchoConfig = typeof HonchoConfig.Type;
 const decodeHonchoConfig = Schema.decodeUnknownEffect(Schema.fromJsonString(HonchoConfig));
 
 const RepresentationResponse = Schema.Struct({ representation: Schema.String });
 const MessageSearchResponse = Schema.Array(
   Schema.Struct({
     content: Schema.String,
-    created_at: Schema.String,
+    session_id: Schema.optional(Schema.String),
   }),
 );
 
 class HonchoRequestError extends Schema.TaggedError<HonchoRequestError>()("HonchoRequestError", {
   operation: Schema.String,
-  reason: Schema.Literals(["unavailable", "transport", "timeout", "http", "invalid_response"]),
+  reason: Schema.Literals([
+    "unavailable",
+    "connect",
+    "transport",
+    "timeout",
+    "http",
+    "invalid_response",
+  ]),
   status: Schema.optional(Schema.Number),
 }) {}
 
@@ -103,199 +113,267 @@ const honchoId = (prefix: string, value: string) => {
 const captainHonchoPeerId = (captainId: CaptainId) => honchoId("duet_", captainId);
 const captainHonchoSessionId = (threadId: ThreadId) => honchoId("conversation_", threadId);
 
-const captainHonchoUserPeerId = () => USER_PEER_ID;
-
 const trimHonchoMessage = (text: string) =>
-  text.length <= HONCHO_MESSAGE_MAX_LENGTH ? text : `${text.slice(0, HONCHO_MESSAGE_MAX_LENGTH)}…`;
+  text.length <= HONCHO_MESSAGE_MAX_LENGTH
+    ? text
+    : `${text.slice(0, HONCHO_MESSAGE_MAX_LENGTH - 1)}…`;
+
+const safeBaseUrl = (baseUrl: string) => {
+  try {
+    const url = new URL(baseUrl);
+    return (url.protocol === "https:" || url.protocol === "http:") &&
+      url.username === "" &&
+      url.password === "" &&
+      !url.href.includes("?") &&
+      !url.href.includes("#")
+      ? url.href.replace(/\/+$/, "")
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const validToken = (token: string) => {
+  if (!HONCHO_TOKEN_PATTERN.test(token)) return false;
+  const [header, payload, signature] = token.split(".") as [string, string, string];
+  try {
+    const claims: unknown = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    const algorithm: unknown = JSON.parse(Buffer.from(header, "base64url").toString("utf8"));
+    return (
+      Predicate.isObject(claims) &&
+      !Array.isArray(claims) &&
+      Predicate.hasProperty(algorithm, "alg") &&
+      algorithm.alg === "HS256" &&
+      Buffer.from(signature, "base64url").length === 32
+    );
+  } catch {
+    return false;
+  }
+};
+
+const beforeDispatchCodes = new Set([
+  "ECONNREFUSED",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "UND_ERR_CONNECT_TIMEOUT",
+]);
+
+const failedToConnect = (cause: unknown) => {
+  const socketError = Predicate.hasProperty(cause, "cause") ? cause.cause : undefined;
+  return [cause, socketError].some(
+    (error) =>
+      Predicate.hasProperty(error, "code") &&
+      typeof error.code === "string" &&
+      beforeDispatchCodes.has(error.code),
+  );
+};
 
 const retryable = (error: HonchoRequestError) =>
-  error.reason === "transport" ||
-  error.reason === "timeout" ||
-  error.status === 429 ||
-  (error.status !== undefined && error.status >= 500);
+  error.reason === "connect" || error.status === 429 || error.status === 503;
 
-const mirrorableUserMessage = (item: OrchestrationV2TurnItem) =>
+const rememberKey = (cache: Map<string, true>, key: string, limit: number) => {
+  cache.delete(key);
+  cache.set(key, true);
+  if (cache.size > limit) cache.delete(cache.keys().next().value!);
+};
+
+const mirrorableUserMessage = (
+  item: OrchestrationV2TurnItem,
+): item is Extract<OrchestrationV2TurnItem, { type: "user_message" }> =>
   item.type === "user_message" &&
   item.status === "completed" &&
   item.createdBy === "user" &&
+  item.scheduledTaskId === undefined &&
+  item.senderThreadId === undefined &&
+  item.linkedSender === undefined &&
+  item.idleCompaction === undefined &&
+  item.workflowScript !== true &&
+  item.retryOfRunId === undefined &&
   item.text.trim() !== "";
 
-const mirrorableAssistantMessage = (item: OrchestrationV2TurnItem) =>
-  item.type === "assistant_message" &&
-  item.status === "completed" &&
-  item.delivery !== "async" &&
-  (item.phase === undefined || item.phase === "final_answer") &&
-  item.text.trim() !== "";
-
-export interface CaptainHonchoMemoryShape {
-  readonly enabled: boolean;
-  readonly mirrorTurnItem: (item: OrchestrationV2TurnItem) => Effect.Effect<void>;
-  readonly longTermMemory: (captain: Captain) => Effect.Effect<Option.Option<string>>;
-  readonly search: (
-    captain: Captain,
-    query: string | undefined,
-  ) => Effect.Effect<ReadonlyArray<string>>;
-  /** Test hook: completes after every job queued before it has finished. */
-  readonly drain: Effect.Effect<void>;
-}
+const containsToken = (value: unknown, token: string) =>
+  JSON.stringify(value)?.includes(token) === true;
 
 export class CaptainHonchoMemory extends Context.Service<
   CaptainHonchoMemory,
-  CaptainHonchoMemoryShape
+  {
+    readonly enabled: boolean;
+    readonly longTermMemory: (captain: Captain) => Effect.Effect<Option.Option<string>>;
+    readonly search: (
+      captain: Captain,
+      query: string | undefined,
+    ) => Effect.Effect<ReadonlyArray<string>>;
+    readonly drain: Effect.Effect<void>;
+  }
 >()("t3/captains/CaptainHonchoMemory") {}
 
 const make = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const environment = yield* HostProcess.Environment;
-  const http = yield* Effect.serviceOption(HttpClient.HttpClient);
+  const http = Option.map(yield* Effect.serviceOption(HttpClient.HttpClient), HttpClient.withScope);
   const captainStore = yield* Effect.serviceOption(CaptainStore.CaptainStore);
   const eventSink = yield* Effect.serviceOption(EventSink.EventSinkV2);
+  const sql = yield* Effect.serviceOption(SqlClient.SqlClient);
 
   const configuredPath = environment.T3CODE_HONCHO_CONFIG?.trim();
-  const home = environment.HOME?.trim();
-  const configPath =
-    configuredPath !== undefined && configuredPath !== ""
-      ? configuredPath
-      : home !== undefined && home !== ""
-        ? path.join(home, ".config", "ksg-code", "honcho.json")
-        : path.join(".config", "ksg-code", "honcho.json");
+  const useDefaultPath = configuredPath === undefined || configuredPath === "";
+  const configPath = useDefaultPath
+    ? path.join(environment.HOME?.trim() ?? "", ".config", "ksg-code", "honcho.json")
+    : configuredPath;
+  const config = yield* fs.readFileString(configPath).pipe(
+    Effect.flatMap(decodeHonchoConfig),
+    Effect.flatMap((config) => {
+      const baseUrl = safeBaseUrl(config.baseUrl);
+      return baseUrl === undefined
+        ? Effect.fail("invalid_base_url" as const)
+        : Effect.succeed({ ...config, baseUrl });
+    }),
+    Effect.matchEffect({
+      onSuccess: Effect.succeedSome,
+      onFailure: (error) =>
+        (useDefaultPath &&
+        typeof error !== "string" &&
+        error._tag === "PlatformError" &&
+        error.reason._tag === "NotFound"
+          ? Effect.logDebug("Captain Honcho memory config was not found.")
+          : Effect.logWarning("Captain Honcho memory is disabled.", {
+              reason: "config_unavailable",
+            })
+        ).pipe(Effect.as(Option.none())),
+    }),
+  );
 
-  const config = yield* fs
-    .readFileString(configPath)
-    .pipe(Effect.flatMap(decodeHonchoConfig), Effect.option);
-  if (Option.isNone(config)) {
-    yield* Effect.logWarning("Captain Honcho memory is disabled.", {
-      reason: "config_unavailable",
-      configPath,
-    });
-  }
-
-  const tokenDisabled = yield* Ref.make(false);
-  const tokenWarningLogged = yield* Ref.make(false);
-  const sessionsPrepared = yield* Ref.make<ReadonlySet<string>>(new Set());
-  const enqueuedItems = yield* Ref.make<ReadonlySet<string>>(new Set());
+  let tokenDisabled = false;
+  const enabled = () => Option.isSome(config) && Option.isSome(http) && !tokenDisabled;
+  const sessionsPrepared = new Map<string, true>();
+  const enqueuedItems = new Map<string, true>();
   const jobs = yield* Queue.bounded<MirrorJob>(MIRROR_QUEUE_CAPACITY);
 
-  const readToken = Effect.fnUntraced(function* (): Effect.fn.Return<Option.Option<string>> {
-    if (Option.isNone(config) || (yield* Ref.get(tokenDisabled))) return Option.none<string>();
+  // The request span covers the token read and every transport step.
+  const readToken = Effect.fnUntraced(function* () {
+    if (Option.isNone(config) || tokenDisabled) return Option.none<string>();
     const stored = yield* fs.readFileString(config.value.tokenFile).pipe(Effect.option);
+    if (tokenDisabled) return Option.none<string>();
     const token = Option.getOrUndefined(stored)?.trim() ?? "";
-    if (!HONCHO_TOKEN_PATTERN.test(token)) {
-      yield* Ref.set(tokenDisabled, true);
-      const first = yield* Ref.modify(tokenWarningLogged, (logged) => [!logged, true] as const);
-      if (first) {
-        yield* Effect.logWarning("Captain Honcho memory is disabled.", {
-          reason: "token_unavailable",
+    if (validToken(token)) return Option.some(token);
+
+    tokenDisabled = true;
+    yield* Effect.logWarning("Captain Honcho memory is disabled.", { reason: "token_unavailable" });
+    return Option.none<string>();
+  });
+
+  const request = Effect.fn("CaptainHonchoMemory.request")(
+    function* <A>(
+      operation: string,
+      request: HttpClientRequest.HttpClientRequest,
+      timeout: typeof MIRROR_TIMEOUT | typeof MEMORY_TIMEOUT,
+      readBody: (
+        response: HttpClientResponse.HttpClientResponse,
+      ) => Effect.Effect<A, HonchoRequestError>,
+    ) {
+      const token = yield* readToken();
+      if (Option.isNone(token) || Option.isNone(http)) {
+        return yield* new HonchoRequestError({ operation, reason: "unavailable" });
+      }
+      const response = yield* http.value
+        .execute(HttpClientRequest.bearerToken(request, token.value))
+        .pipe(
+          Effect.provideService(FetchHttpClient.RequestInit, { redirect: "error" }),
+          // Client spans and failures can retain the original request with its authorization.
+          Effect.provideService(HttpClient.TracerDisabledWhen, () => true),
+          Effect.mapError(
+            (error) =>
+              new HonchoRequestError({
+                operation,
+                reason:
+                  error.reason._tag === "TransportError" && failedToConnect(error.reason.cause)
+                    ? "connect"
+                    : "transport",
+              }),
+          ),
+        );
+      if (response.status < 200 || response.status >= 300) {
+        return yield* new HonchoRequestError({
+          operation,
+          reason: "http",
+          status: response.status,
         });
       }
-      return Option.none<string>();
-    }
-    return Option.some(token);
-  });
+      const body = yield* readBody(response);
+      if (containsToken(body, token.value)) {
+        return yield* new HonchoRequestError({ operation, reason: "invalid_response" });
+      }
+      return body;
+    },
+    (effect, operation, _request, duration) =>
+      // Closing the client scope aborts stalled reads and cancels unused response bodies.
+      Effect.scoped(effect).pipe(
+        Effect.timeoutOrElse({
+          duration,
+          orElse: () => Effect.fail(new HonchoRequestError({ operation, reason: "timeout" })),
+        }),
+        Effect.catchDefect(() =>
+          Effect.fail(new HonchoRequestError({ operation, reason: "transport" })),
+        ),
+      ),
+  );
 
-  const execute = Effect.fnUntraced(function* (
+  const requestJson = <A>(
     operation: string,
-    request: HttpClientRequest.HttpClientRequest,
-    timeout: typeof MIRROR_TIMEOUT | typeof MEMORY_TIMEOUT,
-  ): Effect.fn.Return<HttpClientResponse.HttpClientResponse, HonchoRequestError> {
-    const token = yield* readToken();
-    if (Option.isNone(token) || Option.isNone(http)) {
-      return yield* new HonchoRequestError({ operation, reason: "unavailable" });
-    }
-    const transport = http.value.execute(HttpClientRequest.bearerToken(request, token.value)).pipe(
-      // A redirect could carry the bearer token to another origin. The underlying error is
-      // deliberately discarded because client errors can retain request headers.
-      Effect.provideService(FetchHttpClient.RequestInit, { redirect: "error" }),
-      Effect.provideService(HttpClient.TracerPropagationEnabled, false),
-      Effect.mapError(() => new HonchoRequestError({ operation, reason: "transport" as const })),
-    );
-    return yield* transport.pipe(
-      Effect.timeoutOrElse({
-        duration: timeout,
-        orElse: () =>
-          Effect.fail(new HonchoRequestError({ operation, reason: "timeout" as const })),
-      }),
-    );
-  });
-
-  const requestUnit = Effect.fnUntraced(function* (
-    operation: string,
-    request: HttpClientRequest.HttpClientRequest,
-    timeout: typeof MIRROR_TIMEOUT | typeof MEMORY_TIMEOUT,
-  ): Effect.fn.Return<void, HonchoRequestError> {
-    const response = yield* execute(operation, request, timeout);
-    if (response.status < 200 || response.status >= 300) {
-      return yield* new HonchoRequestError({
-        operation,
-        reason: "http",
-        status: response.status,
-      });
-    }
-  });
-
-  const requestJson = Effect.fnUntraced(function* <A>(
-    operation: string,
-    request: HttpClientRequest.HttpClientRequest,
+    input: HttpClientRequest.HttpClientRequest,
     schema: Schema.Codec<A, unknown, never, never>,
-  ): Effect.fn.Return<A, HonchoRequestError> {
-    const response = yield* execute(operation, request, MEMORY_TIMEOUT);
-    if (response.status < 200 || response.status >= 300) {
-      return yield* new HonchoRequestError({
-        operation,
-        reason: "http",
-        status: response.status,
-      });
-    }
-    const body = yield* response.json.pipe(
-      Effect.mapError(
-        () => new HonchoRequestError({ operation, reason: "invalid_response" as const }),
+  ) =>
+    request(operation, input, MEMORY_TIMEOUT, (response) =>
+      response.json.pipe(
+        Effect.flatMap(Schema.decodeEffect(schema)),
+        Effect.mapError(() => new HonchoRequestError({ operation, reason: "invalid_response" })),
       ),
     );
-    return yield* Schema.decodeEffect(schema)(body).pipe(
-      Effect.mapError(
-        () => new HonchoRequestError({ operation, reason: "invalid_response" as const }),
-      ),
-    );
-  });
 
   const endpoint = (path: string) =>
     config._tag === "Some"
-      ? `${config.value.baseUrl.replace(/\/+$/, "")}/v3/workspaces/${encodeURIComponent(config.value.workspaceId)}${path}`
+      ? `${config.value.baseUrl}/v3/workspaces/${config.value.workspaceId}${path}`
       : "";
 
-  const prepareSession = Effect.fnUntraced(function* (input: {
+  const prepareSession = Effect.fn("CaptainHonchoMemory.prepareSession")(function* (input: {
     readonly captainId: CaptainId;
     readonly threadId: ThreadId;
   }) {
-    if (Option.isNone(config)) return;
     const sessionId = captainHonchoSessionId(input.threadId);
-    if ((yield* Ref.get(sessionsPrepared)).has(sessionId)) return;
+    if (sessionsPrepared.has(sessionId)) {
+      rememberKey(sessionsPrepared, sessionId, PREPARED_SESSION_LIMIT);
+      return;
+    }
     const captainPeerId = captainHonchoPeerId(input.captainId);
-    yield* requestUnit(
+    yield* request(
       "prepare duet memory session",
       HttpClientRequest.post(endpoint("/sessions")).pipe(
         HttpClientRequest.bodyJsonUnsafe({
           id: sessionId,
+          scopes: [captainPeerId],
           metadata: {
             t3CaptainId: input.captainId,
             t3ThreadId: input.threadId,
           },
           peers: {
-            [captainHonchoUserPeerId()]: { observe_me: true, observe_others: false },
+            [USER_PEER_ID]: { observe_me: true, observe_others: false },
             [captainPeerId]: { observe_me: true, observe_others: true },
           },
         }),
       ),
       MIRROR_TIMEOUT,
+      () => Effect.void,
     );
-    yield* Ref.update(sessionsPrepared, (sessions) => new Set(sessions).add(sessionId));
+    rememberKey(sessionsPrepared, sessionId, PREPARED_SESSION_LIMIT);
   });
 
-  const postMirror = Effect.fnUntraced(function* (job: Extract<MirrorJob, { type: "message" }>) {
-    if (Option.isNone(config)) return;
+  const postMirror = Effect.fn("CaptainHonchoMemory.postMirror")(function* (
+    job: Extract<MirrorJob, { type: "message" }>,
+  ) {
+    if (!enabled()) return;
     yield* prepareSession(job);
-    yield* requestUnit(
+    yield* request(
       "mirror duet message",
       HttpClientRequest.post(
         endpoint(`/sessions/${encodeURIComponent(captainHonchoSessionId(job.threadId))}/messages`),
@@ -303,11 +381,8 @@ const make = Effect.gen(function* () {
         HttpClientRequest.bodyJsonUnsafe({
           messages: [
             {
-              peer_id:
-                job.role === "user"
-                  ? captainHonchoUserPeerId()
-                  : captainHonchoPeerId(job.captainId),
-              content: trimHonchoMessage(job.text),
+              peer_id: job.role === "user" ? USER_PEER_ID : captainHonchoPeerId(job.captainId),
+              content: job.text,
               metadata: {
                 t3CaptainId: job.captainId,
                 t3ThreadId: job.threadId,
@@ -319,10 +394,13 @@ const make = Effect.gen(function* () {
         }),
       ),
       MIRROR_TIMEOUT,
+      () => Effect.void,
     );
   });
 
-  const processMirrorJob = Effect.fnUntraced(function* (job: MirrorJob) {
+  const processMirrorJob = Effect.fn("CaptainHonchoMemory.processMirrorJob")(function* (
+    job: MirrorJob,
+  ) {
     if (job.type === "barrier") {
       yield* Deferred.succeed(job.deferred, undefined);
       return;
@@ -341,8 +419,9 @@ const make = Effect.gen(function* () {
       processMirrorJob(job).pipe(
         Effect.catchCauseIf(
           (cause) => !Cause.hasInterruptsOnly(cause),
-          () =>
-            job.type === "message"
+          (cause) =>
+            job.type === "message" &&
+            Option.getOrUndefined(Cause.findErrorOption(cause))?.reason !== "unavailable"
               ? Effect.logWarning("Captain Honcho memory dropped a mirrored message.", {
                   threadId: job.threadId,
                   itemId: job.itemId,
@@ -353,58 +432,96 @@ const make = Effect.gen(function* () {
     ),
   );
 
-  const mirrorTurnItem = Effect.fn("CaptainHonchoMemory.mirrorTurnItem")(function* (
-    item: OrchestrationV2TurnItem,
-  ) {
-    if (Option.isNone(config) || !isCaptainThreadId(item.threadId)) return;
-    const role = mirrorableUserMessage(item)
-      ? ("user" as const)
-      : mirrorableAssistantMessage(item)
-        ? ("assistant" as const)
-        : undefined;
-    if (role === undefined || Option.isNone(captainStore)) return;
-    const captain = yield* captainStore.value
-      .findByConversation(item.threadId)
-      .pipe(Effect.orElseSucceed(() => undefined));
-    if (captain === undefined || captain.archivedAt !== null) return;
-    const key = `${item.threadId}:${item.id}:${role}`;
-    const first = yield* Ref.modify(enqueuedItems, (items) => {
-      if (items.has(key)) return [false, items] as const;
-      return [true, new Set(items).add(key)] as const;
-    });
-    if (!first) return;
-    const accepted = Queue.offerUnsafe(jobs, {
-      type: "message",
-      captainId: captain.id,
-      threadId: item.threadId,
-      itemId: item.id,
-      role,
-      text:
-        role === "user"
-          ? (item as Extract<OrchestrationV2TurnItem, { type: "user_message" }>).text
-          : (item as Extract<OrchestrationV2TurnItem, { type: "assistant_message" }>).text,
-    });
-    if (!accepted) {
-      yield* Effect.logWarning("Captain Honcho memory dropped a mirrored message.", {
+  const enqueueMessage = (
+    captain: Captain,
+    message: Pick<Extract<MirrorJob, { type: "message" }>, "itemId" | "text">,
+    role: "user" | "assistant",
+    dedupeId = message.itemId,
+  ) =>
+    Effect.suspend(() => {
+      const threadId = captain.primaryThreadId;
+      const key = `${threadId.length}:${threadId}:${role}:${dedupeId}`;
+      if (enqueuedItems.has(key)) {
+        rememberKey(enqueuedItems, key, MIRRORED_ITEM_LIMIT);
+        return Effect.void;
+      }
+      if (
+        Queue.offerUnsafe(jobs, {
+          type: "message",
+          captainId: captain.id,
+          threadId,
+          itemId: message.itemId,
+          role,
+          text: trimHonchoMessage(message.text),
+        })
+      ) {
+        rememberKey(enqueuedItems, key, MIRRORED_ITEM_LIMIT);
+        return Effect.void;
+      }
+      return Effect.logWarning("Captain Honcho memory dropped a mirrored message.", {
         reason: "queue_full",
-        threadId: item.threadId,
-        itemId: item.id,
+        threadId,
+        itemId: message.itemId,
       });
+    });
+
+  const mirrorEvent = Effect.fn("CaptainHonchoMemory.mirrorEvent")(function* ({
+    event,
+  }: OrchestrationV2StoredEvent) {
+    if (!enabled() || Option.isNone(captainStore)) return;
+    const captain = yield* captainStore.value.byThread(event.threadId);
+    if (captain === undefined) return;
+
+    if (event.type === "turn-item.updated" && mirrorableUserMessage(event.payload)) {
+      yield* enqueueMessage(
+        captain,
+        { itemId: event.payload.id, text: event.payload.text },
+        "user",
+      );
     }
+    if (event.type !== "provider-turn.updated" || Option.isNone(sql)) return;
+
+    const turn = event.payload;
+    const answers = yield* sql.value<{ readonly itemId: string; readonly text: string }>`
+      SELECT item.turn_item_id AS itemId, json_extract(item.payload_json, '$.text') AS text
+      FROM orchestration_v2_projection_turn_items AS item
+      JOIN orchestration_v2_projection_nodes AS root ON root.node_id = ${turn.nodeId}
+        AND root.thread_id = ${event.threadId} AND root.kind = 'root_turn'
+      WHERE item.provider_turn_id = ${turn.id} AND item.thread_id = ${event.threadId}
+        AND item.type = 'assistant_message' AND item.status = 'completed'
+        AND item.parent_item_id IS NULL
+        AND COALESCE(json_extract(item.payload_json, '$.streaming'), 0) = 0
+        AND json_extract(item.payload_json, '$.delivery') IS NULL
+        AND COALESCE(json_extract(item.payload_json, '$.phase'), 'final_answer') = 'final_answer'
+      ORDER BY json_extract(item.payload_json, '$.phase') IS NOT NULL DESC,
+        item.ordinal DESC, item.turn_item_id DESC
+    `;
+    const answer = answers.find(({ text }) => typeof text === "string" && text.trim() !== "");
+    if (answer !== undefined) yield* enqueueMessage(captain, answer, "assistant", turn.id);
   });
 
-  if (Option.isSome(config) && Option.isSome(captainStore) && Option.isSome(eventSink)) {
+  if (enabled() && Option.isSome(captainStore) && Option.isSome(eventSink)) {
     const afterSequence = yield* eventSink.value
       .latestSequence()
       .pipe(Effect.orElseSucceed(() => 0));
     yield* forkParked(
-      Stream.runForEach(
-        eventSink.value.stream({ afterSequence, eventType: "turn-item.updated" }),
-        (stored) =>
-          stored.event.type === "turn-item.updated"
-            ? mirrorTurnItem(stored.event.payload)
-            : Effect.void,
-      ).pipe(
+      eventSink.value.stream({ afterSequence }).pipe(
+        Stream.filter(
+          ({ event }) =>
+            enabled() &&
+            isCaptainThreadId(event.threadId) &&
+            ((event.type === "turn-item.updated" && mirrorableUserMessage(event.payload)) ||
+              (event.type === "provider-turn.updated" && event.payload.status === "completed")),
+        ),
+        Stream.runForEach((stored) =>
+          mirrorEvent(stored).pipe(
+            Effect.catchCauseIf(
+              (cause) => !Cause.hasInterruptsOnly(cause),
+              () =>
+                Effect.logWarning("Captain Honcho memory could not read a conversation update."),
+            ),
+          ),
+        ),
         Effect.catchCauseIf(
           (cause) => !Cause.hasInterruptsOnly(cause),
           () => Effect.logWarning("Captain Honcho memory mirroring stopped."),
@@ -414,28 +531,36 @@ const make = Effect.gen(function* () {
   }
 
   const withoutFailure =
-    <A>(operation: string, fallback: A) =>
-    <E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, never, R> =>
-      effect.pipe(
-        Effect.catchCause(() =>
-          Effect.logWarning("Captain Honcho memory request failed.", { operation }).pipe(
-            Effect.as(fallback),
-          ),
+    <A>(operation: string, fallback: A, emptyStatus?: number) =>
+    <R>(effect: Effect.Effect<A, HonchoRequestError, R>) => {
+      const warn = Effect.logWarning("Captain Honcho memory request failed.", { operation }).pipe(
+        Effect.as(fallback),
+      );
+      return effect.pipe(
+        Effect.catch((error) =>
+          error.reason === "unavailable" ||
+          (emptyStatus !== undefined && error.status === emptyStatus)
+            ? Effect.succeed(fallback)
+            : warn,
+        ),
+        Effect.catchCauseIf(
+          (cause) => !Cause.hasInterruptsOnly(cause),
+          () => warn,
         ),
       );
+    };
 
   const longTermMemory = Effect.fn("CaptainHonchoMemory.longTermMemory")(function* (
     captain: Captain,
   ) {
-    if (Option.isNone(config)) return Option.none<string>();
+    if (!enabled()) return Option.none<string>();
+    const peerId = captainHonchoPeerId(captain.id);
     return yield* requestJson(
       "read duet long-term memory",
-      HttpClientRequest.post(
-        endpoint(`/peers/${encodeURIComponent(captainHonchoPeerId(captain.id))}/representation`),
-      ).pipe(
+      HttpClientRequest.post(endpoint(`/peers/${peerId}/representation`)).pipe(
         HttpClientRequest.bodyJsonUnsafe({
-          target: captainHonchoUserPeerId(),
-          max_conclusions: 25,
+          target: USER_PEER_ID,
+          scope: peerId,
         }),
       ),
       RepresentationResponse,
@@ -444,7 +569,7 @@ const make = Effect.gen(function* () {
         const text = representation.trim();
         return text === "" ? Option.none<string>() : Option.some(text);
       }),
-      withoutFailure("read duet long-term memory", Option.none<string>()),
+      withoutFailure("read duet long-term memory", Option.none<string>(), 404),
     );
   });
 
@@ -452,22 +577,24 @@ const make = Effect.gen(function* () {
     captain: Captain,
     query: string | undefined,
   ) {
-    if (Option.isNone(config)) return [];
+    if (!enabled()) return [];
+    const sessions = new Set(
+      [captain.primaryThreadId, ...captain.earlierThreadIds].map(captainHonchoSessionId),
+    );
     return yield* requestJson(
       "search duet long-term memory",
-      HttpClientRequest.post(
-        endpoint(`/peers/${encodeURIComponent(captainHonchoUserPeerId())}/search`),
-      ).pipe(
+      HttpClientRequest.post(endpoint("/search")).pipe(
         HttpClientRequest.bodyJsonUnsafe({
           query: query ?? "important durable facts, preferences, decisions, and open loops",
           limit: 5,
+          scope: captainHonchoPeerId(captain.id),
         }),
       ),
       MessageSearchResponse,
     ).pipe(
       Effect.map((messages) =>
         messages
-          .toSorted((left, right) => right.created_at.localeCompare(left.created_at))
+          .filter(({ session_id }) => session_id !== undefined && sessions.has(session_id))
           .map(({ content }) => content.trim())
           .filter((content) => content !== ""),
       ),
@@ -482,8 +609,9 @@ const make = Effect.gen(function* () {
   });
 
   return CaptainHonchoMemory.of({
-    enabled: Option.isSome(config),
-    mirrorTurnItem,
+    get enabled() {
+      return enabled();
+    },
     longTermMemory,
     search,
     drain,

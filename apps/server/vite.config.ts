@@ -171,6 +171,12 @@ export default mergeConfig(
       },
     },
     test: {
+      env: {
+        T3CODE_HONCHO_CONFIG: NodePath.join(
+          import.meta.dirname,
+          "src/testUtils/honcho-disabled.json",
+        ),
+      },
       // Parallel sqlite/git/worktree/orchestration tests introduce load-sensitive flakes.
       fileParallelism: false,
       sequence: { sequencer: WeightedShardSequencer },

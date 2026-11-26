@@ -78,7 +78,7 @@ export const formatCaptainBriefing = (input: {
     .join("\n\n");
 };
 
-export const formatCaptainLongTermMemoryBlock = (text: string) =>
+const formatCaptainLongTermMemoryBlock = (text: string) =>
   text.trim() === ""
     ? ""
     : `Long-term memory:
@@ -285,7 +285,7 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
         : "";
       const plan = delivery === undefined ? undefined : briefings.plan(delivery, briefing);
       const longTermMemoryPlan =
-        delivery === undefined || longTermMemoryBlock === ""
+        delivery === undefined || (longTermMemoryBlock === "" && plan?.compacted !== true)
           ? undefined
           : longTermMemoryBriefings.plan(delivery, longTermMemoryBlock);
       const compactionOpenLoops =
@@ -300,11 +300,9 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
         text: [
           plan?.full === false ? unchangedBriefing(captain) : briefing,
           compactionOpenLoops,
-          delivery === undefined
+          delivery === undefined || plan?.compacted === true || longTermMemoryPlan?.full === true
             ? longTermMemoryBlock
-            : longTermMemoryPlan?.full === true
-              ? longTermMemoryBlock
-              : "",
+            : "",
           formatCaptainReports(reports, threadId),
           delivery === undefined
             ? ""
