@@ -108,6 +108,17 @@ export type ReviewGuideGenerationResult = Omit<
   "headSha" | "generatedAt" | "modelSelection"
 >;
 
+export interface BriefTextGenerationInput {
+  cwd: string;
+  prompt: string;
+  modelSelection: ModelSelection;
+  projectId?: ProjectId | null | undefined;
+}
+
+export interface BriefTextGenerationResult {
+  text: string;
+}
+
 export interface TranscriptionPostProcessingInput {
   cwd: string;
   prompt: string;
@@ -119,6 +130,10 @@ export interface TranscriptionPostProcessingResult {
 }
 
 export interface ProviderTextGeneration {
+  readonly generateBriefText: (
+    input: BriefTextGenerationInput,
+  ) => Effect.Effect<BriefTextGenerationResult, TextGenerationError>;
+
   readonly generateTranscriptionPostProcessing: (
     input: TranscriptionPostProcessingInput,
   ) => Effect.Effect<TranscriptionPostProcessingResult, TextGenerationError>;

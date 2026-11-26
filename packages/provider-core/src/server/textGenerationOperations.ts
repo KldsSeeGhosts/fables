@@ -19,6 +19,7 @@ import {
   sanitizeThreadTitle,
 } from "./textGenerationUtils.ts";
 
+export const BriefTextGenerationOutput = Schema.Struct({ text: Schema.String });
 export const TranscriptionPostProcessingOutput = Schema.Struct({ transcription: Schema.String });
 
 export type Operation = keyof ProviderTextGeneration;
@@ -178,6 +179,18 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
     };
   });
 
+  const generateBriefText: ProviderTextGeneration["generateBriefText"] = Effect.fn(
+    `${name}.generateBriefText`,
+  )(function* (input) {
+    return yield* run({
+      operation: "generateBriefText",
+      cwd: input.cwd,
+      prompt: input.prompt,
+      outputSchema: BriefTextGenerationOutput,
+      modelSelection: input.modelSelection,
+    });
+  });
+
   const generateTranscriptionPostProcessing: ProviderTextGeneration["generateTranscriptionPostProcessing"] =
     Effect.fn(`${name}.generateTranscriptionPostProcessing`)(function* (input) {
       return yield* run({
@@ -207,6 +220,7 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
     generateBranchName,
     generateThreadTitle,
     generateReviewGuide,
+    generateBriefText,
     generateTranscriptionPostProcessing,
   } satisfies ProviderTextGeneration;
 }

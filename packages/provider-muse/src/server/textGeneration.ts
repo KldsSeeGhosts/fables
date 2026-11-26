@@ -24,6 +24,7 @@ import { museModelCapabilities, resolveMuseReasoningEffort } from "./modelCatalo
 import { isMuseUsageLimitFailure } from "./usageLimits.ts";
 import type { ProviderTextGeneration } from "@t3tools/provider-core/server/textGeneration";
 import {
+  BriefTextGenerationOutput,
   generatedThreadTitle,
   investigationUnsupported,
   TranscriptionPostProcessingOutput,
@@ -392,6 +393,16 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
         modelSelection: input.modelSelection,
       });
     });
+  const generateBriefText: ProviderTextGeneration["generateBriefText"] = Effect.fn(
+    "MuseTextGeneration.generateBriefText",
+  )(function* (input) {
+    return yield* runMuseJson({
+      operation: "generateBriefText",
+      prompt: input.prompt,
+      outputSchema: BriefTextGenerationOutput,
+      modelSelection: input.modelSelection,
+    });
+  });
   const generateReviewGuide: ProviderTextGeneration["generateReviewGuide"] = () =>
     Effect.fail(investigationUnsupported("generateReviewGuide", "Muse Code"));
   return {
@@ -400,6 +411,7 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
     generateBranchName,
     generateThreadTitle,
     generateReviewGuide,
+    generateBriefText,
     generateTranscriptionPostProcessing,
   } satisfies ProviderTextGeneration;
 });
