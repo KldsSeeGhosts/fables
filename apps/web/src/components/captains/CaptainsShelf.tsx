@@ -484,7 +484,7 @@ function CaptainShelfRow({
     : attention > 0
       ? gt("Needs input")
       : working
-        ? gt("Working", { $context: "Captain status" })
+        ? gt("Working", { $context: "Duet status" })
         : gt("Ready");
   const avatarState = archived
     ? "archived"
@@ -510,7 +510,7 @@ function CaptainShelfRow({
         </MenuItem>
         <MenuSeparator />
         <MenuItem disabled={!canUpdate} onClick={() => profile.edit()}>
-          {isDuet ? <T>Customize Duet</T> : <T>Edit Captain</T>}
+          {isDuet ? <T>Customize Duet</T> : <T>Edit Duet</T>}
         </MenuItem>
         {isDuet && onMove ? (
           <>
@@ -533,16 +533,16 @@ function CaptainShelfRow({
               <T>Archive</T>
             )
           ) : archived ? (
-            <T>Restore Captain</T>
+            <T>Restore Duet</T>
           ) : (
-            <T>Archive Captain</T>
+            <T>Archive Duet</T>
           )}
         </MenuItem>
         {profile.canDelete ? (
           <>
             <MenuSeparator />
             <MenuItem variant="destructive" disabled={pending} onClick={profile.requestDelete}>
-              {isDuet ? <T>Delete</T> : <T>Delete Captain</T>}
+              {isDuet ? <T>Delete</T> : <T>Delete Duet</T>}
             </MenuItem>
           </>
         ) : null}
@@ -651,13 +651,12 @@ export function CaptainShelfList({
       (count, row) => count + Number(row.captain.archivedAt === null && row.attention > 0),
       0,
     );
-  const attentionLabel = isDuet
-    ? gt("{count, plural, one {{count} Duet needs input} other {{count} Duets need input}}", {
-        count: attention,
-      })
-    : gt("{count, plural, one {{count} Captain needs input} other {{count} Captains need input}}", {
-        count: attention,
-      });
+  const attentionLabel = gt(
+    "{count, plural, one {{count} Duet needs input} other {{count} Duets need input}}",
+    {
+      count: attention,
+    },
+  );
   const [savedDuetOrder, setSavedDuetOrder] = useLocalStorage(
     DUET_ORDER_STORAGE_KEY,
     [] as Array<string>,
@@ -707,7 +706,9 @@ export function CaptainShelfList({
 
   const heading = (
     <>
-      <span className="truncate">{isDuet ? <T>Duets</T> : <T>Captains</T>}</span>
+      <span className="truncate">
+        <T>Duets</T>
+      </span>
       {attention > 0 ? (
         <DuetLiveCount tone="needs-input" count={attention} label={attentionLabel} />
       ) : null}
@@ -769,11 +770,7 @@ export function CaptainShelfList({
         )}
         {onCreate ? (
           <span className="flex items-center opacity-60 focus-within:opacity-100 group-hover/captains-label:opacity-100">
-            <SidebarHeaderIconButton
-              size="label"
-              label={isDuet ? gt("New Duet") : gt("New Captain")}
-              onClick={onCreate}
-            >
+            <SidebarHeaderIconButton size="label" label={gt("New Duet")} onClick={onCreate}>
               <PlusIcon />
             </SidebarHeaderIconButton>
           </span>

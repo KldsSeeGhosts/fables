@@ -35,7 +35,6 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { isElectron } from "../../env";
 import { requestConfirmDialog } from "../../confirmDialog";
-import { useDuetShell } from "../../hooks/useDuetShell";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { useLayoutPane } from "../../layout/layoutPaneContext";
 import { cn } from "../../lib/utils";
@@ -502,7 +501,6 @@ export function CaptainTasksDrawer({
   readonly onClose: () => void;
 }) {
   const gt = useGT();
-  const isDuet = useDuetShell();
   const messages = useMessages();
   const navigate = useNavigate();
   const panelTabSlots = usePanelTabSlots();
@@ -562,15 +560,9 @@ export function CaptainTasksDrawer({
         )}
         <DrawerEmpty>
           {captains.data == null && captains.error === null ? (
-            isDuet ? (
-              <T>Loading Duet…</T>
-            ) : (
-              <T>Loading Captain…</T>
-            )
-          ) : isDuet ? (
-            <T>This conversation has no Duet profile.</T>
+            <T>Loading Duet…</T>
           ) : (
-            <T>This conversation has no Captain profile.</T>
+            <T>This conversation has no Duet profile.</T>
           )}
         </DrawerEmpty>
       </div>
@@ -632,9 +624,9 @@ export function CaptainTasksDrawer({
       const ageDays = Math.floor((startOfDay(nowMs) - startOfDay(rowTime(date))) / DAY_MS);
       const label =
         key === todayKey
-          ? gt("Today", { $context: "Captain task group" })
+          ? gt("Today", { $context: "Duet task group" })
           : ageDays === 1
-            ? gt("Yesterday", { $context: "Captain task group" })
+            ? gt("Yesterday", { $context: "Duet task group" })
             : ageDays < 7
               ? date.toLocaleDateString(undefined, { weekday: "long" })
               : date.toLocaleDateString(undefined, {
@@ -666,7 +658,7 @@ export function CaptainTasksDrawer({
       )}
       <div
         role="tablist"
-        aria-label={isDuet ? gt("Duet task views") : gt("Captain task views")}
+        aria-label={gt("Duet task views")}
         className={cn(
           "flex h-[26px] shrink-0 items-center gap-0.5 px-4",
           hideDrawerHeader ? "mt-3" : "mt-1",
@@ -687,10 +679,10 @@ export function CaptainTasksDrawer({
             onClick={() => setTab(entry)}
           >
             {entry === "today"
-              ? gt("Today", { $context: "Captain tasks drawer tab" })
+              ? gt("Today", { $context: "Duet tasks drawer tab" })
               : entry === "all"
-                ? gt("All", { $context: "Captain tasks drawer tab" })
-                : gt("Scheduled", { $context: "Captain tasks drawer tab" })}
+                ? gt("All", { $context: "Duet tasks drawer tab" })
+                : gt("Scheduled", { $context: "Duet tasks drawer tab" })}
           </button>
         ))}
       </div>
@@ -775,11 +767,7 @@ export function CaptainTasksDrawer({
           <div className="flex flex-col gap-3">
             {captain.archivedAt !== null ? (
               <DrawerEmpty>
-                {isDuet ? (
-                  <T>Routines don't run while this Duet is archived.</T>
-                ) : (
-                  <T>Routines don't run while this Captain is archived.</T>
-                )}
+                <T>Routines don't run while this Duet is archived.</T>
               </DrawerEmpty>
             ) : null}
             <CaptainMorningBriefControl

@@ -34,7 +34,6 @@ import {
   COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
 } from "../workspaceTitlebar";
 import { useComposerDraftStore } from "../composerDraftStore";
-import { useDuetShell } from "../hooks/useDuetShell";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useScratchProject } from "../hooks/useScratchProject";
 import { useScrollingWorkspacesEnabled } from "../hooks/useSettings";
@@ -179,7 +178,6 @@ function NewTabLauncherBody({
   openers,
 }: NewTabLauncherBodyProps) {
   const gt = useGT();
-  const isDuet = useDuetShell();
   const { paneId } = useLayoutPane();
   const handleNewThread = useNewThreadHandler();
   const { startScratchThread } = useScratchProject();
@@ -336,7 +334,7 @@ function NewTabLauncherBody({
         ) : null}
         <DraftProjectRow
           icon={<CompassIcon className="size-4 shrink-0 text-muted-foreground" />}
-          label={isDuet ? gt("Duets") : gt("Captains")}
+          label={gt("Duets")}
           detail=""
           onSelect={() => openPage("captains")}
         />

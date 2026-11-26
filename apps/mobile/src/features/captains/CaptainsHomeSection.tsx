@@ -69,7 +69,7 @@ export function CaptainsHomeSection(props: {
     <View className="gap-1 px-2 pb-3 pt-2">
       <View className="flex-row items-center gap-2 px-2 pb-1">
         <Text className="min-w-0 flex-1 font-t3-medium text-xs text-foreground-muted">
-          {gt("Captains")}
+          {gt("Duets")}
         </Text>
         <Pressable
           accessibilityRole="button"
@@ -99,14 +99,14 @@ export function CaptainsHomeSection(props: {
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={gt("Captain tasks")}
+          accessibilityLabel={gt("Duet tasks")}
           hitSlop={6}
           onPress={() => navigation.navigate("CaptainTasks", {})}
           className="flex-row items-center gap-1 rounded-full bg-subtle px-2.5 py-1"
         >
           <SymbolView name="list.number" size={12} tintColorClassName="accent-icon-muted" />
           <Text className="font-t3-medium text-xs text-foreground-muted">
-            {gt("Tasks", { $context: "noun, a Captain's delegated tasks" })}
+            {gt("Tasks", { $context: "noun, a Duet's delegated tasks" })}
           </Text>
         </Pressable>
       </View>
@@ -118,11 +118,11 @@ export function CaptainsHomeSection(props: {
                 { count: activity.attention },
               )
             : activity.children.length > 0
-              ? gt("{count, plural, one {Crew on {count} task} other {Crew on {count} tasks}}", {
+              ? gt("{count, plural, one {Solos on {count} task} other {Solos on {count} tasks}}", {
                   count: activity.children.length,
                 })
               : activity.working
-                ? gt("Working", { $context: "Captain state" })
+                ? gt("Working", { $context: "Duet state" })
                 : captain.role.trim() || null;
         const detail = showsEnvironment
           ? [state, environment.label].filter((part) => part !== null).join(" · ")

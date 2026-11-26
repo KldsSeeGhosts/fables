@@ -51,7 +51,7 @@ describe("formatCaptainHandoff", () => {
         "- Review the migration [task-1] (running, follow: thread:child): Checking projection rows\n\n" +
         "### Last user message\n" +
         "> Please finish the migration\n\n" +
-        "### Captain's last reply\n" +
+        "### Duet's last reply\n" +
         "> I am checking the projection rows\n\n" +
         "### Scheduled tasks\n" +
         "- 2 scheduled tasks moved to the new conversation.\n\n" +

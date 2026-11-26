@@ -41,7 +41,7 @@ describe("formatCaptainBriefing", () => {
     expect(coordinated).toContain("How you work:");
     expect(coordinated).toContain('`delegate_task` and `isolation: "worktree"`');
     expect(coordinated).toContain("`captain_document_write`");
-    expect(coordinated).toContain("pass `repositories` with the ones the child edits");
+    expect(coordinated).toContain("pass `repositories` with the ones the Solo edits");
     expect(coordinated).toContain("never by your checkout's absolute paths");
   });
 
@@ -92,7 +92,7 @@ describe("formatCaptainBriefing", () => {
     expect(rule("react")).toContain("let completion wake you");
     expect(rule("context")).toContain("arrive with the user's next message");
     expect(rule("context")).not.toContain("let completion wake you");
-    expect(rule("ignore")).toContain("You are not told when crew finishes");
+    expect(rule("ignore")).toContain("You are not told when a Solo finishes");
     expect(rule("ignore")).not.toContain("let completion wake you");
   });
 });
@@ -152,6 +152,7 @@ describe("formatCaptainReports", () => {
 describe("formatCaptainCrewRules", () => {
   it("always includes the built-in crew rules", () => {
     const formatted = formatCaptainCrewRules(captain, "");
+    expect(formatted).toContain("Rules for Solos from Duet Maria");
     expect(formatted).toContain("keep a progress note in your worktree");
     expect(formatted).toContain("use the matching folder in yours");
     expect(formatted).toContain("done-check from your brief passes");

@@ -173,7 +173,7 @@ describe("a push hooks approval", () => {
       ],
     }).approvals[0]!;
 
-  it("carries what T3 Code names and no app, and another server's request its app", () => {
+  it("carries what Fables names and no app, and another server's request its app", () => {
     const own = pending({ pushHooks });
     expect(own.pushHooks).toEqual(pushHooks);
     expect(own).not.toHaveProperty("appName");

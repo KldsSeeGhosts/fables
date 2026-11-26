@@ -51,7 +51,7 @@ export function DuetTaskContextHeader({
   const liveShell = useQuietThreadShell(childRef);
   const shell = liveShell ?? stream.childThreads.get(childThreadId) ?? null;
   const statusLabel = useCaptainTaskStatusLabel(captainThreadTaskStatus(shell));
-  const title = shell?.title.trim() || gt("Task", { $context: "Captain delegated task" });
+  const title = shell?.title.trim() || gt("Task", { $context: "Duet delegated task" });
   return (
     <button
       type="button"

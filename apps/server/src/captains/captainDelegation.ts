@@ -23,7 +23,7 @@ export const captainDelegationProject = Effect.fn("CaptainService.delegationProj
     if (!scope.includes(projectId)) {
       return yield* new OrchestratorMcpFailure({
         code: "invalid_request",
-        message: "Choose a local project in this Captain's workspace scope for the delegated task.",
+        message: "Choose a local project in this Duet's workspace scope for the delegated task.",
       });
     }
     return projectId;

@@ -51,7 +51,6 @@ import {
 import { previewRuntimeTabId } from "../browser/previewRuntimeTabId";
 import { canShareWithGuestAtom } from "../components/chat/guestShareAvailability";
 import { previewBridge } from "../components/preview/previewBridge";
-import { useDuetShell } from "../hooks/useDuetShell";
 import { useThreadActionMenu } from "../hooks/useThreadActionMenu";
 
 import { ProjectFavicon } from "../components/ProjectFavicon";
@@ -1734,10 +1733,9 @@ export function useLayoutTabLabel(tab: LayoutTab): {
     if (surfaceDraft) return scopeProjectRef(surfaceDraft.environmentId, surfaceDraft.projectId);
     return threadlessSurfacesProjectRef(surfaceThreadRef);
   })();
-  const isDuet = useDuetShell();
   const project = useProject(projectRef);
   if (isLayoutPageContent(tab.content)) {
-    const title = layoutPageTabTitle(tab.content.kind, messages, { duet: isDuet });
+    const title = layoutPageTabTitle(tab.content.kind, messages);
     const Icon =
       tab.content.kind === "settings"
         ? SettingsIcon

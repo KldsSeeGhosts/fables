@@ -48,7 +48,7 @@ function Trail(props: { readonly trail: DuetRowTrail; readonly tokens: DuetToken
           color: working ? tokens.workingText : tokens.needsInputText,
         }}
       >
-        {working ? gt("Working", { $context: "Captain state" }) : m(DUET_WAITING_LABELS[trail.on])}
+        {working ? gt("Working", { $context: "Duet state" }) : m(DUET_WAITING_LABELS[trail.on])}
       </Text>
     </View>
   );
@@ -118,7 +118,7 @@ export function DuetHomeSection(props: {
           >
             <SymbolView name="list.number" size={13} tintColor={tokens.pillForeground} />
             <Text className="font-t3-medium" style={{ fontSize: 13, color: tokens.pillForeground }}>
-              {gt("Tasks", { $context: "noun, a Captain's delegated tasks" })}
+              {gt("Tasks", { $context: "noun, a Duet's delegated tasks" })}
             </Text>
           </View>
         </Pressable>

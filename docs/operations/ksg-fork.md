@@ -21,7 +21,7 @@ distribution and stay stable across the rename.
   `out/MacUpdater.js` gives the ZIP to Electron's native updater. Squirrel.Mac
   matches the running bundle ID and verifies the signature. When the installed
   bundle's basename matches its executable name, ShipIt can rename the
-  destination to match the ZIP before replacing it. Keeping the ZIP's bundle
+  destination to match the new executable before replacing it. Keeping that
   name preserves the installed path and any shortcuts to it. A custom bundle
   name chosen by the user stays in place. See
   [SQRLUpdater.m](https://github.com/Squirrel/Squirrel.Mac/blob/fffea30e4a339a7f7d69a3391314b72548d209bd/Squirrel/SQRLUpdater.m)

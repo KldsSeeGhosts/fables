@@ -2799,7 +2799,7 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 
 const DESKTOP_PRODUCT_NAME = "Fables";
 // The macOS bundle, Windows executable, and Debian install path ship under this name.
-const DESKTOP_INSTALL_NAME = "KSG Code";
+export const DESKTOP_INSTALL_NAME = "KSG Code";
 
 // Personal builds use an external keychain without distribution provisioning
 // (see docs/operations/ksg-fork.md).

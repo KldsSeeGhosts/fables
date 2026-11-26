@@ -180,7 +180,7 @@ export function CaptainTasksSheet({ route }: StaticScreenProps<CaptainTasksParam
   });
   const single = route.params?.captainId !== undefined;
   const tokens = useDuetTokens();
-  const fallbackTitle = isDuet ? gt("Duet tasks") : gt("Captain tasks");
+  const fallbackTitle = gt("Duet tasks");
   const title = single
     ? (listed.flatMap(({ captains }) => captains)[0]?.name ?? fallbackTitle)
     : fallbackTitle;
@@ -199,7 +199,7 @@ export function CaptainTasksSheet({ route }: StaticScreenProps<CaptainTasksParam
     <View collapsable={false} className="flex-1 bg-sheet">
       <SheetHeader
         title={title}
-        subtitle={isDuet && single ? gt("Crew tasks") : undefined}
+        subtitle={isDuet && single ? gt("Solo tasks") : undefined}
         onClose={() => navigation.goBack()}
       />
       <ScreenContent>

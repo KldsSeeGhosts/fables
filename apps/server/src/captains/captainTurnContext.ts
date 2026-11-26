@@ -28,26 +28,26 @@ const prefix = (text: string, length: number) =>
 
 // The report policy decides whether finished crew wakes the Captain, so the waiting rule follows it.
 const crewWaitRule: Record<Captain["reportPolicy"], string> = {
-  react: "While crew works, end your turn and let completion wake you. Do not poll.",
+  react: "While Solos work, end your turn and let completion wake you. Do not poll.",
   context:
-    "While crew works, end your turn. Finished reports arrive with the user's next message, not as a wake-up. Do not poll.",
+    "While Solos work, end your turn. Finished reports arrive with the user's next message, not as a wake-up. Do not poll.",
   ignore:
-    "While crew works, end your turn. You are not told when crew finishes; check a task with `task_status` only when the user asks about it. Do not poll.",
+    "While Solos work, end your turn. You are not told when a Solo finishes; check a task with `task_status` only when the user asks about it. Do not poll.",
 };
 
 const coordinatorBriefing = (captain: Captain) => `How you work:
 - Answer quick questions and lookups yourself.
-- Delegate anything that edits code with \`delegate_task\` and \`isolation: "worktree"\`. In a project that tracks several repositories, pass \`repositories\` with the ones the child edits.
-- A worktree child gets its own copy of each repository. In the brief, name a repository by its folder name and files by their path inside it, never by your checkout's absolute paths.
-- Scale crew to the task: one child for one change, two to four for independent parallel work, none for a lookup.
+- Delegate anything that edits code with \`delegate_task\` and \`isolation: "worktree"\`. In a project that tracks several repositories, pass \`repositories\` with the ones the Solo edits.
+- A Solo in a worktree gets its own copy of each repository. In the brief, name a repository by its folder name and files by their path inside it, never by your checkout's absolute paths.
+- Choose how many Solos the task needs: one Solo for one change, two to four for independent parallel work, none for a lookup.
 - Every brief states the objective, the expected output, boundaries (files or areas it owns and must not touch), and a done-check (the command or observation that proves it is done).
 - ${crewWaitRule[captain.reportPolicy]}
-- Relay each result to the user as one line plus the task link. Do not paste crew output.
-- Questions a child asks the user stay in that child's thread.
-- When crew opens a PR you are responsible for, watch it with \`watch_pull_request\`.
+- Relay each result to the user as one line plus the task link. Do not paste Solo output.
+- Questions a Solo asks the user stay in that Solo's thread.
+- When a Solo opens a PR you are responsible for, watch it with \`watch_pull_request\`.
 - Settle or archive finished task threads with \`t3_thread_organize\` once relayed.
 - At the end of a substantial turn, keep NOTES.md current (plan, open loops, next step) with \`captain_document_write\`.
-- After reacting to crew results, rewrite the \`## New\` section of DIGEST.md with one line per result that needs the user.`;
+- After reacting to Solo results, rewrite the \`## New\` section of DIGEST.md with one line per result that needs the user.`;
 
 export const formatCaptainBriefing = (input: {
   readonly captain: Captain;
@@ -60,7 +60,7 @@ export const formatCaptainBriefing = (input: {
   const handoffSplit = splitCaptainHandoffSection(notes);
   const notesBody = handoffSplit.rest.trim();
   return [
-    `Captain profile: ${captain.name}${captain.role ? ` (${captain.role})` : ""}`,
+    `Duet profile: ${captain.name}${captain.role ? ` (${captain.role})` : ""}`,
     captain.instructions && `Instructions:\n${prefix(captain.instructions, 4_000)}`,
     captain.coordinatorOnly && coordinatorBriefing(captain),
     projects.length > 0
@@ -72,7 +72,7 @@ export const formatCaptainBriefing = (input: {
     handoffSplit.handoff &&
       `Conversation handoff:\n${prefix(handoffSplit.handoff, CAPTAIN_HANDOFF_MAX_LENGTH)}`,
     notesBody && `NOTES.md:\n${prefix(notesBody, 6_000)}`,
-    "Use captain_document_read and captain_memory_search to look up more Captain context.",
+    "Use captain_document_read and captain_memory_search to look up more Duet context.",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -127,7 +127,7 @@ export const formatCaptainReports = (
 
 export const formatCaptainCrewRules = (captain: Captain, crew: string) =>
   [
-    `Crew rules from Captain ${captain.name}:\n- Work only in your own working directory and the folders listed with it. If the brief gives a path in another checkout, use the matching folder in yours.\n- For multi-step work, keep a progress note in your worktree and commit after each step.\n- Run the focused tests or checks that prove the change, and report the evidence.\n- Do not report done until the done-check from your brief passes.\n- End your final message with a 2 to 4 sentence summary first, then details.\n- If you took a screenshot or made an image of the result, put the clearest one in that final message as a markdown image with its absolute path.`,
+    `Rules for Solos from Duet ${captain.name}:\n- Work only in your own working directory and the folders listed with it. If the brief gives a path in another checkout, use the matching folder in yours.\n- For multi-step work, keep a progress note in your worktree and commit after each step.\n- Run the focused tests or checks that prove the change, and report the evidence.\n- Do not report done until the done-check from your brief passes.\n- End your final message with a 2 to 4 sentence summary first, then details.\n- If you took a screenshot or made an image of the result, put the clearest one in that final message as a markdown image with its absolute path.`,
     crew.trim() === "" ? "" : `CREW.md:\n${prefix(crew, 2_000)}`,
   ]
     .filter((part) => part !== "")
@@ -153,10 +153,10 @@ export const formatCaptainContextPressure = (usage: {
 };
 
 const unchangedBriefing = (captain: Captain) =>
-  `Captain ${captain.name}: your profile, instructions, scope, essential memories, AGENTS.md, NOTES.md and how you work are unchanged since they were last given in this conversation. Use captain_read, captain_document_read and captain_memory_search if you need them again.`;
+  `Duet ${captain.name}: your profile, instructions, scope, essential memories, AGENTS.md, NOTES.md and how you work are unchanged since they were last given in this conversation. Use captain_read, captain_document_read and captain_memory_search if you need them again.`;
 
 const unchangedCrewRules = (captain: Captain) =>
-  `Captain ${captain.name}'s crew rules are unchanged since they were last given in this conversation.`;
+  `Duet ${captain.name}'s rules for Solos are unchanged since they were last given in this conversation.`;
 
 export interface CaptainTurnContext {
   readonly text: string;
@@ -324,9 +324,7 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
       };
     },
     Effect.catch((cause) =>
-      Effect.logWarning("Could not read Captain turn context.", { cause }).pipe(
-        Effect.as(NO_CONTEXT),
-      ),
+      Effect.logWarning("Could not read Duet turn context.", { cause }).pipe(Effect.as(NO_CONTEXT)),
     ),
   );
 });

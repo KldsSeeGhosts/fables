@@ -49,7 +49,6 @@ import {
   useSystemWorkspaceTabBar,
 } from "./useSystemWorkspaceTabBar";
 import { openSettings } from "../../settings/settings-navigation";
-import { useDuetShell } from "../../captains/useDuetShell";
 
 const TAB_TITLES = WORKSPACE_TAB_LABELS;
 
@@ -62,7 +61,6 @@ function WorkspaceRootTitle(props: {
   const { state, settingsOpen } = useWorkspaceTabs()!;
   const maxWidth = Math.max(0, props.columnWidth - (use(HeaderItemsWidthContext) ?? 160));
   const enabled = useEnabledNavigationTabs();
-  const isDuet = useDuetShell();
   const tabTitle = settingsOpen
     ? gt("Settings")
     : enabled.length
@@ -77,7 +75,7 @@ function WorkspaceRootTitle(props: {
           ) : (
             <CompactBrandTitle
               accessibilityLabel={gt("{product}, {title}", {
-                product: isDuet ? "KSG Duet" : "Fables",
+                product: "Fables",
                 title: tabTitle,
               })}
               fit

@@ -4,7 +4,6 @@ import { T, useGT } from "gt-react";
 import { CompassIcon } from "lucide-react";
 import { useState } from "react";
 
-import { useDuetShell } from "../../hooks/useDuetShell";
 import { workspaceAreaProps } from "../../lib/workspaceFocus";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { SettingsPaneHeader, SettingsTabNotch } from "../settings/SettingsTabNotch";
@@ -17,7 +16,6 @@ import { useOpenCaptainThread } from "./captainNavigation";
 /** The Captains home: what every Captain has waiting, running and finished, in one column. */
 export function CaptainsWorkspace() {
   const gt = useGT();
-  const isDuet = useDuetShell();
   const { environments, shells } = useCaptainsDirectory();
   const { destinations, destination } = useCaptainDestinations(usePrimaryEnvironmentId());
   const [creating, setCreating] = useState(false);
@@ -34,10 +32,12 @@ export function CaptainsWorkspace() {
       <div className="pane-mobile-chrome flex min-h-0 min-w-0 flex-1 flex-col">
         <SettingsPaneHeader transparent>
           <SettingsTabNotch
-            title={isDuet ? gt("Duets") : gt("Captains")}
+            title={gt("Duets")}
             icon={<CompassIcon aria-hidden className="size-3.5 shrink-0 text-foreground" />}
           >
-            <h1 className="truncate">{isDuet ? <T>Duets</T> : <T>Captains</T>}</h1>
+            <h1 className="truncate">
+              <T>Duets</T>
+            </h1>
           </SettingsTabNotch>
         </SettingsPaneHeader>
         <div className="@container/duets-page scrollbar-gutter-both min-h-0 min-w-0 flex-1 overflow-y-auto">

@@ -18,7 +18,7 @@ const failed = (error: CaptainError) =>
 const denied = () =>
   new OrchestratorMcpFailure({
     code: "capability_denied",
-    message: "This tool belongs to the active primary thread of a Captain.",
+    message: "This tool belongs to the active primary thread of a Duet.",
   });
 
 const callerCaptain = Effect.fn("CaptainService.callerCaptain")(function* (

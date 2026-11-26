@@ -180,7 +180,7 @@ it("lays out Duets, active work and a markdown brief, and opens cards in the con
   await expect
     .element(screen.getByRole("heading", { name: /^Good (morning|afternoon|evening)$/ }))
     .toBeVisible();
-  await expect.element(screen.getByText("1 Captain")).toBeVisible();
+  await expect.element(screen.getByText("1 Duet")).toBeVisible();
   await expect.element(screen.getByText("1 needs you")).toBeVisible();
   await expect.element(screen.getByText("Review release").nth(1)).toBeVisible();
   await expect.element(screen.getByText("Working").nth(1)).toBeVisible();

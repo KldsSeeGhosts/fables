@@ -1962,8 +1962,8 @@ function OpenCommandPaletteDialog(props: {
   actionItems.push({
     kind: "action",
     value: "action:captains",
-    searchTerms: ["captains", "captain", "brief"],
-    title: gt("Open Captains"),
+    searchTerms: ["duets", "duet", "brief"],
+    title: gt("Open Duets"),
     icon: <CompassIcon className={ITEM_ICON_CLASS} />,
     shortcutCommand: "captains.open",
     run: async () => {

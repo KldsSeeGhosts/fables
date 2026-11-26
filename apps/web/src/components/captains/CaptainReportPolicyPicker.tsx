@@ -1,7 +1,6 @@
 import { CaptainReportPolicy } from "@t3tools/contracts";
 import { useGT } from "gt-react";
 
-import { useDuetShell } from "../../hooks/useDuetShell";
 import { Radio, RadioGroup } from "../ui/radio-group";
 
 export function CaptainReportPolicyPicker({
@@ -16,19 +15,14 @@ export function CaptainReportPolicyPicker({
   onChange: (policy: CaptainReportPolicy) => void;
 }) {
   const gt = useGT();
-  const isDuet = useDuetShell();
   const labels = {
-    react: isDuet ? gt("Wake the Duet") : gt("Wake the Captain"),
+    react: gt("Wake the Duet"),
     context: gt("Include on its next turn"),
     ignore: gt("Don’t report back"),
   };
   const descriptions = {
-    react: isDuet
-      ? gt("A delegated task report can start a Duet turn.")
-      : gt("A delegated task report can start a Captain turn."),
-    context: isDuet
-      ? gt("Recent reports are included on the next Duet turn.")
-      : gt("Recent reports are included on the next Captain turn."),
+    react: gt("A delegated task report can start a Duet turn."),
+    context: gt("Recent reports are included on the next Duet turn."),
     ignore: gt("Reports stay in the delegated task’s history."),
   };
   return (

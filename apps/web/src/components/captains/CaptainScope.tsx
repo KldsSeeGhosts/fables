@@ -37,12 +37,12 @@ export function CaptainScope({
           isDuet ? (
             <T>Not limited to any project. This Duet works in a scratch folder.</T>
           ) : (
-            <T>Not limited to any project. The Captain works in a scratch folder.</T>
+            <T>Not limited to any project. The Duet works in a scratch folder.</T>
           )
         ) : isDuet ? (
           <T>This Duet can delegate work only to the selected projects.</T>
         ) : (
-          <T>The Captain can delegate work only to the selected projects.</T>
+          <T>The Duet can delegate work only to the selected projects.</T>
         )}
       </p>
       {choices.length > 0 ? (

@@ -708,7 +708,7 @@ it.effect(
             },
           }).pipe(Effect.map(({ text }) => text));
         const context = yield* read(captain.primaryThreadId);
-        assert.include(context, "Captain profile: Maria (Coordinator)");
+        assert.include(context, "Duet profile: Maria (Coordinator)");
         assert.include(context, "Workspace [project]");
         assert.include(context, "Always mention this");
         assert.include(context, "Notes are included");
@@ -808,7 +808,7 @@ it.effect(
         yield* firstCrew.delivered;
         const secondCrew = yield* readContext(crewThread, crewDelivery);
         assert.notInclude(secondCrew.text, "keep a progress note in your worktree");
-        assert.include(secondCrew.text, "crew rules are unchanged");
+        assert.include(secondCrew.text, "rules for Solos are unchanged");
 
         const noCustomCrew = yield* service.create({
           ...input,

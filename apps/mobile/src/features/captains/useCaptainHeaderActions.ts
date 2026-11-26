@@ -48,7 +48,7 @@ export function useCaptainHeaderActions(
         ? gt("Tasks, {count} waiting on you", { count: attention })
         : isDuet
           ? gt("Duet tasks")
-          : gt("Captain tasks"),
+          : gt("Duet tasks"),
     icon: attention > 0 ? "bell.badge" : "list.number",
     separateBackground: false,
     onPress: () => navigation.navigate("CaptainTasks", params),

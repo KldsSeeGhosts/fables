@@ -81,7 +81,6 @@ import {
 import { useTextGenerationTargets } from "../../textGenerators";
 import { ensureLocalApi, readLocalApi } from "../../localApi";
 import { isMacPlatform } from "../../lib/utils";
-import { useDuetShell } from "../../hooks/useDuetShell";
 import {
   useEnvironmentProviders,
   useEnvironments,
@@ -608,7 +607,7 @@ function useSettingsRestore(onRestored?: () => void) {
       ? [gt("Tool calls in chat")]
       : []),
     ...(settings.duetToolCallVisibility !== DEFAULT_UNIFIED_SETTINGS.duetToolCallVisibility
-      ? [gt("Tool calls in Captains and Duets")]
+      ? [gt("Tool calls in Duets")]
       : []),
     ...(settings.screenReaderAnnouncements !== DEFAULT_UNIFIED_SETTINGS.screenReaderAnnouncements
       ? [gt("Screen reader announcements")]
@@ -1594,31 +1593,18 @@ function DuetToolCallVisibilityRow() {
   const gt = useGT();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
-  const isDuetShell = useDuetShell();
-  const title = isDuetShell
-    ? gt("In Duets", { $context: "tool call visibility setting" })
-    : gt("In Captains", { $context: "tool call visibility setting" });
+  const title = gt("In Duets", { $context: "tool call visibility setting" });
   return (
     <SettingsRow
       {...setting("duet-tool-call-visibility")}
       title={title}
-      description={
-        isDuetShell
-          ? gt(
-              "Choose a different tool-call view for a Duet's current and earlier conversations. Crew and subagent threads keep the main setting.",
-            )
-          : gt(
-              "Choose a different tool-call view for a Captain's current and earlier conversations. Crew and subagent threads keep the main setting.",
-            )
-      }
+      description={gt(
+        "Choose a different tool-call view for a Duet's current and earlier conversations. Solo and other subagent threads keep the main setting.",
+      )}
       resetAction={
         settings.duetToolCallVisibility !== DEFAULT_UNIFIED_SETTINGS.duetToolCallVisibility ? (
           <SettingResetButton
-            ariaLabel={
-              isDuetShell
-                ? gt("Reset tool calls in Duets to default")
-                : gt("Reset tool calls in Captains to default")
-            }
+            ariaLabel={gt("Reset tool calls in Duets to default")}
             onClick={() =>
               updateSettings({
                 duetToolCallVisibility: DEFAULT_UNIFIED_SETTINGS.duetToolCallVisibility,
