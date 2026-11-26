@@ -1,6 +1,5 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
-  captainDocument,
   captainInboxItems,
   captainThreadActivity,
   type CaptainInboxItem,
@@ -9,18 +8,15 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/model
 import type { Captain, EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { T, useGT, useLocale } from "gt-react";
 import { GitForkIcon, MessageCircleQuestionIcon, PlusIcon, ShieldAlertIcon } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { useDuetShell } from "../../hooks/useDuetShell";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { useTimeOfDayGreeting } from "../chat/ChatHero";
-import ChatMarkdown from "../ChatMarkdown";
 import { Button, ContentButton } from "../ui/button";
 import { Text } from "../ui/text";
 import { ApprovalBoundaryCard } from "./ApprovalBoundaryCard";
 import { CaptainAvatar } from "./CaptainAvatar";
-import { captainDigestPreview } from "./CaptainDigest";
-import { captainDigestMarkdownExcerpt } from "@t3tools/client-runtime/state/captain-digest";
 import type { CaptainChannelEnvironment } from "./captainsDirectory";
 import {
   OverviewFinishedTaskRows,
@@ -29,7 +25,7 @@ import {
   OverviewTaskList,
   useOverviewRemoteTaskCounts,
 } from "./CaptainsOverviewTasks";
-import { useCaptains } from "./useCaptain";
+import { MorningBriefs } from "./MorningBriefs";
 
 /** Captains whose delegated tasks the page subscribes to; the rest show only local activity. */
 const DETAILED_CAPTAINS = 3;
@@ -204,111 +200,6 @@ function DuetOverviewCard({
   );
 }
 
-function DigestCard({
-  environmentId,
-  captain,
-  working,
-  onOpen,
-}: {
-  environmentId: EnvironmentId;
-  captain: Captain;
-  working: boolean;
-  onOpen: () => void;
-}) {
-  const gt = useGT();
-  const isDuet = useDuetShell();
-  const locale = useLocale();
-  const details = useCaptains(environmentId, captain.id);
-  const document = captainDocument(details.data, captain.id, "DIGEST.md");
-  const preview = captainDigestPreview(document);
-  const fullDigest = document?.content ?? "";
-  const excerpt = preview === "" ? null : captainDigestMarkdownExcerpt(fullDigest);
-  const [expanded, setExpanded] = useState(false);
-  const loading = details.data === null && details.error === null;
-  const dateLabel =
-    document && preview !== ""
-      ? new Intl.DateTimeFormat(locale, {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        }).format(new Date(document.updatedAt))
-      : null;
-  return (
-    <li className="grid min-w-0">
-      <article
-        data-duet-digest-card=""
-        className="overflow-hidden rounded-card border border-transparent surface-card-settings-rim"
-      >
-        <ContentButton
-          variant="card-row"
-          aria-label={gt("Open {name}'s conversation", { name: captain.name })}
-          onClick={onOpen}
-          className="w-full text-left"
-        >
-          <CaptainAvatar
-            avatar={captain.avatar}
-            size="header"
-            state={working ? "working" : "idle"}
-          />
-          <span className="grid min-w-0 flex-1">
-            <Text variant="label" truncate>
-              {captain.name}
-            </Text>
-            {captain.role ? (
-              <Text variant="meta" tone="muted" truncate>
-                {captain.role}
-              </Text>
-            ) : null}
-          </span>
-          {dateLabel ? (
-            <Text variant="meta" tone="muted" numeric>
-              {dateLabel}
-            </Text>
-          ) : null}
-        </ContentButton>
-        <div className={excerpt === null ? "px-4 pb-4" : "min-h-28 px-4 pb-4"}>
-          {excerpt !== null ? (
-            <>
-              <div data-duet-digest-preview="" className="min-h-0 overflow-hidden">
-                <ChatMarkdown
-                  text={expanded ? fullDigest : excerpt.markdown}
-                  cwd={undefined}
-                  environmentId={environmentId}
-                />
-              </div>
-              {excerpt.truncated ? (
-                <div className="pt-2">
-                  <Button
-                    type="button"
-                    variant="ghost-muted"
-                    size="xs"
-                    aria-expanded={expanded}
-                    onClick={() => setExpanded((open) => !open)}
-                  >
-                    {expanded ? <T>Show less</T> : <T>Show full brief</T>}
-                  </Button>
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <Text variant="body" tone="muted" render={<p />}>
-              {loading ? (
-                <T>Loading the brief…</T>
-              ) : details.error !== null ? (
-                <T>The brief could not be loaded.</T>
-              ) : isDuet ? (
-                <T>No brief yet. Turn on the morning brief in a Duet's Tasks → Scheduled.</T>
-              ) : (
-                <T>No brief yet. Turn on the morning brief in a Captain's Tasks → Scheduled.</T>
-              )}
-            </Text>
-          )}
-        </div>
-      </article>
-    </li>
-  );
-}
-
 /** What every Captain has waiting, running and recently done, in one editorial column. */
 export function CaptainsInbox({
   environments,
@@ -475,17 +366,7 @@ export function CaptainsInbox({
 
       <DuetSection title={<T>Morning briefs</T>}>
         {active.length > 0 ? (
-          <ul className="grid grid-cols-1 gap-3 @2xl:grid-cols-2">
-            {active.map(({ environmentId, captain, working }) => (
-              <DigestCard
-                key={`${environmentId}:${captain.id}`}
-                environmentId={environmentId}
-                captain={captain}
-                working={working}
-                onOpen={() => onOpenCaptain(environmentId, captain)}
-              />
-            ))}
-          </ul>
+          <MorningBriefs duets={active} now={now} onOpenCaptain={onOpenCaptain} />
         ) : (
           <Text variant="body" tone="muted" render={<p />}>
             {isDuet ? (
