@@ -95,14 +95,12 @@ describe("published upstream nightlies", () => {
     expect(upstreamMergePrompt("0.0.46-nightly.20261014.3132")).toContain(
       "published upstream nightly v0.0.46-nightly.20261014.3132 from pingdotgg/t3code",
     );
-    expect(upstreamMergePrompt("0.0.46-nightly.20261014.3132")).toContain(
-      "Follow the KSG fork rules and upstream sync procedure in AGENTS.md.",
-    );
-    expect(upstreamMergePrompt("0.0.46-nightly.20261014.3132")).toContain(
-      "Once the sync is complete and checks pass, push upstream, ksg/passthrough, and ksg/dev to origin to trigger a KSG release.",
-    );
-    expect(upstreamMergePrompt("0.0.46-nightly.20261014.3132")).toContain(
-      "Verify the release publishes successfully.",
-    );
+    const prompt = upstreamMergePrompt("0.0.46-nightly.20261014.3132");
+    expect(prompt).toContain("docs/operations/ksg-customization-inventory.md");
+    expect(prompt).toContain("git switch upstream && git merge --ff-only origin/upstream");
+    expect(prompt).toContain("git merge --no-edit ksg/passthrough");
+    expect(prompt).toContain("Never push, publish a release, or update a running device.");
+    expect(prompt).toContain("path | branch layer | resolution | evidence or check");
+    expect(prompt).toContain("Do not push unless the user explicitly approves in a later message.");
   });
 });
