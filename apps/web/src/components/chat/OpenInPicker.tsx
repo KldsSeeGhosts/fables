@@ -10,6 +10,7 @@ import {
 } from "@t3tools/contracts";
 import { T, useGT, useMessages, Var } from "gt-react";
 import { memo, use } from "react";
+import type { FileManagerAction } from "./OpenInPicker.logic";
 import { BackgroundThreadContext } from "./backgroundThread";
 import { shortcutLabelForCommand } from "../../keybindings";
 import { OPEN_FAVORITE_EDITOR_ATTRIBUTE } from "./OpenInPickerShortcut";
@@ -226,7 +227,7 @@ export const OpenInPicker = memo(function OpenInPicker({
   compact = false,
   enableShortcut = true,
   displayMode = "toolbar",
-  revealFileManager = false,
+  fileManagerAction = "open",
 }: {
   environmentId: EnvironmentId;
   keybindings: ResolvedKeybindingsConfig;
@@ -237,7 +238,7 @@ export const OpenInPicker = memo(function OpenInPicker({
   compact?: boolean;
   enableShortcut?: boolean;
   displayMode?: "toolbar" | "panel";
-  revealFileManager?: boolean;
+  fileManagerAction?: FileManagerAction;
 }) {
   const gt = useGT();
   const messages = useMessages();
@@ -257,11 +258,18 @@ export const OpenInPicker = memo(function OpenInPicker({
   // Remote editors run on the viewing machine; only desktop can probe that PATH.
   const effectiveEditors = remote.mode === "local-exec" ? availableEditors : remoteCapableEditors;
   const [preferredEditor, setPreferredEditor] = usePreferredEditor(effectiveEditors);
+  const isEditorUnavailable = (editor: EditorId | null) =>
+    editor === "file-manager" && fileManagerAction === "unavailable";
+  const canOpenPreferredEditor =
+    preferredEditor !== null &&
+    !!openInCwd &&
+    canOpenEditor &&
+    !isEditorUnavailable(preferredEditor);
 
   const openInEditor = async (editorId: EditorId | null): Promise<boolean> => {
     if (!openInCwd) return false;
     const editor = editorId ?? preferredEditor;
-    if (!editor) return false;
+    if (!editor || isEditorUnavailable(editor)) return false;
     if (remote.mode === "remote-unavailable") return false;
     if (remote.mode === "remote-links") {
       const url = buildRemoteOpenUrl({
@@ -285,7 +293,7 @@ export const OpenInPicker = memo(function OpenInPicker({
       input: {
         cwd: openInCwd,
         editor,
-        ...(revealFileManager && editor === "file-manager" ? { reveal: true } : {}),
+        ...(fileManagerAction === "reveal" && editor === "file-manager" ? { reveal: true } : {}),
       },
     });
     setPreferredEditor(editor);
@@ -341,7 +349,11 @@ export const OpenInPicker = memo(function OpenInPicker({
           {options.map(({ label, Icon, value, kind }) => (
             <MenuItem
               density={presentation === "menu" ? "touch" : "default"}
-              disabled={!openInCwd || !canOpenEditor}
+              disabled={
+                !openInCwd ||
+                !canOpenEditor ||
+                (presentation === "menu" && isEditorUnavailable(value))
+              }
               key={value}
               onClick={() => {
                 if (presentation === "menu") {
@@ -393,9 +405,8 @@ export const OpenInPicker = memo(function OpenInPicker({
       <>
         {primaryOption && (
           <MenuItem
-            density={presentation === "menu" ? "touch" : "default"}
-
-            disabled={!openInCwd || !canOpenEditor}
+            density="touch"
+            disabled={!canOpenPreferredEditor}
             onClick={() => openInEditor(preferredEditor)}
           >
             <primaryOption.Icon className={cn("size-4", getOpenInIconClass(primaryOption.kind))} />
@@ -435,7 +446,7 @@ export const OpenInPicker = memo(function OpenInPicker({
               <ThreadDetailsControl
                 part="icon"
                 aria-label={primaryLabel}
-                disabled={!preferredEditor || !openInCwd || !canOpenEditor}
+                disabled={!canOpenPreferredEditor}
                 {...(enableShortcut && (focused || related) && !backgroundThread
                   ? { [OPEN_FAVORITE_EDITOR_ATTRIBUTE]: "" }
                   : {})}
@@ -492,7 +503,7 @@ export const OpenInPicker = memo(function OpenInPicker({
               size={ghost ? "icon-sm" : "xs"}
               variant={ghost ? "ghost" : "secondary"}
               panel={false}
-              disabled={!preferredEditor || !openInCwd || !canOpenEditor}
+              disabled={!canOpenPreferredEditor}
               {...(enableShortcut && (focused || related) && !backgroundThread
                 ? { [OPEN_FAVORITE_EDITOR_ATTRIBUTE]: "" }
                 : {})}

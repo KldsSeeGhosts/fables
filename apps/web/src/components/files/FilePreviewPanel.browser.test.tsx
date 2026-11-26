@@ -1,11 +1,13 @@
 import { DEFAULT_THEMES, preloadHighlighter } from "@pierre/diffs";
 import { EnvironmentId, ThreadId, type ProjectReadFileResult } from "@t3tools/contracts";
+import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { StrictMode, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { cdp, page, userEvent } from "vite-plus/test/browser";
 import { act, fakeTimers, render } from "../../../test/render";
 import appCss from "~/index.css?inline";
+import { registerOpenFavoriteEditorCommand } from "~/components/chat/OpenInPickerShortcut";
 import { isMacPlatform } from "~/lib/utils";
 import {
   createWorkspaceFocusController,
@@ -23,6 +25,7 @@ const state = vi.hoisted(() => ({
   browserAssetMints: 0,
   openedBrowserUrls: [] as string[],
   serverConfig: null as unknown,
+  primaryEnvironmentId: null as EnvironmentId | null,
 }));
 
 vi.mock(import("@t3tools/client-runtime/state/runtime"), async (original) => ({
@@ -83,6 +86,7 @@ vi.mock(import("~/browser/previewRuntime"), async (original) => ({
 vi.mock(import("~/state/environments"), async (original) => ({
   ...(await original()),
   useEnvironmentHttpBaseUrl: () => "http://environment.test",
+  usePrimaryEnvironmentId: () => state.primaryEnvironmentId,
 }));
 vi.mock(import("~/state/assets"), async (original) => {
   const actual = await original();
@@ -183,6 +187,7 @@ function setup() {
   state.file = null;
   state.optimistic = null;
   state.serverConfig = Atom.make(null);
+  state.primaryEnvironmentId = null;
   state.assetUrl = { _tag: "Loading" };
   state.assetResources = [];
   state.openedBrowserUrls = [];
@@ -223,9 +228,9 @@ function filePreview(relativePath: string, workspaceMutationId: string | null = 
       relativePath={relativePath}
       threadRef={threadRef}
       composerDraftTarget={threadRef}
-      keybindings={[]}
-      availableEditors={[]}
-      openInShortcutEnabled={false}
+      keybindings={state.primaryEnvironmentId ? DEFAULT_RESOLVED_KEYBINDINGS : []}
+      availableEditors={state.primaryEnvironmentId ? ["file-manager"] : []}
+      openInShortcutEnabled={state.primaryEnvironmentId !== null}
       revealLine={null}
       revealRequestId={0}
       onOpenFile={vi.fn()}
@@ -237,6 +242,33 @@ function filePreview(relativePath: string, workspaceMutationId: string | null = 
     />
   );
 }
+
+it("waits for the file read before the favorite editor shortcut can reveal the file", async () => {
+  using _setup = setup();
+  state.primaryEnvironmentId = environmentId;
+  state.serverConfig = Atom.make({ shellRevealInFileManager: true });
+  using _shortcut = { [Symbol.dispose]: registerOpenFavoriteEditorCommand() };
+  await using screen = await render(filePreview("notes.txt"));
+  const openButton = screen.getByRole("button", { name: "Open file in preferred editor" });
+  const openFavorite = () =>
+    userEvent.keyboard(
+      isMacPlatform(navigator.platform) ? "{Meta>}o{/Meta}" : "{Control>}o{/Control}",
+    );
+
+  await expect.element(openButton).toBeDisabled();
+  await openFavorite();
+  expect(state.writeFile).not.toHaveBeenCalled();
+
+  await screen.rerender(markdownPreview(false, "Notes", "notes.txt"));
+  await expect.element(openButton).toBeEnabled();
+  await openFavorite();
+  await vi.waitFor(() =>
+    expect(state.writeFile).toHaveBeenCalledExactlyOnceWith({
+      environmentId,
+      input: { cwd: "/workspace/notes.txt", editor: "file-manager", reveal: true },
+    }),
+  );
+});
 
 function documentPreview(workspaceMutationId: string, fileRevision: string) {
   state.file = null;

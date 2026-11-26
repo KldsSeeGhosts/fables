@@ -98,11 +98,7 @@ async function setup() {
   const _openFavorite = { [Symbol.dispose]: registerOpenFavoriteEditorCommand() };
   stack.use(_openFavorite);
   const screen = stack.use(await renderUi(null));
-  async function renderPicker(
-    availableEditors: readonly EditorId[] = editors,
-    panel = false,
-    { openInCwd = "/work/project", revealFileManager = false } = {},
-  ) {
+  async function renderPicker(availableEditors: readonly EditorId[] = editors, panel = false) {
     await act(async () => {
       for (const listener of state.listeners) listener();
       const node = (
@@ -110,8 +106,7 @@ async function setup() {
           environmentId={selected}
           keybindings={DEFAULT_RESOLVED_KEYBINDINGS}
           availableEditors={availableEditors}
-          openInCwd={openInCwd}
-          revealFileManager={revealFileManager}
+          openInCwd="/work/project"
           displayMode={panel ? "panel" : "toolbar"}
           compact={!panel}
         />
