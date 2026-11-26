@@ -354,6 +354,7 @@ const layerCaptainProvided = CaptainService.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
       CaptainStore.layer,
+      layerEventSink,
       layerThreadManagementProvided,
       layerThreadLaunchProvided,
       layerManagedProjectFoldersProvided,
@@ -365,7 +366,7 @@ const layerCaptainProvided = CaptainService.layer.pipe(
 const layerCaptainRolloverWorkerProvided = CaptainRolloverWorker.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
-      layerEventSink,
+      ThreadCommandExecutor.layer,
       layerCaptainProvided,
       CaptainStore.layer,
       layerThreadManagementProvided,

@@ -4,13 +4,25 @@ import {
   CaptainDocumentName,
   CaptainError,
   CaptainMemory,
+  ChatAttachment,
+  CommandId,
+  MessageId,
+  ModelSelection,
+  OrchestrationMessageContext,
+  OrchestrationV2Actor,
+  OrchestrationV2CreationSource,
+  OrchestrationV2LinkedSender,
+  ProjectId,
+  ScheduledTaskId,
+  ThreadId,
+  type ProviderThreadId,
+  type RunId,
   type CaptainDeleteMemoryInput,
   type CaptainId,
   type CaptainSnapshot,
   type CaptainSubscribeInput,
   type CaptainUpdateDocumentInput,
   type CaptainUpsertMemoryInput,
-  type ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -29,6 +41,29 @@ const CaptainRow = Schema.Struct({
   scopedProjectIds: Schema.fromJsonString(Captain.fields.scopedProjectIds),
   coordinatorOnly: Schema.BooleanFromBit,
 });
+const RolloverResendJson = Schema.fromJsonString(
+  Schema.Struct({
+    projectId: ProjectId,
+    commandId: CommandId,
+    threadId: ThreadId,
+    messageId: MessageId,
+    text: Schema.String,
+    attachments: Schema.Array(ChatAttachment),
+    context: Schema.optionalKey(OrchestrationMessageContext),
+    mode: Schema.Literal("queue"),
+    modelSelection: Schema.optionalKey(ModelSelection),
+    freshContext: Schema.optionalKey(Schema.Boolean),
+    outputSchema: Schema.optionalKey(Schema.Record(Schema.String, Schema.Json)),
+    createdBy: OrchestrationV2Actor,
+    creationSource: OrchestrationV2CreationSource,
+    scheduledTaskId: Schema.optionalKey(ScheduledTaskId),
+    senderThreadId: Schema.optionalKey(ThreadId),
+    linkedSender: Schema.optionalKey(OrchestrationV2LinkedSender),
+  }),
+);
+const encodeRolloverResend = Schema.encodeEffect(RolloverResendJson);
+const decodeRolloverResend = Schema.decodeUnknownEffect(RolloverResendJson);
+
 const MemoryRow = Schema.Struct({
   ...CaptainMemory.fields,
   essential: Schema.BooleanFromBit,
@@ -137,6 +172,48 @@ const make = Effect.gen(function* () {
         updated_at = excluded.updated_at, archived_at = excluded.archived_at
     `;
     return captain;
+  }, Effect.catch(captainUnavailable));
+
+  const latestCompletedCompactionAt = Effect.fn("CaptainStore.latestCompletedCompactionAt")(
+    function* (threadId: ThreadId, providerThreadId: ProviderThreadId) {
+      const [row] = yield* sql<{ readonly completedAt: string }>`
+        SELECT COALESCE(json_extract(payload_json, '$.completedAt'), updated_at) AS completedAt
+        FROM orchestration_v2_projection_turn_items
+        WHERE thread_id = ${threadId} AND type = 'compaction' AND status = 'completed'
+          AND provider_thread_id = ${providerThreadId}
+        ORDER BY completedAt DESC LIMIT 1
+      `;
+      return row?.completedAt;
+    },
+    Effect.catch(captainUnavailable),
+  );
+
+  const saveRolloverResend = Effect.fn("CaptainStore.saveRolloverResend")(function* (
+    runId: RunId,
+    send: typeof RolloverResendJson.Type,
+  ) {
+    const payload = yield* encodeRolloverResend(send);
+    yield* sql`
+        INSERT INTO captain_rollover_resends (command_id, source_run_id, thread_id, payload_json)
+        VALUES (${send.commandId}, ${runId}, ${send.threadId}, ${payload})
+      `;
+  }, Effect.catch(captainUnavailable));
+
+  const pendingRolloverResends = Effect.fn("CaptainStore.pendingRolloverResends")(function* (
+    threadId?: ThreadId,
+  ) {
+    const rows = yield* sql<{ readonly payload: string }>`
+        SELECT payload_json AS payload FROM captain_rollover_resends
+        ${threadId === undefined ? sql`` : sql`WHERE thread_id = ${threadId}`}
+        ORDER BY id
+      `;
+    return yield* Effect.forEach(rows, (row) => decodeRolloverResend(row.payload));
+  }, Effect.catch(captainUnavailable));
+
+  const clearRolloverResend = Effect.fn("CaptainStore.clearRolloverResend")(function* (
+    commandId: CommandId,
+  ) {
+    yield* sql`DELETE FROM captain_rollover_resends WHERE command_id = ${commandId}`;
   }, Effect.catch(captainUnavailable));
 
   const remove = Effect.fn("CaptainStore.remove")(function* (id: CaptainId) {
@@ -325,6 +402,10 @@ const make = Effect.gen(function* () {
     find,
     requireCaptain,
     save,
+    latestCompletedCompactionAt,
+    saveRolloverResend,
+    pendingRolloverResends,
+    clearRolloverResend,
     remove,
     document,
     listMemories,

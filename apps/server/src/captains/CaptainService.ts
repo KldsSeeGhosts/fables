@@ -2,6 +2,7 @@ import {
   CaptainError,
   captainPrimaryThreadId,
   CommandId,
+  EventId,
   type ThreadId,
   type CaptainCreateInput,
   type CaptainId,
@@ -19,6 +20,11 @@ import * as Option from "effect/Option";
 import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/sql/SqlClient";
 
+import * as EventSink from "../orchestration-v2/EventSink.ts";
+import {
+  queuedRunCancellationEvents,
+  queuedRunsInDeliveryOrder,
+} from "../orchestration-v2/QueuedRunOrder.ts";
 import * as ThreadCommandExecutor from "../orchestration-v2/ThreadCommandExecutor.ts";
 import * as ThreadLaunch from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
@@ -27,7 +33,11 @@ import * as ProjectService from "../project/ProjectService.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as CaptainHandoff from "./captainHandoff.ts";
 import * as CaptainStore from "./CaptainStore.ts";
-import { hasActiveCaptainCrew } from "./captainRollover.ts";
+import {
+  hasUnsettledCaptainCrew,
+  rolloverSendInput,
+  type CaptainImmediateRollover,
+} from "./captainRollover.ts";
 
 const invalid = (message: string) => new CaptainError({ code: "invalid_request", message });
 const timestamp = Effect.map(DateTime.now, DateTime.formatIso);
@@ -41,6 +51,7 @@ const RESET_BLOCKING_RUN_STATUSES = [
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+  const eventSink = yield* EventSink.EventSinkV2;
   const store = yield* CaptainStore.CaptainStore;
   const threads = yield* ThreadManagement.ThreadManagementService;
   const threadCommands = yield* ThreadCommandExecutor.ThreadCommandExecutor;
@@ -180,6 +191,7 @@ const make = Effect.gen(function* () {
   const requireQuietConversation = Effect.fn("CaptainService.requireQuietConversation")(function* (
     threadId: ThreadId,
     waitForCrew: boolean,
+    moveQueue: boolean,
   ) {
     const shell = yield* threads
       .getThreadShell(threadId)
@@ -192,23 +204,24 @@ const make = Effect.gen(function* () {
       })
       .pipe(Effect.catch(CaptainStore.captainUnavailable));
     if (
-      records.runs.some((run) =>
-        (RESET_BLOCKING_RUN_STATUSES as ReadonlyArray<OrchestrationV2Run["status"]>).includes(
-          run.status,
-        ),
+      records.runs.some(
+        (run) =>
+          (RESET_BLOCKING_RUN_STATUSES as ReadonlyArray<OrchestrationV2Run["status"]>).includes(
+            run.status,
+          ) && !(moveQueue && run.status === "queued"),
       )
     )
       return yield* invalid(
         "The Captain is still working. Stop or wait for the current turn before resetting.",
       );
-    if (waitForCrew && hasActiveCaptainCrew(records.subagents)) {
+    if (waitForCrew && hasUnsettledCaptainCrew(records.subagents)) {
       return yield* invalid("The Captain still has active delegated tasks.");
     }
-    return records.thread;
+    return records;
   });
 
   const resetConversation = Effect.fn("CaptainService.resetConversation")(
-    function* (input: CaptainResetInput) {
+    function* (input: CaptainResetInput, immediate?: CaptainImmediateRollover) {
       const current = yield* store.requireCaptain(input.captainId);
       const { primaryThreadId: previousId } = current;
       if (input.expectedThreadId !== previousId) {
@@ -227,10 +240,39 @@ const make = Effect.gen(function* () {
       const { captain, handoff } = yield* threadCommands.withLock(
         previousId,
         Effect.gen(function* () {
-          const previous = yield* requireQuietConversation(
+          const { thread: previous, runs } = yield* requireQuietConversation(
             previousId,
             input.reason === "threshold",
+            immediate !== undefined,
           );
+          const queuedRuns =
+            immediate === undefined ? [] : runs.filter((run) => run.status === "queued");
+          const queue =
+            queuedRuns.length === 0
+              ? undefined
+              : yield* threads
+                  .getThreadRecords(previousId, ["messages", "attempts", "nodes"], {
+                    messageIds: queuedRuns.map((run) => run.userMessageId),
+                    attemptIds: queuedRuns.flatMap((run) =>
+                      run.activeAttemptId === null ? [] : [run.activeAttemptId],
+                    ),
+                    nodeIds: queuedRuns.flatMap((run) =>
+                      run.rootNodeId === null ? [] : [run.rootNodeId],
+                    ),
+                  })
+                  .pipe(Effect.catch(CaptainStore.captainUnavailable));
+          const queuedMessages = new Map(queue?.messages.map((message) => [message.id, message]));
+          const moves = queuedRunsInDeliveryOrder({
+            runs: queuedRuns,
+            messages: queue?.messages ?? [],
+          }).flatMap((run) => {
+            const message = queuedMessages.get(run.userMessageId);
+            return message?.role === "user" &&
+              message.delegatedCompletion === undefined &&
+              message.notification === undefined
+              ? [{ run, message }]
+              : [];
+          });
           // Read before the reset moves scheduled tasks; NOTES.md changes only once the reset commits.
           const handoff = yield* CaptainHandoff.prepare({
             captain: current,
@@ -247,25 +289,63 @@ const make = Effect.gen(function* () {
           );
           yield* createPrimaryThread(primaryThreadId, previous.projectId, current.name, previous);
 
-          const captain = yield* sql
-            .withTransaction(
-              Effect.gen(function* () {
-                yield* schedules
-                  .rebindThreadTasks(previousId, primaryThreadId)
-                  .pipe(Effect.catch(CaptainStore.captainUnavailable));
-                return yield* store.save({
-                  ...current,
+          const commitReset = Effect.gen(function* () {
+            yield* schedules
+              .rebindThreadTasks(previousId, primaryThreadId)
+              .pipe(Effect.catch(CaptainStore.captainUnavailable));
+            if (immediate?.failedMessage !== undefined) {
+              yield* store.saveRolloverResend(
+                immediate.run.id,
+                rolloverSendInput(
                   primaryThreadId,
-                  earlierThreadIds: [previousId, ...current.earlierThreadIds],
-                  earlierThreadEndReasons: [
-                    input.reason ?? "manual",
-                    ...(current.earlierThreadEndReasons ?? []),
-                  ],
-                  updatedAt: yield* timestamp,
-                });
-              }),
-            )
-            .pipe(Effect.catchTags({ SqlError: CaptainStore.captainUnavailable }));
+                  previous.projectId,
+                  immediate.failedMessage,
+                  immediate.run,
+                  true,
+                ),
+              );
+            }
+            for (const { run, message } of moves) {
+              yield* store.saveRolloverResend(
+                run.id,
+                rolloverSendInput(primaryThreadId, previous.projectId, message, run, false),
+              );
+            }
+            const now = yield* DateTime.now;
+            if (queue !== undefined && moves.length > 0) {
+              // Queue cancellation and pending sends commit together before the old thread can run them.
+              yield* eventSink
+                .write({
+                  events: moves.flatMap(({ run }) =>
+                    queuedRunCancellationEvents(queue, run, now).map((event, index) => ({
+                      ...event,
+                      id: EventId.make(`captain-rollover-cancel:${run.id}:${index}`),
+                    })),
+                  ),
+                })
+                .pipe(Effect.catch(CaptainStore.captainUnavailable));
+            }
+            return yield* store.save({
+              ...current,
+              primaryThreadId,
+              earlierThreadIds: [previousId, ...current.earlierThreadIds],
+              earlierThreadEndReasons: [
+                input.reason ?? "manual",
+                ...(current.earlierThreadEndReasons ?? []),
+              ],
+              updatedAt: DateTime.formatIso(now),
+            });
+          });
+          const captain = yield* moves.length === 0
+            ? sql
+                .withTransaction(commitReset)
+                .pipe(Effect.catchTags({ SqlError: CaptainStore.captainUnavailable }))
+            : eventSink.withProviderBatch(commitReset).pipe(
+                Effect.catchTags({
+                  EventSinkWriteError: CaptainStore.captainUnavailable,
+                  EventSinkStreamError: CaptainStore.captainUnavailable,
+                }),
+              );
           return { captain, handoff };
         }),
       );

@@ -1,4 +1,8 @@
-import type { OrchestrationV2Run, OrchestrationV2ThreadProjection } from "@t3tools/contracts";
+import type {
+  OrchestrationV2DomainEvent,
+  OrchestrationV2Run,
+  OrchestrationV2ThreadProjection,
+} from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 
 export function isAutomaticCompletionRun(
@@ -48,4 +52,55 @@ export function queuedRunsInDeliveryOrder(
       messageIndex += 1;
     }
   }
+}
+
+type WithoutEventId<Event> = Event extends OrchestrationV2DomainEvent ? Omit<Event, "id"> : never;
+type QueueCancellationEvent = WithoutEventId<
+  Extract<
+    OrchestrationV2DomainEvent,
+    { type: "run.updated" | "run-attempt.updated" | "node.updated" }
+  >
+>;
+
+export function queuedRunCancellationEvents(
+  projection: Pick<OrchestrationV2ThreadProjection, "nodes" | "attempts">,
+  run: OrchestrationV2Run,
+  now: DateTime.Utc,
+): ReadonlyArray<QueueCancellationEvent> {
+  const rootNode = projection.nodes.find((node) => node.id === run.rootNodeId);
+  const attempt = projection.attempts.find((candidate) => candidate.id === run.activeAttemptId);
+  const events: Array<QueueCancellationEvent> = [
+    {
+      type: "run.updated",
+      threadId: run.threadId,
+      runId: run.id,
+      ...(run.rootNodeId === null ? {} : { nodeId: run.rootNodeId }),
+      providerInstanceId: run.providerInstanceId,
+      occurredAt: now,
+      payload: { ...run, status: "cancelled", queuePosition: null, completedAt: now },
+    },
+  ];
+  if (attempt !== undefined && rootNode !== undefined) {
+    events.push({
+      type: "run-attempt.updated",
+      threadId: run.threadId,
+      runId: run.id,
+      nodeId: rootNode.id,
+      providerInstanceId: run.providerInstanceId,
+      occurredAt: now,
+      payload: { ...attempt, status: "cancelled", completedAt: now },
+    });
+  }
+  if (rootNode !== undefined) {
+    events.push({
+      type: "node.updated",
+      threadId: run.threadId,
+      runId: run.id,
+      nodeId: rootNode.id,
+      providerInstanceId: run.providerInstanceId,
+      occurredAt: now,
+      payload: { ...rootNode, status: "cancelled", completedAt: now },
+    });
+  }
+  return events;
 }

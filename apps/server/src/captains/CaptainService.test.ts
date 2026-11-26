@@ -19,6 +19,7 @@ import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
 
+import * as EventSink from "../orchestration-v2/EventSink.ts";
 import * as ThreadCommandExecutor from "../orchestration-v2/ThreadCommandExecutor.ts";
 import {
   type ThreadLaunchInput,
@@ -64,6 +65,7 @@ const fixture = ({ scratchUnavailable = false } = {}) => {
   const dependencies = Layer.mergeAll(
     CaptainStore.layer,
     ThreadCommandExecutor.layer,
+    Layer.mock(EventSink.EventSinkV2)({}),
     Layer.mock(ThreadLaunchService)({
       launch: (input) =>
         Effect.sync(() => {
@@ -88,6 +90,7 @@ const fixture = ({ scratchUnavailable = false } = {}) => {
             id,
           },
           runs: runOverrides.get(id) ?? [],
+          subagents: [],
         })) as never,
     }),
     Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
