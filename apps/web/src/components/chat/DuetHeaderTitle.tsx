@@ -2,7 +2,7 @@
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import type { Captain, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { T, useGT } from "gt-react";
-import { ChevronDownIcon, LayersIcon, SquareTerminal, XIcon } from "lucide-react";
+import { SquareTerminal } from "lucide-react";
 import type {
   FocusEvent as ReactFocusEvent,
   KeyboardEvent as ReactKeyboardEvent,
@@ -12,22 +12,11 @@ import type {
 } from "react";
 
 import { type LayoutTab, THREAD_TERMINAL_SURFACE_ID } from "../../layout/layoutModel";
-import { closeLayoutTabByUser } from "../../layout/layoutActions";
 import { beginLayoutContentDrag } from "../../layout/layoutDrag";
-import { useLayoutStore } from "../../layout/layoutStore";
-import { useLayoutTabLabel } from "../../layout/PaneTabs";
+import { LayoutPaneTab, LayoutPaneTabStrip } from "../../layout/PaneTabs";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { CaptainAvatar } from "../captains/CaptainAvatar";
-import {
-  Menu,
-  MenuGroup,
-  MenuGroupLabel,
-  MenuItem,
-  MenuItemLabel,
-  MenuPopup,
-  MenuTrigger,
-} from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
@@ -82,79 +71,6 @@ function TitleButton({
   );
 }
 
-function PaneTabMenuItem({ tab }: { tab: LayoutTab }) {
-  const gt = useGT();
-  const { icon, title, tooltip } = useLayoutTabLabel(tab);
-  return (
-    <MenuItem
-      closeOnClick
-      onClick={() => useLayoutStore.getState().focusTab(tab.id)}
-      className="group/duet-pane-tab"
-    >
-      {icon}
-      <MenuItemLabel title={tooltip}>{title}</MenuItemLabel>
-      <button
-        type="button"
-        aria-label={gt("Close {title}", { title })}
-        className="ms-auto flex size-5 shrink-0 items-center justify-center rounded-kbd text-muted-foreground opacity-0 transition-opacity hover:surface-ghost-hover hover:text-foreground focus-visible:opacity-100 group-data-highlighted/duet-pane-tab:opacity-100"
-        onClick={(event) => {
-          event.stopPropagation();
-          closeLayoutTabByUser(tab.id);
-        }}
-      >
-        <XIcon aria-hidden className="size-3" />
-      </button>
-    </MenuItem>
-  );
-}
-
-function DuetPaneTabsMenu({
-  before,
-  after,
-  compactIcon = false,
-}: {
-  before: readonly LayoutTab[];
-  after: readonly LayoutTab[];
-  compactIcon?: boolean;
-}) {
-  const gt = useGT();
-  const tabs = [...before, ...after];
-  if (tabs.length === 0) return null;
-  return (
-    <Menu>
-      <MenuTrigger
-        render={
-          <button
-            type="button"
-            aria-label={gt("Show tabs in this pane")}
-            data-thread-title-chevron
-            className="flex size-5 shrink-0 items-center justify-center rounded-badge text-muted-foreground outline-none [-webkit-app-region:no-drag] hover:surface-ghost-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          >
-            {compactIcon ? (
-              <LayersIcon aria-hidden className="size-3.5" />
-            ) : (
-              <ChevronDownIcon aria-hidden className="size-3" />
-            )}
-          </button>
-        }
-      />
-      <MenuPopup align="start" width="wide">
-        <MenuGroup>
-          <MenuGroupLabel>
-            <T>In this pane</T>
-          </MenuGroupLabel>
-          {before.map((tab) => (
-            <PaneTabMenuItem key={tab.id} tab={tab} />
-          ))}
-          {after.map((tab) => (
-            <PaneTabMenuItem key={tab.id} tab={tab} />
-          ))}
-        </MenuGroup>
-      </MenuPopup>
-    </Menu>
-  );
-}
-
 function HiddenTerminalPill({
   hiddenTerminal,
   environmentId,
@@ -198,7 +114,7 @@ function HiddenTerminalPill({
   );
 }
 
-/** Tabless Duet title. It keeps tab drag/rename affordances while looking like a simple title. */
+/** Duet keeps the active title and shows switchable tabs beside it when the pane has any. */
 export function DuetHeaderTitle({
   captain,
   customTitle = null,
@@ -242,6 +158,7 @@ export function DuetHeaderTitle({
   onRenameKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => void;
 }) {
   const gt = useGT();
+  const tabs = [...siblingTabs.before, ...siblingTabs.after];
   return (
     <div className="flex min-w-0 items-center gap-1">
       {parentThreadLink ? (
@@ -285,26 +202,26 @@ export function DuetHeaderTitle({
           />
         </div>
       ) : (
-        <>
-          {customTitle ?? (
-            <TitleButton
-              captain={captain}
-              project={project}
-              title={title}
-              layoutTabId={layoutTabId}
-              onPointerDown={onPointerDown}
-              onAuxClick={onAuxClick}
-              onDoubleClick={onDoubleClick}
-              onClick={onClick}
-            />
-          )}
-          <DuetPaneTabsMenu
-            before={siblingTabs.before}
-            after={siblingTabs.after}
-            compactIcon={customTitle !== null}
+        (customTitle ?? (
+          <TitleButton
+            captain={captain}
+            project={project}
+            title={title}
+            layoutTabId={layoutTabId}
+            onPointerDown={onPointerDown}
+            onAuxClick={onAuxClick}
+            onDoubleClick={onDoubleClick}
+            onClick={onClick}
           />
-        </>
+        ))
       )}
+      {tabs.length > 0 ? (
+        <LayoutPaneTabStrip>
+          {tabs.map((tab) => (
+            <LayoutPaneTab key={tab.id} tab={tab} />
+          ))}
+        </LayoutPaneTabStrip>
+      ) : null}
       {hiddenTerminal ? (
         <HiddenTerminalPill
           hiddenTerminal={hiddenTerminal}

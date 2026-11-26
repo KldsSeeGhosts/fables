@@ -1,7 +1,7 @@
 /** Layout functions stay pure and preserve identity on no-ops. Scoped tab keys permit multiple
  * environments; cameraWidth keeps long strips from reflowing. */
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import { isCaptainThreadId, type ScopedThreadRef } from "@t3tools/contracts";
 
 import type { ThreadRouteTarget } from "../threadRoutes";
 import type { LayoutNewTabPosition, LayoutWhenNoRoom } from "./layoutBehavior";
@@ -1526,11 +1526,33 @@ export function showLayoutContent(state: LayoutState, content: LayoutTabContent)
   return placeLayoutGhost(state, anchor.pane.id, tab.id, content, null);
 }
 
-/**
- * Duet's single-focus navigation: an ordinary sidebar route takes over the focused pane's
- * active tab instead of leaving the previous chat or page behind as a ghost sibling.
- * Explicit tab creation still goes through openLayoutTab placements.
- */
+function isDuetChat(content: LayoutTabContent): boolean {
+  return (
+    content.kind === "chat" &&
+    content.target.kind === "server" &&
+    isCaptainThreadId(content.target.threadRef.threadId)
+  );
+}
+
+/** A Duet closes abandoned sidebar previews when it comes back into view. */
+export function pruneInactiveDuetPreviews(state: LayoutState): LayoutState {
+  return mapPanes(state, (pane) => {
+    if (pane.tabs.length < 2) return pane;
+    const active = pane.tabs.find((tab) => tab.id === pane.activeTabId);
+    if (!active || !isDuetChat(active.content)) return pane;
+    const tabs = pane.tabs.filter(
+      (tab) =>
+        tab === active ||
+        tab.ghostOf !== null ||
+        tab.content.kind !== "chat" ||
+        tab.content.target.kind !== "server" ||
+        isDuetChat(tab.content),
+    );
+    return tabs.length === pane.tabs.length ? pane : { ...pane, tabs };
+  });
+}
+
+/** Duet navigation reuses the active tab, with a temporary tab for browsing away from a Duet. */
 export function replaceFocusedLayoutContent(
   state: LayoutState,
   content: LayoutTabContent,
@@ -1546,6 +1568,14 @@ export function replaceFocusedLayoutContent(
       workspace.columns.length,
       createColumn(createPane(createLayoutTab(content))),
     );
+  }
+  if (content.kind === "chat" && !isDuetChat(content)) {
+    if (isDuetChat(anchor.tab.content)) {
+      return showLayoutContent(keepLayoutTab(state, anchor.tab.id), content);
+    }
+    if (isLayoutGhostTab(anchor.tab) && anchor.pane.tabs.some((tab) => isDuetChat(tab.content))) {
+      return showLayoutContent(state, content);
+    }
   }
   const replaced = replaceLayoutTabContent(state, anchor.tab.id, content);
   const unghosted = mapPanes(replaced, (pane) => ({
