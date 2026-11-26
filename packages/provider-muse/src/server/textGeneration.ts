@@ -30,6 +30,7 @@ import {
 } from "@t3tools/provider-core/server/textGenerationOperations";
 import {
   buildBranchNamePrompt,
+  buildBriefTextPrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
@@ -392,6 +393,15 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
         modelSelection: input.modelSelection,
       });
     });
+  const generateBriefText: ProviderTextGeneration["generateBriefText"] = Effect.fn(
+    "MuseTextGeneration.generateBriefText",
+  )(function* (input) {
+    return yield* runMuseJson({
+      operation: "generateBriefText",
+      ...buildBriefTextPrompt(input.prompt),
+      modelSelection: input.modelSelection,
+    });
+  });
   const generateReviewGuide: ProviderTextGeneration["generateReviewGuide"] = () =>
     Effect.fail(investigationUnsupported("generateReviewGuide", "Muse Code"));
   return {
@@ -400,6 +410,7 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
     generateBranchName,
     generateThreadTitle,
     generateReviewGuide,
+    generateBriefText,
     generateTranscriptionPostProcessing,
   } satisfies ProviderTextGeneration;
 });

@@ -8,6 +8,7 @@ import { extractJsonObject } from "@t3tools/shared/schemaJson";
 import type { ProviderTextGeneration } from "./textGeneration.ts";
 import {
   buildBranchNamePrompt,
+  buildBriefTextPrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
   buildReviewGuidePrompt,
@@ -178,6 +179,17 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
     };
   });
 
+  const generateBriefText: ProviderTextGeneration["generateBriefText"] = Effect.fn(
+    `${name}.generateBriefText`,
+  )(function* (input) {
+    return yield* run({
+      operation: "generateBriefText",
+      cwd: input.cwd,
+      ...buildBriefTextPrompt(input.prompt),
+      modelSelection: input.modelSelection,
+    });
+  });
+
   const generateTranscriptionPostProcessing: ProviderTextGeneration["generateTranscriptionPostProcessing"] =
     Effect.fn(`${name}.generateTranscriptionPostProcessing`)(function* (input) {
       return yield* run({
@@ -207,6 +219,7 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
     generateBranchName,
     generateThreadTitle,
     generateReviewGuide,
+    generateBriefText,
     generateTranscriptionPostProcessing,
   } satisfies ProviderTextGeneration;
 }

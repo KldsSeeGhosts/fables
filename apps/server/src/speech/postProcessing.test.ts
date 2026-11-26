@@ -22,6 +22,7 @@ it.effect("cleanup pinned to a provider that cannot generate text uses the text 
     const layer = SpeechPostProcessing.layer.pipe(
       Layer.provide(
         Layer.succeed(TextGeneration.TextGeneration, {
+          generateBriefText: () => Effect.die("unused"),
           generateTranscriptionPostProcessing: (input: { modelSelection: ModelSelection }) =>
             Ref.set(used, input.modelSelection).pipe(Effect.as({ transcription: "Hello, world." })),
         } as unknown as TextGeneration.TextGeneration["Service"]),

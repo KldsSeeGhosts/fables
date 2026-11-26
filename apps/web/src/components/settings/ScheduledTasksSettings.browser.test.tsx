@@ -368,6 +368,18 @@ describe("ScheduledTasksSettings", () => {
       .toBeDisabled();
   });
 
+  it("shows the current brief model for a migrated morning brief", async () => {
+    setupEffortTask();
+    state.tasks = [{ ...task, kind: "captain_morning_brief" }];
+    state.settings = {
+      ...state.settings,
+      briefModelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "plain" },
+    };
+    await using _screen = await render(<ScheduledTasksSettings taskId={task.id} />);
+    await expect.element(page.getByRole("dialog").getByText("Plain model")).toBeVisible();
+    expect(page.getByRole("dialog").getByText("Bound model").query()).toBeNull();
+  });
+
   it("keeps an editor the user opened when the linked task loads later", async () => {
     setup();
     state.tasksLoaded = false;

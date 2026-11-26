@@ -35,6 +35,7 @@ import {
 } from "@t3tools/client-runtime/contract-labels";
 import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
 import { createModelSelection, pickModelSelection } from "@t3tools/shared/model";
+import { resolveBriefModelSelection } from "@t3tools/shared/serverSettings";
 import { resolvePastedPath } from "@t3tools/shared/path";
 import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
@@ -503,6 +504,7 @@ function useSettingsRestore(onRestored?: () => void) {
     settings.textGenerationModelSelection ?? null,
     DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
   );
+  const isBriefModelDirty = settings.briefModelSelection !== null;
   const isBackgroundActivityDirty = hasChangedBackgroundActivitySettings(settings);
 
   const changedSettingLabels = [
@@ -656,6 +658,7 @@ function useSettingsRestore(onRestored?: () => void) {
       : []),
     ...(settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit ? [gt("Quit shortcut")] : []),
     ...(isTextGenerationModelDirty ? [gt("Text generation model")] : []),
+    ...(isBriefModelDirty ? [gt("Brief model")] : []),
     ...(settings.threadTitleInstructions !== DEFAULT_UNIFIED_SETTINGS.threadTitleInstructions
       ? [gt("Thread title instructions")]
       : []),
@@ -779,6 +782,7 @@ function useSettingsRestore(onRestored?: () => void) {
       confirmThreadUnpin: DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin,
       confirmQuit: DEFAULT_UNIFIED_SETTINGS.confirmQuit,
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
+      briefModelSelection: DEFAULT_UNIFIED_SETTINGS.briefModelSelection,
       threadTitleInstructions: DEFAULT_UNIFIED_SETTINGS.threadTitleInstructions,
       fontFamilySans: DEFAULT_UNIFIED_SETTINGS.fontFamilySans,
       fontFamilyComposer: DEFAULT_UNIFIED_SETTINGS.fontFamilyComposer,
@@ -2070,7 +2074,7 @@ export function ThreadsSettingsPanel() {
     settings,
     providers: serverProviders.filter((provider) => provider.supportsTextGeneration !== false),
     projectId: target?.projectId ?? null,
-    selections: [settings.textGenerationModelSelection],
+    selections: [settings.textGenerationModelSelection, settings.briefModelSelection],
   });
   const textGenerationProviders = textGenerationTargets.providers;
   const textGenerationModelSelection = resolveAppModelSelectionState(
@@ -2099,6 +2103,22 @@ export function ThreadsSettingsPanel() {
     settings.textGenerationModelSelection ?? null,
     DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
   );
+  const briefModelSelection = resolveBriefModelSelection(settings, textGenerationProviders);
+  const briefGenInstanceId = briefModelSelection.instanceId;
+  const briefGenModel = briefModelSelection.model;
+  const briefGenModelOptions = briefModelSelection.options;
+  const briefGenInstanceEntry = textGenerationModelInstanceEntries.find(
+    (entry) => entry.instanceId === briefGenInstanceId,
+  );
+  const briefGenProvider: ProviderDriverKind =
+    briefGenInstanceEntry?.driverKind ?? DEFAULT_DRIVER_KIND;
+  const briefGenerationModelOptionsByInstance = getTextGenerationModelOptionsByInstance(
+    settings,
+    textGenerationProviders,
+    briefGenInstanceId,
+    briefGenModel,
+  );
+  const isBriefModelDirty = settings.briefModelSelection !== null;
   const textGenerationModelDisabledReason = useScopedModelDisabledReason(
     settings,
     textGenerationModelInstanceEntries,
@@ -2106,6 +2126,7 @@ export function ThreadsSettingsPanel() {
   );
   const mixedAddProjectBaseDirectory = useScopedSettingsMixed(["addProjectBaseDirectory"]);
   const mixedTextGenerationModel = useScopedSettingsMixed(["textGenerationModelSelection"]);
+  const mixedBriefModel = useScopedSettingsMixed(["briefModelSelection"]);
 
   return (
     <SettingsPageContainer>
@@ -2413,6 +2434,86 @@ export function ThreadsSettingsPanel() {
                                 ),
                               },
                               textGenerationProviders,
+                            ),
+                          });
+                        },
+                      }
+                    : null
+                }
+              />
+            )
+          }
+        />
+        <SettingsRow
+          serverScoped
+          settingKeys={["briefModelSelection"]}
+          {...setting("brief-model")}
+          description={gt(
+            "For Duet morning briefs. Follows the text generation model until you pick one.",
+          )}
+          resetAction={
+            hasServerTargets && isBriefModelDirty ? (
+              <SettingResetButton
+                ariaLabel={gt("Reset brief model to default")}
+                onClick={() => updateSettings({ briefModelSelection: null })}
+              />
+            ) : null
+          }
+          control={
+            !hasServerTargets ? (
+              <span className="text-sm text-muted-foreground">
+                <T>Connect an environment to choose its brief model.</T>
+              </span>
+            ) : !hasTextGenerationProvider ? (
+              <span className="text-body text-muted-foreground">
+                <T>No text generation providers available.</T>
+              </span>
+            ) : (
+              <SettingsModelPicker
+                environmentId={environmentId}
+                activeInstanceId={briefGenInstanceId}
+                model={briefGenModel}
+                instanceEntries={textGenerationModelInstanceEntries}
+                modelOptionsByInstance={briefGenerationModelOptionsByInstance}
+                {...(mixedBriefModel ? { triggerLabel: gt("Mixed") } : {})}
+                getModelDisabledReason={textGenerationModelDisabledReason}
+                {...(environmentId
+                  ? {
+                      onOpenProviderSetup: (instanceId: ProviderInstanceId) => {
+                        void navigate({
+                          to: "/settings/providers",
+                          search: { environmentId, instanceId },
+                        });
+                      },
+                    }
+                  : {})}
+                onInstanceModelChange={(instanceId, model) => {
+                  const reason = textGenerationModelDisabledReason(instanceId, model);
+                  if (reason) {
+                    toastManager.add({
+                      type: "error",
+                      title: gt("Brief model not saved"),
+                      description: reason,
+                    });
+                    return;
+                  }
+                  updateSettings({
+                    briefModelSelection: pickModelSelection(briefModelSelection, instanceId, model),
+                  });
+                }}
+                traits={
+                  briefGenInstanceEntry && !mixedBriefModel
+                    ? {
+                        provider: briefGenProvider,
+                        models: briefGenInstanceEntry.models,
+                        modelOptions: briefGenModelOptions,
+                        includePlanAgent: selectsPlanAgent(briefGenModelOptions),
+                        onModelOptionsChange: (nextOptions) => {
+                          updateSettings({
+                            briefModelSelection: createModelSelection(
+                              briefGenInstanceId,
+                              briefGenModel,
+                              nextOptions,
                             ),
                           });
                         },

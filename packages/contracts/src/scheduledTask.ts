@@ -3,6 +3,7 @@ import * as Schema from "effect/Schema";
 import {
   CommandId,
   ForwardCompatibleArray,
+  ForwardCompatibleOptional,
   IsoDateTime,
   ProjectId,
   ScheduledTaskId,
@@ -231,6 +232,11 @@ export type ScheduledTaskWebhookEndpoint = typeof ScheduledTaskWebhookEndpoint.T
 export const ScheduledTaskThreadMode = Schema.Literals(["new_thread", "continue", "fresh_session"]);
 export type ScheduledTaskThreadMode = typeof ScheduledTaskThreadMode.Type;
 
+export const ScheduledTaskKind = Schema.Literals(["agent", "captain_morning_brief"]);
+export type ScheduledTaskKind = typeof ScheduledTaskKind.Type;
+export const scheduledTaskKind = (task: { readonly kind?: ScheduledTaskKind | undefined }) =>
+  task.kind ?? "agent";
+
 /** Servers before thread modes omit it; their bound tasks continue the conversation. */
 export function scheduledTaskThreadMode(
   task: Pick<ScheduledTask, "threadId" | "threadMode">,
@@ -240,6 +246,7 @@ export function scheduledTaskThreadMode(
 
 export const ScheduledTask = Schema.Struct({
   id: ScheduledTaskId,
+  kind: ForwardCompatibleOptional(ScheduledTaskKind),
   title: TrimmedNonEmptyString,
   prompt: TrimmedNonEmptyString,
   enabled: Schema.Boolean,
@@ -278,6 +285,7 @@ export type ScheduledTaskListResult = typeof ScheduledTaskListResult.Type;
 
 export const ScheduledTaskUpsertInput = Schema.Struct({
   id: Schema.optional(ScheduledTaskId),
+  kind: Schema.optional(ScheduledTaskKind),
   requireExisting: Schema.optional(Schema.Boolean).annotate({
     description:
       "Reject the save if the task no longer exists, for edits based on an earlier read.",

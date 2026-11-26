@@ -1,4 +1,5 @@
 import {
+  CaptainError,
   CommandId,
   isCaptainThreadId,
   MessageId,
@@ -28,6 +29,7 @@ import {
   managedPolicyDeniedMessage,
   scheduledTaskThreadMode,
   managedRuntimeModeDenial,
+  scheduledTaskKind,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -54,6 +56,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as CaptainStore from "../captains/CaptainStore.ts";
+import * as CaptainBriefService from "../captains/CaptainBriefService.ts";
 import * as Metrics from "../observability/Metrics.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import { OrchestratorDispatchError } from "../orchestration-v2/Orchestrator.ts";
@@ -227,6 +230,7 @@ function resolveThreadMode(
 
 interface ScheduledTaskRow {
   readonly task_id: string;
+  readonly kind: string;
   readonly title: string;
   readonly prompt: string;
   readonly enabled: number;
@@ -425,6 +429,7 @@ const decodeRow = Effect.fnUntraced(
     const modelSelection = yield* decodeModelSelectionJson(row.model_selection_json);
     return yield* decodeTask({
       id: row.task_id,
+      kind: row.kind === "captain_morning_brief" ? "captain_morning_brief" : "agent",
       title: row.title,
       prompt: row.prompt,
       enabled: row.enabled === 1,
@@ -508,6 +513,7 @@ export const layer = Layer.effect(
     const scheduler = yield* Scheduler.Scheduler;
     const readWebhookOrigin = yield* ScheduledTaskWebhookOrigin;
     const captainStore = yield* Effect.serviceOption(CaptainStore.CaptainStore);
+    const captainBriefs = yield* Effect.serviceOption(CaptainBriefService.CaptainBriefService);
     const managedPolicy = yield* ManagedPolicy.ManagedPolicy;
     const webhookPolicyOrganization = ManagedPolicy.deniedBy(managedPolicy, "webhookTasks");
     // Existing webhook tasks stay stored but report why they do not run.
@@ -550,6 +556,7 @@ export const layer = Layer.effect(
       sql<ScheduledTaskRow>`
       SELECT
         task_id,
+        kind,
         title,
         prompt,
         enabled,
@@ -592,6 +599,7 @@ export const layer = Layer.effect(
       sql<ScheduledTaskRow>`
       SELECT
         task_id,
+        kind,
         title,
         prompt,
         enabled,
@@ -672,6 +680,7 @@ export const layer = Layer.effect(
       sql<{ task_id: string }>`
         INSERT INTO scheduled_tasks (
           task_id,
+          kind,
           title,
           prompt,
           enabled,
@@ -697,6 +706,7 @@ export const layer = Layer.effect(
         )
         SELECT
           ${task.id},
+          ${task.kind ?? "agent"},
           ${task.title},
           ${task.prompt},
           ${task.enabled ? 1 : 0},
@@ -723,6 +733,7 @@ export const layer = Layer.effect(
            OR EXISTS (SELECT 1 FROM scheduled_tasks WHERE task_id = ${task.id})
         ON CONFLICT (task_id)
         DO UPDATE SET
+          kind = excluded.kind,
           title = excluded.title,
           prompt = excluded.prompt,
           enabled = excluded.enabled,
@@ -1056,6 +1067,7 @@ export const layer = Layer.effect(
         // prompt per interval. A failed read falls through to the normal send.
         if (
           trigger === "scheduled" &&
+          scheduledTaskKind(active) === "agent" &&
           active.schedule.type !== "once" &&
           active.threadId !== null
         ) {
@@ -1152,9 +1164,35 @@ export const layer = Layer.effect(
               }),
             );
 
+        const isCaptainMorningBrief = scheduledTaskKind(active) === "captain_morning_brief";
         // Capture defects and interrupts too so dispatch failures still reach markCompleted.
-        const result =
-          active.threadId === null
+        const generateCaptainBrief = (() => {
+          if (active.threadId === null) {
+            return Effect.fail(
+              new CaptainError({
+                code: "invalid_request",
+                message: "The morning brief is not bound to a Duet conversation.",
+              }),
+            );
+          }
+          if (!Option.isSome(captainBriefs)) {
+            return Effect.fail(
+              new CaptainError({
+                code: "unavailable",
+                message: "Morning brief generation is unavailable.",
+              }),
+            );
+          }
+          return captainBriefs.value
+            .generateForThread({
+              threadId: ThreadId.make(active.threadId),
+              projectId: active.projectId,
+            })
+            .pipe(Effect.as(null));
+        })();
+        const result: Exit.Exit<ThreadId | null, unknown> = isCaptainMorningBrief
+          ? yield* Effect.exit(generateCaptainBrief)
+          : active.threadId === null
             ? yield* Effect.exit(
                 threadLaunch
                   .launch({
@@ -1631,6 +1669,7 @@ export const layer = Layer.effect(
         yield* requireFutureOnce({ enabled: input.enabled, schedule }, now, id);
       const task: ScheduledTask = {
         id,
+        kind: input.kind ?? existingTask?.kind ?? "agent",
         title: input.title,
         prompt: input.prompt,
         enabled: input.enabled,

@@ -6,6 +6,7 @@ import {
   type TextGeneratorConfig,
 } from "@t3tools/contracts";
 import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
+import * as TextGenerationOperations from "@t3tools/provider-core/server/textGenerationOperations";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -99,6 +100,33 @@ it.effect("a turned-off text generator fails instead of calling its API", () =>
     );
     expect(failure.detail).toBe("OpenRouter is off. Turn it on in Settings → Providers.");
     expect(upstream).not.toHaveBeenCalled();
+  }),
+);
+
+it.effect("requests structured brief output from the Anthropic API in one call", () =>
+  Effect.gen(function* () {
+    const upstream = vi.fn<typeof fetch>(async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      const text = "- Review the migration";
+      const reply = body.messages[0].content.includes('JSON object with one string field, "text"')
+        ? JSON.stringify({ text })
+        : text;
+      return Response.json({ stop_reason: "end_turn", content: [{ type: "text", text: reply }] });
+    });
+    const generators = yield* TextGenerators.TextGenerators.pipe(
+      Effect.provide(layer({ kind: "anthropic", apiKey: "secret" })),
+    );
+    const run = yield* generators.runner(ID);
+    const api = TextGenerationOperations.fromRunner("TextGenerator", run!);
+    const result = yield* api
+      .generateBriefText({
+        cwd: request.cwd,
+        modelSelection: request.modelSelection,
+        prompt: "Summarize the pending migration review.",
+      })
+      .pipe(Effect.provideService(FetchHttpClient.Fetch, upstream));
+    expect(result.text).toBe("- Review the migration");
+    expect(upstream).toHaveBeenCalledTimes(1);
   }),
 );
 

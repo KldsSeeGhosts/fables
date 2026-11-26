@@ -11,6 +11,7 @@ import {
   ScheduledTaskId,
   type ScheduledTaskUpsertInput,
   SecretRef,
+  TextGenerationError,
   ThreadId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -35,6 +36,7 @@ import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as CaptainStore from "../captains/CaptainStore.ts";
+import * as CaptainBriefService from "../captains/CaptainBriefService.ts";
 import * as ScheduledTaskService from "./ScheduledTaskService.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 
@@ -418,6 +420,133 @@ it.effect("thread cleanup notifies subscribers and a finishing run cannot recrea
       yield* Deferred.succeed(release, undefined);
       yield* Fiber.join(run);
       assert.lengthOf((yield* service.list()).tasks, 0);
+    }).pipe(Effect.provide(layer));
+  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+);
+
+it.effect("dispatches morning briefs to the generator while ordinary tasks start turns", () =>
+  Effect.gen(function* () {
+    const beforeBrief = DateTime.makeZonedUnsafe("2026-11-02T07:59:55Z", {
+      timeZone: DateTime.zoneMakeLocal(),
+      adjustForTimeZone: true,
+    });
+    yield* TestClock.setTime(DateTime.toEpochMillis(beforeBrief));
+    const briefCalls: Array<{
+      readonly threadId: ThreadId;
+      readonly projectId?: ProjectId | undefined;
+    }> = [];
+    let launches = 0;
+    let sends = 0;
+    let briefFailure: TextGenerationError | undefined;
+    const layer = ScheduledTaskService.layer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          ManagedPolicy.layerTest(),
+          Layer.mock(CaptainBriefService.CaptainBriefService)({
+            generateForThread: (input) =>
+              Effect.suspend(() => {
+                briefCalls.push(input);
+                return briefFailure === undefined
+                  ? Effect.succeed({
+                      captainId: "captain",
+                      name: "DIGEST.md",
+                      content: "## New",
+                      revision: 1,
+                      updatedAt: "2026-09-09T12:00:00.000Z",
+                    } as never)
+                  : Effect.fail(briefFailure);
+              }),
+          }),
+          Layer.mock(ThreadLaunchService.ThreadLaunchService)({
+            launch: (input) =>
+              Effect.sync(() => {
+                launches++;
+                return { threadId: input.threadId ?? ThreadId.make("thread:launched") } as never;
+              }),
+          }),
+          Layer.mock(ThreadManagementService.ThreadManagementService)({
+            sendToThread: () =>
+              Effect.sync(() => {
+                sends++;
+              }).pipe(Effect.as(undefined as never)),
+            getThreadShell: () => Effect.succeed(threadShell(ProjectId.make("project:test"))),
+          }),
+          Layer.mock(SecretRequests.SecretRequests)({}),
+          Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
+            namedProjectsRoot: "/projects",
+            isScratchProject: () => Effect.succeed(false),
+          }),
+          NodeCrypto.layer,
+          Scheduler.layer,
+        ),
+      ),
+    );
+    yield* Effect.gen(function* () {
+      const service = yield* ScheduledTaskService.ScheduledTaskService;
+      const duetThread = ThreadId.make("captain:maria:0");
+      const brief = yield* service.upsert({
+        id: ScheduledTaskId.make("captain-morning-brief:maria"),
+        kind: "captain_morning_brief",
+        title: "Morning brief",
+        prompt: "Generate the morning brief.",
+        enabled: true,
+        schedule: { type: "fixed_time", timeOfDay: "08:00" },
+        projectId: ProjectId.make("project:test"),
+        threadId: duetThread,
+        threadMode: "continue",
+        workspaceStrategy: { type: "root" },
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+      });
+      const preserved = yield* service.upsert({
+        id: brief.task.id,
+        title: "Morning brief",
+        prompt: "Generate the morning brief.",
+        enabled: true,
+        schedule: { type: "fixed_time", timeOfDay: "08:00" },
+        projectId: ProjectId.make("project:test"),
+        threadId: duetThread,
+        threadMode: "continue",
+        workspaceStrategy: { type: "root" },
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+      });
+      assert.equal(preserved.task.kind, "captain_morning_brief");
+      const ordinary = yield* service.upsert({
+        title: "Ordinary task",
+        prompt: "Start a turn",
+        enabled: true,
+        schedule: { type: "fixed_time", timeOfDay: "08:00" },
+        projectId: ProjectId.make("project:test"),
+        workspaceStrategy: { type: "root" },
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+      });
+      const completed = yield* service.subscribeList().pipe(
+        Stream.filter(({ tasks }) => tasks.every((task) => task.lastRunStatus === "succeeded")),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+      yield* TestClock.adjust("5 seconds");
+      assert.isTrue(Option.isSome(yield* Fiber.join(completed)));
+      assert.deepEqual(briefCalls, [
+        { threadId: duetThread, projectId: ProjectId.make("project:test") },
+      ]);
+      assert.equal(launches, 1);
+      assert.equal(sends, 0);
+      const tasks = (yield* service.list()).tasks;
+      assert.equal(tasks.find((task) => task.id === brief.task.id)?.lastRunStatus, "succeeded");
+      assert.equal(tasks.find((task) => task.id === ordinary.task.id)?.lastRunStatus, "succeeded");
+      briefFailure = new TextGenerationError({
+        operation: "generateBriefText",
+        detail: "No text generation provider is available.",
+      });
+      const failed = yield* service.runNow({ id: brief.task.id });
+      assert.equal(failed.task.lastRunStatus, "failed");
+      assert.equal(failed.task.lastRunError, briefFailure.message);
     }).pipe(Effect.provide(layer));
   }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
 );

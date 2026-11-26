@@ -24,6 +24,7 @@ import {
   isModelSelectionProviderEnabled,
   parsePersistedServerObservabilitySettings,
   resolveReviewGuideModelSelection,
+  resolveBriefModelSelection,
   resolveSourceControlWriterModelSelection,
   resolveSpeechPostProcessingModelSelection,
 } from "./serverSettings.ts";
@@ -1092,6 +1093,44 @@ describe("resolveSpeechPostProcessingModelSelection", () => {
     expect(
       applyServerSettingsPatch(pinned, { speechPostProcessingModelSelection: null })
         .speechPostProcessingModelSelection,
+    ).toBeNull();
+  });
+});
+
+describe("resolveBriefModelSelection", () => {
+  it("follows the text generation model until a usable brief model is set", () => {
+    const textGeneration = createModelSelection(ProviderInstanceId.make("codex"), "gpt-6-luna");
+    const brief = createModelSelection(ProviderInstanceId.make("claudeAgent"), "claude-haiku", [
+      { id: "effort", value: "low" },
+    ]);
+    const base = { ...DEFAULT_SERVER_SETTINGS, textGenerationModelSelection: textGeneration };
+    expect(resolveBriefModelSelection(base)).toBe(textGeneration);
+    const pinned = applyServerSettingsPatch(base, { briefModelSelection: brief });
+    expect(resolveBriefModelSelection(pinned)).toEqual(brief);
+    expect(
+      resolveBriefModelSelection({
+        ...pinned,
+        providerInstances: {
+          [ProviderInstanceId.make("claudeAgent")]: {
+            driver: ProviderDriverKind.make("claudeAgent"),
+            enabled: false,
+            config: {},
+          },
+        },
+      }),
+    ).toBe(textGeneration);
+    expect(
+      resolveBriefModelSelection(pinned, [
+        {
+          instanceId: "claudeAgent",
+          enabled: true,
+          installed: true,
+          supportsTextGeneration: false,
+        },
+      ] as never),
+    ).toBe(textGeneration);
+    expect(
+      applyServerSettingsPatch(pinned, { briefModelSelection: null }).briefModelSelection,
     ).toBeNull();
   });
 });
