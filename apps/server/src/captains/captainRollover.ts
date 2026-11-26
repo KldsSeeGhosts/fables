@@ -28,6 +28,7 @@ const PROVIDER_NATIVE_AUTOMATIC_COMPACTION_DRIVERS = new Set([
   "cursor",
   "pi",
   "muse",
+  "kiro",
 ]);
 
 export interface CaptainRolloverThreadRecords {
@@ -153,6 +154,9 @@ const reachedThreshold = (records: CaptainRolloverThreadRecords, run: RolloverRu
 export const hasUnsettledCaptainCrew = (unsettled: CaptainRolloverThreadRecords["subagents"]) =>
   unsettled.some((subagent) => subagent.origin === "app_owned");
 
+export const isRolloverCompactionMessage = (message: OrchestrationV2ConversationMessage) =>
+  message.idleCompaction !== undefined || /^\/compact(?:\s|$)/i.test(message.text.trim());
+
 export const rolloverSendInput = (
   threadId: ThreadId,
   projectId: ThreadManagementSendInput["projectId"],
@@ -215,8 +219,7 @@ export const handleCaptainTurnEnd = Effect.fn("CaptainRollover.handleTurnEnd")(f
             message.role === "user" &&
             message.notification === undefined &&
             message.delegatedCompletion === undefined &&
-            message.idleCompaction === undefined &&
-            !/^\/compact(?:\s|$)/i.test(message.text.trim()),
+            !isRolloverCompactionMessage(message),
         );
   const reset = yield* dependencies.resetConversation(
     { captainId: captain.id, expectedThreadId: threadId, reason },

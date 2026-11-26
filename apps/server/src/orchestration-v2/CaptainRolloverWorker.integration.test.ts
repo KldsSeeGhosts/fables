@@ -449,6 +449,18 @@ it.effect("commits the failed prompt and reordered follow-ups before retrying th
       const queued = [
         { ...makeRun(threadId, 2, "queued"), queuePosition: 2 },
         { ...makeRun(threadId, 3, "queued"), queuePosition: 1 },
+        makeRun(threadId, 4, "queued"),
+        makeRun(threadId, 5, "queued"),
+      ];
+      const prompts = [
+        message(failed, "Prompt 0"),
+        message(queued[0]!, "Prompt 1"),
+        message(queued[1]!, "Prompt 2"),
+        message(queued[2]!, "/compact preserve the migration details"),
+        {
+          ...message(queued[3]!, "Compact the current conversation"),
+          idleCompaction: "onReturn" as const,
+        },
       ];
       for (const [index, run] of [failed, ...queued].entries()) {
         yield* sink.write({
@@ -458,7 +470,7 @@ it.effect("commits the failed prompt and reordered follow-ups before retrying th
               type: "message.updated",
               threadId,
               occurredAt: at(index),
-              payload: message(run, `Prompt ${index}`),
+              payload: prompts[index]!,
             },
             {
               id: EventId.make(`run:${index}`),
@@ -507,7 +519,7 @@ it.effect("commits the failed prompt and reordered follow-ups before retrying th
       const old = yield* projections.getThreadRecords(threadId, ["runs"]);
       assert.deepEqual(
         old.runs.map((run) => run.status),
-        ["failed", "cancelled", "cancelled"],
+        ["failed", "cancelled", "cancelled", "cancelled", "cancelled"],
       );
 
       yield* TestClock.adjust("100 millis");

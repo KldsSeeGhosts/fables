@@ -35,6 +35,7 @@ import * as CaptainHandoff from "./captainHandoff.ts";
 import * as CaptainStore from "./CaptainStore.ts";
 import {
   hasUnsettledCaptainCrew,
+  isRolloverCompactionMessage,
   rolloverSendInput,
   type CaptainImmediateRollover,
 } from "./captainRollover.ts";
@@ -262,7 +263,7 @@ const make = Effect.gen(function* () {
                   })
                   .pipe(Effect.catch(CaptainStore.captainUnavailable));
           const queuedMessages = new Map(queue?.messages.map((message) => [message.id, message]));
-          const moves = queuedRunsInDeliveryOrder({
+          const followUps = queuedRunsInDeliveryOrder({
             runs: queuedRuns,
             messages: queue?.messages ?? [],
           }).flatMap((run) => {
@@ -305,18 +306,19 @@ const make = Effect.gen(function* () {
                 ),
               );
             }
-            for (const { run, message } of moves) {
+            for (const { run, message } of followUps) {
+              if (isRolloverCompactionMessage(message)) continue;
               yield* store.saveRolloverResend(
                 run.id,
                 rolloverSendInput(primaryThreadId, previous.projectId, message, run, false),
               );
             }
             const now = yield* DateTime.now;
-            if (queue !== undefined && moves.length > 0) {
-              // Queue cancellation and pending sends commit together before the old thread can run them.
+            if (queue !== undefined && followUps.length > 0) {
+              // Cancel queued compactions too. The new thread has no history to compact.
               yield* eventSink
                 .write({
-                  events: moves.flatMap(({ run }) =>
+                  events: followUps.flatMap(({ run }) =>
                     queuedRunCancellationEvents(queue, run, now).map((event, index) => ({
                       ...event,
                       id: EventId.make(`captain-rollover-cancel:${run.id}:${index}`),
@@ -336,7 +338,7 @@ const make = Effect.gen(function* () {
               updatedAt: DateTime.formatIso(now),
             });
           });
-          const captain = yield* moves.length === 0
+          const captain = yield* followUps.length === 0
             ? sql
                 .withTransaction(commitReset)
                 .pipe(Effect.catchTags({ SqlError: CaptainStore.captainUnavailable }))

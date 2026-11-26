@@ -229,7 +229,7 @@ it.effect("waits for active crew tasks before a threshold rollover", () =>
       {
         id: providerThreadId,
         appThreadId: firstThreadId,
-        driver: "kiro",
+        driver: "claude",
         contextUsage: null,
       },
     ] as never;
@@ -275,13 +275,13 @@ it.effect("waits for active crew tasks before a threshold rollover", () =>
   }),
 );
 
-it.effect("does not roll over a provider with automatic compaction", () =>
+it.effect.each(["codex", "kiro", "muse"])("lets %s compact automatically", (driver) =>
   Effect.gen(function* () {
     const providerThreads = [
       {
         id: providerThreadId,
         appThreadId: firstThreadId,
-        driver: "codex",
+        driver,
         contextUsage: { usedTokens: 99_000, maxTokens: 100_000 },
         updatedAt: "2026-01-01T00:00:00.000Z",
       },

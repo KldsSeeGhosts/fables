@@ -328,6 +328,17 @@ it.effect("refuses reset while a run executes or waits in the queue", () =>
         assert.equal(failure.code, "invalid_request");
         assert.include(failure.message, "Stop or wait for the current turn");
       }
+      for (const status of ["preparing", "starting", "running"] as const) {
+        f.setRunStatuses(captain.primaryThreadId, ["failed", "queued", status]);
+        const failure = yield* Effect.flip(
+          service.resetConversation(
+            { ...reset, reason: "context_overflow" },
+            { run: { status: "failed" } as OrchestrationV2Run },
+          ),
+        );
+        assert.equal(failure.code, "invalid_request");
+        assert.include(failure.message, "Stop or wait for the current turn");
+      }
     }).pipe(Effect.provide(f.layer));
   }),
 );
