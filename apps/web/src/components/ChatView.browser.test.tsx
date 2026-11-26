@@ -8,6 +8,7 @@ import {
   EnvironmentId,
   IssueTrackerKind,
   ORCHESTRATION_V2_WS_METHODS,
+  OrchestrationV2GetThreadProjectionError,
   NodeId,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
   RunId,
@@ -1485,7 +1486,18 @@ it("follows a live Duet rollover in a tab and opens a past conversation explicit
   const showEarlier = screen.getByRole("button", { name: "Show earlier conversation" });
   await expect.element(showEarlier).toBeVisible();
   expect(isThreadSubscribed(old.id)).toBe(false);
-  await userEvent.click(showEarlier);
+  {
+    using _unavailable = answerRpc(
+      ORCHESTRATION_V2_WS_METHODS.subscribeThread,
+      ({ threadId }: { threadId: ThreadId }) =>
+        Stream.fail(
+          new OrchestrationV2GetThreadProjectionError({ threadId, message: "History unavailable" }),
+        ),
+    );
+    await userEvent.click(showEarlier);
+    await expect.element(screen.getByText("Could not load earlier conversation.")).toBeVisible();
+  }
+  await screen.getByRole("button", { name: "Retry", exact: true }).click();
 
   await expect.element(screen.getByText("Earlier conversation", { exact: true })).toBeVisible();
   await expect.element(screen.getByText("context full", { exact: true })).toBeVisible();
