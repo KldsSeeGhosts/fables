@@ -1,3 +1,4 @@
+import { useDuetShell } from "../captains/useDuetShell";
 import { ChildThreadApprovals } from "./ChildThreadApprovals";
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import { useOpenThreadInspector } from "./thread-inspector-navigation";
@@ -149,6 +150,7 @@ import { RenderErrorBoundary, RenderFailureView } from "../../components/RenderE
 import {
   ANDROID_READING_MAX_WIDTH,
   CHAT_CONTENT_MAX_WIDTH,
+  DUET_CHAT_CONTENT_MAX_WIDTH,
   type LayoutVariant,
 } from "../../lib/layout";
 import { editPendingThreadMessage } from "../../state/edit-pending-thread-message";
@@ -1269,11 +1271,14 @@ function ThreadDetailBody(
   );
   const layoutVariant = props.layoutVariant ?? "compact";
   const isSplitLayout = layoutVariant !== "compact";
+  const isDuet = useDuetShell();
   const contentMaxWidth =
     Platform.OS === "android"
       ? ANDROID_READING_MAX_WIDTH
       : isSplitLayout
-        ? CHAT_CONTENT_MAX_WIDTH
+        ? isDuet
+          ? DUET_CHAT_CONTENT_MAX_WIDTH
+          : CHAT_CONTENT_MAX_WIDTH
         : undefined;
   const providerSubagentProvider = props.serverConfig?.providers.find(
     (provider) => provider.instanceId === props.selectedThread.modelSelection.instanceId,

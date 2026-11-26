@@ -1,4 +1,5 @@
 import { captainInboxItems, captainThreadActivity } from "@t3tools/client-runtime/state/captains";
+import type { EnvironmentProject } from "@t3tools/client-runtime/state/models";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { useNavigation } from "@react-navigation/native";
 import { useGT } from "gt-react-native";
@@ -12,6 +13,8 @@ import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspace
 import { CaptainOrb } from "./CaptainOrb";
 import { orderCaptainHomeRows } from "./captainHomeOrder";
 import { captainShells, captainShellsByConversation } from "./captainShellIndex";
+import { duetInboxGroups } from "./captainInbox";
+import { DuetHomeSection } from "./DuetHomeSection";
 import { useCaptainsDirectory } from "./useCaptainsDirectory";
 import { useDuetShell } from "./useDuetShell";
 
@@ -19,6 +22,8 @@ import { useDuetShell } from "./useDuetShell";
 export function CaptainsHomeSection(props: {
   readonly hidden: boolean;
   readonly environmentId: EnvironmentId | null;
+  readonly projects: ReadonlyArray<EnvironmentProject>;
+  readonly selectedThreadKey: string | null;
 }) {
   const gt = useGT();
   const isDuet = useDuetShell();
@@ -44,15 +49,27 @@ export function CaptainsHomeSection(props: {
       }),
     ),
   );
-  const waiting = captainInboxItems(
+  const inbox = captainInboxItems(
     environments,
     rows.flatMap(({ own }) => own),
-  ).length;
+  );
+  if (isDuet) {
+    return (
+      <DuetHomeSection
+        rows={rows}
+        waiting={duetInboxGroups(inbox).reduce((count, group) => count + group.items.length, 0)}
+        showsEnvironment={showsEnvironment}
+        projects={props.projects}
+        selectedThreadKey={props.selectedThreadKey}
+      />
+    );
+  }
+  const waiting = inbox.length;
   return (
     <View className="gap-1 px-2 pb-3 pt-2">
       <View className="flex-row items-center gap-2 px-2 pb-1">
         <Text className="min-w-0 flex-1 font-t3-medium text-xs text-foreground-muted">
-          {isDuet ? gt("Duets") : gt("Captains")}
+          {gt("Captains")}
         </Text>
         <Pressable
           accessibilityRole="button"
@@ -82,7 +99,7 @@ export function CaptainsHomeSection(props: {
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={isDuet ? gt("Duet tasks") : gt("Captain tasks")}
+          accessibilityLabel={gt("Captain tasks")}
           hitSlop={6}
           onPress={() => navigation.navigate("CaptainTasks", {})}
           className="flex-row items-center gap-1 rounded-full bg-subtle px-2.5 py-1"

@@ -104,6 +104,8 @@ import { holdLaunchSplashForHomeRows, settleLaunchSplashHomeRows } from "./home-
 import { useWorkspaceTabs } from "../layout/workspace/WorkspaceTabsContext";
 import { ThreadListFilters } from "./ThreadListFilters";
 import { CaptainsHomeSection } from "../captains/CaptainsHomeSection";
+import { useDuetShell } from "../captains/useDuetShell";
+import { DuetThreadsHeader } from "./DuetThreadsHeader";
 import { deriveHomeEmptyState } from "./home-empty-state";
 
 interface HomeScreenProps {
@@ -196,6 +198,7 @@ function renderHomeScrollView(props: ScrollViewProps) {
 
 export function HomeScreen(props: HomeScreenProps) {
   const gt = useGT();
+  const isDuet = useDuetShell();
   const m = useMessages();
   const usesNativeWorkspaceColumns = useNativeWorkspaceColumnsSupported();
   const workspace = useWorkspaceTabs();
@@ -680,25 +683,23 @@ export function HomeScreen(props: HomeScreenProps) {
   }
 
   const listHeader = Platform.OS === "ios" ? undefined : <HomeTopContentSpacer />;
+  const projectFilterOptions = pickableProjectGroups(
+    sortHomeProjectScopes({
+      scopes: projectScopes,
+      threads: props.threads,
+      pendingTasks: [],
+      projectSortOrder: "updated_at",
+    }),
+  ).map((scope) => ({ key: scope.key, label: scope.title }));
 
   const v2ListHeader = (
     <>
       {listHeader}
-      {Platform.OS === "ios" && workspace ? (
+      {Platform.OS === "ios" && workspace && !isDuet ? (
         <ThreadListFilters
           gutter={sidebarSurface ? 8 : 0}
           environments={props.environments}
-          projects={pickableProjectGroups(
-            sortHomeProjectScopes({
-              scopes: projectScopes,
-              threads: props.threads,
-              pendingTasks: [],
-              projectSortOrder: "updated_at",
-            }),
-          ).map((scope) => ({
-            key: scope.key,
-            label: scope.title,
-          }))}
+          projects={projectFilterOptions}
           selectedEnvironmentId={props.selectedEnvironmentId}
           selectedProjectKey={props.selectedProjectKey}
           onEnvironmentChange={props.onEnvironmentChange}
@@ -708,7 +709,25 @@ export function HomeScreen(props: HomeScreenProps) {
       <CaptainsHomeSection
         hidden={hasSearchQuery || v2ScopedProjectGroup !== null}
         environmentId={props.selectedEnvironmentId}
+        projects={props.projects}
+        selectedThreadKey={selectedThreadKey}
       />
+      {isDuet ? (
+        <DuetThreadsHeader
+          filter={
+            Platform.OS === "ios" && workspace
+              ? {
+                  environments: props.environments,
+                  projects: projectFilterOptions,
+                  selectedEnvironmentId: props.selectedEnvironmentId,
+                  selectedProjectKey: props.selectedProjectKey,
+                  onEnvironmentChange: props.onEnvironmentChange,
+                  onProjectChange: props.onProjectChange,
+                }
+              : null
+          }
+        />
+      ) : null}
     </>
   );
 

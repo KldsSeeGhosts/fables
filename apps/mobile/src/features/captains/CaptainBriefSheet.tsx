@@ -19,6 +19,7 @@ import { serverEnvironment } from "../../state/server";
 import { useEnvironmentScope, useEnvironmentScopeDenied } from "../../state/session";
 import { useMarkdownPreviewStyles } from "../files/FileMarkdownPreview";
 import { CaptainOrb } from "./CaptainOrb";
+import { DuetBriefBody } from "./DuetBriefBody";
 import { useDuetShell } from "./useDuetShell";
 
 export type CaptainBriefParams = {
@@ -78,8 +79,14 @@ export function CaptainBriefSheet({ route }: StaticScreenProps<CaptainBriefParam
   return (
     <View collapsable={false} className="flex-1 bg-sheet">
       <SheetHeader
-        title={captain?.name ?? gt("Brief", { $context: "noun, what a Captain knows" })}
-        subtitle={captain ? gt("Brief", { $context: "noun, what a Captain knows" }) : undefined}
+        title={
+          isDuet
+            ? gt("Brief", { $context: "noun, what a Captain knows" })
+            : (captain?.name ?? gt("Brief", { $context: "noun, what a Captain knows" }))
+        }
+        subtitle={
+          captain && !isDuet ? gt("Brief", { $context: "noun, what a Captain knows" }) : undefined
+        }
         onClose={() => navigation.goBack()}
       />
       <ScreenContent>
@@ -93,6 +100,14 @@ export function CaptainBriefSheet({ route }: StaticScreenProps<CaptainBriefParam
             <Text className="px-5 py-8 text-center text-sm text-foreground-muted">
               {unavailable ?? gt("Loading the brief…")}
             </Text>
+          ) : isDuet ? (
+            <DuetBriefBody
+              environmentId={environmentId}
+              captain={captain}
+              digest={digestNew === "" ? null : markdown(digestNew)}
+              notes={notes === "" ? null : markdown(notes)}
+              memories={memories}
+            />
           ) : (
             <>
               <View className="flex-row items-center gap-3 px-4 pb-4 pt-2">

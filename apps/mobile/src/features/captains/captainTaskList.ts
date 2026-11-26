@@ -74,3 +74,33 @@ export function captainTaskGroups(input: {
     }),
   );
 }
+
+export interface CaptainTaskSection {
+  readonly kind: "running" | "finished";
+  readonly rows: ReadonlyArray<CaptainTaskRow>;
+}
+
+const RUNNING_RANK: Partial<Record<CaptainTaskStatus, number>> = {
+  "needs-input": 0,
+  working: 1,
+  scheduled: 2,
+};
+
+/**
+ * The Duet shell's Running and Finished sections. Running puts what needs input first, then
+ * work in progress; each section keeps the newest-first order within a status.
+ */
+export function captainTaskSections(
+  rows: ReadonlyArray<CaptainTaskRow>,
+): ReadonlyArray<CaptainTaskSection> {
+  const running = rows
+    .filter((row) => RUNNING_RANK[row.status] !== undefined)
+    .sort((a, b) => RUNNING_RANK[a.status]! - RUNNING_RANK[b.status]! || compareCaptainTasks(a, b));
+  const finished = rows
+    .filter((row) => RUNNING_RANK[row.status] === undefined)
+    .sort(compareCaptainTasks);
+  return [
+    { kind: "running" as const, rows: running },
+    { kind: "finished" as const, rows: finished },
+  ].filter((section) => section.rows.length > 0);
+}

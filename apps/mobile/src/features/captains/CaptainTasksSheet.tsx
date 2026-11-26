@@ -11,8 +11,18 @@ import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { SheetHeader } from "../../components/ui/SheetHeader";
 import { useNowMinuteMs } from "../../lib/clock";
 import { CAPTAIN_TASK_STATUS_LABELS } from "./captainLabels";
-import { captainTaskGroups, type CaptainTaskRange, type CaptainTaskRow } from "./captainTaskList";
+import type { CaptainTaskStatus } from "@t3tools/client-runtime/state/captain-tasks";
+import { SymbolView } from "../../components/ui/AppSymbol";
+import {
+  captainTaskGroups,
+  captainTaskSections,
+  type CaptainTaskRange,
+  type CaptainTaskRow,
+} from "./captainTaskList";
 import { CaptainOrb } from "./CaptainOrb";
+import { DuetCreature } from "./DuetCreature";
+import type { DuetTokens } from "./duetTokens";
+import { useDuetTokens } from "./useDuetTokens";
 import { CaptainTaskRing } from "./CaptainTaskRing";
 import {
   CaptainEnvironmentNotices,
@@ -64,6 +74,82 @@ function TaskRow(props: { readonly row: CaptainTaskRow; readonly onOpen: () => v
   );
 }
 
+function statusColor(status: CaptainTaskStatus, tokens: DuetTokens) {
+  switch (status) {
+    case "needs-input":
+      return tokens.needsInputText;
+    case "working":
+      return tokens.workingText;
+    case "ready":
+      return tokens.ready;
+    case "failed":
+      return tokens.failed;
+    default:
+      return tokens.meta;
+  }
+}
+
+function DuetTaskRow(props: {
+  readonly row: CaptainTaskRow;
+  readonly first: boolean;
+  readonly onOpen: () => void;
+}) {
+  const m = useMessages();
+  const tokens = useDuetTokens();
+  const status = m(CAPTAIN_TASK_STATUS_LABELS[props.row.status]);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${props.row.thread.title}, ${status}`}
+      onPress={props.onOpen}
+      className="min-h-16 flex-row items-start gap-3 py-[11px] pl-4 pr-2.5"
+      style={({ pressed }) => ({ backgroundColor: pressed ? tokens.row : undefined })}
+    >
+      {props.first ? null : (
+        <View
+          className="absolute right-0 top-0 h-px"
+          style={{ left: 44, backgroundColor: tokens.hairline }}
+        />
+      )}
+      <View className="pt-0.5">
+        <CaptainTaskRing status={props.row.status} />
+      </View>
+      <View className="min-w-0 flex-1">
+        <View className="flex-row items-baseline gap-2">
+          <Text
+            className="min-w-0 flex-1 font-t3-medium"
+            style={{ fontSize: 15, lineHeight: 20, color: tokens.foreground }}
+            numberOfLines={1}
+          >
+            {props.row.thread.title}
+          </Text>
+          {props.row.updatedAtMs > 0 ? (
+            <Text style={{ fontSize: 12, color: tokens.meta }}>
+              <RelativeTime timestamp={new Date(props.row.updatedAtMs).toISOString()} />
+            </Text>
+          ) : null}
+        </View>
+        <Text style={{ fontSize: 13, lineHeight: 18, color: tokens.meta }} numberOfLines={1}>
+          <Text style={{ color: statusColor(props.row.status, tokens) }}>{status}</Text>
+          {props.row.detail ? ` · ${props.row.detail}` : null}
+        </Text>
+      </View>
+      <View className="self-center">
+        <SymbolView name="chevron.right" size={14} tintColor={tokens.icon} />
+      </View>
+    </Pressable>
+  );
+}
+
+function DuetSectionHeading(props: { readonly children: string }) {
+  const tokens = useDuetTokens();
+  return (
+    <Text className="px-4 pb-1 pt-3.5 font-t3-medium" style={{ fontSize: 13, color: tokens.muted }}>
+      {props.children}
+    </Text>
+  );
+}
+
 /** Delegated tasks, grouped by Captain, or one Captain's when opened from its conversation. */
 export function CaptainTasksSheet({ route }: StaticScreenProps<CaptainTasksParams>) {
   const navigation = useNavigation();
@@ -93,6 +179,7 @@ export function CaptainTasksSheet({ route }: StaticScreenProps<CaptainTasksParam
     captainId: route.params?.captainId,
   });
   const single = route.params?.captainId !== undefined;
+  const tokens = useDuetTokens();
   const fallbackTitle = isDuet ? gt("Duet tasks") : gt("Captain tasks");
   const title = single
     ? (listed.flatMap(({ captains }) => captains)[0]?.name ?? fallbackTitle)
@@ -110,7 +197,11 @@ export function CaptainTasksSheet({ route }: StaticScreenProps<CaptainTasksParam
         : gt("No delegated tasks yet.");
   return (
     <View collapsable={false} className="flex-1 bg-sheet">
-      <SheetHeader title={title} onClose={() => navigation.goBack()} />
+      <SheetHeader
+        title={title}
+        subtitle={isDuet && single ? gt("Crew tasks") : undefined}
+        onClose={() => navigation.goBack()}
+      />
       <ScreenContent>
         <ScrollView
           nestedScrollEnabled
@@ -140,6 +231,45 @@ export function CaptainTasksSheet({ route }: StaticScreenProps<CaptainTasksParam
                 {emptyText}
               </Text>
             )
+          ) : isDuet ? (
+            groups.map((group) => (
+              <View key={`${group.environmentId}:${group.captain.id}`} className="-mx-2 pb-3">
+                {single ? null : (
+                  <View className="flex-row items-center gap-2 px-4 pb-1 pt-3">
+                    <DuetCreature captain={group.captain} size={18} />
+                    <Text
+                      className="min-w-0 flex-1 font-t3-medium"
+                      style={{ fontSize: 13, color: tokens.foreground }}
+                    >
+                      {directory.showsEnvironment
+                        ? `${group.captain.name} · ${
+                            environments.find(
+                              ({ environmentId }) => environmentId === group.environmentId,
+                            )?.label ?? ""
+                          }`
+                        : group.captain.name}
+                    </Text>
+                  </View>
+                )}
+                {captainTaskSections(group.rows).map((section) => (
+                  <View key={section.kind}>
+                    <DuetSectionHeading>
+                      {section.kind === "running"
+                        ? gt("Running · {count}", { count: section.rows.length })
+                        : gt("Finished · {count}", { count: section.rows.length })}
+                    </DuetSectionHeading>
+                    {section.rows.map((row, index) => (
+                      <DuetTaskRow
+                        key={row.thread.id}
+                        row={row}
+                        first={index === 0}
+                        onOpen={() => openTask(row)}
+                      />
+                    ))}
+                  </View>
+                ))}
+              </View>
+            ))
           ) : (
             groups.map((group) => (
               <View key={`${group.environmentId}:${group.captain.id}`} className="pb-3">

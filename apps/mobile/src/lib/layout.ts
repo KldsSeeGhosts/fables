@@ -11,9 +11,13 @@ const EXPANDED_LAYOUT_MIN_WIDTH = 720;
 const SPLIT_LAYOUT_MIN_HEIGHT = 600;
 
 const SPLIT_SIDEBAR_MIN_WIDTH = 280;
+// The Duet shell's sidebar is the desktop sidebar's width, beside or over the conversation.
+const DUET_SIDEBAR_WIDTH = 300;
 const SPLIT_SIDEBAR_DEFAULT_MAX_WIDTH = 380;
 
 export const CHAT_CONTENT_MAX_WIDTH = 960;
+/** The Duet shell centres a conversation at the desktop timeline's width. */
+export const DUET_CHAT_CONTENT_MAX_WIDTH = 600;
 // Limit Android reading width for wide foldables and keyboard-open split views.
 export const ANDROID_READING_MAX_WIDTH = 640;
 // min-h-8 uses the 14px rem configured in metro.config.js.
@@ -103,6 +107,7 @@ export function deriveLayout(input: {
   readonly height: number;
   readonly nativeMetrics?: NativeLayoutMetrics | null;
   readonly nativeWorkspace?: boolean;
+  readonly duetShell?: boolean;
 }): Layout {
   const { width, height } = input;
   const metrics = input.nativeMetrics;
@@ -156,13 +161,15 @@ export function deriveLayout(input: {
     usesSplitView: true,
     listPaneWidth:
       division?.x ??
-      (input.nativeWorkspace === true && variant === "medium"
-        ? 350
-        : clamp(
-            Math.round(width * 0.32),
-            SPLIT_SIDEBAR_MIN_WIDTH,
-            SPLIT_SIDEBAR_DEFAULT_MAX_WIDTH,
-          )),
+      (input.duetShell === true
+        ? DUET_SIDEBAR_WIDTH
+        : input.nativeWorkspace === true && variant === "medium"
+          ? 350
+          : clamp(
+              Math.round(width * 0.32),
+              SPLIT_SIDEBAR_MIN_WIDTH,
+              SPLIT_SIDEBAR_DEFAULT_MAX_WIDTH,
+            )),
     ...(division ? { listPaneGap: division.width } : {}),
     shellPadding: 0,
   };

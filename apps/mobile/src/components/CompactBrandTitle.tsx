@@ -9,9 +9,12 @@ import { T3Wordmark } from "./T3Wordmark";
 import { IPAD_HOME_TITLE_OFFSET } from "../lib/layoutMetrics";
 import { resolveMobileStageLabel } from "../lib/mobileBranding";
 import { useAndroidControlSizing } from "./ui/useAndroidControlSizing";
+import { FONT_FAMILIES } from "../lib/fontFamilies";
+import { useDuetShell } from "../features/captains/useDuetShell";
 
 const BRAND_MAX_FONT_SCALE = 1.4;
 const WORDMARK_SUFFIX = "Code";
+const DUET_WORDMARK = "KSG Duet";
 
 export function brandTitleOffset(): number {
   if (Platform.OS !== "ios") return 0;
@@ -35,6 +38,37 @@ export function CompactBrandTitle(
   const [fullWidth, setFullWidth] = useState<number | null>(null);
   const showStage =
     !props.fit || availableWidth === null || fullWidth === null || fullWidth <= availableWidth;
+
+  const isDuet = useDuetShell();
+  if (isDuet) {
+    return (
+      <View
+        aria-level={1}
+        accessibilityLabel={
+          props.accessibilityLabel ?? gt("{product}, Threads", { product: DUET_WORDMARK })
+        }
+        accessible
+        role="heading"
+        className={props.fit ? "min-w-0 flex-1 flex-row items-center" : "flex-row items-center"}
+        style={{ marginLeft: titleOffset }}
+      >
+        <Text
+          allowFontScaling={props.allowFontScaling}
+          maxFontSizeMultiplier={BRAND_MAX_FONT_SCALE}
+          numberOfLines={1}
+          className="text-foreground"
+          style={{
+            fontFamily: FONT_FAMILIES.displaySerif,
+            fontSize: 22 * scale,
+            lineHeight: 28 * scale,
+            letterSpacing: -0.22 * scale,
+          }}
+        >
+          {DUET_WORDMARK}
+        </Text>
+      </View>
+    );
+  }
 
   const title = (
     <View

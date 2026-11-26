@@ -136,12 +136,16 @@ export function AppBar(props: AppBarProps) {
               destructive: action.destructive,
               onPress: action.onPress,
             })),
-            ...trailingMenus.map((menu) => ({
-              id: menu.title,
-              title: menu.title,
-              icon: iosIcon(menu.icon),
-              items: menu.items,
-            })),
+            ...trailingMenus.map((menu) =>
+              menu.inlineWhenGrouped
+                ? { id: menu.title, inline: true, items: menu.items }
+                : {
+                    id: menu.title,
+                    title: menu.title,
+                    icon: iosIcon(menu.icon),
+                    items: menu.items,
+                  },
+            ),
           ],
         },
       ]

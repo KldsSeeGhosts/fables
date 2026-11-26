@@ -2,7 +2,7 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/model
 import { CaptainId, EnvironmentId, ThreadId, type Captain } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { captainTaskGroups } from "./captainTaskList";
+import { captainTaskGroups, captainTaskSections } from "./captainTaskList";
 
 const environmentId = EnvironmentId.make("home");
 const nowMs = Date.parse("2026-11-25T12:00:00.000Z");
@@ -99,5 +99,38 @@ describe("captainTaskGroups", () => {
       captainId: "gone",
     });
     expect(groups).toEqual([]);
+  });
+});
+
+describe("captainTaskSections", () => {
+  const row = (
+    id: string,
+    status: "needs-input" | "working" | "ready" | "failed" | "done",
+    at: number,
+  ) => ({
+    thread: task(id, ThreadId.make("captain:maria:1")),
+    status,
+    detail: null,
+    updatedAtMs: at,
+  });
+
+  it("lists Running before Finished, with what needs input first", () => {
+    const sections = captainTaskSections([
+      row("built", "ready", 50),
+      row("building", "working", 40),
+      row("push", "needs-input", 10),
+      row("smoke", "failed", 60),
+      row("preview", "working", 30),
+    ]);
+    expect(sections.map(({ kind, rows }) => [kind, rows.map(({ thread }) => thread.id)])).toEqual([
+      ["running", ["push", "building", "preview"]],
+      ["finished", ["smoke", "built"]],
+    ]);
+  });
+
+  it("leaves out an empty section", () => {
+    expect(captainTaskSections([row("built", "done", 1)]).map(({ kind }) => kind)).toEqual([
+      "finished",
+    ]);
   });
 });
