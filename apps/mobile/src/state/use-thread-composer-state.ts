@@ -874,7 +874,6 @@ export function useThreadComposerState(input: {
 
     // Resolve at send time because outbox delivery may be delayed.
     // An approval redirect must steer the waiting turn instead of queueing behind it.
-    if (input.earlierConversation) return null;
     const activeTurnDefault = beforeDispatch !== undefined ? "steer" : followUpBehavior;
     const followUpAction = resolveComposerDispatchMode({
       running: activeThreadBusy && canSteerActiveTurn,

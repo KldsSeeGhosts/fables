@@ -350,6 +350,21 @@ describe("mobile task permissions", () => {
     expect(state.setFreshPending).toHaveBeenCalledWith("secondary:thread", false);
   });
 
+  it("sends an approval redirect in an earlier conversation and blocks ordinary sends there", async () => {
+    state.grantedEnvironments.add("secondary");
+    state.draft = { ...state.draft, text: "Try this instead" };
+    const composer = useThreadComposerState({ ...NO_SIDE_CHATS, earlierConversation: true });
+    expect(await composer.onSendMessage()).toBeNull();
+    expect(state.enqueue).not.toHaveBeenCalled();
+
+    const beforeDispatch = vi.fn(async () => true);
+    expect(await composer.onSendMessage(undefined, beforeDispatch)).toBe("message");
+    expect(beforeDispatch).toHaveBeenCalledWith("Try this instead", false);
+    expect(state.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: "thread", text: "Try this instead" }),
+    );
+  });
+
   it("compacts a stale thread before sending unless kept or a fresh session is armed", async () => {
     state.grantedEnvironments.add("secondary");
     state.projection = {
