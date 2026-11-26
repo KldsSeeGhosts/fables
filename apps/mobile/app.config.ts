@@ -130,10 +130,8 @@ const dmSansFonts = {
   bold: "@expo-google-fonts/dm-sans/700Bold/DMSans_700Bold.ttf",
 } as const;
 
-const sourceSerifFonts = {
-  medium: "@expo-google-fonts/source-serif-4/500Medium/SourceSerif4_500Medium.ttf",
-  semiBold: "@expo-google-fonts/source-serif-4/600SemiBold/SourceSerif4_600SemiBold.ttf",
-} as const;
+// The Duet shell's serif wordmark. OFL-licensed; the licence sits beside the file.
+const sourceSerifSemiBold = "./assets/fonts/SourceSerif4/SourceSerif4-SemiBold.ttf";
 
 const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
   "expo-widgets",
@@ -337,13 +335,7 @@ const config: ExpoConfig = {
       "expo-font",
       {
         ios: {
-          fonts: [
-            dmSansFonts.regular,
-            dmSansFonts.medium,
-            dmSansFonts.bold,
-            sourceSerifFonts.medium,
-            sourceSerifFonts.semiBold,
-          ],
+          fonts: [dmSansFonts.regular, dmSansFonts.medium, dmSansFonts.bold, sourceSerifSemiBold],
         },
         android: {
           fonts: [
@@ -365,12 +357,8 @@ const config: ExpoConfig = {
               ],
             },
             {
-              fontFamily: "SourceSerif4-Medium",
-              fontDefinitions: [{ path: sourceSerifFonts.medium, weight: 500 }],
-            },
-            {
               fontFamily: "SourceSerif4-SemiBold",
-              fontDefinitions: [{ path: sourceSerifFonts.semiBold, weight: 600 }],
+              fontDefinitions: [{ path: sourceSerifSemiBold, weight: 600 }],
             },
           ],
         },

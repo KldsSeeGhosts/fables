@@ -1,9 +1,9 @@
-import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import type { MobileThemeAppearance } from "../../lib/mobileTheme";
 
 /**
  * The mobile mirror of web's ksg-salon Duet tokens. Components read this one set rather than
- * inventing local values; keep it in step with apps/web/src/themes/ksg-salon.css.
+ * inventing local values; keep it in step with apps/web/src/themes/ksg-salon.css. Failed is the
+ * theme's error colour and the scrim is plain black, since ksg-salon has no Duet token for either.
  */
 export const DUET_TOKENS = {
   light: {
@@ -39,7 +39,8 @@ export const DUET_TOKENS = {
     scrim: "rgba(0, 0, 0, 0.22)",
     disc: "#ffffff",
     rim: "#ebebeb",
-    shadow: "rgba(0, 0, 0, 0.14)",
+    panelShadow: "0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 28px -14px rgba(0, 0, 0, 0.14)",
+    discShadow: "0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 14px rgba(0, 0, 0, 0.07)",
   },
   dark: {
     background: "#191919",
@@ -74,16 +75,13 @@ export const DUET_TOKENS = {
     scrim: "rgba(0, 0, 0, 0.5)",
     disc: "#262626",
     rim: "#333333",
-    shadow: "rgba(0, 0, 0, 0.55)",
+    panelShadow: "0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px -14px rgba(0, 0, 0, 0.55)",
+    discShadow: "0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.35)",
   },
-} as const;
+} as const satisfies Record<MobileThemeAppearance, Record<string, string>>;
 
-export type DuetTokens = (typeof DUET_TOKENS)["light"];
+export type DuetTokens = Readonly<Record<keyof (typeof DUET_TOKENS)["light"], string>>;
 
 export function duetTokensForAppearance(appearance: MobileThemeAppearance): DuetTokens {
   return DUET_TOKENS[appearance];
-}
-
-export function useDuetTokens(): DuetTokens {
-  return duetTokensForAppearance(useAppearancePreferences().themeAppearance);
 }

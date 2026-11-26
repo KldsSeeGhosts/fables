@@ -558,9 +558,6 @@ importers:
       '@expo-google-fonts/dm-sans':
         specifier: ^0.4.2
         version: 0.4.2
-      '@expo-google-fonts/source-serif-4':
-        specifier: 0.4.2
-        version: 0.4.2
       '@expo/metro-runtime':
         specifier: ~58.0.17
         version: 58.0.17(@expo/log-box@58.0.15)(expo@58.0.23)(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)
@@ -4290,9 +4287,6 @@ packages:
 
   '@expo-google-fonts/material-symbols@0.4.38':
     resolution: {integrity: sha512-IJkBtN1o8u9BW5fvSii1MyHPQ7Q0HxbWcVBvOrOzgMLpVtZw7R2w94wBTVR7kZwv3w1JNTESMmLA5Sqn1+Z36A==}
-
-  '@expo-google-fonts/source-serif-4@0.4.2':
-    resolution: {integrity: sha512-7X2w5KT0n/pxRXr5Ogv6W35D004IbCXUouTCr9VCh9bSlSWbryyvk8/ovXNOaJLOJV8QeIDnX0hIppgH0UZ8sA==}
 
   '@expo/cli@58.1.19':
     resolution: {integrity: sha512-zoLhSlFnln0xn1fiW0+kb1J0lNv06HAy+FQ27HHwEEWoAClCE13FnTQBOW5bOVYc3c7hsGM8ypKcZGS7RGqjQA==}
@@ -14806,8 +14800,6 @@ snapshots:
   '@expo-google-fonts/dm-sans@0.4.2': {}
 
   '@expo-google-fonts/material-symbols@0.4.38': {}
-
-  '@expo-google-fonts/source-serif-4@0.4.2': {}
 
   '@expo/cli@58.1.19(71c6c18c67381aed8a99e0cd5abbf7da)':
     dependencies:

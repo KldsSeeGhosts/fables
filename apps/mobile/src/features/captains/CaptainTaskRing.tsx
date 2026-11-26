@@ -1,7 +1,7 @@
 import type { CaptainTaskStatus } from "@t3tools/client-runtime/state/captain-tasks";
 import Svg, { Circle, Path } from "react-native-svg";
 
-import { useDuetTokens } from "./duetTokens";
+import { useDuetTokens } from "./useDuetTokens";
 
 /** The Duet task state ring the desktop drawer uses, drawn static. */
 export function CaptainTaskRing(props: {

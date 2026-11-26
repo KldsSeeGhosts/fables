@@ -25,10 +25,10 @@ describe("duetTokens", () => {
     expect(Object.keys(DUET_TOKENS.light).sort()).toEqual(Object.keys(DUET_TOKENS.dark).sort());
   });
 
-  it("keeps hardcoded hex colors out of Duet components", () => {
+  it("keeps hardcoded hex colors out of every Duet component", () => {
     const directory = NodePath.resolve(import.meta.dirname);
     const offenders = NodeFS.readdirSync(directory)
-      .filter((name) => /^(Captain|Duet).+\.tsx$/.test(name))
+      .filter((name) => name.endsWith(".tsx"))
       .flatMap((name) => {
         const source = NodeFS.readFileSync(NodePath.join(directory, name), "utf8");
         return /#[0-9a-fA-F]{3,8}\b/.test(source) ? [name] : [];
