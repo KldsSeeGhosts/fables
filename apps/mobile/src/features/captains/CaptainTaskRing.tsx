@@ -1,23 +1,24 @@
 import type { CaptainTaskStatus } from "@t3tools/client-runtime/state/captain-tasks";
 import Svg, { Circle, Path } from "react-native-svg";
 
-const RING_COLOR: Record<CaptainTaskStatus, string> = {
-  "needs-input": "#a98546",
-  working: "#d97757",
-  ready: "#1e7d2c",
-  failed: "#c4473a",
-  stopped: "#838383",
-  scheduled: "#838383",
-  done: "#838383",
-  unknown: "#838383",
-};
+import { useDuetTokens } from "./useDuetTokens";
 
 /** The Duet task state ring the desktop drawer uses, drawn static. */
 export function CaptainTaskRing(props: {
   readonly status: CaptainTaskStatus;
   readonly size?: number;
 }) {
-  const color = RING_COLOR[props.status];
+  const tokens = useDuetTokens();
+  const color = {
+    "needs-input": tokens.needsInputRing,
+    working: tokens.working,
+    ready: tokens.ready,
+    failed: tokens.failed,
+    stopped: tokens.meta,
+    scheduled: tokens.meta,
+    done: tokens.meta,
+    unknown: tokens.meta,
+  }[props.status];
   const size = props.size ?? 16;
   return (
     <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">

@@ -85,6 +85,45 @@ describe("native workspace sizing", () => {
     },
   );
 
+  it.each([
+    { name: "folded", width: 466, height: 678, sizeClass: "compact", panes: "stack" },
+    { name: "unfolded landscape", width: 951, height: 669, sizeClass: "regular", panes: "two" },
+    { name: "unfolded portrait", width: 669, height: 951, sizeClass: "regular", panes: "drawer" },
+  ] as const)(
+    "gives the Duet shell a stack, two panes, or one pane with a drawer: $name",
+    ({ width, height, sizeClass, panes }) => {
+      const nativeMetrics = {
+        width,
+        height,
+        hasHinge: sizeClass === "regular",
+        horizontalSizeClass: sizeClass,
+        verticalBarEdge: "none" as const,
+        safeArea: { top: 24, bottom: 20, left: 0, right: 0 },
+        reservedRegions: [],
+      };
+      const layout = deriveLayout({
+        width,
+        height,
+        nativeMetrics,
+        nativeWorkspace: true,
+        duetShell: true,
+      });
+      expect(layout.variant).toBe(
+        panes === "stack" ? "compact" : panes === "two" ? "expanded" : "medium",
+      );
+      expect(layout.listPaneWidth).toBe(panes === "stack" ? null : 300);
+      if (panes === "stack") return;
+      expect(
+        deriveWorkspacePaneLayout({
+          layout,
+          viewportWidth: width,
+          primarySidebarPreferredVisible: true,
+          auxiliaryPanePreferredVisible: false,
+        }).contentPaneWidth,
+      ).toBe(panes === "two" ? width - 300 : width);
+    },
+  );
+
   it("keeps the detail mounted in a narrow iPad window while UIKit still has two columns", () => {
     const nativeMetrics = {
       width: 715,

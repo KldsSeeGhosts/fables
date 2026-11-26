@@ -74,3 +74,54 @@ it.each(["leadingItems", "trailingItems", "toolbarItems"] as const)(
     }
   },
 );
+
+it("keeps a submenu's icon and an inline group's empty title", () => {
+  bridge.ios = undefined;
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const root = createRoot(document.createElement("div"));
+  const onPress = () => {};
+  const items: NativeStackHeaderItem[] = [
+    {
+      type: "menu",
+      label: "More actions",
+      menu: {
+        items: [
+          {
+            type: "submenu",
+            label: "",
+            inline: true,
+            items: [
+              {
+                type: "submenu",
+                label: "Terminal",
+                icon: { type: "sfSymbol", name: "terminal" },
+                items: [{ type: "action", label: "Open new terminal", onPress }],
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ];
+  try {
+    act(() =>
+      root.render(
+        <V5StackHeader canGoBack={false} options={{ unstable_headerRightItems: () => items }} />,
+      ),
+    );
+    const [item] = (bridge.ios as StackHeaderConfigProps["ios"])?.trailingItems ?? [];
+    if (item?.type !== "item" || "render" in item || !item.menu)
+      throw new Error("Expected a native menu item");
+    const [group] = item.menu.children;
+    if (group?.type !== "menu") throw new Error("Expected the inline group");
+    expect(group).toMatchObject({ title: "", displayInline: true });
+    expect(group.children[0]).toMatchObject({
+      type: "menu",
+      title: "Terminal",
+      icon: { type: "sfSymbol", name: "terminal" },
+    });
+  } finally {
+    act(() => root.unmount());
+    vi.unstubAllGlobals();
+  }
+});

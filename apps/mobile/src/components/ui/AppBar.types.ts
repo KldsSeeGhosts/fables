@@ -47,6 +47,8 @@ export interface AppBarMenu {
   readonly icon: AppSymbolName;
   readonly status?: string;
   readonly separateBackground?: boolean;
+  /** iOS Duo: where the bar groups its items into one menu, this menu's items join it inline. */
+  readonly inlineWhenGrouped?: boolean;
   readonly items: ReadonlyArray<AppBarMenuItem>;
 }
 

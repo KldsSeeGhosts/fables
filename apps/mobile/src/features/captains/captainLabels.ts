@@ -18,3 +18,16 @@ export const CAPTAIN_INBOX_KIND_LABELS: Readonly<Record<CaptainInboxItem["kind"]
   input: msg("Question waiting"),
   "subagent-request": msg("Delegation request"),
 };
+
+/** What a Duet row says it waits on, in place of its time. */
+export const DUET_WAITING_LABELS: Readonly<Record<CaptainInboxItem["kind"], string>> = {
+  approval: msg("Approval", { $context: "a Duet waits on the user's approval" }),
+  input: msg("Question", { $context: "a Duet waits on the user's answer" }),
+  "subagent-request": msg("Delegation", { $context: "a Duet waits on a delegation request" }),
+};
+
+export const DUET_WAITING_ICONS = {
+  approval: "exclamationmark.shield",
+  input: "questionmark.bubble",
+  "subagent-request": "arrow.triangle.branch",
+} as const satisfies Record<CaptainInboxItem["kind"], string>;

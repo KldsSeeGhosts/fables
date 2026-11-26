@@ -1,3 +1,5 @@
+import { useDuetShell } from "../../captains/useDuetShell";
+import { useDuetTokens } from "../../captains/useDuetTokens";
 import { useGT, useMessages } from "gt-react-native";
 import {
   WORKSPACE_TAB_LABELS,
@@ -163,6 +165,8 @@ export function WorkspaceNativeTabs(props: {
     workspaceUsesColumns(workspace.state.selectedTab, workspace.settingsOpen) &&
     !panes.primarySidebarVisible;
   const { colors } = useControlTheme();
+  const isDuet = useDuetShell();
+  const duetTokens = useDuetTokens();
   const selectedTab = workspace.state.selectedTab;
   const selectedSlot = workspace.settingsOpen ? -1 : primaryTabs.indexOf(selectedTab);
   const selectedScreenKey =
@@ -205,7 +209,9 @@ export function WorkspaceNativeTabs(props: {
           ios={{
             tabBarControllerMode: "tabBar",
             tabBarMinimizeBehavior: "never",
-            tabBarTintColor: colors["--color-primary"],
+            // iOS 26 ignores tab bar background and blur, so the Duet shell keeps the glass and
+            // sets only a neutral selected tint, as its design asks.
+            tabBarTintColor: isDuet ? duetTokens.foreground : colors["--color-primary"],
           }}
           onTabSelectionRejected={({
             nativeEvent,

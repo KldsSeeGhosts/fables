@@ -1,3 +1,4 @@
+import { useDuetShell } from "../captains/useDuetShell";
 import { useGT } from "gt-react-native";
 import {
   WorkspaceColumnsRendererContext,
@@ -299,9 +300,10 @@ function AdaptiveWorkspaceLayoutContent(
   // objects here change the workspace context on every render, so every workspace screen
   // re-renders on any layout state change, and the inspector registration then loops: each
   // re-register re-renders its screen, which hands over a new inspector renderer.
+  const duetShell = useDuetShell();
   const baseLayout = useMemo(
-    () => deriveLayout({ width: viewportWidth, height, nativeMetrics, nativeWorkspace }),
-    [height, viewportWidth, nativeMetrics, nativeWorkspace],
+    () => deriveLayout({ width: viewportWidth, height, nativeMetrics, nativeWorkspace, duetShell }),
+    [height, viewportWidth, nativeMetrics, nativeWorkspace, duetShell],
   );
   // The overlay sidebar closes when a page opens from it, and stays open on a list or on the
   // page a tab switch opened (`keepOpenFor`, set by that switch).

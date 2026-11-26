@@ -10,7 +10,7 @@ import { View } from "react-native";
 import Svg, { Circle, ClipPath, Defs, G, Path, RadialGradient, Rect, Stop } from "react-native-svg";
 
 import { AppText as Text } from "../../components/ui/AppText";
-import { useControlTheme } from "../../components/ui/useControlTheme";
+import { useDuetTokens } from "./useDuetTokens";
 
 const CREATURE_OFFSET = 7.5;
 const CREATURE_SCALE = 0.25;
@@ -37,7 +37,7 @@ export function CaptainOrb(props: {
   const assetId = `captain-orb-${props.captain.id.replace(/[^A-Za-z0-9_-]/g, "-")}-${instanceId}`;
   const gradientId = `${assetId}-gradient`;
   const lineClipId = `${assetId}-line-clip`;
-  const lineColor = useControlTheme().colorScheme === "dark" ? "#ececec" : "#141413";
+  const lineColor = useDuetTokens().line;
   const attention = props.attention ?? 0;
   return (
     <View
