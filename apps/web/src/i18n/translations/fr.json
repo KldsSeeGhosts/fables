@@ -13275,6 +13275,18 @@
   "f8fec76a8dea38d4": "Brouillon non envoyé",
   "b0b811c800c8af57": "Désépingler le fil",
   "4fca00950ff1db87": "Régénération du titre",
+  "4ca68ffac8d84488": [
+    {
+      "t": "span",
+      "i": 1,
+      "c": "Snoozed until "
+    },
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
   "509a9c76494bfdba": "Wake thread now",
   "467c8192b9726ba6": "Rouvrir le fil",
   "9e8470dfcf1004d6": "Clore le fil",

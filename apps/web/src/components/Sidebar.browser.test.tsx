@@ -6,6 +6,7 @@ import { createWorkspaceFocusController, workspaceAreaProps } from "../lib/works
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
   DEFAULT_CLIENT_SETTINGS,
+  type ContextMenuItem,
   EnvironmentId,
   type LocalApi,
   ProjectId,
@@ -13,6 +14,8 @@ import {
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import { isMacPlatform } from "@t3tools/shared/keybindings";
+import * as Cause from "effect/Cause";
+import { AsyncResult } from "effect/reactivity";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 
@@ -24,10 +27,15 @@ import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { __setClientSettingsForTests, getClientSettings } from "../hooks/useSettings";
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
-import { useProjects, useServerConfigs, useQuietThreadShells } from "../state/entities";
+import {
+  readEnvironmentServerConfigLoaded,
+  useProjects,
+  useServerConfigs,
+  useQuietThreadShells,
+} from "../state/entities";
 import { useConnectedEnvironmentIds, usePrimaryEnvironmentId } from "../state/environments";
 import { readEnvironmentScope, useEnvironmentScope } from "../state/session";
-import { useOrchestrationCommand } from "../state/use-orchestration-command";
+import { threadTriagePermitted, useOrchestrationCommand } from "../state/use-orchestration-command";
 import { useTerminalUiStateStore } from "../terminalUiStateStore";
 import { readLocalApi } from "../localApi";
 import type { Project } from "../types";
@@ -525,7 +533,100 @@ describe("sidebar thread menu", () => {
     await vi.waitFor(() => expect(show).toHaveBeenCalledTimes(2));
     expect(show.mock.lastCall?.[2]).toBe("mouse");
   });
+
+  it.each([
+    { action: "settle", section: "active", label: "Settle thread" },
+    { action: "unsettle", section: "settled", label: "Un-settle thread" },
+    { action: "snooze", section: "active", label: "Snooze" },
+    { action: "unsnooze", section: "snoozed", label: "Wake thread" },
+  ] as const)(
+    "runs $action from a single-thread menu while offline",
+    async ({ action, section, label }) => {
+      const thread = setupTriageRow(section);
+      vi.mocked(readEnvironmentScope).mockReturnValue(false);
+      vi.mocked(useEnvironmentScope).mockReturnValue(false);
+      vi.mocked(threadTriagePermitted).mockReturnValue(true);
+      vi.mocked(readEnvironmentServerConfigLoaded).mockReturnValue(true);
+      const triage = vi.fn().mockResolvedValue(AsyncResult.failure(Cause.interrupt()));
+      vi.mocked(useOrchestrationCommand).mockReturnValue(triage);
+      const show = vi.fn(
+        async (items: readonly ContextMenuItem[]) =>
+          items.find((entry) => entry.id === action)?.children?.[0]?.id ?? action,
+      );
+      vi.mocked(readLocalApi).mockReturnValue({ contextMenu: { show } } as unknown as LocalApi);
+      await using screen = await render(
+        <SidebarProvider>
+          <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+        </SidebarProvider>,
+      );
+      await userEvent.click(screen.getByText(thread.title, { exact: true }).first(), {
+        button: "right",
+      });
+      await vi.waitFor(() => expect(show).toHaveBeenCalledTimes(1));
+      const items = show.mock.calls[0]![0];
+      const item = items.find((entry) => entry.id === action);
+      expect(item?.label).toBe(label);
+      expect(item?.disabled).not.toBe(true);
+      expect(items.find((entry) => entry.id === "pin")?.disabled).toBe(true);
+      await vi.waitFor(() => expect(triage).toHaveBeenCalledTimes(1));
+      expect(triage).toHaveBeenCalledWith({
+        environmentId: thread.environmentId,
+        input: {
+          threadId: thread.id,
+          ...(action === "snooze" ? { snoozedUntil: expect.any(String) } : {}),
+          ...(action === "unsettle" || action === "unsnooze" ? { reason: "user" } : {}),
+        },
+      });
+    },
+  );
+
+  it("labels the snoozed row's wake time for screen readers", async () => {
+    const thread = setupTriageRow("snoozed");
+    await using screen = await render(
+      <SidebarProvider>
+        <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+      </SidebarProvider>,
+    );
+    const row = screen
+      .getByText(thread.title, { exact: true })
+      .first()
+      .element()
+      .closest("[data-thread-item]");
+    expect(row).not.toBeNull();
+    expect(row!.querySelector(".sr-only")?.textContent ?? "").toContain("Snoozed until");
+  });
 });
+
+function setupTriageRow(section: "active" | "settled" | "snoozed") {
+  const activeProject = project("active");
+  const thread = {
+    ...threadShell(activeProject.id, 0),
+    ...(section === "settled"
+      ? { settledOverride: "settled" as const, settledAt: "2026-01-01T00:00:00.000Z" }
+      : section === "snoozed"
+        ? { snoozedAt: "2026-01-01T00:00:00.000Z", snoozedUntil: "2099-01-01T00:00:00.000Z" }
+        : {}),
+  };
+  const threadRef = scopeThreadRef(thread.environmentId, thread.id);
+  vi.mocked(useProjects).mockReturnValue([activeProject]);
+  vi.mocked(useQuietThreadShells).mockReturnValue([thread]);
+  vi.mocked(useServerConfigs).mockReturnValue(
+    new Map([
+      [thread.environmentId, { environment: { capabilities: {} } } as EnvironmentServerConfig],
+    ]),
+  );
+  vi.mocked(useThreadRouteTarget).mockReturnValue({ kind: "server", threadRef });
+  vi.mocked(useHandleNewThread).mockReturnValue({
+    activeDraftThread: null,
+    activeThread: null,
+    defaultProjectRef: scopeProjectRef(thread.environmentId, activeProject.id),
+    defaultProjectFallbackReady: true,
+    handleNewThread: vi.fn().mockResolvedValue(null),
+    routeDraftId: null,
+    routeThreadRef: threadRef,
+  });
+  return thread;
+}
 
 describe("sidebar Duet thread row", () => {
   it("leaves thread actions to the context menu, with no three-dot button", async () => {

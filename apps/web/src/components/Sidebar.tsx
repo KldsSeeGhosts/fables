@@ -3002,6 +3002,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                   threadRef.environmentId,
                   AuthOrchestrationOperateScope,
                 ),
+                canTriage: threadTriagePermitted(threadRef.environmentId),
                 branch: thread.branch ?? null,
                 // An archived project is not a filter choice.
                 projectFilter:
@@ -3043,7 +3044,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           openThreadToTheSide(threadRef);
           return;
         }
-        if (threadActionRequiresOperate(clicked.value) && !checkThreadOperations([thread])) return;
+        if (
+          threadActionRequiresOperate(clicked.value) &&
+          !checkThreadOperations([thread], isThreadTriageAction(clicked.value))
+        )
+          return;
         if (clicked.value?.startsWith("snooze:")) {
           const preset =
             clicked.value === "snooze:custom"

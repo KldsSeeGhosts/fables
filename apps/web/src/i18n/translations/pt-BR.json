@@ -13275,6 +13275,18 @@
   "f8fec76a8dea38d4": "Rascunho não enviado",
   "b0b811c800c8af57": "Desafixar thread",
   "4fca00950ff1db87": "Regenerando título",
+  "4ca68ffac8d84488": [
+    {
+      "t": "span",
+      "i": 1,
+      "c": "Snoozed until "
+    },
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
   "509a9c76494bfdba": "Wake thread now",
   "467c8192b9726ba6": "Reabrir thread",
   "9e8470dfcf1004d6": "Concluir thread",
