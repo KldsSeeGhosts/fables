@@ -49,6 +49,7 @@ import {
   MIN_SCHEDULED_TASK_INTERVAL_MS,
   ProviderInstanceId,
   resolveEnvironmentMachineKind,
+  scheduledTaskKind,
   scheduledTaskThreadMode,
 } from "@t3tools/contracts";
 import {
@@ -124,6 +125,7 @@ import { ToggleGroup, Toggle } from "../ui/toggle-group";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { TraitsPicker } from "../chat/TraitsPicker";
 import { createModelSelection } from "@t3tools/shared/model";
+import { resolveBriefModelSelection } from "@t3tools/shared/serverSettings";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
@@ -1716,11 +1718,19 @@ function ScheduledTaskEditorForm({
 
   const firstInstance = instanceEntries[0];
   const draftSelection = draft.modelSelection;
+  const briefSelection =
+    task !== null && scheduledTaskKind(task) === "captain_morning_brief"
+      ? resolveBriefModelSelection(settings)
+      : null;
+  const briefModelName = providers
+    .find((provider) => provider.instanceId === briefSelection?.instanceId)
+    ?.models.find((model) => model.slug === briefSelection?.model)?.name;
   const activeSelection =
-    draftSelection &&
+    briefSelection ??
+    (draftSelection &&
     instanceEntries.some((entry) => entry.instanceId === draftSelection.instanceId && entry.enabled)
       ? draftSelection
-      : scheduledTaskDefaultModel(settings, selectedProject ?? null, instanceEntries);
+      : scheduledTaskDefaultModel(settings, selectedProject ?? null, instanceEntries));
   const activeInstanceId =
     activeSelection?.instanceId ?? firstInstance?.instanceId ?? ("" as ProviderInstanceId);
   const activeModel = activeSelection?.model ?? "";
@@ -2136,46 +2146,57 @@ function ScheduledTaskEditorForm({
           </Field>
 
           <Field label={gt("Model")}>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <ProviderModelPicker
-                environmentId={environmentId}
-                // The saved selection only seeds new threads; bound runs ignore it.
-                disabled={saving || !connected || draft.threadId !== ""}
-                activeInstanceId={shownInstanceId}
-                model={shownModel}
-                lockedProvider={null}
-                instanceEntries={instanceEntries}
-                modelOptionsByInstance={modelOptionsByInstance}
-                isComposerOwned={false}
-                triggerClassName={"min-w-0"}
-                onInstanceModelChange={(instanceId, model) => {
-                  if (instanceId === activeSelection?.instanceId && model === activeSelection.model)
-                    return;
-                  setDraft((current) => ({
-                    ...current,
-                    modelSelection: createModelSelection(instanceId, model),
-                  }));
-                }}
-              />
-              {!draft.threadId && activeSelection && activeEntry ? (
-                <TraitsPicker
-                  provider={activeEntry.driverKind}
-                  models={activeEntry.models}
-                  model={activeModel}
-                  modelOptions={activeSelection.options ?? []}
-                  allowPromptInjectedEffort={false}
-                  includePlanAgent={selectsPlanAgent(activeSelection.options)}
-                  disabled={saving || !connected}
+            {briefSelection !== null ? (
+              <span className="text-sm">{briefModelName ?? briefSelection.model}</span>
+            ) : (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <ProviderModelPicker
+                  environmentId={environmentId}
+                  // The saved selection only seeds new threads; bound runs ignore it.
+                  disabled={saving || !connected || draft.threadId !== ""}
+                  activeInstanceId={shownInstanceId}
+                  model={shownModel}
+                  lockedProvider={null}
+                  instanceEntries={instanceEntries}
+                  modelOptionsByInstance={modelOptionsByInstance}
+                  isComposerOwned={false}
                   triggerClassName={"min-w-0"}
-                  onModelOptionsChange={(options) =>
+                  onInstanceModelChange={(instanceId, model) => {
+                    if (
+                      instanceId === activeSelection?.instanceId &&
+                      model === activeSelection.model
+                    )
+                      return;
                     setDraft((current) => ({
                       ...current,
-                      modelSelection: createModelSelection(activeInstanceId, activeModel, options),
-                    }))
-                  }
+                      modelSelection: createModelSelection(instanceId, model),
+                    }));
+                  }}
                 />
-              ) : null}
-            </div>
+                {!draft.threadId && activeSelection && activeEntry ? (
+                  <TraitsPicker
+                    provider={activeEntry.driverKind}
+                    models={activeEntry.models}
+                    model={activeModel}
+                    modelOptions={activeSelection.options ?? []}
+                    allowPromptInjectedEffort={false}
+                    includePlanAgent={selectsPlanAgent(activeSelection.options)}
+                    disabled={saving || !connected}
+                    triggerClassName={"min-w-0"}
+                    onModelOptionsChange={(options) =>
+                      setDraft((current) => ({
+                        ...current,
+                        modelSelection: createModelSelection(
+                          activeInstanceId,
+                          activeModel,
+                          options,
+                        ),
+                      }))
+                    }
+                  />
+                ) : null}
+              </div>
+            )}
           </Field>
 
           <div className="space-y-3">

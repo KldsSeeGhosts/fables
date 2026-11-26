@@ -1,16 +1,18 @@
 import {
   CaptainError,
+  CaptainDocumentContent,
   type Captain,
   type CaptainDocument,
   type CaptainId,
   type ProjectId,
   type ThreadId,
-  type TextGenerationError,
+  TextGenerationError,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import { resolveBriefModelSelection } from "../serverSettings.ts";
@@ -20,6 +22,9 @@ import * as CaptainHandoff from "./captainHandoff.ts";
 import * as CaptainStore from "./CaptainStore.ts";
 
 const missing = () => new CaptainError({ code: "not_found", message: "Captain not found." });
+const isDocumentContent = Schema.is(CaptainDocumentContent);
+const BRIEF_DOCUMENT_CONTEXT_LIMIT = 4_000;
+const BRIEF_ACTIVITY_LIMIT = 4_000;
 
 /** Replaces only DIGEST.md's `## New` section, or adds it after the title when the digest has none. */
 export const replaceCaptainDigestNewSection = (content: string, section: string): string => {
@@ -30,26 +35,26 @@ export const replaceCaptainDigestNewSection = (content: string, section: string)
   if (start !== -1) {
     const rest = lines.slice(start + 1);
     const end = rest.findIndex((line) => /^#{1,2}\s/.test(line.trim()));
-    return [...lines.slice(0, start), ...replacement, ...(end === -1 ? [] : rest.slice(end))]
-      .join("\n")
-      .trimEnd();
+    return [...lines.slice(0, start), ...replacement, ...(end === -1 ? [] : rest.slice(end))].join(
+      "\n",
+    );
   }
   const firstContent = lines.findIndex((line) => line.trim() !== "");
   const insertAt = firstContent !== -1 && /^#\s/.test(lines[firstContent]!) ? firstContent + 1 : 0;
   const afterTitle = insertAt > 0;
   const following = lines.slice(insertAt);
-  const firstFollowing = following.findIndex((line) => line.trim() !== "");
+  if (following[0]?.trim() === "") replacement.pop();
   return [
     ...lines.slice(0, insertAt),
     ...(afterTitle ? [""] : []),
     ...replacement,
-    ...(firstFollowing === -1 ? [] : following.slice(firstFollowing)),
-  ]
-    .join("\n")
-    .trim();
+    ...following,
+  ].join("\n");
 };
 
 const compactLine = (value: string | null | undefined) => value?.replace(/\s+/g, " ").trim();
+const excerpt = (value: string, limit: number) =>
+  value.length <= limit ? value : `${value.slice(0, limit - 1)}…`;
 
 const formatActivity = (activity: {
   readonly activeTasks: ReadonlyArray<{
@@ -69,13 +74,13 @@ const formatActivity = (activity: {
   }>;
 }) => {
   const lines: string[] = [];
-  for (const task of activity.activeTasks) {
-    lines.push(
-      `- active ${task.status}: ${task.title}${task.progress ? `, ${compactLine(task.progress)}` : ""}`,
-    );
-  }
-  for (const request of activity.pendingRequests) {
+  for (const request of activity.pendingRequests.slice(0, 8)) {
     lines.push(`- pending ${request.kind}: ${compactLine(request.detail) ?? "Needs an answer"}`);
+  }
+  for (const task of activity.activeTasks.slice(0, 8)) {
+    lines.push(
+      `- active ${task.status}: ${excerpt(compactLine(task.title) ?? "", 100)}${task.progress ? `, ${compactLine(task.progress)}` : ""}`,
+    );
   }
   for (const task of activity.completedTasks) {
     lines.push(
@@ -95,13 +100,13 @@ const briefPrompt = (input: {
 Return only the markdown body for that section. Do not include the "## New" heading, a code fence, or commentary. Write no more than 8 bullets, with one line per item that needs the user's attention or decision. Use plain language. Cover progress, open work, blockers, and decisions that need the user. Use the existing digest for continuity, but write a fresh current section rather than copying stale items forward.
 
 ## NOTES.md
-${input.notes.trim() || "(empty)"}
+${excerpt(input.notes.trim(), BRIEF_DOCUMENT_CONTEXT_LIMIT) || "(empty)"}
 
 ## Current DIGEST.md
-${input.digest.trim() || "(empty)"}
+${excerpt(input.digest.trim(), BRIEF_DOCUMENT_CONTEXT_LIMIT) || "(empty)"}
 
 ## Recent activity
-${input.activity}`;
+${excerpt(input.activity, BRIEF_ACTIVITY_LIMIT)}`;
 
 export class CaptainBriefService extends Context.Service<
   CaptainBriefService,
@@ -190,10 +195,10 @@ const make = Effect.gen(function* () {
     const completedTasks = yield* recentCompletedTasks(captain);
     const settings = yield* serverSettings.getSettings.pipe(
       Effect.mapError(
-        (cause) =>
+        () =>
           new CaptainError({
             code: "unavailable",
-            message: `Could not read brief model settings: ${cause.message}`,
+            message: "Could not read brief model settings.",
           }),
       ),
     );
@@ -212,11 +217,23 @@ const make = Effect.gen(function* () {
       .trim()
       .replace(/^##\s+New\s*\n+/i, "")
       .trim();
+    if (/^\s*(?:#{1,2}(?:\s|$)|`{3,}|~{3,}|=+[ \t]*$)/m.test(section)) {
+      return yield* new TextGenerationError({
+        operation: "generateBriefText",
+        detail: "The brief model returned headings or code fences instead of a brief.",
+      });
+    }
 
     const writeOnce = Effect.gen(function* () {
       const digest = yield* store.document(captain, "DIGEST.md");
       const content = replaceCaptainDigestNewSection(digest.content, section);
       if (content === digest.content) return digest;
+      if (!isDocumentContent(content)) {
+        return yield* new CaptainError({
+          code: "invalid_request",
+          message: "The generated brief would exceed the DIGEST.md size limit.",
+        });
+      }
       return yield* store.updateDocument({
         captainId: captain.id,
         name: "DIGEST.md",

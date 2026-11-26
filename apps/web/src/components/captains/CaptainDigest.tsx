@@ -79,6 +79,7 @@ export function CaptainMorningBriefControl({
   };
 
   const dirty = time !== null || enabled !== null;
+  const shownError = error ?? (task?.lastRunStatus === "failed" ? task.lastRunError : null);
   return (
     <div className="rounded-lg border border-(--duet-hairline) px-3 py-2.5">
       <div className="flex min-w-0 items-center gap-3">
@@ -136,9 +137,9 @@ export function CaptainMorningBriefControl({
           ) : null}
         </div>
       ) : null}
-      {error !== null ? (
+      {shownError !== null ? (
         <p role="alert" className="mt-2 text-meta text-destructive-foreground">
-          {error}
+          {shownError}
         </p>
       ) : null}
     </div>

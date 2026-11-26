@@ -68,7 +68,7 @@ it("replaces only the digest New section", () => {
   assert.isTrue(
     next.includes("## Projects\n\nKeep this section exactly.\n\n\nThis blank spacing stays."),
   );
-  assert.isTrue(next.includes("## Decisions\n\nKeep this too."));
+  assert.isTrue(next.endsWith("## Decisions\n\nKeep this too.\n"));
   assert.isFalse(next.includes("stale item"));
 });
 
@@ -81,6 +81,10 @@ it("adds a missing New section after the digest title", () => {
     next,
     "# Maria digest\n\n## New\n\n- fresh item\n\n## Projects\n\nKeep this section.",
   );
+  assert.equal(
+    CaptainBriefService.replaceCaptainDigestNewSection("\n## Projects\r\n\r\nKeep this.\r\n", ""),
+    "## New\n\n\n## Projects\r\n\r\nKeep this.\r\n",
+  );
 });
 
 it.effect("generates with the brief model and retries once after a revision conflict", () =>
@@ -90,11 +94,12 @@ it.effect("generates with the brief model and retries once after a revision conf
     const generationModels: unknown[] = [];
     const generationPrompts: string[] = [];
     const documents = new Map<CaptainDocumentName, CaptainDocument>([
-      ["NOTES.md", document("NOTES.md", "User cares about the migration.")],
+      ["NOTES.md", document("NOTES.md", `User cares about the migration.\n${"x".repeat(50_000)}`)],
       ["DIGEST.md", document("DIGEST.md", digestContent)],
     ]);
     let digestReads = 0;
     let writes = 0;
+    let response = Effect.succeed({ text: "- migration finished\n- one approval waits" });
     const storeLayer = Layer.mock(CaptainStore.CaptainStore)({
       find: (id) => Effect.succeed(id === captain.id ? captain : undefined),
       document: (_captain, name) =>
@@ -105,6 +110,10 @@ it.effect("generates with the brief model and retries once after a revision conf
       updateDocument: (input) => {
         writes++;
         if (writes === 1) {
+          documents.set(
+            "DIGEST.md",
+            document("DIGEST.md", `${digestContent}\nConcurrent edit.\n`, 1),
+          );
           return Effect.fail(
             new CaptainError({
               code: "conflict",
@@ -130,10 +139,10 @@ it.effect("generates with the brief model and retries once after a revision conf
     });
     const textGenerationLayer = Layer.mock(TextGeneration.TextGeneration)({
       generateBriefText: (input) =>
-        Effect.sync(() => {
+        Effect.suspend(() => {
           generationModels.push(input.modelSelection);
           generationPrompts.push(input.prompt);
-          return { text: "- migration finished\n- one approval waits" };
+          return response;
         }),
     });
     const layer = CaptainBriefService.layer.pipe(
@@ -171,11 +180,27 @@ it.effect("generates with the brief model and retries once after a revision conf
       assert.isTrue(written.content.includes("- migration finished"));
       assert.isTrue(generationPrompts[0]?.includes("Review the migration") === true);
       assert.isTrue(generationPrompts[0]?.includes("Migration review passed") === true);
+      assert.isBelow(generationPrompts[0]!.length, 16_000);
+      assert.isTrue(written.content.endsWith("\nConcurrent edit.\n"));
       assert.isTrue(
         written.content.includes(
           "## Projects\n\nKeep this section exactly.\n\n\nThis blank spacing stays.",
         ),
       );
+
+      response = Effect.succeed({ text: "- item\n\n## Decisions\nDuplicate section." });
+      const malformed = yield* Effect.result(service.generate({ captainId: captain.id }));
+      assert.equal(malformed._tag, "Failure");
+      assert.equal(writes, 2);
+
+      documents.set(
+        "DIGEST.md",
+        document("DIGEST.md", `## New\n\n## Projects\n${"x".repeat(63_970)}`, 3),
+      );
+      response = Effect.succeed({ text: "- ".concat("An item to review. ".repeat(10)) });
+      const oversized = yield* Effect.result(service.generate({ captainId: captain.id }));
+      assert.equal(oversized._tag, "Failure");
+      assert.equal(writes, 2);
     }).pipe(Effect.provide(layer));
   }),
 );
