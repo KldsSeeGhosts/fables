@@ -8016,19 +8016,27 @@
     }
   ],
   "ce703d4ba40dc9b4": "Mesclando a pilha...",
-  "ac7feb9c583b02a0": "Fazendo rebase da pilha...",
   "cb0f63bbb0b68d94": "Não foi possível mesclar a pilha",
-  "c8a943fa15a56b2b": "Não foi possível fazer rebase da pilha",
-  "ec22caeb8b949ed1": "O host recusou o rebase. Um rebase para no primeiro commit que não se aplica sem conflitos.",
   "ead3e2bac1a8d231": "Pedido de merge da pilha concluído",
+  "8a883c4fbc127b68": "Enabling stack auto-merge...",
+  "5fb2a26ae31e8983": "Could not enable stack auto-merge",
+  "986d0dcbf4dd0098": "Stack auto-merge enabled",
+  "ac7feb9c583b02a0": "Fazendo rebase da pilha...",
+  "c8a943fa15a56b2b": "Não foi possível fazer rebase da pilha",
   "d7079b5ac269c65e": "Rebase da pilha feito",
+  "ec22caeb8b949ed1": "O host recusou o rebase. Um rebase para no primeiro commit que não se aplica sem conflitos.",
   "5631b32be0ce48d3": "{host} mesclou a pilha ou a adicionou à fila de merge.",
+  "f3ed1f63c8a3eef2": "{host} merges the stack through #{number} once its requirements are met.",
+  "bd536a0a1754f6cb": "Could not cancel stack auto-merge",
+  "bb90ac3b2f3a72d5": "The host refused to cancel auto-merge. Refresh and try again.",
   "2d3b55018a54287e": "Verificando a pilha com o host…",
   "eea55205e46d2e3d": "Pilha {number}, camada {position} de {size}",
   "b6f729119107a145": "{count, plural, one {Mesclar a pilha até o '#'{number} em {base} ({count} {term, select, mr {merge request} cr {solicitação de alteração} other {pull request}})} other {Mesclar a pilha até o '#'{number} em {base} ({count} {term, select, mr {merge requests} cr {solicitações de alteração} other {pull requests}})}}",
   "d4bfcdc6bb7676a3": "{count, plural, one {Mesclar {count} {term, select, mr {merge request} cr {solicitação de alteração} other {pull request}}?} other {Mesclar {count} {term, select, mr {merge requests} cr {solicitações de alteração} other {pull requests}}?}}",
+  "9c28753c777c37b7": "{count, plural, one {Auto-merge {count} {term, select, mr {merge request} cr {change request} other {pull request}}?} other {Auto-merge {count} {term, select, mr {merge requests} cr {change requests} other {pull requests}}?}}",
   "b9f2a24a3757f6c9": "{count, plural, one {Fazer rebase de {count} {term, select, mr {merge request} cr {solicitação de alteração} other {pull request}}?} other {Fazer rebase de {count} {term, select, mr {merge requests} cr {solicitações de alteração} other {pull requests}}?}}",
   "d1bcf19eb2753fff": "Mescla o #{number} e as camadas não mescladas abaixo dele em {base} usando {method}. {host} verifica as regras antes de mesclá-las ou enfileirá-las e faz rebase do restante da pilha depois do merge.",
+  "a86b49982e18784d": "Merge #{number} and its unmerged layers below into {base} using {method} once every one of them meets the requirements on {host}. This may happen immediately.",
   "31d2f22f5a282719": "Faz rebase dos branches remotos, de baixo para cima, sobre {base}. Isso reescreve o histórico dos branches e pode reiniciar as verificações. Se uma camada falhar, as atualizações anteriores permanecem.",
   "a0adf78733c368ae": "Mesclar pilha",
   "140dc384c58b74f3": "Fazer rebase da pilha",
@@ -8063,6 +8071,16 @@
     },
     ")"
   ],
+  "b1afda5c964deee4": [
+    "Auto-merge stack (",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ")"
+  ],
+  "33d18dda74f6d7b3": "Cancel stack auto-merge",
   "30440f98e929440a": "Fazer rebase da pilha",
   "f94a1b0f3130f44d": [
     "Resolve the conflicts with ",
@@ -8074,6 +8092,7 @@
     " before merging."
   ],
   "13718a03e3144142": "Todas as camadas a mesclar precisam estar abertas e prontas para revisão.",
+  "012c67c7f1a99e33": "Auto-merge stack",
   "4aafe1baf113088a": "Mesclar pilha",
   "0292da19054f2a04": "Carregando a pilha…",
   "5ce05fc45e78d256": "This {term, select, mr {merge request} cr {change request} other {pull request}} is no longer in a stack.",

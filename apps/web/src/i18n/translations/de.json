@@ -8017,19 +8017,27 @@
     }
   ],
   "ce703d4ba40dc9b4": "Stack wird gemergt...",
-  "ac7feb9c583b02a0": "Stack wird rebased...",
   "cb0f63bbb0b68d94": "Der Stack konnte nicht gemergt werden",
-  "c8a943fa15a56b2b": "Der Stack konnte nicht rebased werden",
-  "ec22caeb8b949ed1": "Der Host hat den Rebase abgelehnt. Ein Rebase hält beim ersten Commit an, der sich nicht sauber anwenden lässt.",
   "ead3e2bac1a8d231": "Merge-Anfrage für den Stack abgeschlossen",
+  "8a883c4fbc127b68": "Enabling stack auto-merge...",
+  "5fb2a26ae31e8983": "Could not enable stack auto-merge",
+  "986d0dcbf4dd0098": "Stack auto-merge enabled",
+  "ac7feb9c583b02a0": "Stack wird rebased...",
+  "c8a943fa15a56b2b": "Der Stack konnte nicht rebased werden",
   "d7079b5ac269c65e": "Rebase des Stacks abgeschlossen",
+  "ec22caeb8b949ed1": "Der Host hat den Rebase abgelehnt. Ein Rebase hält beim ersten Commit an, der sich nicht sauber anwenden lässt.",
   "5631b32be0ce48d3": "{host} hat den Stack gemergt oder in seine Merge-Warteschlange aufgenommen.",
+  "f3ed1f63c8a3eef2": "{host} merges the stack through #{number} once its requirements are met.",
+  "bd536a0a1754f6cb": "Could not cancel stack auto-merge",
+  "bb90ac3b2f3a72d5": "The host refused to cancel auto-merge. Refresh and try again.",
   "2d3b55018a54287e": "Der Stack wird beim Host geprüft…",
   "eea55205e46d2e3d": "Stack {number}, Ebene {position} von {size}",
   "b6f729119107a145": "{count, plural, one {Stack bis '#'{number} in {base} mergen ({count} {term, select, mr {Merge Request} cr {Änderungsanfrage} other {Pull Request}})} other {Stack bis '#'{number} in {base} mergen ({count} {term, select, mr {Merge Requests} cr {Änderungsanfragen} other {Pull Requests}})}}",
   "d4bfcdc6bb7676a3": "{count, plural, one {{count} {term, select, mr {Merge Request} cr {Änderungsanfrage} other {Pull Request}} mergen?} other {{count} {term, select, mr {Merge Requests} cr {Änderungsanfragen} other {Pull Requests}} mergen?}}",
+  "9c28753c777c37b7": "{count, plural, one {Auto-merge {count} {term, select, mr {merge request} cr {change request} other {pull request}}?} other {Auto-merge {count} {term, select, mr {merge requests} cr {change requests} other {pull requests}}?}}",
   "b9f2a24a3757f6c9": "{count, plural, one {{count} {term, select, mr {Merge Request} cr {Änderungsanfrage} other {Pull Request}} rebasen?} other {{count} {term, select, mr {Merge Requests} cr {Änderungsanfragen} other {Pull Requests}} rebasen?}}",
   "d1bcf19eb2753fff": "#{number} und die darunterliegenden nicht gemergten Ebenen per {method} in {base} mergen. {host} prüft ihre Regeln, bevor sie gemergt oder eingereiht werden, und rebased nach dem Mergen den restlichen Stack.",
+  "a86b49982e18784d": "Merge #{number} and its unmerged layers below into {base} using {method} once every one of them meets the requirements on {host}. This may happen immediately.",
   "31d2f22f5a282719": "Die Remote-Branches von unten nach oben auf {base} rebasen. Das schreibt die Branch-Historie um und kann Checks neu starten. Schlägt eine Ebene fehl, bleiben frühere Aktualisierungen bestehen.",
   "a0adf78733c368ae": "Stack mergen",
   "140dc384c58b74f3": "Stack rebasen",
@@ -8064,6 +8072,16 @@
     },
     ")"
   ],
+  "b1afda5c964deee4": [
+    "Auto-merge stack (",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ")"
+  ],
+  "33d18dda74f6d7b3": "Cancel stack auto-merge",
   "30440f98e929440a": "Stack rebasen",
   "f94a1b0f3130f44d": [
     "Resolve the conflicts with ",
@@ -8075,6 +8093,7 @@
     " before merging."
   ],
   "13718a03e3144142": "Jede zu mergende Ebene muss offen und bereit für Review sein.",
+  "012c67c7f1a99e33": "Auto-merge stack",
   "4aafe1baf113088a": "Stack mergen",
   "0292da19054f2a04": "Stack wird geladen…",
   "5ce05fc45e78d256": "This {term, select, mr {merge request} cr {change request} other {pull request}} is no longer in a stack.",

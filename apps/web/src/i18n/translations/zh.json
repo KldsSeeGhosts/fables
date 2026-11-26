@@ -8028,19 +8028,27 @@
     }
   ],
   "ce703d4ba40dc9b4": "正在合并堆叠…",
-  "ac7feb9c583b02a0": "正在对堆叠变基…",
   "cb0f63bbb0b68d94": "无法合并堆叠",
-  "c8a943fa15a56b2b": "无法对堆叠变基",
-  "ec22caeb8b949ed1": "托管平台拒绝了变基。变基在应用提交时遇到冲突就会停止。",
   "ead3e2bac1a8d231": "堆叠合并请求已完成",
+  "8a883c4fbc127b68": "Enabling stack auto-merge...",
+  "5fb2a26ae31e8983": "Could not enable stack auto-merge",
+  "986d0dcbf4dd0098": "Stack auto-merge enabled",
+  "ac7feb9c583b02a0": "正在对堆叠变基…",
+  "c8a943fa15a56b2b": "无法对堆叠变基",
   "d7079b5ac269c65e": "堆叠已变基",
+  "ec22caeb8b949ed1": "托管平台拒绝了变基。变基在应用提交时遇到冲突就会停止。",
   "5631b32be0ce48d3": "{host} 已合并该堆叠，或已将其加入合并队列。",
+  "f3ed1f63c8a3eef2": "{host} merges the stack through #{number} once its requirements are met.",
+  "bd536a0a1754f6cb": "Could not cancel stack auto-merge",
+  "bb90ac3b2f3a72d5": "The host refused to cancel auto-merge. Refresh and try again.",
   "2d3b55018a54287e": "正在与托管平台核对堆叠…",
   "eea55205e46d2e3d": "堆叠 {number}，第 {position} 层，共 {size} 层",
   "b6f729119107a145": "{count, plural, other {将堆叠合并至 '#'{number} 并并入 {base}（{count} 个 {term, select, mr {MR} cr {change request} other {PR}}）}}",
   "d4bfcdc6bb7676a3": "{count, plural, other {合并 {count} 个 {term, select, mr {merge request} cr {change request} other {pull request}}？}}",
+  "9c28753c777c37b7": "{count, plural, one {Auto-merge {count} {term, select, mr {merge request} cr {change request} other {pull request}}?} other {Auto-merge {count} {term, select, mr {merge requests} cr {change requests} other {pull requests}}?}}",
   "b9f2a24a3757f6c9": "{count, plural, other {变基 {count} 个 {term, select, mr {merge request} cr {change request} other {pull request}}？}}",
   "d1bcf19eb2753fff": "使用 {method} 将 #{number} 及其下方未合并的各层合并到 {base}。{host} 会在合并或排队前检查它们的规则，并在合并后对剩余堆叠执行变基。",
+  "a86b49982e18784d": "Merge #{number} and its unmerged layers below into {base} using {method} once every one of them meets the requirements on {host}. This may happen immediately.",
   "31d2f22f5a282719": "将远端分支自下而上变基到 {base}。这会重写分支历史，并可能重新运行检查。如果某一层失败，之前的更新会保留。",
   "a0adf78733c368ae": "合并堆叠",
   "140dc384c58b74f3": "对堆叠变基",
@@ -8076,6 +8084,16 @@
     },
     "）"
   ],
+  "b1afda5c964deee4": [
+    "Auto-merge stack (",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ")"
+  ],
+  "33d18dda74f6d7b3": "Cancel stack auto-merge",
   "30440f98e929440a": "对堆叠变基",
   "f94a1b0f3130f44d": [
     "Resolve the conflicts with ",
@@ -8087,6 +8105,7 @@
     " before merging."
   ],
   "13718a03e3144142": "要合并的每一层都必须处于开放状态，且已准备好接受审查。",
+  "012c67c7f1a99e33": "Auto-merge stack",
   "4aafe1baf113088a": "合并堆叠",
   "0292da19054f2a04": "正在加载堆叠…",
   "5ce05fc45e78d256": "This {term, select, mr {merge request} cr {change request} other {pull request}} is no longer in a stack.",

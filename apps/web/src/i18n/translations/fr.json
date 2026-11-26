@@ -8017,19 +8017,27 @@
     }
   ],
   "ce703d4ba40dc9b4": "Fusion de la pile...",
-  "ac7feb9c583b02a0": "Rebase de la pile...",
   "cb0f63bbb0b68d94": "Impossible de fusionner la pile",
-  "c8a943fa15a56b2b": "Impossible de faire le rebase de la pile",
-  "ec22caeb8b949ed1": "L’hôte a refusé le rebase. Un rebase s’arrête au premier commit qui ne s’applique pas proprement.",
   "ead3e2bac1a8d231": "Demande de fusion de la pile terminée",
+  "8a883c4fbc127b68": "Enabling stack auto-merge...",
+  "5fb2a26ae31e8983": "Could not enable stack auto-merge",
+  "986d0dcbf4dd0098": "Stack auto-merge enabled",
+  "ac7feb9c583b02a0": "Rebase de la pile...",
+  "c8a943fa15a56b2b": "Impossible de faire le rebase de la pile",
   "d7079b5ac269c65e": "Rebase de la pile effectué",
+  "ec22caeb8b949ed1": "L’hôte a refusé le rebase. Un rebase s’arrête au premier commit qui ne s’applique pas proprement.",
   "5631b32be0ce48d3": "{host} a fusionné la pile ou l’a ajoutée à sa file de fusion.",
+  "f3ed1f63c8a3eef2": "{host} merges the stack through #{number} once its requirements are met.",
+  "bd536a0a1754f6cb": "Could not cancel stack auto-merge",
+  "bb90ac3b2f3a72d5": "The host refused to cancel auto-merge. Refresh and try again.",
   "2d3b55018a54287e": "Vérification de la pile auprès de l’hôte…",
   "eea55205e46d2e3d": "Pile {number}, couche {position} sur {size}",
   "b6f729119107a145": "{count, plural, one {Fusionner la pile jusqu’à '#'{number} dans {base} ({count} {term, select, mr {merge request} cr {demande de modification} other {pull request}})} other {Fusionner la pile jusqu’à '#'{number} dans {base} ({count} {term, select, mr {merge requests} cr {demandes de modification} other {pull requests}})}}",
   "d4bfcdc6bb7676a3": "{count, plural, one {Fusionner {count} {term, select, mr {merge request} cr {demande de modification} other {pull request}} ?} other {Fusionner {count} {term, select, mr {merge requests} cr {demandes de modification} other {pull requests}} ?}}",
+  "9c28753c777c37b7": "{count, plural, one {Auto-merge {count} {term, select, mr {merge request} cr {change request} other {pull request}}?} other {Auto-merge {count} {term, select, mr {merge requests} cr {change requests} other {pull requests}}?}}",
   "b9f2a24a3757f6c9": "{count, plural, one {Faire le rebase de {count} {term, select, mr {merge request} cr {demande de modification} other {pull request}} ?} other {Faire le rebase de {count} {term, select, mr {merge requests} cr {demandes de modification} other {pull requests}} ?}}",
   "d1bcf19eb2753fff": "Fusionner #{number} et ses couches non fusionnées inférieures dans {base} avec {method}. {host} vérifie leurs règles avant de les fusionner ou de les mettre en file d’attente, puis fait le rebase du reste de la pile après la fusion.",
+  "a86b49982e18784d": "Merge #{number} and its unmerged layers below into {base} using {method} once every one of them meets the requirements on {host}. This may happen immediately.",
   "31d2f22f5a282719": "Faire le rebase des branches distantes de bas en haut sur {base}. Cela réécrit l’historique des branches et peut relancer les checks. Si une couche échoue, les mises à jour précédentes restent en place.",
   "a0adf78733c368ae": "Fusionner la pile",
   "140dc384c58b74f3": "Rebase de la pile",
@@ -8064,6 +8072,16 @@
     },
     ")"
   ],
+  "b1afda5c964deee4": [
+    "Auto-merge stack (",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ")"
+  ],
+  "33d18dda74f6d7b3": "Cancel stack auto-merge",
   "30440f98e929440a": "Rebase de la pile",
   "f94a1b0f3130f44d": [
     "Resolve the conflicts with ",
@@ -8075,6 +8093,7 @@
     " before merging."
   ],
   "13718a03e3144142": "Chaque couche fusionnée doit être ouverte et prête pour la revue.",
+  "012c67c7f1a99e33": "Auto-merge stack",
   "4aafe1baf113088a": "Fusionner la pile",
   "0292da19054f2a04": "Chargement de la pile…",
   "5ce05fc45e78d256": "This {term, select, mr {merge request} cr {change request} other {pull request}} is no longer in a stack.",

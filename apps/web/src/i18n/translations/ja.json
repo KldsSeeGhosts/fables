@@ -7988,19 +7988,27 @@
     }
   ],
   "ce703d4ba40dc9b4": "スタックをマージしています...",
-  "ac7feb9c583b02a0": "スタックをリベースしています...",
   "cb0f63bbb0b68d94": "スタックをマージできませんでした",
-  "c8a943fa15a56b2b": "スタックをリベースできませんでした",
-  "ec22caeb8b949ed1": "ホストがリベースを拒否しました。リベースは、きれいに適用できない最初のコミットで停止します。",
   "ead3e2bac1a8d231": "スタックのマージリクエストが完了しました",
+  "8a883c4fbc127b68": "Enabling stack auto-merge...",
+  "5fb2a26ae31e8983": "Could not enable stack auto-merge",
+  "986d0dcbf4dd0098": "Stack auto-merge enabled",
+  "ac7feb9c583b02a0": "スタックをリベースしています...",
+  "c8a943fa15a56b2b": "スタックをリベースできませんでした",
   "d7079b5ac269c65e": "スタックをリベースしました",
+  "ec22caeb8b949ed1": "ホストがリベースを拒否しました。リベースは、きれいに適用できない最初のコミットで停止します。",
   "5631b32be0ce48d3": "{host} がスタックをマージしたか、マージキューに追加しました。",
+  "f3ed1f63c8a3eef2": "{host} merges the stack through #{number} once its requirements are met.",
+  "bd536a0a1754f6cb": "Could not cancel stack auto-merge",
+  "bb90ac3b2f3a72d5": "The host refused to cancel auto-merge. Refresh and try again.",
   "2d3b55018a54287e": "ホストでスタックを確認しています…",
   "eea55205e46d2e3d": "スタック {number}、レイヤー {position}/{size}",
   "b6f729119107a145": "{count, plural, other {スタックを '#'{number} まで {base} にマージ ({term, select, mr {マージリクエスト {count} 件} cr {変更リクエスト {count} 件} other {プルリクエスト {count} 件}})}}",
   "d4bfcdc6bb7676a3": "{count, plural, other {{term, select, mr {マージリクエスト {count} 件をマージしますか？} cr {変更リクエスト {count} 件をマージしますか？} other {プルリクエスト {count} 件をマージしますか？}}}}",
+  "9c28753c777c37b7": "{count, plural, one {Auto-merge {count} {term, select, mr {merge request} cr {change request} other {pull request}}?} other {Auto-merge {count} {term, select, mr {merge requests} cr {change requests} other {pull requests}}?}}",
   "b9f2a24a3757f6c9": "{count, plural, other {{term, select, mr {マージリクエスト {count} 件をリベースしますか？} cr {変更リクエスト {count} 件をリベースしますか？} other {プルリクエスト {count} 件をリベースしますか？}}}}",
   "d1bcf19eb2753fff": "#{number} と、その下の未マージのレイヤーを {method} で {base} にマージします。{host} はマージまたはキューへの追加の前にルールを確認し、マージ後に残りのスタックをリベースします。",
+  "a86b49982e18784d": "Merge #{number} and its unmerged layers below into {base} using {method} once every one of them meets the requirements on {host}. This may happen immediately.",
   "31d2f22f5a282719": "リモートブランチを下から順に {base} にリベースします。これによりブランチの履歴が書き換えられ、チェックが再実行される場合があります。途中のレイヤーで失敗しても、それまでの更新は残ります。",
   "a0adf78733c368ae": "スタックをマージ",
   "140dc384c58b74f3": "スタックをリベース",
@@ -8036,6 +8044,16 @@
     },
     ")"
   ],
+  "b1afda5c964deee4": [
+    "Auto-merge stack (",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ")"
+  ],
+  "33d18dda74f6d7b3": "Cancel stack auto-merge",
   "30440f98e929440a": "スタックをリベース",
   "f94a1b0f3130f44d": [
     "Resolve the conflicts with ",
@@ -8047,6 +8065,7 @@
     " before merging."
   ],
   "13718a03e3144142": "マージするすべてのレイヤーがオープンで、レビューの準備完了である必要があります。",
+  "012c67c7f1a99e33": "Auto-merge stack",
   "4aafe1baf113088a": "スタックをマージ",
   "0292da19054f2a04": "スタックを読み込んでいます…",
   "5ce05fc45e78d256": "This {term, select, mr {merge request} cr {change request} other {pull request}} is no longer in a stack.",

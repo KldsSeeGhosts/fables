@@ -726,6 +726,7 @@ export function PullRequestDetailPanel({
     stackError: nativeStackQuery.error,
   });
   const stackOwnsMerge = supportsStackActions && nativeStack !== null;
+  const stackAutoMerge = supportsStackActions && detail?.capabilities.stackAutoMerge === true;
   const mergeBlockedReason = canMergeSinglePullRequest
     ? null
     : nativeStackQuery.error
@@ -1563,6 +1564,7 @@ export function PullRequestDetailPanel({
           onRetry: nativeStackQuery.error ? nativeStackQuery.refresh : undefined,
           reference,
           environmentId,
+          shownHeadSha,
           onSelect: onSelectPullRequest,
           mergeMethod: selectedMergeMethod,
           stale: !nativeStackQuery.isFresh,
@@ -1572,6 +1574,11 @@ export function PullRequestDetailPanel({
               ? detail.baseBranch
               : null,
           canRebase: supportsStackActions && detail.viewerPermissions.stackRebase === true,
+          canAutoMerge:
+            stackAutoMerge && can("enable-auto-merge") && allowedMergeMethods.length > 0,
+          preferAutoMerge: checksState !== null && checksState !== "passing",
+          autoMergeArmed: stackAutoMerge && autoMergeArmed,
+          canCancelAutoMerge: stackAutoMerge && can("disable-auto-merge"),
           onActed: () => {
             refreshDetail();
             onActed?.();
@@ -1602,7 +1609,10 @@ export function PullRequestDetailPanel({
     />
   ) : null;
   const stackMergeButton =
-    stackMenuProps !== null && stackMenuProps.canMerge && stackMenuProps.conflictsWith === null ? (
+    stackMenuProps !== null &&
+    (stackMenuProps.canMerge || stackMenuProps.canAutoMerge) &&
+    !stackMenuProps.autoMergeArmed &&
+    stackMenuProps.conflictsWith === null ? (
       <PullRequestStackMenu {...stackMenuProps} display="merge-button" />
     ) : null;
   const showsArmedNote = autoMergeArmed && primaryAction !== "auto-merge-armed";

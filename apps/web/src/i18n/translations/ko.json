@@ -7990,19 +7990,27 @@
     }
   ],
   "ce703d4ba40dc9b4": "스택 병합 중...",
-  "ac7feb9c583b02a0": "스택 리베이스 중...",
   "cb0f63bbb0b68d94": "스택을 병합할 수 없습니다",
-  "c8a943fa15a56b2b": "스택을 리베이스할 수 없습니다",
-  "ec22caeb8b949ed1": "호스트가 리베이스를 거부했습니다. 리베이스는 깔끔하게 적용되지 않는 첫 커밋에서 멈춥니다.",
   "ead3e2bac1a8d231": "스택 병합 요청 완료",
+  "8a883c4fbc127b68": "Enabling stack auto-merge...",
+  "5fb2a26ae31e8983": "Could not enable stack auto-merge",
+  "986d0dcbf4dd0098": "Stack auto-merge enabled",
+  "ac7feb9c583b02a0": "스택 리베이스 중...",
+  "c8a943fa15a56b2b": "스택을 리베이스할 수 없습니다",
   "d7079b5ac269c65e": "스택 리베이스됨",
+  "ec22caeb8b949ed1": "호스트가 리베이스를 거부했습니다. 리베이스는 깔끔하게 적용되지 않는 첫 커밋에서 멈춥니다.",
   "5631b32be0ce48d3": "{host}에서 스택을 병합했거나 병합 대기열에 추가했습니다.",
+  "f3ed1f63c8a3eef2": "{host} merges the stack through #{number} once its requirements are met.",
+  "bd536a0a1754f6cb": "Could not cancel stack auto-merge",
+  "bb90ac3b2f3a72d5": "The host refused to cancel auto-merge. Refresh and try again.",
   "2d3b55018a54287e": "호스트에서 스택을 확인하는 중…",
   "eea55205e46d2e3d": "스택 {number}, {size}개 중 {position}번째 레이어",
   "b6f729119107a145": "{count, plural, other {'#'{number}까지 스택을 {base}에 병합({term, select, mr {병합 요청} cr {변경 요청} other {풀 리퀘스트}} {count}개)}}",
   "d4bfcdc6bb7676a3": "{count, plural, other {{term, select, mr {병합 요청} cr {변경 요청} other {풀 리퀘스트}} {count}개를 병합할까요?}}",
+  "9c28753c777c37b7": "{count, plural, one {Auto-merge {count} {term, select, mr {merge request} cr {change request} other {pull request}}?} other {Auto-merge {count} {term, select, mr {merge requests} cr {change requests} other {pull requests}}?}}",
   "b9f2a24a3757f6c9": "{count, plural, other {{term, select, mr {병합 요청} cr {변경 요청} other {풀 리퀘스트}} {count}개를 리베이스할까요?}}",
   "d1bcf19eb2753fff": "#{number}와(과) 그 아래의 병합되지 않은 레이어를 {method}(으)로 {base}에 병합합니다. {host}이(가) 병합하거나 대기열에 넣기 전에 규칙을 확인하고, 병합 후 남은 스택을 리베이스합니다.",
+  "a86b49982e18784d": "Merge #{number} and its unmerged layers below into {base} using {method} once every one of them meets the requirements on {host}. This may happen immediately.",
   "31d2f22f5a282719": "원격 브랜치를 아래에서 위로 {base}에 리베이스합니다. 브랜치 기록이 다시 작성되고 검사가 다시 시작될 수 있습니다. 레이어 하나가 실패해도 이전 업데이트는 유지됩니다.",
   "a0adf78733c368ae": "스택 병합",
   "140dc384c58b74f3": "스택 리베이스",
@@ -8036,6 +8044,16 @@
     },
     ")"
   ],
+  "b1afda5c964deee4": [
+    "Auto-merge stack (",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ")"
+  ],
+  "33d18dda74f6d7b3": "Cancel stack auto-merge",
   "30440f98e929440a": "스택 리베이스",
   "f94a1b0f3130f44d": [
     "Resolve the conflicts with ",
@@ -8047,6 +8065,7 @@
     " before merging."
   ],
   "13718a03e3144142": "병합할 모든 레이어가 열려 있고 검토 준비가 완료되어야 합니다.",
+  "012c67c7f1a99e33": "Auto-merge stack",
   "4aafe1baf113088a": "스택 병합",
   "0292da19054f2a04": "스택 불러오는 중…",
   "5ce05fc45e78d256": "This {term, select, mr {merge request} cr {change request} other {pull request}} is no longer in a stack.",
