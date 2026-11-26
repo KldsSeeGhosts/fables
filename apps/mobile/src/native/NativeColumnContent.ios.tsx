@@ -1,12 +1,13 @@
 import { HeaderHeightContext } from "@react-navigation/elements";
 import { use, useState, type ReactNode } from "react";
-import { View, type ColorValue } from "react-native";
+import { StyleSheet, View, type ColorValue } from "react-native";
 import {
   SafeAreaProvider,
   SafeAreaView,
   useSafeAreaFrame,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { useDuetShell } from "../features/captains/useDuetShell";
 import { NativeColumnLayoutMetricsContext } from "./native-layout-metrics";
 import type { NativeLayoutMetrics } from "../lib/reserved-regions";
 import { NativeLayoutObserver } from "./NativeLayoutObserver";
@@ -25,6 +26,8 @@ export function NativeColumnContent(props: {
   readonly column?: string;
 }) {
   const tabActivity = use(NativeWorkspaceTabActivityContext);
+  // The Duet shell draws columns flush on one surface, split from the sidebar by a hairline.
+  const duetShell = useDuetShell();
   const shared = use(WorkspaceColumnMetricsContext);
   const [measured, setMeasured] = useState<NativeLayoutMetrics | null>(null);
   const onMetrics = (next: NativeLayoutMetrics) => {
@@ -59,7 +62,7 @@ export function NativeColumnContent(props: {
           style={{ flex: 1 }}
         >
           <View
-            className={`flex-1 overflow-hidden ${props.primary ? "bg-drawer" : "bg-screen"} ${props.insetTop === false ? "" : "rounded-t-[28px]"}`}
+            className={`flex-1 overflow-hidden ${props.primary ? "bg-drawer" : "bg-screen"} ${props.insetTop === false || duetShell ? "" : "rounded-t-[28px]"}`}
             style={
               props.backgroundColor === undefined
                 ? undefined
@@ -78,6 +81,13 @@ export function NativeColumnContent(props: {
           </View>
         </SafeAreaView>
       </SafeAreaProvider>
+      {duetShell && props.primary ? (
+        <View
+          pointerEvents="none"
+          className="absolute bottom-0 right-0 top-0 bg-drawer-border"
+          style={{ width: StyleSheet.hairlineWidth }}
+        />
+      ) : null}
     </View>
   );
 }

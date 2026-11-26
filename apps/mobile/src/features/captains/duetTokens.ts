@@ -4,6 +4,7 @@ import type { MobileThemeAppearance } from "../../lib/mobileTheme";
  * The mobile mirror of web's ksg-salon Duet tokens. Components read this one set rather than
  * inventing local values; keep it in step with apps/web/src/themes/ksg-salon.css. Failed is the
  * theme's error colour and the scrim is plain black, since ksg-salon has no Duet token for either.
+ * Mobile panes share one surface, so `sidebar` matches `background` here.
  */
 export const DUET_TOKENS = {
   light: {
@@ -44,7 +45,7 @@ export const DUET_TOKENS = {
   },
   dark: {
     background: "#191919",
-    sidebar: "#1f1f1f",
+    sidebar: "#191919",
     sheet: "#1f1f1f",
     foreground: "#e3e3e3",
     muted: "#8a8a8a",

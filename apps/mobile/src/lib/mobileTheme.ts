@@ -534,6 +534,7 @@ export function getMobileThemeVariables(
   );
 
   // Web's sunken well: fields and off switch tracks sit below the card instead of matching it.
+  // The Duet shell (ksg-salon) puts every pane and native bar on one surface; controls keep their fills.
   const variables =
     themeId === DEFAULT_MOBILE_THEME_ID && appearance === "dark"
       ? {
@@ -541,7 +542,14 @@ export function getMobileThemeVariables(
           "--color-input": T3_CODE_DARK_WELL,
           "--color-switch-inactive-track": T3_CODE_DARK_WELL,
         }
-      : baseVariables;
+      : themeId === "ksg-salon"
+        ? {
+            ...baseVariables,
+            "--color-header": baseVariables["--color-screen"],
+            "--color-status-bar": baseVariables["--color-screen"],
+            "--color-drawer": baseVariables["--color-screen"],
+          }
+        : baseVariables;
 
   return overrides ? ({ ...variables, ...overrides } as MobileThemeVariables) : variables;
 }

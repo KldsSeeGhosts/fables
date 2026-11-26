@@ -33,6 +33,7 @@ import {
   Keyboard,
   Platform,
   Pressable,
+  StyleSheet,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -1061,6 +1062,14 @@ function AdaptiveWorkspaceLayoutContent(
               />
             ) : null}
           </Animated.View>
+          {/* The Duet shell's panes share one surface, so only this hairline splits them. */}
+          {duetShell ? (
+            <View
+              pointerEvents="none"
+              className="absolute bottom-0 right-0 top-0 bg-drawer-border"
+              style={{ width: StyleSheet.hairlineWidth }}
+            />
+          ) : null}
         </Animated.View>
       ) : null}
       <Animated.View

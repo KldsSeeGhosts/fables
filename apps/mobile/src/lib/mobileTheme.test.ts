@@ -79,7 +79,11 @@ describe("mobile themes", () => {
           : getMobileThemeVariables(themeId, appearance);
       expect(variables["--color-screen"]).toBe(themeColorToNativeColor(colors.canvas));
       expect(variables["--color-thread-canvas"]).toBe(variables["--color-screen"]);
-      expect(variables["--color-drawer"]).toBe(themeColorToNativeColor(colors.sidebar));
+      expect(variables["--color-drawer"]).toBe(
+        themeId === "ksg-salon"
+          ? variables["--color-screen"]
+          : themeColorToNativeColor(colors.sidebar),
+      );
       expect(variables["--color-thread-hover"]).toBe(
         themeColorToNativeColor(colors.sidebarRowHover),
       );
@@ -234,6 +238,17 @@ describe("mobile themes", () => {
         ).toBeGreaterThanOrEqual(4.5);
       }
     }
+  });
+
+  it("puts every Duet pane and native bar on the screen surface", () => {
+    for (const appearance of ["light", "dark"] as const) {
+      const variables = getMobileThemeVariables("ksg-salon", appearance);
+      for (const role of ["--color-header", "--color-status-bar", "--color-drawer"] as const) {
+        expect(variables[role]).toBe(variables["--color-screen"]);
+      }
+    }
+    const t3Dark = getMobileThemeVariables(DEFAULT_MOBILE_THEME_ID, "dark");
+    expect(t3Dark["--color-header"]).not.toBe(t3Dark["--color-screen"]);
   });
 
   it("migrates one theme choice to both appearances and preserves independent choices", () => {

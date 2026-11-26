@@ -2993,7 +2993,7 @@
       --color-icon: #242424;
       --color-icon-muted: #8a8a8a;
       --color-icon-subtle: #737373;
-      --color-header: rgba(255, 255, 255, 0.97);
+      --color-header: #ffffff;
       --color-header-foreground: #242424;
       --color-header-border: #ebebeb;
       --color-glass-surface: rgba(255, 255, 255, 0.74);
@@ -3156,13 +3156,13 @@
       --color-icon: #e3e3e3;
       --color-icon-muted: #7d7d7d;
       --color-icon-subtle: #959595;
-      --color-header: #111111;
+      --color-header: #191919;
       --color-header-foreground: #e3e3e3;
       --color-header-border: #262626;
       --color-glass-surface: rgba(37, 37, 37, 0.74);
       --color-glass-fallback: rgba(37, 37, 37, 0.9);
       --color-glass-tint: rgba(37, 37, 37, 0.22);
-      --color-status-bar: #111111;
+      --color-status-bar: #191919;
       --color-md-body: #e3e3e3;
       --color-md-strong: #e3e3e3;
       --color-md-link: #d97757;
@@ -3180,7 +3180,7 @@
       --color-user-bubble-foreground-muted: rgba(227, 227, 227, 0.78);
       --color-user-bubble-skill-foreground: #d97757;
       --color-backdrop: rgba(0, 0, 0, 0.48);
-      --color-drawer: #1f1f1f;
+      --color-drawer: #191919;
       --color-drawer-foreground: #d6d6d6;
       --color-drawer-foreground-muted: #919191;
       --color-drawer-border: #262626;
