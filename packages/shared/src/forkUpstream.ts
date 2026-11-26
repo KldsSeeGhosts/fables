@@ -55,7 +55,7 @@ export function upstreamReviewUrl(includedVersion: string | null, latestVersion:
 
 export function upstreamMergePrompt(latestVersion: string): string {
   const tag = `v${latestVersion}`;
-  return `Sync KSG Code with published upstream nightly ${tag} from ${T3_UPSTREAM_REPOSITORY}.
+  return `Sync Fables with published upstream nightly ${tag} from ${T3_UPSTREAM_REPOSITORY}.
 
 Read AGENTS.md, docs/operations/ksg-fork.md, and docs/operations/ksg-customization-inventory.md before running any merge. Work only in this KSG repository and its sync worktrees. Do not use GitHub's "Sync fork", git rebase, or a force push. Never install an upstream artifact over KSG. This task ends with a local sync report. A push, release, or device update requires separate explicit user approval.
 

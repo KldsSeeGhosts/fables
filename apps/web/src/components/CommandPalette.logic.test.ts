@@ -171,7 +171,7 @@ describe("buildThreadActionItems", () => {
       threads: Array.from({ length: 13 }, (_, index) =>
         makeThread({
           id: ThreadId.make(`daily-${index}`),
-          title: "Daily T3 Code trace hotspot check",
+          title: "Daily Fables trace hotspot check",
           latestUserMessageAt: `2026-03-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
         }),
       ),
@@ -692,7 +692,7 @@ describe("buildThreadActionItems", () => {
     });
     const items = buildThreadActionItems({
       threads: [idThread, titleThread],
-      projectByKey: new Map([[`${LOCAL_ENVIRONMENT_ID}:${PROJECT_ID}`, { title: "T3 Code" }]]),
+      projectByKey: new Map([[`${LOCAL_ENVIRONMENT_ID}:${PROJECT_ID}`, { title: "Fables" }]]),
       icon: null,
       runThread: async (_thread) => undefined,
     });

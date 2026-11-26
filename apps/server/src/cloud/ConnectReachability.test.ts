@@ -450,7 +450,7 @@ describe("ConnectReachability DNS failures", () => {
 });
 
 describe("T3 Connect troubleshooting links", () => {
-  it("each section names a heading in the user guide", () => {
+  it("each section has a link target in the user guide", () => {
     const guide = NodeFS.readFileSync(
       new URL("../../../../docs/user/t3-connect-troubleshooting.md", import.meta.url),
       "utf8",
@@ -464,6 +464,9 @@ describe("T3 Connect troubleshooting links", () => {
           .replace(/ /g, "-"),
       ),
     );
+    for (const [, anchor] of guide.matchAll(/<a name="([^"]+)"><\/a>/g)) {
+      anchors.add(anchor!);
+    }
     for (const section of T3_CONNECT_TROUBLESHOOTING_SECTIONS) {
       expect(anchors, section).toContain(section);
     }

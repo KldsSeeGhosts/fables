@@ -69,7 +69,7 @@ describe("contextWindowSegments", () => {
     ).toEqual([
       ["Messages", 500],
       ["System prompt", 300],
-      ["T3 Code tools", 200],
+      ["Fables tools", 200],
     ]);
   });
 

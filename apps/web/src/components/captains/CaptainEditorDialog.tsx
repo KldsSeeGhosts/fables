@@ -144,18 +144,9 @@ export function CaptainEditorDialog({
     })();
     setSaving(false);
     if (result === null) {
-      setError(
-        isDuet
-          ? gt("Configure a model on this environment before creating a Duet.")
-          : gt("Configure a model on this environment before creating a Captain."),
-      );
+      setError(gt("Configure a model on this environment before creating a Duet."));
     } else if (result._tag === "Failure") {
-      setError(
-        captainCommandError(
-          result,
-          isDuet ? gt("Could not save Duet.") : gt("Could not save Captain."),
-        ),
-      );
+      setError(captainCommandError(result, gt("Could not save Duet.")));
     } else {
       onSave(environmentId, result.value);
     }
@@ -174,35 +165,15 @@ export function CaptainEditorDialog({
       <DialogPopup className="sm:max-w-lg">
         <div className="flex min-h-0 flex-col">
           <DialogHeader>
-            <DialogTitle>
-              {captain === undefined ? (
-                isDuet ? (
-                  <T>New Duet</T>
-                ) : (
-                  <T>New Captain</T>
-                )
-              ) : isDuet ? (
-                <T>Edit Duet</T>
-              ) : (
-                <T>Edit Captain</T>
-              )}
-            </DialogTitle>
+            <DialogTitle>{captain === undefined ? <T>New Duet</T> : <T>Edit Duet</T>}</DialogTitle>
             <DialogDescription>
-              {isDuet ? (
-                <T>A Duet keeps its own conversation, memories, and documents across sessions.</T>
-              ) : (
-                <T>
-                  A Captain keeps its own conversation, memories, and documents across sessions.
-                </T>
-              )}
+              <T>A Duet keeps its own conversation, memories, and documents across sessions.</T>
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
             {captain !== undefined ? (
               <ToggleGroup
-                aria-label={
-                  isDuet ? gt("Duet customization section") : gt("Captain customization section")
-                }
+                aria-label={gt("Duet customization section")}
                 value={[section]}
                 onValueChange={(value) => {
                   if (value[0] === "profile" || value[0] === "memory") setSection(value[0]);
@@ -375,15 +346,9 @@ export function CaptainEditorDialog({
                   id={`${fieldId}-instructions`}
                   rows={5}
                   maxLength={16_000}
-                  placeholder={
-                    isDuet
-                      ? gt(
-                          "What this Duet is responsible for, how it should work, and when to check in with you.",
-                        )
-                      : gt(
-                          "What this Captain is responsible for, how it should work, and when to check in with you.",
-                        )
-                  }
+                  placeholder={gt(
+                    "What this Duet is responsible for, how it should work, and when to check in with you.",
+                  )}
                   value={instructions}
                   disabled={saving}
                   onChange={(event) => setInstructions(event.target.value)}
@@ -396,7 +361,7 @@ export function CaptainEditorDialog({
                   </span>
                   <p className="text-meta text-muted-foreground">
                     <T>
-                      Answers quick questions itself and hands anything that edits code to crew in
+                      Answers quick questions itself and hands anything that edits code to Solos in
                       their own worktrees.
                     </T>
                   </p>
@@ -449,15 +414,7 @@ export function CaptainEditorDialog({
                 disabled={saving || !canSave || !name.trim()}
                 onClick={() => void save()}
               >
-                {captain === undefined ? (
-                  isDuet ? (
-                    <T>Create Duet</T>
-                  ) : (
-                    <T>Create Captain</T>
-                  )
-                ) : (
-                  <T>Save changes</T>
-                )}
+                {captain === undefined ? <T>Create Duet</T> : <T>Save changes</T>}
               </Button>
             ) : null}
           </DialogFooter>

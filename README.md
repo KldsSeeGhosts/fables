@@ -1,19 +1,19 @@
-# KSG Code
+# Fables
 
-KSG Code is a desktop, web, and mobile workspace for running coding agents on your own machines. It is built on [T3 Code](https://github.com/pingdotgg/t3code) and adds long-running Duet agent leads, optional long-term memory, and its own interface and release channel.
+Fables is a desktop, web, and mobile workspace for running coding agents on your own machines. It is built on [T3 Code](https://github.com/pingdotgg/t3code) and adds long-running Duet agent leads, optional long-term memory, and its own interface and release channel.
 
-![KSG Code desktop app with an open Duet conversation](./.github/readme/ksg-desktop.png)
+![Fables desktop app with an open Duet conversation](./.github/readme/ksg-desktop.png)
 
-## What KSG Code adds
+## What Fables adds
 
-- **Duets.** Long-running agent leads that delegate work to crew threads across scoped projects, maintain structured documents (`NOTES.md`, `AGENTS.md`, `CREW.md`, `DIGEST.md`) and local memories, and automatically roll over long conversations when context fills up while stitching earlier conversations into the timeline.
-- **Optional Honcho memory.** Off by default. When [configured on the server](./docs/user/captain-honcho-memory.md), KSG Code mirrors user messages and final Duet answers to a Honcho server and includes recalled context in briefings and memory search.
-- **KSG Duet interface.** Ships with the `ksg-salon` light and dark shell as the default across desktop, web, and mobile, including adaptive split-view and reading-width layouts for foldable phones and tablets.
+- **Duets.** Long-running agent leads that delegate work to Solo threads across scoped projects, maintain structured documents (`NOTES.md`, `AGENTS.md`, `CREW.md`, `DIGEST.md`) and local memories, and automatically roll over long conversations when context fills up while stitching earlier conversations into the timeline.
+- **Optional Honcho memory.** Off by default. When [configured on the server](./docs/user/captain-honcho-memory.md), Fables mirrors user messages and final Duet answers to a Honcho server and includes recalled context in briefings and memory search.
+- **Duet interface.** Ships with the `ksg-salon` light and dark shell as the default across desktop, web, and mobile, including adaptive split-view and reading-width layouts for foldable phones and tablets.
 - **Independent release channel.** Nightly desktop builds and CLI archives publish from this repository's [GitHub Releases](https://github.com/KldsSeeGhosts/ksgcode/releases) on their own update feed, and mobile preview builds receive over-the-air updates from this fork's Expo project.
 
-| Folded | Unfolded |
-| --- | --- |
-| <img src="./.github/readme/ksg-mobile-folded.png" alt="KSG Code mobile app on a folded foldable phone" /> | <img src="./.github/readme/ksg-mobile-unfolded.png" alt="KSG Code mobile app unfolded in split view" /> |
+| Folded                                                                                                  | Unfolded                                                                                              |
+| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| <img src="./.github/readme/ksg-mobile-folded.png" alt="Fables mobile app on a folded foldable phone" /> | <img src="./.github/readme/ksg-mobile-unfolded.png" alt="Fables mobile app unfolded in split view" /> |
 
 ## What it keeps from T3 Code
 
@@ -39,7 +39,7 @@ The iOS app is distributed as a self-signed IPA rather than through the App Stor
 
 ### Sign in to an agent
 
-KSG Code requires at least one coding agent installed and signed in on the host machine. See [provider setup](./docs/user/install.md#providers) for per-agent login steps.
+Fables requires at least one coding agent installed and signed in on the host machine. See [provider setup](./docs/user/install.md#providers) for per-agent login steps.
 
 ## Development
 
@@ -54,4 +54,4 @@ Use `vp run dev:desktop` for the Electron app. See the [development runbook](./d
 
 ## Credits and license
 
-KSG Code is built on [T3 Code](https://github.com/pingdotgg/t3code) by Ping Labs. Licensed under the [MIT License](./LICENSE).
+Fables is built on [T3 Code](https://github.com/pingdotgg/t3code) by Ping Labs. Licensed under the [MIT License](./LICENSE).

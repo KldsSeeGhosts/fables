@@ -17,7 +17,6 @@ import { T, useGT } from "gt-react";
 import { ArrowUpRightIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import { useDuetShell } from "../../hooks/useDuetShell";
 import { useChildThreadInputs, useProjects, useQuietThreadProjection } from "../../state/entities";
 import { useEnvironment } from "../../state/environments";
 import { useLinkedThreadOpener } from "../../state/linkedThreadView";
@@ -300,7 +299,6 @@ export function useCaptainProfile({
   onDelete: () => void;
 }) {
   const gt = useGT();
-  const isDuet = useDuetShell();
   const canUpdate = useAtomValue(serverEnvironment.updateCaptain.permissionAtom(environmentId));
   const canArchive = useAtomValue(serverEnvironment.archiveCaptain.permissionAtom(environmentId));
   const canRestore = useAtomValue(serverEnvironment.unarchiveCaptain.permissionAtom(environmentId));
@@ -329,10 +327,7 @@ export function useCaptainProfile({
     const result = await update({ environmentId, input: { captainId: captain.id, ...changes } });
     setPending(false);
     if (result._tag === "Failure") {
-      const message = captainCommandError(
-        result,
-        isDuet ? gt("Could not update Duet.") : gt("Could not update Captain."),
-      );
+      const message = captainCommandError(result, gt("Could not update Duet."));
       setError(message);
       return message;
     }
@@ -350,12 +345,7 @@ export function useCaptainProfile({
     });
     setPending(false);
     if (result._tag === "Failure")
-      setError(
-        captainCommandError(
-          result,
-          isDuet ? gt("Could not update Duet.") : gt("Could not update Captain."),
-        ),
-      );
+      setError(captainCommandError(result, gt("Could not update Duet.")));
     else setApplied(result.value);
   };
 
@@ -366,12 +356,7 @@ export function useCaptainProfile({
     const result = await deleteCaptain({ environmentId, input: { captainId: captain.id } });
     setPending(false);
     if (result._tag === "Failure")
-      setError(
-        captainCommandError(
-          result,
-          isDuet ? gt("Could not delete Duet.") : gt("Could not delete Captain."),
-        ),
-      );
+      setError(captainCommandError(result, gt("Could not delete Duet.")));
     else onDelete();
   };
 
@@ -414,7 +399,6 @@ export type CaptainProfileSection = "profile" | "memory";
 
 /** The edit and delete dialogs that `useCaptainProfile` opens. */
 export function CaptainProfileDialogs({ profile }: { profile: CaptainProfile }) {
-  const isDuet = useDuetShell();
   const environment = useEnvironment(profile.environmentId);
   const { captain, environmentId, error, pending } = profile;
   return (
@@ -438,20 +422,13 @@ export function CaptainProfileDialogs({ profile }: { profile: CaptainProfile }) 
           <AlertDialogPopup>
             <AlertDialogHeader>
               <AlertDialogTitle>
-                {isDuet ? <T>Delete Duet?</T> : <T>Delete Captain?</T>}
+                <T>Delete Duet?</T>
               </AlertDialogTitle>
               <AlertDialogDescription>
-                {isDuet ? (
-                  <T>
-                    This deletes the Duet, documents and memories. Its conversations and scheduled
-                    tasks stay available.
-                  </T>
-                ) : (
-                  <T>
-                    This deletes the Captain, documents and memories. Its conversations and
-                    scheduled tasks stay available.
-                  </T>
-                )}
+                <T>
+                  This deletes the Duet, documents and memories. Its conversations and scheduled
+                  tasks stay available.
+                </T>
               </AlertDialogDescription>
             </AlertDialogHeader>
             {error !== null ? (
@@ -468,7 +445,7 @@ export function CaptainProfileDialogs({ profile }: { profile: CaptainProfile }) 
                 disabled={pending || !profile.canDelete}
                 onClick={() => void profile.remove()}
               >
-                {isDuet ? <T>Delete Duet</T> : <T>Delete Captain</T>}
+                <T>Delete Duet</T>
               </Button>
             </AlertDialogFooter>
           </AlertDialogPopup>

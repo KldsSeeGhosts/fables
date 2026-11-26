@@ -894,7 +894,7 @@ function ThreadSurfaceContent({
           <PullRequestsUnavailableState
             icon={IssueGlyph.issue}
             title={gt("Issues unavailable")}
-            error={gt("Update this environment's T3 Code server to browse issues.")}
+            error={gt("Update this environment's Fables server to browse issues.")}
           />
         );
       }

@@ -1423,7 +1423,7 @@ export function PullRequestsPage() {
         <PullRequestListNotice
           icon={PullRequestGlyph.pullRequest}
           title={gt("Pull requests unavailable")}
-          description={gt("Update your T3 Code servers to browse pull requests.")}
+          description={gt("Update your Fables servers to browse pull requests.")}
         />
       ) : firstLoad ? (
         <PullRequestListGhost rows={7} caption={gt("Loading pull requests…")} />

@@ -210,7 +210,7 @@ export function snapShotCaptureHelperStatus(
   return {
     tone: "success",
     label: resolve(msg("Ready", { $context: "capture helper status" })),
-    description: resolve(msg("Included with T3 Code. No download needed.")),
+    description: resolve(msg("Included with Fables. No download needed.")),
     needsSetup: false,
   };
 }

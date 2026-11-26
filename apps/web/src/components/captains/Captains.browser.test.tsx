@@ -55,7 +55,7 @@ it("shows Captain attention on the section and opens the primary thread on selec
     </SidebarProvider>,
   );
   await expect.element(screen.getByRole("button", { name: /Maria, Needs input/ })).toBeVisible();
-  await expect.element(screen.getByLabelText("1 Captain needs input")).toBeVisible();
+  await expect.element(screen.getByLabelText("1 Duet needs input")).toBeVisible();
   await activate(screen.getByRole("button", { name: /Maria, Needs input/ }));
   expect(open).toHaveBeenCalledWith(threadRef);
 });

@@ -111,7 +111,7 @@ const make = Effect.gen(function* () {
           Effect.catch((cause) =>
             cause._tag === "ScratchUnavailableError"
               ? invalid(
-                  "This environment has no scratch folder. Add a project to the Captain's workspace scope.",
+                  "This environment has no scratch folder. Add a project to the Duet's workspace scope.",
                 )
               : CaptainStore.captainUnavailable(cause),
           ),
@@ -197,7 +197,7 @@ const make = Effect.gen(function* () {
     const shell = yield* threads
       .getThreadShell(threadId)
       .pipe(Effect.catch(CaptainStore.captainUnavailable));
-    if (shell === null) return yield* invalid("The Captain's previous thread could not be found.");
+    if (shell === null) return yield* invalid("The Duet's previous thread could not be found.");
     const records = yield* threads
       .getThreadRecords(threadId, ["runs", "subagents"], {
         runStatuses: RESET_BLOCKING_RUN_STATUSES,
@@ -213,10 +213,10 @@ const make = Effect.gen(function* () {
       )
     )
       return yield* invalid(
-        "The Captain is still working. Stop or wait for the current turn before resetting.",
+        "The Duet is still working. Stop or wait for the current turn before resetting.",
       );
     if (waitForCrew && hasUnsettledCaptainCrew(records.subagents)) {
-      return yield* invalid("The Captain still has active delegated tasks.");
+      return yield* invalid("The Duet still has active delegated tasks.");
     }
     return records;
   });
@@ -229,11 +229,11 @@ const make = Effect.gen(function* () {
         if (current.earlierThreadIds[0] === input.expectedThreadId) return current;
         return yield* new CaptainError({
           code: "conflict",
-          message: "The Captain's primary conversation has already changed.",
+          message: "The Duet's primary conversation has already changed.",
         });
       }
       if (current.archivedAt !== null)
-        return yield* invalid("Restore the Captain before resetting it.");
+        return yield* invalid("Restore the Duet before resetting it.");
       const primaryThreadId = captainPrimaryThreadId(
         current.id,
         current.earlierThreadIds.length + 1,
@@ -283,7 +283,7 @@ const make = Effect.gen(function* () {
             Effect.provideService(SqlClient.SqlClient, sql),
             Effect.asSome,
             Effect.catch((cause) =>
-              Effect.logWarning("Could not read the Captain handoff before resetting.", {
+              Effect.logWarning("Could not read the Duet handoff before resetting.", {
                 cause,
               }).pipe(Effect.as(Option.none<string>())),
             ),
@@ -355,7 +355,7 @@ const make = Effect.gen(function* () {
         yield* CaptainHandoff.save({ captain, section: handoff.value }).pipe(
           Effect.provideService(CaptainStore.CaptainStore, store),
           Effect.catch((cause) =>
-            Effect.logWarning("Could not write the Captain handoff after resetting.", { cause }),
+            Effect.logWarning("Could not write the Duet handoff after resetting.", { cause }),
           ),
         );
       }

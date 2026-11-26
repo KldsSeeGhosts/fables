@@ -57,7 +57,7 @@ export function DuetTaskDrawerHeader({
   const childRef = scopeThreadRef(parentThreadRef.environmentId, childThreadId);
   const shell = useQuietThreadShell(childRef);
   const statusLabel = useCaptainTaskStatusLabel(captainThreadTaskStatus(shell));
-  const title = shell?.title.trim() || gt("Task", { $context: "Captain delegated task" });
+  const title = shell?.title.trim() || gt("Task", { $context: "Duet delegated task" });
   const subtitleParts = [statusLabel, shell?.branch].filter(
     (part): part is string => typeof part === "string" && part.length > 0,
   );

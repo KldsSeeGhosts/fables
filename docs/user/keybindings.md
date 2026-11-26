@@ -106,10 +106,10 @@ It is a JSON array of rules:
 ]
 ```
 
-T3 Code creates the file with its defaults and adds new defaults on later startups.
+Fables creates the file with its defaults and adds new defaults on later startups.
 New defaults do not replace commands you customized. If a new default overlaps one
 of your shortcuts, [rule order](#precedence) decides which runs.
-Invalid rules are ignored; if the file cannot be parsed, T3 Code uses defaults.
+Invalid rules are ignored; if the file cannot be parsed, Fables uses defaults.
 
 ## Rule shape
 
@@ -164,7 +164,7 @@ and **Escape** to close find.
 `preview.find` (`mod+f` while a browser has focus) searches the open page in the desktop app. It
 is also in the browser's **⋮** menu and the command palette. A page that handles `mod+f` itself,
 such as a code editor, keeps its own find. Use the **⋮** menu to reach the browser's find there.
-Streamed browser tabs and T3 Code in a web browser do not support it.
+Streamed browser tabs and Fables in a web browser do not support it.
 
 ## Precedence
 
@@ -190,7 +190,7 @@ field gets its own undo back. Terminals always keep their native shortcut.
 
 `navigation.back` (`mod+[` by default) and `navigation.forward` (`mod+]`) move
 through the pages you have visited, like the back and forward buttons next to the
-sidebar toggle. Both stop at the first page you opened in T3 Code, so in a browser
+sidebar toggle. Both stop at the first page you opened in Fables, so in a browser
 they never leave the app; the browser's own buttons still can.
 
 `chat.new` may ask you to choose a project when there is more than one.

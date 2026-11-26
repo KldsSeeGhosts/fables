@@ -75,13 +75,13 @@ const decodeDocument = Schema.decodeUnknownEffect(CaptainDocument);
 const decodeMemory = Schema.decodeUnknownEffect(MemoryRow);
 
 export const captainUnavailable = (cause: unknown) =>
-  Effect.logWarning("Captain operation failed.", { cause }).pipe(
+  Effect.logWarning("Duet operation failed.", { cause }).pipe(
     Effect.andThen(
-      new CaptainError({ code: "unavailable", message: "Could not access Captain state." }),
+      new CaptainError({ code: "unavailable", message: "Could not access Duet state." }),
     ),
   );
 
-const missing = () => new CaptainError({ code: "not_found", message: "Captain not found." });
+const missing = () => new CaptainError({ code: "not_found", message: "Duet not found." });
 
 /** `profile` changes the Captain list; `content` only that Captain's documents or memories. */
 type CaptainChange = { readonly captainId: CaptainId; readonly kind: "profile" | "content" };

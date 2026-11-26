@@ -111,14 +111,14 @@ export function CaptainHeaderActions({
         {trigger ? (
           <PopoverTrigger
             render={trigger}
-            aria-label={gt("Captain details and actions")}
-            title={gt("Captain details and actions")}
+            aria-label={gt("Duet details and actions")}
+            title={gt("Duet details and actions")}
           />
         ) : (
           <PopoverTrigger
             render={defaultTrigger}
-            aria-label={gt("Captain details and actions")}
-            title={gt("Captain details and actions")}
+            aria-label={gt("Duet details and actions")}
+            title={gt("Duet details and actions")}
           >
             <FolderIcon />
             {scopeName ? (
@@ -174,7 +174,7 @@ export function CaptainHeaderActions({
                 profile.edit();
               }}
             >
-              <T>Edit Captain</T>
+              <T>Edit Duet</T>
             </CaptainMenuRow>
             <button
               type="button"
@@ -229,7 +229,7 @@ export function CaptainHeaderActions({
               disabled={pending || !profile.canArchive}
               onClick={() => void profile.changeArchive()}
             >
-              {archived ? <T>Restore Captain</T> : <T>Archive Captain</T>}
+              {archived ? <T>Restore Duet</T> : <T>Archive Duet</T>}
             </CaptainMenuRow>
             {profile.canDelete ? (
               <CaptainMenuRow
@@ -241,7 +241,7 @@ export function CaptainHeaderActions({
                   profile.requestDelete();
                 }}
               >
-                <T>Delete Captain</T>
+                <T>Delete Duet</T>
               </CaptainMenuRow>
             ) : null}
           </div>

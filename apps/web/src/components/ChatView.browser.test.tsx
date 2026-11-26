@@ -510,12 +510,12 @@ it("imports Pi conversations through the environment RPC and can retry a changed
 
   expect(importSessions).toHaveBeenCalledTimes(1);
   await expect
-    .element(page.getByRole("heading", { name: "Welcome to T3 Code" }))
+    .element(page.getByRole("heading", { name: "Welcome to Fables" }))
     .not.toBeInTheDocument();
   await vi.waitFor(() => expect(router.state.location.pathname).not.toBe("/welcome"));
   changed = false;
   await router.navigate({ to: "/welcome" });
-  await expect.element(page.getByRole("heading", { name: "Welcome to T3 Code" })).toBeVisible();
+  await expect.element(page.getByRole("heading", { name: "Welcome to Fables" })).toBeVisible();
   await page.getByText("Import projects and their threads", { exact: true }).click();
   await page.getByRole("button", { name: "Import threads and start", exact: true }).click();
   await expect
@@ -527,7 +527,7 @@ it("imports Pi conversations through the environment RPC and can retry a changed
     expectedWorkspaceRoot: "/workspace/render",
   });
   await expect
-    .element(page.getByRole("heading", { name: "Welcome to T3 Code" }))
+    .element(page.getByRole("heading", { name: "Welcome to Fables" }))
     .not.toBeInTheDocument();
 });
 

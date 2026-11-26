@@ -9,7 +9,6 @@ import { ListChoiceRow } from "../../../../components/ui/ListChoiceRow";
 import { mobilePreferencesAtom, saveMobilePreferences } from "../../../../state/preferences";
 import { useAtomCommand } from "../../../../state/use-atom-command";
 import { SettingsSection } from "../../components/SettingsSection";
-import { useAppearancePreferences } from "../AppearancePreferencesProvider";
 
 const TOOL_CALL_VISIBILITY_OPTIONS: ReadonlyArray<{
   readonly value: ToolCallVisibility;
@@ -37,24 +36,16 @@ export function ToolCallsAppearanceSection() {
   const m = useMessages();
   const savePreferences = useAtomCommand(saveMobilePreferences);
   const preferences = useAtomValue(mobilePreferencesAtom);
-  const { themeId } = useAppearancePreferences();
   const selected = AsyncResult.isSuccess(preferences)
     ? (preferences.value.toolCallVisibility ?? "showAll")
     : null;
   const duetSelected = AsyncResult.isSuccess(preferences)
     ? (preferences.value.duetToolCallVisibility ?? "inherit")
     : null;
-  const duetShell = themeId.startsWith("ksg-salon");
-  const duetTitle = duetShell
-    ? gt("In Duets", { $context: "tool call visibility setting" })
-    : gt("In Captains", { $context: "tool call visibility setting" });
-  const duetDescription = duetShell
-    ? gt(
-        "Choose a different tool-call view for a Duet's current and earlier conversations. Crew and subagent threads keep the main setting.",
-      )
-    : gt(
-        "Choose a different tool-call view for a Captain's current and earlier conversations. Crew and subagent threads keep the main setting.",
-      );
+  const duetTitle = gt("In Duets", { $context: "tool call visibility setting" });
+  const duetDescription = gt(
+    "Choose a different tool-call view for a Duet's current and earlier conversations. Solo and other subagent threads keep the main setting.",
+  );
 
   return (
     <View className="gap-3">

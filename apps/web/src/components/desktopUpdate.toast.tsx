@@ -132,7 +132,7 @@ export function showDesktopUpdateDownloadedToast(
         <>
           {version ? (
             <T>
-              T3 Code <Var>{version}</Var> is ready. Restart to finish updating.
+              Fables <Var>{version}</Var> is ready. Restart to finish updating.
             </T>
           ) : (
             <T>The update is ready. Restart to finish updating.</T>

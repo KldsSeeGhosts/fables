@@ -416,7 +416,7 @@ it("notes that routines do not run while the Captain is archived", async () => {
   await userEvent.click(screen.getByRole("tab", { name: "Scheduled" }));
 
   await expect
-    .element(screen.getByText("Routines don't run while this Captain is archived."))
+    .element(screen.getByText("Routines don't run while this Duet is archived."))
     .toBeVisible();
 });
 

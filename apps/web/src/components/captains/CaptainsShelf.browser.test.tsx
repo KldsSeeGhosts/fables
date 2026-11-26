@@ -223,7 +223,7 @@ it("shows a working status on the first line and the scoped project on the secon
   const project = {
     id: ProjectId.make("project"),
     environmentId,
-    title: "KSG Code",
+    title: "Fables",
     workspaceRoot: "/repo/ksgcode",
     faviconPath: null,
     projectIcon: null,
@@ -237,7 +237,7 @@ it("shows a working status on the first line and the scoped project on the secon
   await expect.element(row).toBeVisible();
   const lines = row.element().querySelector(":scope > span.grid")?.children;
   expect(lines?.[0]?.textContent).toContain("Working");
-  expect(lines?.[1]?.textContent).toContain("KSG Code");
+  expect(lines?.[1]?.textContent).toContain("Fables");
   expect(lines?.[1]?.textContent).not.toContain("Fix the login flow");
   expect(lines?.[1]?.textContent).not.toContain("Working");
   expect(lines?.[1]?.querySelector('[data-slot="project-monogram"]')).not.toBeNull();
@@ -308,7 +308,7 @@ it("shows the scoped project's favicon and name when quiet", async () => {
   const project = {
     id: ProjectId.make("project"),
     environmentId,
-    title: "KSG Code",
+    title: "Fables",
     workspaceRoot: "/repo/ksgcode",
     faviconPath: null,
     projectIcon: null,
@@ -316,10 +316,10 @@ it("shows the scoped project's favicon and name when quiet", async () => {
   const scopedCaptain = { ...captain, scopedProjectIds: [project.id] };
   await using screen = await renderList({ captain: scopedCaptain }, { projects: [project] });
   const row = screen.getByRole("button", {
-    name: "Maria, Ready, KSG Code, Coordinator",
+    name: "Maria, Ready, Fables, Coordinator",
   });
   await expect.element(row).toBeVisible();
-  expect(row.element().textContent).toContain("KSG Code");
+  expect(row.element().textContent).toContain("Fables");
 });
 
 it("shows the machine as an icon, named in the row's hover card, when Duets span machines", async () => {

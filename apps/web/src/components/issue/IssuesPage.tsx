@@ -756,7 +756,7 @@ export function IssuesPage() {
     <PullRequestListNotice
       icon={IssueGlyph.issue}
       title={gt("Issues unavailable")}
-      description={gt("Update this environment's T3 Code server to browse issues.")}
+      description={gt("Update this environment's Fables server to browse issues.")}
     />
   ) : noneAnswered && list.isPending ? (
     <PullRequestListGhost rows={7} caption={gt("Loading issues…")} />

@@ -51,7 +51,7 @@ export const layer = Layer.effectDiscard(
       (threadId: ThreadId) =>
         drain(threadId, true).pipe(
           Effect.catch((cause) =>
-            Effect.logWarning("Captain rollover resend remains pending.", { threadId, cause }).pipe(
+            Effect.logWarning("Duet rollover resend remains pending.", { threadId, cause }).pipe(
               Effect.andThen(
                 drain(threadId, false).pipe(
                   Effect.retry({ schedule: Schedule.spaced(RESEND_RETRY_INTERVAL) }),
@@ -105,7 +105,7 @@ export const layer = Layer.effectDiscard(
       (effect, threadId) =>
         effect.pipe(
           Effect.catchCause((cause) =>
-            Effect.logWarning("Captain automatic rollover failed.", { threadId, cause }),
+            Effect.logWarning("Duet automatic rollover failed.", { threadId, cause }),
           ),
         ),
     );
@@ -122,7 +122,7 @@ export const layer = Layer.effectDiscard(
           }),
         ),
         Effect.tapError((cause) =>
-          Effect.logWarning("Could not restore Captain rollover resends.", { cause }),
+          Effect.logWarning("Could not restore Duet rollover resends.", { cause }),
         ),
         Effect.retry({ schedule: Schedule.spaced(RESEND_RETRY_INTERVAL) }),
       ),

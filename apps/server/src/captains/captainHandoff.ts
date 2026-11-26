@@ -128,7 +128,7 @@ const formatLoopSection = (input: {
 
   const lastAssistantMessage = quoteBlock(input.lastAssistantMessage ?? "", 1_000);
   if (lastAssistantMessage !== "") {
-    parts.push(`### Captain's last reply\n${lastAssistantMessage}`);
+    parts.push(`### Duet's last reply\n${lastAssistantMessage}`);
   }
 
   const scheduledTaskCount = input.scheduledTaskCount ?? 0;
@@ -327,7 +327,7 @@ export const save = Effect.fn("CaptainHandoff.save")(function* (input: {
     const notes = yield* store.document(captain, "NOTES.md");
     const next = upsertCaptainHandoffSection(notes.content, section);
     if (!next.included) {
-      yield* Effect.logWarning("NOTES.md has no room for the Captain handoff.");
+      yield* Effect.logWarning("NOTES.md has no room for the Duet handoff.");
     }
     if (next.content === notes.content) return notes;
     return yield* store.updateDocument({

@@ -10,14 +10,14 @@ export function useCaptainAvatarLabels(): {
   const gt = useGT();
   return {
     emblems: {
-      orb: gt("Wave orb", { $context: "Captain avatar emblem" }),
-      sunburst: gt("Ripple", { $context: "Captain avatar emblem" }),
-      "twin-arcs": gt("Twin wave", { $context: "Captain avatar emblem" }),
-      "heart-wave": gt("Heart wave", { $context: "Captain avatar emblem" }),
-      terminal: gt("Zigzag", { $context: "Captain avatar emblem" }),
-      prism: gt("Prism", { $context: "Captain avatar emblem" }),
-      orbit: gt("Orbit", { $context: "Captain avatar emblem" }),
-      horizon: gt("Horizon", { $context: "Captain avatar emblem" }),
+      orb: gt("Wave orb", { $context: "Duet avatar emblem" }),
+      sunburst: gt("Ripple", { $context: "Duet avatar emblem" }),
+      "twin-arcs": gt("Twin wave", { $context: "Duet avatar emblem" }),
+      "heart-wave": gt("Heart wave", { $context: "Duet avatar emblem" }),
+      terminal: gt("Zigzag", { $context: "Duet avatar emblem" }),
+      prism: gt("Prism", { $context: "Duet avatar emblem" }),
+      orbit: gt("Orbit", { $context: "Duet avatar emblem" }),
+      horizon: gt("Horizon", { $context: "Duet avatar emblem" }),
     },
     palettes: {
       terracotta: gt("Terracotta", { $context: "color" }),

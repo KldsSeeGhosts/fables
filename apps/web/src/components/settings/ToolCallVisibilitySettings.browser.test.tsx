@@ -17,7 +17,7 @@ vi.mock(import("../../hooks/useDuetShell"), () => ({
 }));
 
 it.each([
-  [false, "In Captains"],
+  [false, "In Duets"],
   [true, "In Duets"],
 ] as const)("renders the Duet tool-call control as %s", async (duetShell, label) => {
   state.duetShell = duetShell;

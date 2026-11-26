@@ -243,8 +243,8 @@ const make = Effect.gen(function* () {
               typeof error !== "string" &&
               error._tag === "PlatformError" &&
               error.reason._tag === "NotFound"
-                ? Effect.logDebug("Captain Honcho memory config was not found.")
-                : Effect.logWarning("Captain Honcho memory is disabled.", {
+                ? Effect.logDebug("Duet Honcho memory config was not found.")
+                : Effect.logWarning("Duet Honcho memory is disabled.", {
                     reason: "config_unavailable",
                   })
               ).pipe(Effect.as(Option.none())),
@@ -266,7 +266,7 @@ const make = Effect.gen(function* () {
     if (validToken(token)) return Option.some(token);
 
     tokenDisabled = true;
-    yield* Effect.logWarning("Captain Honcho memory is disabled.", { reason: "token_unavailable" });
+    yield* Effect.logWarning("Duet Honcho memory is disabled.", { reason: "token_unavailable" });
     return Option.none<string>();
   });
 
@@ -429,7 +429,7 @@ const make = Effect.gen(function* () {
           (cause) =>
             job.type === "message" &&
             Option.getOrUndefined(Cause.findErrorOption(cause))?.reason !== "unavailable"
-              ? Effect.logWarning("Captain Honcho memory dropped a mirrored message.", {
+              ? Effect.logWarning("Duet Honcho memory dropped a mirrored message.", {
                   threadId: job.threadId,
                   itemId: job.itemId,
                 })
@@ -465,7 +465,7 @@ const make = Effect.gen(function* () {
         rememberKey(enqueuedItems, key, MIRRORED_ITEM_LIMIT);
         return Effect.void;
       }
-      return Effect.logWarning("Captain Honcho memory dropped a mirrored message.", {
+      return Effect.logWarning("Duet Honcho memory dropped a mirrored message.", {
         reason: "queue_full",
         threadId,
         itemId: message.itemId,
@@ -541,14 +541,13 @@ const make = Effect.gen(function* () {
           mirrorEvent(stored).pipe(
             Effect.catchCauseIf(
               (cause) => !Cause.hasInterruptsOnly(cause),
-              () =>
-                Effect.logWarning("Captain Honcho memory could not read a conversation update."),
+              () => Effect.logWarning("Duet Honcho memory could not read a conversation update."),
             ),
           ),
         ),
         Effect.catchCauseIf(
           (cause) => !Cause.hasInterruptsOnly(cause),
-          () => Effect.logWarning("Captain Honcho memory mirroring stopped."),
+          () => Effect.logWarning("Duet Honcho memory mirroring stopped."),
         ),
       ),
     );
@@ -557,7 +556,7 @@ const make = Effect.gen(function* () {
   const withoutFailure =
     <A>(operation: string, fallback: A, emptyStatus?: number) =>
     <R>(effect: Effect.Effect<A, HonchoRequestError, R>) => {
-      const warn = Effect.logWarning("Captain Honcho memory request failed.", { operation }).pipe(
+      const warn = Effect.logWarning("Duet Honcho memory request failed.", { operation }).pipe(
         Effect.as(fallback),
       );
       return effect.pipe(

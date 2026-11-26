@@ -1,8 +1,8 @@
-# Captain long-term memory with Honcho
+# Duet long-term memory with Honcho
 
-Captains can use an optional Honcho memory server for long-term recall. When configured, the server mirrors your messages and the Captain's final answers to Honcho, adds a short long-term memory section to Captain briefings, and includes Honcho recall in `captain_memory_search` after the Captain's local memories.
+Duets can use an optional Honcho memory server for long-term recall. When configured, the server mirrors your messages and the Duet's final answers to Honcho, adds a short long-term memory section to Duet briefings, and includes Honcho recall in `captain_memory_search` after the Duet's local memories.
 
-This is off by default. Local Captain memories, NOTES.md, and ordinary threads are unchanged. Clients and mobile apps do not connect to Honcho directly.
+This is off by default. Local Duet memories, NOTES.md, and ordinary threads are unchanged. Clients and mobile apps do not connect to Honcho directly.
 
 ## Configure it
 
@@ -16,6 +16,6 @@ Create `~/.config/ksg-code/honcho.json`, or set `T3CODE_HONCHO_CONFIG` to anothe
 }
 ```
 
-`tokenFile` must contain only the workspace bearer token. Keep that file private. KSG Code logs a warning if it cannot read the configured file or token, or if either is invalid. With no default config file, Honcho memory stays off.
+`tokenFile` must contain only the workspace bearer token. Keep that file private. Fables logs a warning if it cannot read the configured file or token, or if either is invalid. With no default config file, Honcho memory stays off.
 
-Restart the KSG server after adding the file. Mirroring runs in the background. The Captain continues with its local briefing if Honcho fails or takes longer than two seconds to respond.
+Restart the Fables server after adding the file. Mirroring runs in the background. The Duet continues with its local briefing if Honcho fails or takes longer than two seconds to respond.

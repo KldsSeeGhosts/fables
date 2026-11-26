@@ -13,8 +13,7 @@ import { FONT_FAMILIES } from "../lib/fontFamilies";
 import { useDuetShell } from "../features/captains/useDuetShell";
 
 const BRAND_MAX_FONT_SCALE = 1.4;
-const WORDMARK_SUFFIX = "Code";
-const DUET_WORDMARK = "KSG Duet";
+const WORDMARK = "Fables";
 
 export function brandTitleOffset(): number {
   if (Platform.OS !== "ios") return 0;
@@ -45,7 +44,7 @@ export function CompactBrandTitle(
       <View
         aria-level={1}
         accessibilityLabel={
-          props.accessibilityLabel ?? gt("{product}, Threads", { product: DUET_WORDMARK })
+          props.accessibilityLabel ?? gt("{product}, Threads", { product: WORDMARK })
         }
         accessible
         role="heading"
@@ -64,7 +63,7 @@ export function CompactBrandTitle(
             letterSpacing: -0.22 * scale,
           }}
         >
-          {DUET_WORDMARK}
+          {WORDMARK}
         </Text>
       </View>
     );
@@ -76,7 +75,9 @@ export function CompactBrandTitle(
         props.fit && showStage ? (event) => setFullWidth(event.nativeEvent.layout.width) : undefined
       }
       aria-level={1}
-      accessibilityLabel={props.accessibilityLabel ?? gt("T3 Code, Threads")}
+      accessibilityLabel={
+        props.accessibilityLabel ?? gt("{product}, Threads", { product: WORDMARK })
+      }
       accessible
       role="heading"
       className="flex-row items-center gap-1.5"
@@ -94,7 +95,7 @@ export function CompactBrandTitle(
         className="font-t3-medium text-foreground-muted"
         style={{ fontSize: 21 * scale, letterSpacing: -0.5 * scale }}
       >
-        {WORDMARK_SUFFIX}
+        {WORDMARK}
       </Text>
       {showStage ? (
         <View

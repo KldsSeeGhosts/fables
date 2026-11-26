@@ -93,7 +93,7 @@ export function CaptainsInboxSheet() {
                     const kind = m(CAPTAIN_INBOX_KIND_LABELS[item.kind]);
                     const from = captain
                       ? item.isChild
-                        ? gt("Crew of {name}", { name: captain.name })
+                        ? gt("Solo for {name}", { name: captain.name })
                         : captain.name
                       : null;
                     return (
@@ -161,7 +161,7 @@ export function CaptainsInboxSheet() {
               const kind = m(CAPTAIN_INBOX_KIND_LABELS[item.kind]);
               const from = captain
                 ? item.isChild
-                  ? gt("Crew of {name}", { name: captain.name })
+                  ? gt("Solo for {name}", { name: captain.name })
                   : captain.name
                 : null;
               return (

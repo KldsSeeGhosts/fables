@@ -109,11 +109,7 @@ export function CaptainMorningBriefControl({
         />
         <div className="min-w-0">
           <Text variant="meta" tone="muted" truncate render={<div />}>
-            {isDuet ? (
-              <T>Updates DIGEST.md each day.</T>
-            ) : (
-              <T>Updates the Captain digest each day.</T>
-            )}
+            {isDuet ? <T>Updates DIGEST.md each day.</T> : <T>Updates the Duet digest each day.</T>}
           </Text>
         </div>
       </div>

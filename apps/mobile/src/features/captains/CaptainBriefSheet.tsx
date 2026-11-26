@@ -60,15 +60,11 @@ export function CaptainBriefSheet({ route }: StaticScreenProps<CaptainBriefParam
   const digestNew =
     captainDigestNewSection(digest) ?? captainDigestMarkdownExcerpt(digest).markdown;
   const unavailable = readDenied
-    ? isDuet
-      ? gt("You cannot read Duets in this environment.")
-      : gt("You cannot read Captains in this environment.")
+    ? gt("You cannot read Duets in this environment.")
     : live.error !== null && live.data === null
       ? live.error
       : live.data !== null && captain === undefined
-        ? isDuet
-          ? gt("This Duet no longer exists.")
-          : gt("This Captain no longer exists.")
+        ? gt("This Duet no longer exists.")
         : null;
   const memories = (live.data?.memories ?? []).filter(
     (memory) => memory.captainId === captainId && memory.essential,
@@ -81,11 +77,11 @@ export function CaptainBriefSheet({ route }: StaticScreenProps<CaptainBriefParam
       <SheetHeader
         title={
           isDuet
-            ? gt("Brief", { $context: "noun, what a Captain knows" })
-            : (captain?.name ?? gt("Brief", { $context: "noun, what a Captain knows" }))
+            ? gt("Brief", { $context: "noun, what a Duet knows" })
+            : (captain?.name ?? gt("Brief", { $context: "noun, what a Duet knows" }))
         }
         subtitle={
-          captain && !isDuet ? gt("Brief", { $context: "noun, what a Captain knows" }) : undefined
+          captain && !isDuet ? gt("Brief", { $context: "noun, what a Duet knows" }) : undefined
         }
         onClose={() => navigation.goBack()}
       />

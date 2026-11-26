@@ -100,7 +100,7 @@ export function ThreadHeader(props: {
     : [gitMenu, terminalMenu].filter((menu): menu is AppBarMenu => menu !== null);
 
   const crewOf = useDuetCrewOf(props.thread ?? null);
-  const crewLabel = crewOf ? gt("Crew of {name}", { name: crewOf.name }) : null;
+  const crewLabel = crewOf ? gt("Solo for {name}", { name: crewOf.name }) : null;
   return (
     <AppBar
       title={props.title}

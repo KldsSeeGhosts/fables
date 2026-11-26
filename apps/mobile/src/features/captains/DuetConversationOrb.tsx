@@ -56,7 +56,7 @@ export function DuetConversationOrb(props: {
       ? null
       : count > 0
         ? gt("{count, plural, =1 {Working on 1 task} other {Working on {count} tasks}}", { count })
-        : gt("Working", { $context: "Captain state" });
+        : gt("Working", { $context: "Duet state" });
   return (
     <View
       pointerEvents="none"

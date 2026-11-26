@@ -658,12 +658,12 @@ function ManagedCodexSetup({
         <span>
           {installation?.source === "local"
             ? gt("Using your installed Codex.")
-            : gt("Managed by T3 Code.")}
+            : gt("Managed by Fables.")}
         </span>
         {installation?.installedVersion ? <span>v{installation.installedVersion}</span> : null}
       </span>
     ) : (
-      (installation?.message ?? gt("T3 Code downloads and manages Codex for you."))
+      (installation?.message ?? gt("Fables downloads and manages Codex for you."))
     );
   const accountDescription = finishingSignIn ? (
     gt("Finishing sign-in...")
@@ -744,7 +744,7 @@ function ManagedCodexSetup({
     !handoff && auth?.phase === "waiting" && url ? (
       <div className="flex w-full flex-col gap-3 text-meta leading-relaxed text-muted-foreground">
         <p>
-          <T>If sign-in doesn't return to T3 Code, paste the URL from the final localhost page.</T>
+          <T>If sign-in doesn't return to Fables, paste the URL from the final localhost page.</T>
         </p>
         <form
           className="flex flex-col gap-2 sm:flex-row sm:items-center"
@@ -1154,7 +1154,7 @@ export function CodexManagedRuntimeFields({
     <>
       <SettingsRow
         title={gt("Binary path")}
-        description={gt("Selected by T3 Code.")}
+        description={gt("Selected by Fables.")}
         control={
           <div className="w-full sm:w-80">
             <Input

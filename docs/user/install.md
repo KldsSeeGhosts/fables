@@ -1,25 +1,25 @@
-# Install T3 Code
+# Install Fables
 
-T3 Code runs coding agents on your computer and lets you control them from its
+Fables runs coding agents on your computer and lets you control them from its
 desktop, web, or mobile app. Set up the machine where the agents will work first.
 
 ## Requirements
 
 You need an installed, authenticated provider before starting a thread. You can
-launch T3 Code and configure providers afterwards.
+launch Fables and configure providers afterwards.
 
 ## Command line
 
-KSG Code does not run an install script. Download the CLI archive for your
+Fables does not run an install script. Download the CLI archive for your
 platform from
-[KSG Code releases](https://github.com/KldsSeeGhosts/ksgcode/releases) and put
+[Fables releases](https://github.com/KldsSeeGhosts/ksgcode/releases) and put
 the `t3` binary inside on your `PATH`, such as `~/.local/bin`. Archives are
 published for macOS (Apple silicon), Linux x64, and Windows x64 as
 `t3-<version>-<platform>-<arch>.tar.gz`, with a `.zip` on Windows. The
 `.tar.gz` archives are listed in the release's `SHA256SUMS` file.
 
 Upstream T3 Code's install scripts and `npx t3` install a different app that
-shares state with KSG Code; do not mix them.
+shares state with Fables; do not mix them.
 
 | Task                                  | Command                                                                 |
 | ------------------------------------- | ----------------------------------------------------------------------- |
@@ -58,7 +58,7 @@ update it with `git pull` and a rebuild.
 ## Desktop app
 
 Download a release from
-[KSG Code releases](https://github.com/KldsSeeGhosts/ksgcode/releases). Every
+[Fables releases](https://github.com/KldsSeeGhosts/ksgcode/releases). Every
 release publishes desktop installers for macOS (Apple silicon), Linux x64, and
 Windows x64, and the installed apps update themselves from that feed. The
 Windows installer is not code-signed, so SmartScreen may ask you to confirm
@@ -83,7 +83,7 @@ The `.deb` updates itself like the other desktop builds. It asks for your
 password to install each update. If your desktop has no password prompt, the
 update fails. Download the new `.deb` and install it the same way.
 
-Package manager distributions of upstream T3 Code do not install KSG Code.
+Package manager distributions of upstream T3 Code do not install Fables.
 
 ### The `t3` command
 
@@ -99,7 +99,7 @@ add it again. If you already have another `t3`, it stays as it is.
 ### Windows Subsystem for Linux
 
 Choose a WSL distro in **Settings → Sharing & access** to run agents and projects
-there. Install the provider CLIs inside that distro. T3 Code installs its own
+there. Install the provider CLIs inside that distro. Fables installs its own
 server runtime there automatically; the first launch after an app update can
 take longer.
 
@@ -125,11 +125,14 @@ folder paths, so in the web app use **Add project** instead.
 
 ## Mobile app
 
-Install T3 Code from the
-[App Store](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824) or
-[Google Play](https://play.google.com/store/apps/details?id=com.t3tools.t3code).
+Install a Fables build from the
+[fork's Expo project](https://expo.dev/accounts/kidsseeghosts/projects/ksg-code/builds).
 The phone connects to a server on another machine. Follow
 [remote access](./remote-access.md) to link it through T3 Connect or a pairing URL.
+
+Upstream T3 Code is available from the
+[App Store](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824) or
+[Google Play](https://play.google.com/store/apps/details?id=com.t3tools.t3code).
 
 Store links and QR codes are also available in **Settings → About → Mobile app**
 on web and desktop. The store apps work with both stable and Nightly servers. Test builds are optional:
@@ -159,19 +162,19 @@ computer.
 | Grok Build          | Install [Grok Build CLI](https://x.ai/cli), then run `grok login`.                                                                                        |
 | Kiro                | Install [Kiro CLI](https://kiro.dev/docs/cli/), then run `kiro-cli login`.                                                                                |
 | OpenCode            | Install [OpenCode](https://opencode.ai), then run `opencode auth login`.                                                                                  |
-| Antigravity         | Install and sign in with Google from T3 Code's provider settings.                                                                                         |
+| Antigravity         | Install and sign in with Google from Fables’ provider settings.                                                                                           |
 | Pi                  | Install [Pi](./providers-pi.md#set-up-pi) with Node.js 22.19 or newer, then run `pi` and `/login`.                                                        |
 | Muse Code           | Install [Muse Code](https://dev.meta.ai/docs/muse-code) on the server, run `muse login`, then enable it in Settings → Providers.                          |
 | fx                  | Install [fx](https://fx.sh) with `curl -fsSL https://fx.sh/setup.sh \| bash`, then run `fx login`.                                                        |
 | ACP Registry agents | Add GitHub Copilot and other [ACP agents](./providers-acp.md#add-an-agent) from **Settings → Providers → Add provider → Show more**.                      |
 
-Provider CLIs must be on the server's `PATH`. If T3 Code cannot find one, set its
+Provider CLIs must be on the server's `PATH`. If Fables cannot find one, set its
 **Binary path** in provider settings, especially when using a version manager.
 Cursor's executable is `cursor-agent`, although its login command is
 `agent login`. Codex connected through ChatGPT and Antigravity can use their
 managed runtimes without a `PATH` entry.
 
-T3 Code warns when a provider version has known compatibility problems with your
+Fables warns when a provider version has known compatibility problems with your
 release. Check **Settings → Providers** on that environment for the recommended
 version or range. When its package manager supports installing a specific version,
 you can install the recommendation there. Otherwise use the provider's installer
@@ -180,24 +183,24 @@ on the environment's machine. An unlisted version is unverified.
 When a provider CLI is behind its latest release, its provider card shows the
 available version. **Update now** runs the installer that owns the CLI
 (Homebrew, mise, or a global npm, pnpm, Yarn, Bun, Volta, or Vite+ install), or
-the CLI's own update command when T3 Code cannot tell. Claude, Codex, and
-OpenCode installs T3 Code cannot identify stay manual: update them through the
-installer you used. T3 Code runs `mise upgrade`
+the CLI's own update command when Fables cannot tell. Claude, Codex, and
+OpenCode installs Fables cannot identify stay manual: update them through the
+installer you used. Fables runs `mise upgrade`
 only for a tool your mise config requests as `latest` when the provider's binary
 path is a mise shim or under the tool's `installs/<tool>/latest` link; update a
 pinned version, or a path into one version's directory, through mise yourself.
 Update a CLI installed with Nix through Nix.
-Cursor and Antigravity update with T3 Code. Homebrew and Chocolatey installs
+Cursor and Antigravity update with Fables. Homebrew and Chocolatey installs
 compare against the version their package manager offers, which can trail the
 npm release; update Claude installed with Chocolatey through Chocolatey.
 
 The managed runtimes for Antigravity and for Codex connected through ChatGPT
-first install the release T3 Code tested. When T3 Code finds a newer compatible
+first install the release Fables tested. When Fables finds a newer compatible
 release, their setup in **Settings → Providers** offers an update.
 
 Add another provider instance for a separate account or configuration. Each
 instance can have its own environment variables, such as API keys or a custom
-base URL. Mark secret values as sensitive; after saving, T3 Code does not display
+base URL. Mark secret values as sensitive; after saving, Fables does not display
 their original values.
 
 For provider-specific setup and accounts, see [Codex](./providers-codex.md),
@@ -208,7 +211,7 @@ For provider-specific setup and accounts, see [Codex](./providers-codex.md),
 
 ### Provider check timeouts
 
-If a provider works in its CLI but T3 Code reports a timeout while checking it,
+If a provider works in its CLI but Fables reports a timeout while checking it,
 allow more time in the T3 server's environment. For example, give Codex and
 Claude readiness checks 60 seconds:
 
@@ -253,5 +256,5 @@ installation, update checks, and shutdown limits keep their existing behavior.
 - [Permission modes](./permission-modes.md): choose when agents ask before acting.
 - [Remote access](./remote-access.md): connect from another device.
 - [Running in the background](./background-service.md): keep a host available.
-- [Updating T3 Code](./updating.md): update the app and connected servers.
-- [Managed policy](./managed-policy.md): configure T3 Code for everyone on a machine.
+- [Updating Fables](./updating.md): update the app and connected servers.
+- [Managed policy](./managed-policy.md): configure Fables for everyone on a machine.

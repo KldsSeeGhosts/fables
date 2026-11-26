@@ -14,15 +14,10 @@ const pageTabTitles = {
   issues: msg("Issues", { $context: "sidebar link to the list of issues" }),
   workflows: msg("Workflows"),
   "pull-requests": msg("Pull requests"),
-  captains: msg("Captains"),
+  captains: msg("Duets"),
 } satisfies Record<LayoutPageContent["kind"], ReturnType<typeof msg>>;
 
-export function layoutPageTabTitle(
-  kind: LayoutPageContent["kind"],
-  resolve: MessageResolver,
-  options?: { readonly duet?: boolean },
-) {
-  if (kind === "captains" && options?.duet) return resolve(msg("Duets"));
+export function layoutPageTabTitle(kind: LayoutPageContent["kind"], resolve: MessageResolver) {
   return resolve(pageTabTitles[kind]);
 }
 

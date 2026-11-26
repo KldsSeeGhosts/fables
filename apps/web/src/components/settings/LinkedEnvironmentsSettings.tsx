@@ -131,7 +131,7 @@ export function LinkedEnvironmentsSettings({
         <SettingsRow
           title={gt("No linked environments")}
           description={gt(
-            "Link another machine running T3 Code, such as a VPS, so agents here can launch and drive threads there.",
+            "Link another machine running Fables, such as a VPS, so agents here can launch and drive threads there.",
           )}
         />
       ) : (
@@ -695,8 +695,8 @@ export function useForgetPeerLink(environmentId: EnvironmentId, link: PeerLinkSu
           type: "warning",
           title: gt("{label} did not answer", { label: link.label }),
           description: gt(
-            // oxlint-disable-next-line t3code/no-dot-separated-text -- "T3 Code · …" is the linked client's literal entry name in Sharing & access, not joined chrome.
-            "Revoke \"T3 Code · …\" in {label}''s Sharing & access to end the session there too.",
+            // oxlint-disable-next-line t3code/no-dot-separated-text -- "Fables · …" is the linked client's literal entry name in Sharing & access, not joined chrome.
+            "Revoke \"Fables · …\" in {label}''s Sharing & access to end the session there too.",
             { label: link.label },
           ),
         });

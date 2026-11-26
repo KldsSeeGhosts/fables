@@ -122,8 +122,8 @@ export function CaptainResetDialog({
               </T>
             ) : (
               <T>
-                A new conversation will keep the Captain’s documents, memories and scheduled tasks.
-                You can still open the earlier conversation.
+                A new conversation will keep the Duet’s documents, memories and scheduled tasks. You
+                can still open the earlier conversation.
               </T>
             )}
           </AlertDialogDescription>

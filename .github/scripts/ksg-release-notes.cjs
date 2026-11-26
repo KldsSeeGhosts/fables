@@ -49,7 +49,7 @@ function previousRelease(releases, tag, ref, cwd) {
       (release) =>
         !release.draft &&
         release.published_at &&
-        release.name?.startsWith("KSG Code ") &&
+        /^(?:Fables|KSG Code) /.test(release.name ?? "") &&
         NIGHTLY_TAG.test(release.tag_name) &&
         compareTags(release.tag_name, tag) < 0,
     )
@@ -133,13 +133,13 @@ function generateReleaseNotes({ releases, repository, tag, upstreamTag, ref = "H
 
   // The desktop popover prioritizes the last bullets, so keep KSG's changes last.
   const forkChanges = forkCommits.map((commit) => changeBullet(commit, repository)).filter(Boolean);
-  notes.push("", "### KSG Code", "", ...forkChanges);
+  notes.push("", "### Fables", "", ...forkChanges);
   if (forkChanges.length === 0) {
     notes.push(
       forkCommits.length > 0
         ? "- Documentation, test, or formatting changes only; no new KSG application changes."
         : previousUpstream === upstreamTag
-          ? "- Rebuilt KSG Code; no new application changes."
+          ? "- Rebuilt Fables; no new application changes."
           : "- No additional KSG-specific changes in this upstream update.",
     );
   }

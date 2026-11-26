@@ -10,7 +10,6 @@ import { T, useGT, useLocale } from "gt-react";
 import { GitForkIcon, MessageCircleQuestionIcon, PlusIcon, ShieldAlertIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { useDuetShell } from "../../hooks/useDuetShell";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { useTimeOfDayGreeting } from "../chat/ChatHero";
 import { Button, ContentButton } from "../ui/button";
@@ -68,7 +67,6 @@ function CaptainInboxCard({
   onReview: (threadRef: ScopedThreadRef) => void;
 }) {
   const gt = useGT();
-  const isDuet = useDuetShell();
   const [icon, label] =
     item.kind === "approval"
       ? [<ShieldAlertIcon key="icon" />, gt("Approval requested")]
@@ -98,7 +96,7 @@ function CaptainInboxCard({
       {item.isChild ? (
         <ApprovalBoundaryCard.Detail>
           {gt("Delegated by {name}", {
-            name: captain?.name ?? (isDuet ? gt("a Duet") : gt("a Captain")),
+            name: captain?.name ?? gt("a Duet"),
           })}
         </ApprovalBoundaryCard.Detail>
       ) : null}
@@ -216,7 +214,6 @@ export function CaptainsInbox({
   onCreate?: (() => void) | undefined;
 }) {
   const gt = useGT();
-  const isDuet = useDuetShell();
   const locale = useLocale();
   const now = new Date(`${useNowMinute()}Z`);
   const nowMs = now.getTime();
@@ -260,13 +257,9 @@ export function CaptainsInbox({
           </Text>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 text-meta text-muted-foreground">
             <span className="tabular-nums">
-              {isDuet
-                ? gt("{count, plural, one {{count} Duet} other {{count} Duets}}", {
-                    count: active.length,
-                  })
-                : gt("{count, plural, one {{count} Captain} other {{count} Captains}}", {
-                    count: active.length,
-                  })}
+              {gt("{count, plural, one {{count} Duet} other {{count} Duets}}", {
+                count: active.length,
+              })}
             </span>
             <span className="tabular-nums">
               {gt("{count, plural, one {{count} needs you} other {{count} need you}}", {
@@ -278,7 +271,7 @@ export function CaptainsInbox({
         {onCreate ? (
           <Button variant="quiet-pill" size="sm" onClick={onCreate}>
             <PlusIcon aria-hidden />
-            {isDuet ? <T>New Duet</T> : <T>New Captain</T>}
+            <T>New Duet</T>
           </Button>
         ) : null}
       </header>
@@ -300,15 +293,11 @@ export function CaptainsInbox({
         </ul>
       ) : (
         <Text variant="body" tone="muted" render={<p />}>
-          {isDuet ? (
-            <T>No Duets yet. Create one to delegate work and get a daily brief.</T>
-          ) : (
-            <T>No Captains yet. Create one to delegate work and get a daily brief.</T>
-          )}
+          <T>No Duets yet. Create one to delegate work and get a daily brief.</T>
         </Text>
       )}
 
-      <DuetSection title={<T>Needs you</T>} count={items.length}>
+      <DuetSection title=<T>Needs you</T> count={items.length}>
         {items.length === 0 ? (
           <Text variant="body" tone="muted" render={<p />}>
             <T>Nothing is waiting on you.</T>
@@ -327,8 +316,8 @@ export function CaptainsInbox({
         )}
       </DuetSection>
 
-      <DuetSection title={<T>In flight</T>}>
-        <OverviewTaskList empty={<T>No delegated work is running.</T>}>
+      <DuetSection title=<T>In flight</T>>
+        <OverviewTaskList empty=<T>No delegated work is running.</T>>
           {active.map(({ environmentId, captain, children }) => (
             <OverviewLocalTaskRows
               key={`${environmentId}:${captain.id}`}
@@ -349,8 +338,8 @@ export function CaptainsInbox({
         </OverviewTaskList>
       </DuetSection>
 
-      <DuetSection title={<T>Recently finished</T>}>
-        <OverviewTaskList empty={<T>No delegated tasks finished recently.</T>}>
+      <DuetSection title=<T>Recently finished</T>>
+        <OverviewTaskList empty=<T>No delegated tasks finished recently.</T>>
           {detailed.map(({ environmentId, captain }) => (
             <OverviewFinishedTaskRows
               key={`${environmentId}:${captain.id}`}
@@ -364,16 +353,12 @@ export function CaptainsInbox({
         </OverviewTaskList>
       </DuetSection>
 
-      <DuetSection title={<T>Morning briefs</T>}>
+      <DuetSection title=<T>Morning briefs</T>>
         {active.length > 0 ? (
           <MorningBriefs duets={active} now={now} onOpenCaptain={onOpenCaptain} />
         ) : (
           <Text variant="body" tone="muted" render={<p />}>
-            {isDuet ? (
-              <T>Create a Duet to delegate work and get a daily brief.</T>
-            ) : (
-              <T>Create a Captain to delegate work and get a daily brief.</T>
-            )}
+            <T>Create a Duet to delegate work and get a daily brief.</T>
           </Text>
         )}
       </DuetSection>

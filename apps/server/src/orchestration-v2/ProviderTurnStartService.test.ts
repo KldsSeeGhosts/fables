@@ -2424,7 +2424,7 @@ effectIt.effect("briefs a Duet on a turn that carries no other pending context",
     });
     yield* harness.start;
     const text = harness.startTurn.mock.calls[0]?.[0].message.text ?? "";
-    expect(text).toContain("Captain profile: Harness lead");
+    expect(text).toContain("Duet profile: Harness lead");
     expect(text).toContain("How you work:");
     expect(text.endsWith("Fix the typo")).toBe(true);
   }),

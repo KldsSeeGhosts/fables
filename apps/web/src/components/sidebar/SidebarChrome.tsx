@@ -78,7 +78,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
   return (
     <Link
       data-app-brand=""
-      aria-label={gt("T3 Code home")}
+      aria-label={gt("Fables home")}
       className={cn(
         "pointer-events-auto relative z-10 hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md outline-hidden ring-ring [-webkit-app-region:no-drag] focus-visible:ring-2 focus-visible:ring-inset md:flex",
         onBackdrop ? "text-white light:text-foreground" : "text-foreground",
@@ -93,15 +93,14 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
 function SidebarBrandMark({ onBackdrop }: { onBackdrop: boolean }) {
   return (
     <span className="inline-flex min-w-0 items-baseline gap-1 text-label tracking-tight">
-      <T3Wordmark aria-label="T3" className="h-[1cap] w-auto shrink-0" />
+      <T3Wordmark aria-hidden className="h-[1cap] w-auto shrink-0" />
       <span
         className={cn(
           "truncate [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:py-1",
           onBackdrop ? "text-white/70 light:text-muted-foreground" : "text-muted-foreground",
         )}
       >
-        {/* oxlint-disable-next-line t3code/no-untranslated-copy -- product wordmark */}
-        {"Code"}
+        Fables
       </span>
     </span>
   );
@@ -149,8 +148,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
             className="hidden w-[calc(var(--workspace-controls-left)+var(--workspace-titlebar-control-size)+4px)] shrink-0 md:block"
           />
           <div data-duet-wordmark="" className={DUET_WORDMARK_CLASS_NAME}>
-            {/* oxlint-disable-next-line t3code/no-untranslated-copy -- product wordmark */}
-            KSG Duet
+            Fables
           </div>
           <div
             data-duet-sidebar-nav=""

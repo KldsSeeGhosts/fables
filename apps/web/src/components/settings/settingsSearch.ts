@@ -635,12 +635,10 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "duet-tool-call-visibility",
-    title: msg("Tool calls in Captains and Duets"),
+    title: msg("Tool calls in Duets"),
     to: "/settings/chat",
     searchTerms: [
-      msg(
-        "in captains in duets same as other threads inherit override hide tool calls zen final answers only",
-      ),
+      msg("in duets same as other threads inherit override hide tool calls zen final answers only"),
     ],
   },
   {
@@ -1373,7 +1371,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "pull-request-links-open-in-app",
-    title: msg("Open pull requests in T3 Code"),
+    title: msg("Open pull requests in Fables"),
     to: "/settings/diffs",
     searchTerms: [
       `pr commit links ${SOURCE_CONTROL_HOST_LABELS} browser external click default pull request view panel`,

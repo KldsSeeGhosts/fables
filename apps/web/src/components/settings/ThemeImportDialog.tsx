@@ -318,7 +318,7 @@ export function ThemeImportDialog({
             <T>Add a theme</T>
           </DialogTitle>
           <DialogDescription>
-            <T>T3 Code or VS Code color themes.</T>
+            <T>Fables or VS Code color themes.</T>
           </DialogDescription>
         </DialogHeader>
         <ThemeImportBody
@@ -619,7 +619,7 @@ function ThemeImportBody({
               {...dropHandlers}
             >
               <FileUpIcon className="size-5 text-muted-foreground" />
-              <p className="text-label">{gt("Drop T3 Code or VS Code .json files")}</p>
+              <p className="text-label">{gt("Drop Fables or VS Code .json files")}</p>
               <div className="flex flex-wrap justify-center gap-2">
                 <Button disabled={isReading} size="sm" variant="secondary" onClick={openFilePicker}>
                   {isReading ? gt("Reading…") : gt("Choose files")}

@@ -3024,13 +3024,13 @@ const make = Effect.gen(function* () {
               .pipe(Effect.mapError((error) => failure("orchestration_error", error.message)))
           : undefined;
       if (captain?.archivedAt != null) {
-        return yield* failure("invalid_request", "Restore this Captain before delegating work.");
+        return yield* failure("invalid_request", "Restore this Duet before delegating work.");
       }
       if (input.target !== undefined && environmentId !== undefined) {
         if (captain?.scopedProjectIds.length) {
           return yield* failure(
             "invalid_request",
-            "A scoped Captain can delegate only to its local workspace projects.",
+            "A scoped Duet can delegate only to its local workspace projects.",
           );
         }
         yield* requireCapability(callerScope);
