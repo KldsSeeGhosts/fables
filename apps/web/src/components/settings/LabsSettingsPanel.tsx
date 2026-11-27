@@ -286,14 +286,12 @@ function ChorusHomeRow() {
     >
       {fleet?.status.state === "conflict" ? (
         <p role="alert" className="mt-2 text-body text-warning-foreground">
-          {fleet.status.conflictingHomes.length > 0 ? (
-            <T>
-              More than one machine is set as the Chorus home:{" "}
-              {fleet.status.conflictingHomes.join(", ")}. Turn it off on all but one.
-            </T>
-          ) : (
-            <T>More than one machine is set as the Chorus home. Turn it off on all but one.</T>
-          )}
+          {fleet.status.conflictingHomes.length > 0
+            ? gt(
+                "More than one machine is set as the Chorus home: {labels}. Turn it off on all but one.",
+                { labels: fleet.status.conflictingHomes.join(", ") },
+              )
+            : gt("More than one machine is set as the Chorus home. Turn it off on all but one.")}
         </p>
       ) : null}
     </SettingsRow>

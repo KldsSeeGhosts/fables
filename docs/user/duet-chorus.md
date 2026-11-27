@@ -1,14 +1,16 @@
 # Chorus
 
-A Chorus is a Duet for all your linked machines. Ask it what's happening across your Duets or ask it to route work to the Duet that owns a project. It can start a Solo for a one-off in a project no Duet covers. If that project comes up again, Chorus suggests giving it to a Duet. Keep ongoing project state in the Duet that owns the work.
+Chorus is the fleet-wide coordinator for your linked machines. Ask it what's happening across your Duets or ask it to route work to the Duet that owns a project. It can start a Solo for a one-off in a project no Duet covers. If that project comes up again, Chorus suggests giving it to a Duet. Keep ongoing project state in the Duet that owns the work.
 
-## Create, archive, or restore a Chorus
+## Choose the Chorus home
 
-On web or desktop, open **Duets**, choose **New Duet**, and select **Chorus**. On mobile, choose **New Chorus** above your Duets. Choose an up-to-date machine to host it. The active Chorus appears above the other Duets when your app is connected to its host.
+One machine owns Chorus. Turn on **Chorus home** in **Settings → Labs** on that machine. Pick an always-on machine that you keep up to date. Fables creates Chorus there automatically and uses the same row again after restarts. You never create Chorus by hand.
 
-On web or desktop, use **Archive** or **Restore** in the Chorus row's menu. On mobile, open **Brief** in the Chorus conversation to archive it. Tap the archived Chorus row to open its Brief and restore it. Archiving removes the pinned row. Restoring pins it again.
+The pinned Chorus row appears above your Duets in web, desktop, and mobile apps connected to any machine new enough to understand the fleet row. It has no machine label. Opening it from another machine reads it through the existing linked thread relay.
 
-A fleet is meant to have one active Chorus. Fables checks the machines that respond when you create or restore one. Simultaneous creates, or a restore while another machine is offline, can leave two active Choruses. If you see the duplicate warning, archive all but the one you want to keep.
+If the home machine is offline, the pinned row says so. If it runs an older server that does not understand the fleet row, the row says the home machine needs an update. If no machine is a home, the row asks you to choose one in Settings. If two machines claim the role, Settings shows a warning. Turn **Chorus home** off on all but one machine.
+
+Turning **Chorus home** off archives that machine's Chorus row. There is no separate archive or restore control for Chorus. If a machine already has an older manually created Chorus, turning the setting on there keeps that row when it is active; otherwise the machine creates or restores its fleet row automatically. Machines without the home role archive their local Chorus rows so the fleet keeps one visible owner.
 
 ## Linked machines and trust
 
