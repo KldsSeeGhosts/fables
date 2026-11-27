@@ -4,6 +4,7 @@ import {
   type CaptainDocumentName,
   type CaptainId,
   type CaptainSnapshot,
+  type FleetChorusState,
   type FleetChorusStatus,
   type EnvironmentId,
   type OrchestrationV2Subagent,
@@ -12,6 +13,8 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
+import { mFallback, msg } from "gt-i18n";
+import type { MFunctionType } from "gt-i18n/types";
 
 import { scopeThreadRef } from "../environment/scoped.ts";
 import { parseThreadKey, threadKey } from "./entities.ts";
@@ -130,10 +133,28 @@ export interface FleetChorusView {
 const fleetChorusStateRank: Record<FleetChorusStatus["state"], number> = {
   conflict: 0,
   ready: 1,
-  offline: 2,
-  too_old: 3,
-  unconfigured: 4,
+  setting_up: 2,
+  offline: 3,
+  too_old: 4,
+  unconfigured: 5,
 };
+
+export function fleetChorusStateLabel(state: FleetChorusState, resolve: MFunctionType = mFallback) {
+  switch (state) {
+    case "ready":
+      return resolve(msg("Fleet coordinator"));
+    case "offline":
+      return resolve(msg("Home machine offline"));
+    case "too_old":
+      return resolve(msg("Home machine needs an update"));
+    case "unconfigured":
+      return resolve(msg("Choose a home in Settings"));
+    case "setting_up":
+      return resolve(msg("Waiting for the Chorus home to finish setup"));
+    case "conflict":
+      return resolve(msg("More than one Chorus home"));
+  }
+}
 
 /**
  * The fleet status to show when a client is connected to several servers. A reachable or
@@ -143,14 +164,45 @@ export function selectFleetChorus(
   entries: ReadonlyArray<{
     readonly environmentId: EnvironmentId;
     readonly status: FleetChorusStatus | null | undefined;
+    readonly connected?: boolean;
   }>,
 ): FleetChorusView | null {
-  const known = entries.flatMap(({ environmentId, status }) =>
-    status === null || status === undefined ? [] : [{ viaEnvironmentId: environmentId, status }],
-  );
+  const known = entries.flatMap(({ environmentId, status, connected = true }) => {
+    if (status == null) return [];
+    if (connected) return [{ viaEnvironmentId: environmentId, status }];
+    return status.home === null
+      ? []
+      : [
+          {
+            viaEnvironmentId: environmentId,
+            status: {
+              ...status,
+              state: "offline" as const,
+              localHome: false,
+              conflictingHomes: [],
+            },
+          },
+        ];
+  });
   if (known.length === 0) return null;
+  const localClaims = known.filter(({ status }) => status.localHome && status.home !== null);
+  if (localClaims.length > 1) {
+    const first = localClaims[0]!;
+    return {
+      ...first,
+      status: {
+        ...first.status,
+        state: "conflict",
+        conflictingHomes: localClaims.map(({ status }) => status.home!.label),
+      },
+    };
+  }
   return known.reduce((best, candidate) =>
-    fleetChorusStateRank[candidate.status.state] < fleetChorusStateRank[best.status.state]
+    fleetChorusStateRank[candidate.status.state] < fleetChorusStateRank[best.status.state] ||
+    (candidate.status.state === "ready" &&
+      best.status.state === "ready" &&
+      candidate.status.localHome &&
+      !best.status.localHome)
       ? candidate
       : best,
   );

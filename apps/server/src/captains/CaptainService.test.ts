@@ -217,15 +217,19 @@ it.effect("forces Chorus fields for automatic creation and rejects client creati
     const { layer, launches } = fixture();
     yield* Effect.gen(function* () {
       const service = yield* CaptainService.CaptainService;
-      const chorus = yield* service.create({
-        ...input,
-        captainId: CaptainId.make("chorus"),
-        kind: "chorus",
-        creationSource: "server" as const,
-        scopedProjectIds: [ProjectId.make("missing")],
-        coordinatorOnly: false,
-        reportPolicy: "context",
-      });
+      const store = yield* CaptainStore.CaptainStore;
+      const chorus = yield* service.create(
+        {
+          ...input,
+          captainId: CaptainId.make("chorus"),
+          kind: "chorus",
+          creationSource: "server" as const,
+          scopedProjectIds: [ProjectId.make("missing")],
+          coordinatorOnly: false,
+          reportPolicy: "context",
+        },
+        true,
+      );
       assert.equal(chorus.kind, "chorus");
       assert.deepStrictEqual(chorus.scopedProjectIds, []);
       assert.isTrue(chorus.coordinatorOnly);
@@ -237,11 +241,25 @@ it.effect("forces Chorus fields for automatic creation and rejects client creati
           ...input,
           captainId: CaptainId.make("manual-chorus"),
           kind: "chorus",
+          creationSource: "server",
         }),
       );
       assert.equal(manual.code, "invalid_request");
       assert.include(manual.message, "created automatically");
       assert.equal(launches.size, 1);
+      const oldId = CaptainId.make("older-chorus");
+      yield* store.save({
+        ...chorus,
+        id: oldId,
+        primaryThreadId: ThreadId.make("captain:older-chorus:0"),
+        createdAt: "2026-11-20T12:00:00.000Z",
+        archivedAt: "2026-11-21T12:00:00.000Z",
+      });
+      assert.equal((yield* store.findChorus())?.id, chorus.id);
+      assert.equal(
+        (yield* Effect.flip(service.archive({ captainId: chorus.id }))).code,
+        "invalid_request",
+      );
     }).pipe(Effect.provide(layer));
   }),
 );
@@ -251,12 +269,15 @@ it.effect("keeps a Chorus unscoped, coordinator-only, and on the react report po
     const { layer } = fixture();
     yield* Effect.gen(function* () {
       const service = yield* CaptainService.CaptainService;
-      const chorus = yield* service.create({
-        ...input,
-        captainId: CaptainId.make("chorus"),
-        kind: "chorus",
-        creationSource: "server" as const,
-      });
+      const chorus = yield* service.create(
+        {
+          ...input,
+          captainId: CaptainId.make("chorus"),
+          kind: "chorus",
+          creationSource: "server" as const,
+        },
+        true,
+      );
 
       const unchanged = yield* service.update({
         captainId: chorus.id,
@@ -295,12 +316,15 @@ it.effect("explains the project requirements for each kind when Scratch is unava
       assert.equal(error.code, "invalid_request");
       assert.include(error.message, "workspace scope");
       const chorusError = yield* Effect.flip(
-        service.create({
-          ...input,
-          kind: "chorus",
-          creationSource: "server" as const,
-          scopedProjectIds: [project],
-        }),
+        service.create(
+          {
+            ...input,
+            kind: "chorus",
+            creationSource: "server" as const,
+            scopedProjectIds: [project],
+          },
+          true,
+        ),
       );
       assert.equal(chorusError.code, "invalid_request");
       assert.include(chorusError.message, "Chorus requires a scratch folder");
@@ -987,12 +1011,15 @@ it.effect("builds a bounded Chorus roster from local state and sends it only whe
     yield* Effect.gen(function* () {
       const service = yield* CaptainService.CaptainService;
       const store = yield* CaptainStore.CaptainStore;
-      const chorus = yield* service.create({
-        ...input,
-        name: "Chorus",
-        kind: "chorus",
-        creationSource: "server" as const,
-      });
+      const chorus = yield* service.create(
+        {
+          ...input,
+          name: "Chorus",
+          kind: "chorus",
+          creationSource: "server" as const,
+        },
+        true,
+      );
       const duets = yield* Effect.forEach(
         Array.from({ length: 14 }, (_, index) => index),
         (index) => {
@@ -1137,12 +1164,15 @@ it.effect(
         const service = yield* CaptainService.CaptainService;
         const sql = yield* SqlClient.SqlClient;
         const store = yield* CaptainStore.CaptainStore;
-        const chorus = yield* service.create({
-          ...input,
-          name: "Chorus",
-          kind: "chorus",
-          creationSource: "server" as const,
-        });
+        const chorus = yield* service.create(
+          {
+            ...input,
+            name: "Chorus",
+            kind: "chorus",
+            creationSource: "server" as const,
+          },
+          true,
+        );
         const now = yield* DateTime.now;
         const recent = DateTime.formatIso(DateTime.toUtc(DateTime.subtract(now, { days: 2 })));
         const old = DateTime.formatIso(DateTime.toUtc(DateTime.subtract(now, { days: 31 })));

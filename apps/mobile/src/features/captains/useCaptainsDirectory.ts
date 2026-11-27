@@ -79,6 +79,9 @@ export function useFleetChorus(): FleetChorusView | null {
   return selectFleetChorus(
     live.map(({ environmentId, result }) => ({
       environmentId,
+      connected:
+        supporting.find((environment) => environment.environmentId === environmentId)?.connection
+          .phase === "connected",
       status: AsyncResult.getOrElse(result, () => null),
     })),
   );

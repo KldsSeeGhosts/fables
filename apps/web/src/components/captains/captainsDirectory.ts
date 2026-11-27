@@ -34,15 +34,18 @@ export function useCaptainEnvironments() {
 
 /** The one fleet Chorus projection, chosen from the connected servers that understand it. */
 export function useFleetChorus(): FleetChorusView | null {
-  const { supporting } = useCaptainEnvironments();
-  const fleetEnvironments = supporting.filter(
-    ({ serverConfig }) => serverConfig?.environment.capabilities.fleetChorus === true,
+  const { environments } = useEnvironments();
+  const readable = useEnvironmentsWithScope(environments, AuthOrchestrationReadScope);
+  const fleetEnvironments = environments.filter(
+    ({ environmentId, serverConfig }) =>
+      readable.has(environmentId) && serverConfig?.environment.capabilities.fleetChorus === true,
   );
   const key = environmentIdsKey(fleetEnvironments.map(({ environmentId }) => environmentId));
   const results = useAtomValue(fleetChorusResults(key));
   return selectFleetChorus(
-    fleetEnvironments.map(({ environmentId }, index) => ({
+    fleetEnvironments.map(({ environmentId, connection }, index) => ({
       environmentId,
+      connected: connection.phase === "connected",
       status: AsyncResult.getOrElse(results[index]!, () => null),
     })),
   );

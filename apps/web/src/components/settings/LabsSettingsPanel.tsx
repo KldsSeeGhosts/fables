@@ -265,8 +265,12 @@ function ChorusHomeRow() {
   const searchableSetting = useSearchableSetting();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
+  const settingsScope = useOptionalSettingsScope();
   const fleet = useFleetChorus();
   const gt = useGT();
+  const targets = settingsScope?.connectedEnvironments ?? [];
+  const canSelectHome =
+    targets.length === 1 && targets[0]?.serverConfig?.environment.capabilities.fleetChorus === true;
   return (
     <SettingsRow
       serverScoped
@@ -275,13 +279,16 @@ function ChorusHomeRow() {
       description={gt(
         "Keep the fleet's one Chorus on this machine. It appears in every connected app; turning this off archives the local row.",
       )}
+      status={targets.length > 1 ? gt("Select one machine to change the Chorus home.") : undefined}
       control={
-        <ScopedSwitch
-          settingKeys={["chorusHome"]}
-          checked={settings.chorusHome}
-          onCheckedChange={(checked) => updateSettings({ chorusHome: Boolean(checked) })}
-          aria-label={gt("Chorus home")}
-        />
+        canSelectHome ? (
+          <ScopedSwitch
+            settingKeys={["chorusHome"]}
+            checked={settings.chorusHome}
+            onCheckedChange={(checked) => updateSettings({ chorusHome: Boolean(checked) })}
+            aria-label={gt("Chorus home")}
+          />
+        ) : undefined
       }
     >
       {fleet?.status.state === "conflict" ? (

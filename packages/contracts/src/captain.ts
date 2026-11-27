@@ -181,6 +181,7 @@ export const FleetChorusState = Schema.Literals([
   "offline",
   "too_old",
   "unconfigured",
+  "setting_up",
   "conflict",
 ]);
 export type FleetChorusState = typeof FleetChorusState.Type;

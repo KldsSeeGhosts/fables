@@ -10,13 +10,14 @@ import { SettingsPaneHeader, SettingsTabNotch } from "../settings/SettingsTabNot
 import { SidebarInset } from "../ui/sidebar";
 import { CaptainEditorDialog } from "./CaptainEditorDialog";
 import { CaptainsInbox } from "./CaptainsInbox";
-import { useCaptainDestinations, useCaptainsDirectory } from "./captainsDirectory";
+import { useCaptainDestinations, useCaptainsDirectory, useFleetChorus } from "./captainsDirectory";
 import { useOpenCaptainThread } from "./captainNavigation";
 
 /** The Captains home: what every Captain has waiting, running and finished, in one column. */
 export function CaptainsWorkspace() {
   const gt = useGT();
   const { environments, shells } = useCaptainsDirectory();
+  const fleet = useFleetChorus();
   const { destinations, destination } = useCaptainDestinations(usePrimaryEnvironmentId());
   const [creating, setCreating] = useState(false);
   const openThread = useOpenCaptainThread();
@@ -43,6 +44,7 @@ export function CaptainsWorkspace() {
         <div className="@container/duets-page scrollbar-gutter-both min-h-0 min-w-0 flex-1 overflow-y-auto">
           <CaptainsInbox
             environments={environments}
+            chorusHome={fleet?.status.state === "ready" ? fleet.status.home : null}
             shells={shells}
             onOpenThread={openThread}
             onOpenCaptain={openCaptain}

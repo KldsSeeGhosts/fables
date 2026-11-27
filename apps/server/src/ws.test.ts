@@ -137,6 +137,7 @@ import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolve
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as CaptainService from "./captains/CaptainService.ts";
+import * as FleetChorusService from "./captains/FleetChorusService.ts";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as Workflows from "./workflows/Workflows.ts";
 import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
@@ -833,6 +834,7 @@ it.effect("shell snapshots omit idle children and older settled threads only on 
 // Build the production RPC layer; unrelated capabilities fail if this test calls them.
 const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(CaptainService.CaptainService)({}),
+  Layer.mock(FleetChorusService.FleetChorusService)({}),
   Layer.mock(DocumentText.DocumentText)({}),
   Layer.mock(ServerSecretStore.ServerSecretStore)({}),
   Layer.mock(SecretCheck.SecretCheck)({}),

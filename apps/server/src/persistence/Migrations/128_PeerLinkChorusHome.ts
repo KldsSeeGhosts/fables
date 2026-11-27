@@ -11,14 +11,9 @@ export default Effect.gen(function* () {
       ALTER TABLE peer_environment_links ADD COLUMN chorus_home_thread_id TEXT
     `;
   }
-  if (!columns.some((column) => column.name === "chorus_home_seen_at")) {
+  if (!columns.some((column) => column.name === "chorus_home_claimed")) {
     yield* sql`
-      ALTER TABLE peer_environment_links ADD COLUMN chorus_home_seen_at TEXT
-    `;
-  }
-  if (!columns.some((column) => column.name === "chorus_home_capable")) {
-    yield* sql`
-      ALTER TABLE peer_environment_links ADD COLUMN chorus_home_capable INTEGER
+      ALTER TABLE peer_environment_links ADD COLUMN chorus_home_claimed INTEGER NOT NULL DEFAULT 0
     `;
   }
 });

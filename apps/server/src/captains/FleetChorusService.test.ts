@@ -17,6 +17,7 @@ import * as Stream from "effect/Stream";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as PeerLinks from "../peer/PeerLinks.ts";
 import * as PeerMcpClient from "../peer/PeerMcpClient.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as CaptainService from "./CaptainService.ts";
 import * as CaptainStore from "./CaptainStore.ts";
@@ -60,43 +61,50 @@ function fixture(input: {
   readonly peerClaimsHome?: boolean;
   readonly learnedThreadId?: ThreadId | null;
   readonly capable?: boolean;
+  readonly peerThreadId?: ThreadId | null;
+  readonly modelConfigured?: boolean;
 }) {
   const creates: CaptainCreateInput[] = [];
   const archives: CaptainId[] = [];
   const unarchives: CaptainId[] = [];
   const recorded: Array<{ environmentId: EnvironmentIdType; threadId: ThreadId | null }> = [];
-  const settings = {
+  let storedChorus = input.storedChorus;
+  let peerFailure = false;
+  let settings = {
     ...DEFAULT_SERVER_SETTINGS,
     chorusHome: input.chorusHome,
-    defaultModelSelection: modelSelection,
-    textGenerationModelSelection: modelSelection,
+    defaultModelSelection: input.modelConfigured === false ? null : modelSelection,
   };
   const dependencies = Layer.mergeAll(
     Layer.mock(ServerSettings.ServerSettingsService)({
-      getSettings: Effect.succeed(settings),
+      getSettings: Effect.sync(() => settings),
       streamChanges: Stream.empty,
     }),
+    Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([]) }),
     Layer.mock(CaptainService.CaptainService)({
       create: (createInput) =>
         Effect.sync(() => {
           creates.push(createInput);
+          storedChorus = chorus;
           return chorus;
         }),
       archive: ({ captainId }) =>
         Effect.sync(() => {
           archives.push(captainId);
-          return { ...chorus, archivedAt: "2026-11-27T00:01:00.000Z" };
+          storedChorus = { ...chorus, archivedAt: "2026-11-27T00:01:00.000Z" };
+          return storedChorus;
         }),
       unarchive: ({ captainId }) =>
         Effect.sync(() => {
           unarchives.push(captainId);
+          storedChorus = chorus;
           return chorus;
         }),
     }),
     Layer.mock(CaptainStore.CaptainStore)({
-      findChorus: () => Effect.succeed(input.storedChorus),
+      findChorus: () => Effect.sync(() => storedChorus),
       findActiveChorus: () =>
-        Effect.succeed(input.storedChorus?.archivedAt === null ? input.storedChorus : undefined),
+        Effect.sync(() => (storedChorus?.archivedAt === null ? storedChorus : undefined)),
     }),
     Layer.mock(PeerLinks.PeerLinks)({
       enabled: Effect.succeed(input.linksEnabled ?? false),
@@ -111,9 +119,7 @@ function fixture(input: {
           ? [
               {
                 environmentId: homeEnvironmentId,
-                label: "Studio",
                 threadId: input.learnedThreadId,
-                capable: input.capable ?? null,
               },
             ]
           : [],
@@ -124,14 +130,19 @@ function fixture(input: {
         } as never),
       recordChorusHome: (environmentId, update) =>
         Effect.sync(() => {
-          recorded.push({ environmentId, threadId: update.threadId });
+          recorded.push({ environmentId, threadId: update?.threadId ?? null });
         }),
     }),
     Layer.mock(PeerMcpClient.PeerMcpClient)({
       call: () =>
-        input.peerClaimsHome === false
-          ? Effect.fail(new Error("unreachable") as never)
-          : Effect.succeed({ home: true, threadId: chorusThreadId }),
+        Effect.suspend(() =>
+          peerFailure
+            ? Effect.fail(new Error("unreachable") as never)
+            : Effect.succeed({
+                home: input.peerClaimsHome ?? true,
+                threadId: input.peerThreadId === undefined ? chorusThreadId : input.peerThreadId,
+              }),
+        ),
     }),
     Layer.mock(ServerEnvironment.ServerEnvironment)({
       getEnvironmentId: Effect.succeed(localEnvironmentId),
@@ -144,6 +155,13 @@ function fixture(input: {
     archives,
     unarchives,
     recorded,
+    setHome: (chorusHome: boolean) =>
+      Effect.sync(() => {
+        settings = { ...settings, chorusHome };
+      }),
+    failPeer: Effect.sync(() => {
+      peerFailure = true;
+    }),
   };
 }
 
@@ -152,7 +170,12 @@ it.effect("creates the fleet Chorus automatically and idempotently on its home m
     const missing = fixture({ chorusHome: true });
     yield* Effect.gen(function* () {
       const service = yield* FleetChorusService.FleetChorusService;
-      yield* service.ensureHome;
+      const [, first, second] = yield* Effect.all(
+        [service.ensureHome, service.refresh, service.status],
+        { concurrency: "unbounded" },
+      );
+      assert.equal(first.home?.threadId, chorusThreadId);
+      assert.equal(second.home?.threadId, chorusThreadId);
     }).pipe(Effect.provide(missing.layer));
     assert.equal(missing.creates.length, 1);
     assert.equal(missing.creates[0]?.kind, "chorus");
@@ -168,14 +191,20 @@ it.effect("creates the fleet Chorus automatically and idempotently on its home m
   }),
 );
 
-it.effect("archives the local row when the home setting is off", () =>
+it.effect("archives and restores the same Chorus when the home setting is toggled", () =>
   Effect.gen(function* () {
-    const off = fixture({ chorusHome: false, storedChorus: chorus });
+    const off = fixture({ chorusHome: true, storedChorus: chorus });
     yield* Effect.gen(function* () {
       const service = yield* FleetChorusService.FleetChorusService;
-      yield* service.ensureHome;
+      assert.equal((yield* service.refresh).state, "ready");
+      yield* off.setHome(false);
+      assert.equal((yield* service.refresh).state, "unconfigured");
+      yield* off.setHome(true);
+      assert.equal((yield* service.refresh).home?.threadId, chorusThreadId);
     }).pipe(Effect.provide(off.layer));
     assert.deepEqual(off.archives, [chorus.id]);
+    assert.deepEqual(off.unarchives, [chorus.id]);
+    assert.deepEqual(off.creates, []);
   }),
 );
 
@@ -204,14 +233,55 @@ it.effect("keeps a learned home visible as offline when the peer cannot be reach
     const remote = fixture({
       chorusHome: false,
       linksEnabled: true,
-      peerClaimsHome: false,
       learnedThreadId: chorusThreadId,
     });
     const status = yield* Effect.gen(function* () {
       const service = yield* FleetChorusService.FleetChorusService;
+      yield* remote.failPeer;
       return yield* service.refresh;
     }).pipe(Effect.provide(remote.layer));
     assert.equal(status.state, "offline");
     assert.equal(status.home?.threadId, chorusThreadId);
+  }),
+);
+
+it.effect("distinguishes an unknown home, an old home, and a home still setting up", () =>
+  Effect.gen(function* () {
+    const scenarios = [
+      { peerClaimsHome: false, expected: "unconfigured", threadId: null },
+      {
+        learnedThreadId: chorusThreadId,
+        capable: false,
+        expected: "too_old",
+        threadId: chorusThreadId,
+      },
+      { peerThreadId: null, expected: "setting_up", threadId: null },
+    ];
+    for (const scenario of scenarios) {
+      const remote = fixture({ chorusHome: false, linksEnabled: true, ...scenario });
+      const status = yield* Effect.gen(function* () {
+        const service = yield* FleetChorusService.FleetChorusService;
+        return yield* service.refresh;
+      }).pipe(Effect.provide(remote.layer));
+      assert.equal(status.state, scenario.expected);
+      assert.equal(status.home?.threadId ?? null, scenario.threadId);
+    }
+  }),
+);
+
+it.effect("warns about both home claims even before either Chorus exists", () =>
+  Effect.gen(function* () {
+    const conflict = fixture({
+      chorusHome: true,
+      modelConfigured: false,
+      linksEnabled: true,
+      peerThreadId: null,
+    });
+    const status = yield* Effect.gen(function* () {
+      const service = yield* FleetChorusService.FleetChorusService;
+      return yield* service.refresh;
+    }).pipe(Effect.provide(conflict.layer));
+    assert.equal(status.state, "conflict");
+    assert.deepEqual(status.conflictingHomes, ["Local", "Studio"]);
   }),
 );

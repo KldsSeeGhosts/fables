@@ -186,12 +186,8 @@ export function CaptainEditorDialog({
           <DialogHeader>
             <DialogTitle>
               {captain === undefined ? (
-                kind === "chorus" ? (
-                  <T>New Chorus</T>
-                ) : (
-                  <T>New Duet</T>
-                )
-              ) : captain.kind === "chorus" ? (
+                <T>New Duet</T>
+              ) : isChorus ? (
                 <T>Edit Chorus</T>
               ) : (
                 <T>Edit Duet</T>

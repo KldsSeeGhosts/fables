@@ -1,5 +1,7 @@
 import {
   CaptainId,
+  isProviderAvailable,
+  resolveProjectProviderInstanceEnabled,
   type FleetChorusStatus,
   type ThreadId,
   type EnvironmentId,
@@ -11,11 +13,13 @@ import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as PeerLinks from "../peer/PeerLinks.ts";
 import * as PeerMcpClient from "../peer/PeerMcpClient.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as CaptainService from "./CaptainService.ts";
 import * as CaptainStore from "./CaptainStore.ts";
@@ -54,83 +58,87 @@ const make = Effect.gen(function* () {
   const store = yield* CaptainStore.CaptainStore;
   const links = yield* PeerLinks.PeerLinks;
   const peers = yield* PeerMcpClient.PeerMcpClient;
+  const providers = yield* ProviderRegistry.ProviderRegistry;
   const environment = yield* ServerEnvironment.ServerEnvironment;
   const changes = yield* PubSub.unbounded<FleetChorusStatus>();
   const current = yield* Ref.make<FleetChorusStatus | null>(null);
+  const reconcileLock = yield* Semaphore.make(1);
+  const refreshLock = yield* Semaphore.make(1);
 
   const publish = Effect.fn("FleetChorusService.publish")(function* (status: FleetChorusStatus) {
     const previous = yield* Ref.get(current);
-    if (previous !== null && sameStatus(previous, status)) return status;
+    if (previous !== null && sameStatus(previous, status)) return previous;
     yield* Ref.set(current, status);
     yield* PubSub.publish(changes, status);
     return status;
   });
 
-  const ensureHome = Effect.fn("FleetChorusService.ensureHome")(function* () {
-    const server = yield* settings.getSettings.pipe(Effect.orElseSucceed(() => null));
-    const existing = yield* store.findChorus().pipe(Effect.orElseSucceed(() => undefined));
-    if (server?.chorusHome !== true) {
-      if (existing?.archivedAt === null) {
-        yield* captains.archive({ captainId: existing.id }).pipe(
-          Effect.catch((error) =>
-            Effect.logWarning("Could not archive the local Chorus after leaving the home role.", {
-              error,
-            }),
-          ),
-        );
+  const ensureHome = Effect.fn("FleetChorusService.ensureHome")(
+    function* () {
+      const server = yield* settings.getSettings;
+      const existing = yield* store.findChorus();
+      if (!server.chorusHome) {
+        if (existing?.archivedAt === null) {
+          yield* captains.archive({ captainId: existing.id }, true);
+        }
+        return;
       }
-      return;
-    }
-    if (existing?.archivedAt === null) return;
-    if (existing !== undefined) {
-      yield* captains
-        .unarchive({ captainId: existing.id })
-        .pipe(
-          Effect.catch((error) =>
-            Effect.logWarning("Could not restore the fleet Chorus home.", { error }),
-          ),
-        );
-      return;
-    }
-    if (server.defaultModelSelection === null && server.textGenerationModelSelection === null) {
-      yield* Effect.logWarning(
-        "The Chorus home is on, but no model is configured for its first conversation.",
+      if (existing?.archivedAt === null) return;
+      if (existing !== undefined) {
+        yield* captains.unarchive({ captainId: existing.id }, true);
+        return;
+      }
+      const available = (yield* providers.getProviders).find(
+        (provider) =>
+          provider.enabled &&
+          provider.installed &&
+          isProviderAvailable(provider) &&
+          provider.auth.status !== "unauthenticated" &&
+          provider.models.length > 0 &&
+          resolveProjectProviderInstanceEnabled(server, null, provider.instanceId),
       );
-      return;
-    }
-    yield* captains
-      .create({
-        captainId: HOME_CAPTAIN_ID,
-        kind: "chorus",
-        name: "Chorus",
-        role: "",
-        instructions: "",
-        avatar: { preset: "circle", color: "orange" },
-        scopedProjectIds: [],
-        reportPolicy: "react",
-        coordinatorOnly: true,
-        modelSelection: server.defaultModelSelection ?? server.textGenerationModelSelection,
-        runtimeMode: server.defaultRuntimeMode,
-        interactionMode: "default",
-        creationSource: "server",
-      })
-      .pipe(
-        Effect.catch((error) =>
-          Effect.logWarning("Could not create the fleet Chorus home.", { error }),
-        ),
+      const model =
+        available?.models.find((candidate) => candidate.isDefault && !candidate.isCustom) ??
+        available?.models[0];
+      const modelSelection =
+        server.defaultModelSelection ??
+        server.fallbackModelSelection ??
+        (available && model ? { instanceId: available.instanceId, model: model.slug } : null);
+      if (modelSelection === null) return;
+      yield* captains.create(
+        {
+          captainId: HOME_CAPTAIN_ID,
+          kind: "chorus",
+          name: "Chorus",
+          role: "",
+          instructions: "",
+          avatar: { preset: "circle", color: "orange" },
+          scopedProjectIds: [],
+          reportPolicy: "react",
+          coordinatorOnly: true,
+          modelSelection,
+          runtimeMode: server.defaultRuntimeMode,
+          interactionMode: "default",
+          creationSource: "server",
+        },
+        true,
       );
-  });
+    },
+    Effect.catch((error) =>
+      Effect.logWarning("Could not reconcile the local Chorus home.", { error }),
+    ),
+    reconcileLock.withPermits(1),
+  );
 
   const computeStatus = Effect.fn("FleetChorusService.computeStatus")(function* () {
+    yield* ensureHome();
     const now = DateTime.formatIso(yield* DateTime.now);
     const server = yield* settings.getSettings.pipe(Effect.orElseSucceed(() => null));
     const localHome = server?.chorusHome === true;
     const descriptor = yield* environment.getDescriptor;
     const claims: HomeClaim[] = [];
-    const conflicts = new Set<string>();
 
     if (localHome) {
-      yield* ensureHome();
       const active = yield* store.findActiveChorus().pipe(Effect.orElseSucceed(() => undefined));
       claims.push({
         environmentId: descriptor.environmentId,
@@ -151,30 +159,17 @@ const make = Effect.gen(function* () {
           Effect.gen(function* () {
             const stored = learnedByEnvironment.get(link.environmentId);
             const resolved = yield* links.resolve(link.environmentId).pipe(Effect.option);
-            if (resolved._tag === "None") {
-              return stored?.threadId != null
-                ? {
+            const unavailable = (reachability: "offline" | "too_old"): HomeClaim | null =>
+              stored === undefined
+                ? null
+                : {
                     environmentId: link.environmentId,
                     label: link.label,
                     threadId: stored.threadId,
-                    reachability: "offline" as const,
-                  }
-                : null;
-            }
-            if (resolved.value.capabilities.fleetChorus !== true) {
-              yield* links.recordChorusHome(link.environmentId, {
-                threadId: stored?.threadId ?? null,
-                capable: false,
-              });
-              return stored?.threadId != null
-                ? {
-                    environmentId: link.environmentId,
-                    label: link.label,
-                    threadId: stored.threadId,
-                    reachability: "too_old" as const,
-                  }
-                : null;
-            }
+                    reachability,
+                  };
+            if (resolved._tag === "None") return unavailable("offline");
+            if (resolved.value.capabilities.fleetChorus !== true) return unavailable("too_old");
             const answer = yield* peers
               .call({
                 environmentId: link.environmentId,
@@ -184,23 +179,19 @@ const make = Effect.gen(function* () {
                 success: ChorusHomeResult,
               })
               .pipe(Effect.timeout("4 seconds"), Effect.option);
-            if (answer._tag === "None") {
-              return stored?.threadId != null
-                ? {
-                    environmentId: link.environmentId,
-                    label: link.label,
-                    threadId: stored.threadId,
-                    reachability: "offline" as const,
-                  }
-                : null;
+            if (answer._tag === "None") return unavailable("offline");
+            const claim = answer.value.home ? { threadId: answer.value.threadId } : null;
+            if (
+              (stored !== undefined) !== (claim !== null) ||
+              stored?.threadId !== claim?.threadId
+            ) {
+              yield* links.recordChorusHome(link.environmentId, claim);
             }
-            const threadId = answer.value.home ? answer.value.threadId : null;
-            yield* links.recordChorusHome(link.environmentId, { threadId, capable: true });
-            return threadId !== null
+            return claim !== null
               ? {
                   environmentId: link.environmentId,
                   label: link.label,
-                  threadId,
+                  threadId: claim.threadId,
                   reachability: "ready" as const,
                 }
               : null;
@@ -210,10 +201,9 @@ const make = Effect.gen(function* () {
       claims.push(...checked.filter((claim) => claim !== null));
     }
 
-    for (const claim of claims.slice(1)) conflicts.add(claim.label);
-    if (claims.length > 1 && claims[0]) conflicts.add(claims[0].label);
     const preferred =
       claims.find((claim) => claim.reachability === "ready" && claim.threadId !== null) ??
+      claims.find((claim) => claim.reachability === "ready") ??
       claims.find((claim) => claim.reachability === "offline") ??
       claims.find((claim) => claim.reachability === "too_old") ??
       null;
@@ -223,7 +213,9 @@ const make = Effect.gen(function* () {
           ? "conflict"
           : preferred === null
             ? "unconfigured"
-            : preferred.reachability,
+            : preferred.reachability === "ready" && preferred.threadId === null
+              ? "setting_up"
+              : preferred.reachability,
       home:
         preferred === null
           ? null
@@ -233,25 +225,27 @@ const make = Effect.gen(function* () {
               threadId: preferred.threadId,
             },
       localHome,
-      conflictingHomes: claims.length > 1 ? [...conflicts] : [],
+      conflictingHomes: claims.length > 1 ? claims.map((claim) => claim.label) : [],
       updatedAt: now,
     } satisfies FleetChorusStatus;
   });
 
   const refresh = Effect.fn("FleetChorusService.refresh")(function* () {
     return yield* computeStatus().pipe(Effect.flatMap((status) => publish(status)));
-  });
+  }, refreshLock.withPermits(1));
 
   const status = Effect.gen(function* () {
     const existing = yield* Ref.get(current);
-    return existing ?? (yield* computeStatus());
+    return existing ?? (yield* refresh());
   });
 
   const subscribe = Stream.unwrap(
     Effect.gen(function* () {
-      const first = yield* refresh();
       const subscription = yield* PubSub.subscribe(changes);
-      return Stream.concat(Stream.succeed(first), Stream.fromSubscription(subscription));
+      const first = yield* status;
+      return Stream.concat(Stream.succeed(first), Stream.fromSubscription(subscription)).pipe(
+        Stream.changesWith(sameStatus),
+      );
     }),
   );
 
@@ -269,7 +263,10 @@ export const layer = Layer.effect(FleetChorusService, make);
 export const worker = Layer.effectDiscard(
   Effect.gen(function* () {
     const service = yield* FleetChorusService;
+    const settings = yield* ServerSettings.ServerSettingsService;
+    const settingsChanges = yield* settings.subscribeChanges;
     yield* service.ensureHome;
+    yield* Stream.runForEach(settingsChanges, () => service.refresh).pipe(Effect.forkScoped);
     yield* service.refresh.pipe(Effect.repeat(REFRESH_INTERVAL), Effect.forkScoped);
   }),
 );

@@ -99,13 +99,13 @@ const make = Effect.gen(function* () {
   });
 
   const create = Effect.fn("CaptainService.create")(
-    function* (input: CaptainCreateInput) {
-      const existing = yield* store.find(input.captainId);
-      if (existing !== undefined) return existing;
+    function* (input: CaptainCreateInput, fleet = false) {
       const kind = input.kind ?? "duet";
-      if (kind === "chorus" && input.creationSource !== "server") {
+      if (kind === "chorus" && !fleet) {
         return yield* invalid("Chorus is created automatically on its home machine.");
       }
+      const existing = yield* store.find(input.captainId);
+      if (existing !== undefined) return existing;
       const scopedProjectIds =
         kind === "chorus" ? [] : yield* validateScope(input.scopedProjectIds);
       const projectId =
@@ -192,8 +192,11 @@ const make = Effect.gen(function* () {
   );
 
   const setArchived = Effect.fn("CaptainService.setArchived")(
-    function* ({ captainId }: { readonly captainId: CaptainId }, archived: boolean) {
+    function* ({ captainId }: { readonly captainId: CaptainId }, archived: boolean, fleet = false) {
       const current = yield* store.requireCaptain(captainId);
+      if (current.kind === "chorus" && !fleet) {
+        return yield* invalid("Change the Chorus home in Settings.");
+      }
       if ((current.archivedAt !== null) === archived) return current;
       const now = yield* timestamp;
       const captain = yield* store.save({
@@ -390,6 +393,10 @@ const make = Effect.gen(function* () {
 
   const deleteCaptain = Effect.fn("CaptainService.delete")(
     function* ({ captainId }: { readonly captainId: CaptainId }) {
+      const current = yield* store.find(captainId);
+      if (current?.kind === "chorus") {
+        return yield* invalid("Change the Chorus home in Settings.");
+      }
       yield* store.remove(captainId);
     },
     Effect.uninterruptible,
@@ -399,8 +406,10 @@ const make = Effect.gen(function* () {
   return {
     create,
     update,
-    archive: (input: { readonly captainId: CaptainId }) => setArchived(input, true),
-    unarchive: (input: { readonly captainId: CaptainId }) => setArchived(input, false),
+    archive: (input: { readonly captainId: CaptainId }, fleet = false) =>
+      setArchived(input, true, fleet),
+    unarchive: (input: { readonly captainId: CaptainId }, fleet = false) =>
+      setArchived(input, false, fleet),
     delete: deleteCaptain,
     resetConversation,
     subscribe: store.subscribe,

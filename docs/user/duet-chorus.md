@@ -4,13 +4,13 @@ Chorus is the fleet-wide coordinator for your linked machines. Ask it what's hap
 
 ## Choose the Chorus home
 
-One machine owns Chorus. Turn on **Chorus home** in **Settings → Labs** on that machine. Pick an always-on machine that you keep up to date. Fables creates Chorus there automatically and uses the same row again after restarts. You never create Chorus by hand.
+One machine owns Chorus. In **Settings → Labs**, select the machine you want to host it and turn on **Chorus home**. Pick an always-on machine that you keep up to date. Fables creates Chorus there automatically and uses the same conversation after restarts. The row shows that setup is in progress while it waits for a model.
 
-The pinned Chorus row appears above your Duets in web, desktop, and mobile apps connected to any machine new enough to understand the fleet row. It has no machine label. Opening it from another machine reads it through the existing linked thread relay.
+The pinned Chorus row appears above your Duets in web, desktop, and mobile apps. The app can connect to the home or to an updated machine that has a link to the home. Opening from another machine uses the linked thread relay to read the conversation. Connect to the home to send Chorus a message.
 
-If the home machine is offline, the pinned row says so. If it runs an older server that does not understand the fleet row, the row says the home machine needs an update. If no machine is a home, the row asks you to choose one in Settings. If two machines claim the role, Settings shows a warning. Turn **Chorus home** off on all but one machine.
+If a known home machine is offline or needs a server update, the pinned row says so. If the connected machine doesn't know a home, the row asks you to choose one in Settings. If two machines claim the role, Settings shows a warning. Turn **Chorus home** off on all but one machine.
 
-Turning **Chorus home** off archives that machine's Chorus row. There is no separate archive or restore control for Chorus. If a machine already has an older manually created Chorus, turning the setting on there keeps that row when it is active; otherwise the machine creates or restores its fleet row automatically. Machines without the home role archive their local Chorus rows so the fleet keeps one visible owner.
+Turning **Chorus home** off archives that machine's Chorus and keeps its history. The pinned row follows the remaining home or asks you to choose one. The home adopts its existing active Chorus, or restores its most recently archived Chorus if it has one. Other machines archive their old local Choruses.
 
 ## Linked machines and trust
 

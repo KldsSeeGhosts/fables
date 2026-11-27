@@ -2,13 +2,14 @@ import {
   captainInboxItems,
   captainThreadActivity,
   fleetChorusCaptain,
+  fleetChorusStateLabel,
   withoutStoredChoruses,
 } from "@t3tools/client-runtime/state/captains";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/models";
 import type { Captain, EnvironmentId, FleetChorusState } from "@t3tools/contracts";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { useNavigation } from "@react-navigation/native";
-import { useGT } from "gt-react-native";
+import { useGT, useMessages } from "gt-react-native";
 import { Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
@@ -41,6 +42,7 @@ export function CaptainsHomeSection(props: {
   readonly selectedThreadKey: string | null;
 }) {
   const gt = useGT();
+  const message = useMessages();
   const isDuet = useDuetShell();
   const navigation = useNavigation();
   const selectDetail = useSelectWorkspaceDetail();
@@ -112,7 +114,7 @@ export function CaptainsHomeSection(props: {
   const openFleet = () => {
     const home = fleet?.status.home;
     if (fleet === null || home?.threadId == null || fleet.status.state !== "ready") return;
-    if (environments.some(({ environmentId }) => environmentId === home.environmentId)) {
+    if (fleet.viaEnvironmentId === home.environmentId) {
       selectDetail({
         name: "Thread",
         params: {
@@ -133,13 +135,10 @@ export function CaptainsHomeSection(props: {
     environments,
     rows.flatMap(({ own }) => own),
   );
-  const chorusControls = null;
   if (isDuet) {
     return (
       <DuetHomeSection
         rows={rows}
-        chorusControls={chorusControls}
-        fleetMachineCount={environments.length}
         waiting={duetInboxGroups(inbox).reduce((count, group) => count + group.items.length, 0)}
         showsEnvironment={showsEnvironment}
         projects={props.projects}
@@ -194,41 +193,27 @@ export function CaptainsHomeSection(props: {
           </Text>
         </Pressable>
       </View>
-      {chorusControls}
       {rows.map(({ environment, captain, activity, fleetState }) => {
         const state =
-          fleetState === "offline"
-            ? gt("Home machine offline")
-            : fleetState === "too_old"
-              ? gt("Home machine needs an update")
-              : fleetState === "unconfigured"
-                ? gt("Choose a home in Settings")
-                : fleetState === "conflict"
-                  ? gt("More than one Chorus home")
-                  : captain.archivedAt !== null
-                    ? gt("Archived")
-                    : captain.kind === "chorus"
-                      ? gt(
-                          "All Duets across {count, plural, =1 {1 machine} other {{count} machines}}",
-                          {
-                            count: environments.length,
-                          },
-                        )
-                      : activity.attention > 0
-                        ? gt(
-                            "{count, plural, one {{count} request waits on you} other {{count} requests wait on you}}",
-                            { count: activity.attention },
-                          )
-                        : activity.children.length > 0
-                          ? gt(
-                              "{count, plural, one {Solos on {count} task} other {Solos on {count} tasks}}",
-                              {
-                                count: activity.children.length,
-                              },
-                            )
-                          : activity.working
-                            ? gt("Working", { $context: "Duet state" })
-                            : captain.role.trim() || null;
+          fleetState !== undefined
+            ? fleetChorusStateLabel(fleetState, message)
+            : captain.archivedAt !== null
+              ? gt("Archived")
+              : activity.attention > 0
+                ? gt(
+                    "{count, plural, one {{count} request waits on you} other {{count} requests wait on you}}",
+                    { count: activity.attention },
+                  )
+                : activity.children.length > 0
+                  ? gt(
+                      "{count, plural, one {Solos on {count} task} other {Solos on {count} tasks}}",
+                      {
+                        count: activity.children.length,
+                      },
+                    )
+                  : activity.working
+                    ? gt("Working", { $context: "Duet state" })
+                    : captain.role.trim() || null;
         const detail =
           showsEnvironment && fleetState === undefined
             ? [state, environment.label].filter((part) => part !== null).join(" · ")
@@ -237,17 +222,11 @@ export function CaptainsHomeSection(props: {
           <Pressable
             key={`${environment.environmentId}:${captain.id}`}
             accessibilityRole="button"
+            accessibilityState={{ disabled: fleetState !== undefined && fleetState !== "ready" }}
             accessibilityLabel={[captain.name, detail].filter(Boolean).join(", ")}
             onPress={() => {
               if (fleetState !== undefined) {
                 openFleet();
-                return;
-              }
-              if (captain.kind === "chorus" && captain.archivedAt !== null) {
-                navigation.navigate("CaptainBrief", {
-                  environmentId: String(environment.environmentId),
-                  captainId: String(captain.id),
-                });
                 return;
               }
               selectDetail({

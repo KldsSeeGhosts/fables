@@ -1,7 +1,7 @@
+import { fleetChorusStateLabel } from "@t3tools/client-runtime/state/captains";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/models";
 import type { Captain, EnvironmentId, FleetChorusState } from "@t3tools/contracts";
 import { useNavigation } from "@react-navigation/native";
-import type { ReactNode } from "react";
 import { useGT, useMessages } from "gt-react-native";
 import { Pressable, View } from "react-native";
 
@@ -60,14 +60,13 @@ function Trail(props: { readonly trail: DuetRowTrail; readonly tokens: DuetToken
 export function DuetHomeSection(props: {
   readonly rows: ReadonlyArray<DuetHomeRow>;
   readonly waiting: number;
-  readonly chorusControls: ReactNode;
-  readonly fleetMachineCount: number;
   readonly showsEnvironment: boolean;
   readonly projects: ReadonlyArray<EnvironmentProject>;
   readonly selectedThreadKey: string | null;
   readonly onOpenFleet: () => void;
 }) {
   const gt = useGT();
+  const message = useMessages();
   const tokens = useDuetTokens();
   const navigation = useNavigation();
   const selectDetail = useSelectWorkspaceDetail();
@@ -128,53 +127,35 @@ export function DuetHomeSection(props: {
           </View>
         </Pressable>
       </View>
-      {props.chorusControls}
       {props.rows.map(({ environment, captain, activity, fleetState }) => {
         const trail = duetRowTrail({ captain, activity });
         const scope = duetRowScope(environment.environmentId, captain, props.projects);
         const scopeText =
-          fleetState === "offline"
-            ? gt("Home machine offline")
-            : fleetState === "too_old"
-              ? gt("Home machine needs an update")
-              : fleetState === "unconfigured"
-                ? gt("Choose a home in Settings")
-                : fleetState === "conflict"
-                  ? gt("More than one Chorus home")
-                  : captain.archivedAt !== null
-                    ? gt("Archived")
-                    : captain.kind === "chorus"
-                      ? gt(
-                          "All Duets across {count, plural, =1 {1 machine} other {{count} machines}}",
-                          {
-                            count: props.fleetMachineCount,
-                          },
-                        )
-                      : scope.kind === "project"
-                        ? scope.title
-                        : scope.kind === "projects"
-                          ? gt("{count, plural, =1 {1 project} other {{count} projects}}", {
-                              count: scope.count,
-                            })
-                          : gt("All projects");
+          fleetState !== undefined
+            ? fleetChorusStateLabel(fleetState, message)
+            : captain.archivedAt !== null
+              ? gt("Archived")
+              : scope.kind === "project"
+                ? scope.title
+                : scope.kind === "projects"
+                  ? gt("{count, plural, =1 {1 project} other {{count} projects}}", {
+                      count: scope.count,
+                    })
+                  : gt("All projects");
         const threadKey = scopedThreadKey(environment.environmentId, captain.primaryThreadId);
         const selected = threadKey === props.selectedThreadKey;
         return (
           <Pressable
             key={`${environment.environmentId}:${captain.id}`}
             accessibilityRole="button"
-            accessibilityState={{ selected }}
+            accessibilityState={{
+              selected,
+              disabled: fleetState !== undefined && fleetState !== "ready",
+            }}
             accessibilityLabel={[captain.name, scopeText].join(", ")}
             onPress={() => {
               if (fleetState !== undefined) {
                 props.onOpenFleet();
-                return;
-              }
-              if (captain.kind === "chorus" && captain.archivedAt !== null) {
-                navigation.navigate("CaptainBrief", {
-                  environmentId: String(environment.environmentId),
-                  captainId: String(captain.id),
-                });
                 return;
               }
               selectDetail({

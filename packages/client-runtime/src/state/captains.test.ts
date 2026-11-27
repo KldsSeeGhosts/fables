@@ -108,6 +108,28 @@ it("chooses the useful fleet Chorus projection and hides stored Chorus rows", ()
       { environmentId: remoteId, status: ready },
     ]),
   ).toEqual({ viaEnvironmentId: remoteId, status: ready });
+  expect(selectFleetChorus([{ environmentId, status: ready }])?.viaEnvironmentId).toBe(
+    environmentId,
+  );
+  expect(
+    selectFleetChorus([
+      { environmentId, status: unconfigured },
+      { environmentId: remoteId, status: { ...ready, localHome: true }, connected: false },
+    ])?.status.state,
+  ).toBe("offline");
+  expect(
+    selectFleetChorus([
+      {
+        environmentId,
+        status: {
+          ...ready,
+          home: { ...status.home, environmentId, label: "Local" },
+          localHome: true,
+        },
+      },
+      { environmentId: remoteId, status: { ...ready, localHome: true } },
+    ])?.status,
+  ).toMatchObject({ state: "conflict", conflictingHomes: ["Local", "Studio"] });
   expect(fleetChorusCaptain(ready)).toMatchObject({
     id: "chorus",
     kind: "chorus",

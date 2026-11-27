@@ -23,6 +23,7 @@ import {
   captainConversationKeys,
   captainThreadActivity,
   fleetChorusCaptain,
+  fleetChorusStateLabel,
   withoutStoredChoruses,
 } from "@t3tools/client-runtime/state/captains";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
@@ -38,7 +39,7 @@ import {
 } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
 import * as Schema from "effect/Schema";
-import { T, useGT, Var } from "gt-react";
+import { T, useGT, useMessages, Var } from "gt-react";
 import { ClockIcon, EllipsisIcon, FoldersIcon, ListTodoIcon, PlusIcon } from "lucide-react";
 import { useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
@@ -151,7 +152,6 @@ function DuetChannelRow({
   status,
   selected,
   activity,
-  fleetMachineCount,
   fleetState,
   onMenu,
   onOpen,
@@ -167,7 +167,6 @@ function DuetChannelRow({
   status: string;
   selected: boolean;
   activity: CaptainActivity;
-  fleetMachineCount: number;
   fleetState?: FleetChorusState | undefined;
   onMenu: (position: { x: number; y: number }, source: ContextMenuSource) => void;
   onOpen: () => void;
@@ -194,27 +193,15 @@ function DuetChannelRow({
     (project) =>
       project.environmentId === environmentId && captain.scopedProjectIds.includes(project.id),
   );
+  const message = useMessages();
   const scope =
-    fleetState === "offline"
-      ? gt("Home machine offline")
-      : fleetState === "too_old"
-        ? gt("Home machine needs an update")
-        : fleetState === "unconfigured"
-          ? gt("Choose a home in Settings")
-          : fleetState === "conflict"
-            ? gt("More than one Chorus home")
-            : isChorus
-              ? gt(
-                  "All Duets across {count, plural, one {{count} machine} other {{count} machines}}",
-                  {
-                    count: fleetMachineCount,
-                  },
-                )
-              : captain.scopedProjectIds.length === 0
-                ? gt("All workspace")
-                : captain.scopedProjectIds.length === 1
-                  ? (scoped[0]?.title ?? gt("1 project"))
-                  : gt("{count} projects", { count: captain.scopedProjectIds.length });
+    fleetState !== undefined
+      ? fleetChorusStateLabel(fleetState, message)
+      : captain.scopedProjectIds.length === 0
+        ? gt("All workspace")
+        : captain.scopedProjectIds.length === 1
+          ? (scoped[0]?.title ?? gt("1 project"))
+          : gt("{count} projects", { count: captain.scopedProjectIds.length });
   const backgroundTasks = primary?.pendingBackgroundTasks.length ?? 0;
   const attentionThread = waiting
     ? [primary, ...running].find(
@@ -238,9 +225,11 @@ function DuetChannelRow({
         ]
   ).filter((part): part is string => !!part);
   const accessibleLabel =
-    details.length === 0
-      ? gt("{name}, {status}", { name, status })
-      : gt("{name}, {status}, {detail}", { name, status, detail: details.join(", ") });
+    fleetState !== undefined && fleetState !== "ready"
+      ? gt("{name}, {status}", { name, status: scope })
+      : details.length === 0
+        ? gt("{name}, {status}", { name, status })
+        : gt("{name}, {status}, {detail}", { name, status, detail: details.join(", ") });
   const detailText = archived ? null : scope;
   const trailing = busy ? (
     <SidebarStatusLabel
@@ -290,6 +279,7 @@ function DuetChannelRow({
               {...listeners}
               aria-current={selected ? "page" : undefined}
               aria-label={accessibleLabel}
+              aria-disabled={fleetState !== undefined && fleetState !== "ready" ? true : undefined}
               onClick={onOpen}
               onContextMenu={handleContextMenu}
               onKeyDown={openContextMenuFromKeyboard}
@@ -424,7 +414,6 @@ function CaptainShelfRow({
   working,
   activity,
   selected,
-  fleetMachineCount,
   fleetState,
   canMoveUp = false,
   canMoveDown = false,
@@ -439,7 +428,6 @@ function CaptainShelfRow({
   working: boolean;
   activity: CaptainActivity;
   selected: boolean;
-  fleetMachineCount: number;
   fleetState?: FleetChorusState | undefined;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
@@ -447,6 +435,7 @@ function CaptainShelfRow({
   onOpen: (threadRef: ScopedThreadRef) => void;
 }) {
   const gt = useGT();
+  const message = useMessages();
   const isDuet = useDuetShell();
   const threadRef = scopeThreadRef(environmentId, captain.primaryThreadId);
   const openView = (tab: CaptainDrawerTab) => {
@@ -530,6 +519,7 @@ function CaptainShelfRow({
       : working
         ? gt("Working", { $context: "Duet status" })
         : gt("Ready");
+  const rowStatus = fleetState === undefined ? status : fleetChorusStateLabel(fleetState, message);
   const avatarState = archived
     ? "archived"
     : attention > 0
@@ -615,7 +605,6 @@ function CaptainShelfRow({
         status={status}
         selected={selected}
         activity={activity}
-        fleetMachineCount={fleetMachineCount}
         fleetState={fleetState}
         onMenu={fleetState === undefined ? openDuetMenu : () => {}}
         onOpen={() => onOpen(threadRef)}
@@ -629,13 +618,15 @@ function CaptainShelfRow({
     <li
       className={cn(
         "group/captain-row relative flex items-center",
+        fleetState !== undefined && "border-s-2 border-(--warning)/70",
         selected && "surface-sidebar-row-selected rounded-row",
       )}
     >
       <ContentButton
         variant="inset-row-multiline"
         aria-current={selected ? "page" : undefined}
-        aria-label={gt("{name}, {status}", { name: current.name, status })}
+        aria-label={gt("{name}, {status}", { name: current.name, status: rowStatus })}
+        aria-disabled={fleetState !== undefined && fleetState !== "ready" ? true : undefined}
         onClick={() => onOpen(threadRef)}
       >
         <CaptainAvatar avatar={current.avatar} state={avatarState} />
@@ -651,7 +642,7 @@ function CaptainShelfRow({
                   : "text-muted-foreground",
             )}
           >
-            {status}
+            {rowStatus}
           </span>
         </span>
         {label ? (
@@ -659,7 +650,7 @@ function CaptainShelfRow({
         ) : null}
       </ContentButton>
       <div className="shrink-0 opacity-0 transition-opacity group-focus-within/captain-row:opacity-100 group-hover/captain-row:opacity-100">
-        {menu}
+        {fleetState === undefined ? menu : null}
       </div>
       <CaptainProfileDialogs profile={profile} />
     </li>
@@ -675,7 +666,6 @@ export function CaptainShelfList({
   activeThread,
   attention: attentionTotal,
   overviewActive = false,
-  fleetMachineCount,
   onOpen,
   onOpenOverview,
   onCreate,
@@ -695,7 +685,6 @@ export function CaptainShelfList({
   /** Captains waiting on the user, counting their delegated threads; defaults to the rows'. */
   attention?: number | undefined;
   overviewActive?: boolean;
-  fleetMachineCount: number;
   onOpen: (threadRef: ScopedThreadRef) => void;
   onOpenOverview?: (() => void) | undefined;
   onCreate?: (() => void) | undefined;
@@ -809,7 +798,6 @@ export function CaptainShelfList({
                   activeThread?.environmentId === environmentId &&
                   activeThread.threadId === captain.primaryThreadId
                 }
-                fleetMachineCount={fleetMachineCount}
                 fleetState={fleetState}
                 canMoveUp={activeIndex !== undefined && activeIndex > 0}
                 canMoveDown={activeIndex !== undefined && activeIndex < activeCount - 1}
@@ -943,7 +931,7 @@ export function CaptainsShelf({
   const openFleet = () => {
     const home = fleet?.status.home;
     if (fleet === null || home?.threadId == null || fleet.status.state !== "ready") return;
-    if (supporting.some(({ environmentId }) => environmentId === home.environmentId)) {
+    if (fleet.viaEnvironmentId === home.environmentId) {
       onOpen(scopeThreadRef(home.environmentId, home.threadId));
       return;
     }
@@ -964,7 +952,6 @@ export function CaptainsShelf({
         activeThread={activeThread}
         attention={captainAttentionTotal(environments, shells)}
         overviewActive={overviewActive}
-        fleetMachineCount={supporting.length}
         onOpen={(threadRef) => {
           if (
             fleetRow !== null &&

@@ -260,7 +260,8 @@ const make = Effect.gen(function* () {
 
   const findChorus = Effect.fn("CaptainStore.findChorus")(function* () {
     const [row] = yield* sql`
-      ${profiles} WHERE kind = 'chorus' ORDER BY created_at, id LIMIT 1
+      ${profiles} WHERE kind = 'chorus'
+      ORDER BY archived_at IS NOT NULL, archived_at DESC, created_at, id LIMIT 1
     `;
     return row === undefined ? undefined : yield* decodeCaptain(row);
   }, Effect.catch(captainUnavailable));
