@@ -29,11 +29,15 @@ import {
   resolveCaptainEnvironments,
   type CaptainEnvironment,
 } from "./captainEnvironments";
+import { createCaptainDirectoryShellsAtom } from "./captainShellIndex";
 import { cachedCaptainsAtom, cachedCaptainsOf, persistCaptains } from "./captainsCache";
 
 export type { CaptainEnvironment } from "./captainEnvironments";
 
 const NO_SHELLS: ReadonlyArray<EnvironmentThreadShell> = [];
+const captainDirectoryShellsAtom = createCaptainDirectoryShellsAtom(
+  environmentThreadShells.threadShellsAtom,
+);
 
 /** Every connected environment that runs Captains, with its live Captains and their status. */
 export function useCaptainEnvironments(environmentId?: EnvironmentId | null) {
@@ -84,7 +88,7 @@ export function useCaptainsDirectory(options?: {
 }) {
   const environments = useCaptainEnvironments(options?.environmentId);
   const shells = useAtomValueWhileVisible(
-    environmentThreadShells.threadShellsAtom,
+    captainDirectoryShellsAtom,
     (options?.visible ?? true) && environments.length > 0,
   );
   return {

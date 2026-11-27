@@ -6,6 +6,28 @@ import {
   type EnvironmentId,
   type ThreadId,
 } from "@t3tools/contracts";
+import { Atom } from "effect/reactivity";
+
+export function createCaptainDirectoryShellsAtom(
+  shells: Atom.Atom<ReadonlyArray<EnvironmentThreadShell>>,
+) {
+  return Atom.map(shells, (threads) =>
+    threads.filter(
+      ({ id, lineage }) =>
+        isCaptainThreadId(id) ||
+        (lineage.relationshipToParent === "subagent" &&
+          lineage.parentThreadId !== null &&
+          isCaptainThreadId(lineage.parentThreadId)),
+    ),
+  ).pipe(
+    Atom.withEquality<ReadonlyArray<EnvironmentThreadShell>>(
+      (previous, next) =>
+        previous.length === next.length &&
+        previous.every((thread, index) => thread === next[index]),
+    ),
+    Atom.withLabel("mobile-captain-directory-shells"),
+  );
+}
 
 /** `threads` without Captain conversations, the same array when none of them are in it. */
 export function withoutCaptainConversations(
