@@ -94,10 +94,11 @@ conflict makes that intent unclear rather than guessing. Run focused tests and
 affected package typechecks. Branches move forward by merges, never rebases or
 force-pushes.
 
-KSG databases already recorded Captain migrations 112–115. Add four to every
-newly integrated upstream migration ID 112 or higher in its filename, manifest
-ID, and manifest import. Keep previously shipped migration IDs and files intact.
-Check the mapping even when Git merged the files cleanly.
+Remap each newly integrated upstream migration ID that collides with or
+precedes a shipped KSG ID to the next free ID after the highest shipped KSG ID.
+Update the filename, manifest ID, and manifest import for each remapped
+migration. Keep shipped migration IDs and files intact. Check the mapping even
+when Git merges cleanly.
 
 Only after approval, push `upstream`, `ksg/passthrough`, and `ksg/dev`.
 Pushing `ksg/dev` can publish a release; it is not just a source backup.
