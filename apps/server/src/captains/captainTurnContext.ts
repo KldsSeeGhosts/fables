@@ -9,6 +9,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as SqlClient from "effect/sql/SqlClient";
 
+import * as PeerLinks from "../peer/PeerLinks.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import {
   makeCaptainBriefingLedger,
@@ -16,6 +17,7 @@ import {
 } from "./captainBriefingLedger.ts";
 import * as CaptainHonchoMemory from "./CaptainHonchoMemory.ts";
 import * as CaptainStore from "./CaptainStore.ts";
+import { captainDigestSummary } from "./captainDigest.ts";
 import {
   CAPTAIN_HANDOFF_MAX_LENGTH,
   formatCaptainCompactionOpenLoops,
@@ -49,12 +51,57 @@ const coordinatorBriefing = (captain: Captain) => `How you work:
 - At the end of a substantial turn, keep NOTES.md current (plan, open loops, next step) with \`captain_document_write\`.
 - After reacting to Solo results, rewrite the \`## New\` section of DIGEST.md with one line per result that needs the user.`;
 
+const chorusBriefing = (captain: Captain) => `How you work:
+- You are the Chorus, the fleet-level Duet. Answer cross-project and cross-Duet questions yourself from \`duet_list\`, \`duet_read\`, \`duet_memory_search\`, \`t3_thread_list\` and \`t3_thread_read\`.
+- Route project work to the Duet whose scope covers it with \`duet_send\`. Never ask a Duet to do something the user didn't ask for.
+- Start a Solo only for a one-off in a project no Duet covers.
+- Relay each result to the user as one line plus the thread link. Do not paste Duet or Solo output.
+- While work runs, end your turn. Do not poll.
+- Keep no project plans or implementation state in NOTES.md. NOTES.md is only for what the user asked of Chorus itself.
+- ${crewWaitRule[captain.reportPolicy]}`;
+
+const CHORUS_ROSTER_DUET_LIMIT = 12;
+const CHORUS_ROSTER_LENGTH = 2_000;
+
+const formatChorusRoster = (input: {
+  readonly duets: ReadonlyArray<{
+    readonly name: string;
+    readonly role: string;
+    readonly scopeTitles: ReadonlyArray<string>;
+    readonly digestSummary: string;
+  }>;
+  readonly omittedDuets?: number;
+  readonly linkedMachineLabels: ReadonlyArray<string>;
+}) => {
+  const duets = input.duets.slice(0, CHORUS_ROSTER_DUET_LIMIT);
+  const lines =
+    duets.length === 0
+      ? ["- No active Duets on this machine."]
+      : duets.map(
+          (duet) =>
+            `- ${prefix(duet.name, 80)}${duet.role ? ` (${prefix(duet.role, 80)})` : ""}. Scope: ${
+              duet.scopeTitles.length === 0
+                ? "No projects selected"
+                : duet.scopeTitles.map((title) => prefix(title, 80)).join(", ")
+            }. Digest: ${prefix(duet.digestSummary, 140)}`,
+        );
+  const omitted = Math.max(input.omittedDuets ?? 0, input.duets.length - duets.length);
+  if (omitted > 0)
+    lines.push(`- ${omitted} more active Duets. Use \`duet_list\` for the full roster.`);
+  const linked =
+    input.linkedMachineLabels.length === 0
+      ? "Linked machines: none linked."
+      : `Linked machines: ${input.linkedMachineLabels.map((label) => prefix(label, 80)).join(", ")}. Use \`duet_list\` for their Duets.`;
+  return prefix(["Duets on this machine:", ...lines, linked].join("\n"), CHORUS_ROSTER_LENGTH - 1);
+};
+
 export const formatCaptainBriefing = (input: {
   readonly captain: Captain;
   readonly projects: ReadonlyArray<{ readonly id: string; readonly title: string }>;
   readonly memories: ReadonlyArray<CaptainMemory>;
   readonly agents: string;
   readonly notes: string;
+  readonly fleetRoster?: string;
 }) => {
   const { captain, projects, memories, agents, notes } = input;
   const handoffSplit = splitCaptainHandoffSection(notes);
@@ -62,10 +109,14 @@ export const formatCaptainBriefing = (input: {
   return [
     `Duet profile: ${captain.name}${captain.role ? ` (${captain.role})` : ""}`,
     captain.instructions && `Instructions:\n${prefix(captain.instructions, 4_000)}`,
-    captain.coordinatorOnly && coordinatorBriefing(captain),
-    projects.length > 0
-      ? `Scoped local projects:\n${projects.map(({ id, title }) => `- ${prefix(title, 100)} [${prefix(id, 100)}]`).join("\n")}${captain.scopedProjectIds.length > projects.length ? "\n- Additional projects are listed in captain_read." : ""}`
-      : "Workspace scope: No projects selected.",
+    captain.kind === "chorus"
+      ? chorusBriefing(captain)
+      : captain.coordinatorOnly && coordinatorBriefing(captain),
+    captain.kind === "chorus" && input.fleetRoster !== undefined
+      ? input.fleetRoster
+      : projects.length > 0
+        ? `Scoped local projects:\n${projects.map(({ id, title }) => `- ${prefix(title, 100)} [${prefix(id, 100)}]`).join("\n")}${captain.scopedProjectIds.length > projects.length ? "\n- Additional projects are listed in captain_read." : ""}`
+        : "Workspace scope: No projects selected.",
     memories.length > 0 &&
       `Essential memories:\n${memories.map(({ text }) => `- ${prefix(text, 500)}`).join("\n")}`,
     agents && `AGENTS.md:\n${prefix(agents, 2_000)}`,
@@ -185,10 +236,24 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
   const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
   const sql = yield* Effect.serviceOption(SqlClient.SqlClient);
   const projects = yield* ProjectService.ProjectService;
+  const peerLinks = yield* Effect.serviceOption(PeerLinks.PeerLinks);
   const briefings = makeCaptainBriefingLedger();
   const crewBriefings = makeCaptainBriefingLedger();
   const longTermMemoryBriefings = makeCaptainBriefingLedger();
   const honcho = yield* Effect.serviceOption(CaptainHonchoMemory.CaptainHonchoMemory);
+
+  const projectEntries = Effect.fnUntraced(function* (projectIds: Captain["scopedProjectIds"]) {
+    return yield* Effect.forEach(projectIds.slice(0, CHORUS_ROSTER_DUET_LIMIT), (id) =>
+      projects.getById(id).pipe(
+        Effect.map(
+          Option.match({
+            onNone: () => ({ id, title: "Unavailable project" }),
+            onSome: (project) => ({ id, title: project.title }),
+          }),
+        ),
+      ),
+    );
+  });
 
   // A delegated child gets the Captain's crew rules only, never its private profile or memories.
   const readCrewContext = Effect.fn("CaptainService.crewContext")(function* (
@@ -225,16 +290,7 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
       const agents = yield* document(captain, "AGENTS.md");
       const notes = yield* document(captain, "NOTES.md");
       const memories = yield* listMemories(captain.id, { essential: true, limit: 8 });
-      const scopedProjects = yield* Effect.forEach(captain.scopedProjectIds.slice(0, 12), (id) =>
-        projects.getById(id).pipe(
-          Effect.map(
-            Option.match({
-              onNone: () => ({ id, title: "Unavailable project" }),
-              onSome: (project) => ({ id, title: project.title }),
-            }),
-          ),
-        ),
-      );
+      const scopedProjects = yield* projectEntries(captain.scopedProjectIds);
       // Earlier conversations can't be woken, so their late reports surface here under react too.
       const reportThreadIds =
         captain.reportPolicy === "context"
@@ -269,12 +325,43 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
           ORDER BY completed_at DESC, subagent_id DESC LIMIT 6
         `
           : [];
+      const fleetRoster =
+        captain.kind === "chorus"
+          ? yield* Effect.gen(function* () {
+              const snapshot = yield* store.value.snapshot({});
+              const active = snapshot.captains.filter((entry) => entry.archivedAt === null);
+              const shown = active.slice(0, CHORUS_ROSTER_DUET_LIMIT);
+              const duets = yield* Effect.forEach(
+                shown,
+                (entry) =>
+                  Effect.gen(function* () {
+                    const digest = yield* store.value.document(entry, "DIGEST.md");
+                    const scope = yield* projectEntries(entry.scopedProjectIds);
+                    return {
+                      name: entry.name,
+                      role: entry.role,
+                      scopeTitles: scope.map((project) => project.title),
+                      digestSummary: captainDigestSummary(digest.content),
+                    };
+                  }),
+                { concurrency: 4 },
+              );
+              return formatChorusRoster({
+                duets,
+                omittedDuets: active.length - shown.length,
+                linkedMachineLabels: Option.isSome(peerLinks)
+                  ? (yield* peerLinks.value.names).map((machine) => machine.label)
+                  : [],
+              });
+            })
+          : undefined;
       const briefing = formatCaptainBriefing({
         captain,
         projects: scopedProjects,
         memories,
         agents: agents.content,
         notes: notes.content,
+        ...(fleetRoster === undefined ? {} : { fleetRoster }),
       });
       const longTermMemory =
         Option.isSome(honcho) && honcho.value.enabled

@@ -162,6 +162,7 @@ export interface McpInvocationScope {
   /** True while Labs → Workflows is on here; `/mcp` reads it per request. Unset is off. */
   readonly workflows?: boolean;
   readonly captain?: boolean;
+  readonly chorus?: boolean;
   /**
    * The origin this `/mcp` request reached, e.g. a T3 Connect tunnel. Hosted clients cannot
    * see the URL they were configured with, so links they must fetch carry it. Unset in-process.
@@ -216,8 +217,17 @@ export const hiddenFromOutsideClients = (): boolean => {
 
 export const captainOnly = (): boolean => {
   const fiber = Fiber.getCurrent();
-  return Boolean(fiber && Context.getOrUndefined(fiber.context, McpInvocationContext)?.captain);
+  const scope = fiber && Context.getOrUndefined(fiber.context, McpInvocationContext);
+  return Boolean(scope?.captain);
 };
+
+export const chorusOnly = (): boolean => {
+  const fiber = Fiber.getCurrent();
+  return Boolean(fiber && Context.getOrUndefined(fiber.context, McpInvocationContext)?.chorus);
+};
+
+/** `hiddenFromSubagents`, and hidden from a Chorus, whose PRs belong to a Duet or the user. */
+export const hiddenFromSubagentsAndChorus = (): boolean => hiddenFromSubagents() && !chorusOnly();
 
 /** `hiddenFromOutsideClients`, and hidden from a thread whose provider cannot hold for background work. */
 export const hiddenWithoutBackgroundWait = (): boolean => {

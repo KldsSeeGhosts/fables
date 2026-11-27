@@ -390,16 +390,14 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
         ? undefined
         : yield* Cache.get(forgeOfThread, limited.thread.threadId);
     const threadId = limited.thread?.threadId;
-    const captain =
+    const captainProfile =
       threadId !== undefined && isCaptainThreadId(threadId) && Option.isSome(captainStore)
-        ? yield* captainStore.value.byThread(threadId).pipe(
-            Effect.map((profile) => profile !== undefined),
-            Effect.orElseSucceed(() => false),
-          )
-        : false;
+        ? yield* captainStore.value.byThread(threadId).pipe(Effect.orElseSucceed(() => undefined))
+        : undefined;
     return {
       ...limited,
-      captain,
+      captain: captainProfile !== undefined,
+      chorus: captainProfile?.kind === "chorus",
       linkedEnvironments,
       agentFeedback,
       workflows,

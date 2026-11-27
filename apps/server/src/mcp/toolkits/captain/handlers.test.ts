@@ -13,6 +13,7 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { McpSchema, McpServer } from "effect/ai";
@@ -20,6 +21,7 @@ import { HttpClient, HttpClientResponse } from "effect/http";
 
 import * as CaptainHonchoMemory from "../../../captains/CaptainHonchoMemory.ts";
 import * as CaptainStore from "../../../captains/CaptainStore.ts";
+import * as ProjectService from "../../../project/ProjectService.ts";
 import * as ThreadManagement from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as Sqlite from "../../../persistence/Sqlite.ts";
 import * as McpHttpServer from "../../McpHttpServer.ts";
@@ -49,6 +51,18 @@ const captain = {
   archivedAt: null,
 } satisfies Captain;
 
+const chorus = {
+  ...captain,
+  id: CaptainId.make("chorus"),
+  primaryThreadId: ThreadId.make("captain:chorus:0"),
+  name: "Chorus",
+  role: "Fleet",
+  kind: "chorus",
+  coordinatorOnly: true,
+  reportPolicy: "react",
+  scopedProjectIds: [],
+} satisfies Captain;
+
 const createCaller = (threadId?: ThreadId): McpInvocationContext.McpInvocationScope => ({
   environmentId: EnvironmentId.make("environment"),
   requestNamespace: "mcp:capture",
@@ -63,7 +77,8 @@ const createCaller = (threadId?: ThreadId): McpInvocationContext.McpInvocationSc
   client: undefined,
   capabilities: new Set(["orchestration"]),
   issuedAt: 0,
-  captain: threadId === captain.primaryThreadId,
+  captain: threadId === captain.primaryThreadId || threadId === chorus.primaryThreadId,
+  chorus: threadId === chorus.primaryThreadId,
 });
 
 const clientInfo = { name: "captain-test", version: "1" };
@@ -92,6 +107,11 @@ const layers = (honcho: Layer.Layer<CaptainHonchoMemory.CaptainHonchoMemory> = h
       }),
     ),
     Layer.provideMerge(CaptainStore.layer),
+    Layer.provideMerge(
+      Layer.mock(ProjectService.ProjectService)({
+        getById: (id) => Effect.succeed(Option.some({ id, title: "Workspace" } as never)),
+      }),
+    ),
     Layer.provideMerge(honcho),
     Layer.provide(Sqlite.layerMemory),
     Layer.provide(NodeCrypto.layer),

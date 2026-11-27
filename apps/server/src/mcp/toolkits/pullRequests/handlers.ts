@@ -1,6 +1,7 @@
 import {
   CommandId,
   NonNegativeInt,
+  OrchestratorMcpFailure,
   type ProviderApprovalPushHooks,
   type PullRequestActivity,
   PullRequestListCursors,
@@ -405,6 +406,13 @@ const make = Effect.gen(function* () {
     watching: boolean,
   ) {
     const scope = yield* McpInvocationContext.requireMcpCapability("pull-requests");
+    if (watching && scope.chorus === true) {
+      return yield* new OrchestratorMcpFailure({
+        code: "capability_denied",
+        message:
+          "A Chorus cannot watch pull requests. Report the PR to the user; a Duet or the user can watch it.",
+      });
+    }
     const threadId = input.threadId ?? scope.thread?.threadId;
     if (threadId === undefined) return yield* new PullRequestThreadRequiredError();
     return yield* watches

@@ -272,11 +272,12 @@ const make = Effect.gen(function* () {
   }, Effect.catch(captainUnavailable));
 
   const listMemories = Effect.fn("CaptainStore.listMemories")(function* (
-    captainId: CaptainId,
+    captainId: CaptainId | undefined,
     options: { readonly essential?: boolean; readonly query?: string; readonly limit: number },
   ) {
     const rows = yield* sql`
-      ${memories} WHERE captain_id = ${captainId}
+      ${memories} WHERE 1 = 1
+        ${captainId === undefined ? sql`` : sql`AND captain_id = ${captainId}`}
         AND (${options.essential ? 1 : 0} = 0 OR essential = 1)
         AND instr(lower(text), lower(${options.query ?? ""})) > 0
       ORDER BY essential DESC, updated_at DESC, id LIMIT ${options.limit}
