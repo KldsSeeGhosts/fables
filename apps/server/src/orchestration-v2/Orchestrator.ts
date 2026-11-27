@@ -123,6 +123,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as ProjectStore from "./ProjectStore.ts";
+import * as CaptainStore from "../captains/CaptainStore.ts";
 import { makeCaptainCanWake } from "../captains/captainDelegation.ts";
 import * as TaskFolderStore from "../workspace/TaskFolderStore.ts";
 import {
@@ -1622,6 +1623,7 @@ const hasRunningDelegatedTasks = (subagents: ReadonlyArray<OrchestrationV2Subage
 
 const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(function* () {
   const captainCanWake = yield* makeCaptainCanWake;
+  const captainStore = yield* Effect.serviceOption(CaptainStore.CaptainStore);
   const checkpointService = yield* CheckpointServiceV2;
   const commandPolicy = yield* CommandPolicyV2;
   const contextHandoffService = yield* ContextHandoffServiceV2;
@@ -4301,6 +4303,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         yield* dispatchThreadMutation(mutation, events, effects);
       }
       if (wake === undefined || outdated[0]) return;
+      if (isCaptainThreadId(thread.id) && Option.isSome(captainStore)) {
+        const captain = yield* captainStore.value
+          .findByConversation(thread.id)
+          .pipe(mapDispatchError(command));
+        if (captain?.kind === "chorus") return;
+      }
       const { sections, ...wakeMessage } = wake;
       const stamps = entries.map(({ entry, key }, index) => ({
         ...key,
@@ -17052,6 +17060,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               Effect.logWarning("Failed to start the next queued V2 run", { threadId, cause }),
             ),
           );
+        if (isCaptainThreadId(threadId) && Option.isSome(captainStore)) {
+          // A terminal run can still move its routed messages during rollover or steer recovery.
+          yield* captainStore.value.settleChorusRouteRun(threadId, run.id);
+        }
       }
       yield* updateDelegatedParentTask(threadId, run.id);
     },
@@ -17073,6 +17085,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
 
   // Projections already contain historical terminals; replaying them delays startup queue promotion with database size.
   const terminalEventsAfterSequence = yield* eventSink.latestSequence().pipe(Effect.orDie);
+  if (Option.isSome(captainStore)) {
+    yield* captainStore.value.restoreChorusRouteSettlements().pipe(Effect.orDie);
+  }
   // Filter run updates before buffering so blocked queue promotion does not retain unrelated tool bodies.
   yield* eventSink
     .stream({ afterSequence: terminalEventsAfterSequence, eventType: "run.updated" })

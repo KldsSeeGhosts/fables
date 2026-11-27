@@ -15,6 +15,7 @@ import * as ServerEnvironment from "../../../environment/ServerEnvironment.ts";
 import * as ProjectService from "../../../project/ProjectService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
+import * as OrchestratorMcpService from "../../OrchestratorMcpService.ts";
 import { CaptainToolkit } from "./tools.ts";
 
 const failed = (error: CaptainError) =>
@@ -230,6 +231,13 @@ export const layer = McpToolAccess.toLayer(
             matches,
             ...(recall.status === "failed" ? { note: HONCHO_RECALL_NOTE } : {}),
           };
+        }),
+      ),
+      duet_send: McpToolAccess.actsAsCaller((input) =>
+        Effect.gen(function* () {
+          const scope = yield* McpInvocationContext.McpInvocationContext;
+          const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+          return yield* service.sendToDuet(scope, input);
         }),
       ),
       captain_read: McpToolAccess.readsAsCaller(() =>

@@ -2060,6 +2060,7 @@ it.effect("uses the authenticated Duet profile to list Chorus read tools and hid
         Layer.provide(
           Layer.mergeAll(
             McpToolAccessTestkit.liveThreadsLayer,
+            Layer.mock(OrchestratorMcpService.OrchestratorMcpService)({}),
             Layer.mock(ProjectService.ProjectService)({}),
             Layer.mock(ServerEnvironment.ServerEnvironment)({
               getDescriptor: Effect.succeed({
@@ -2178,7 +2179,10 @@ it.effect("uses the authenticated Duet profile to list Chorus read tools and hid
       const chorusTools = yield* chorusSession.listed;
       const duetTools = yield* duetSession.listed;
       const chorusChildTools = yield* chorusChild.listed;
-      expect(chorusTools).toEqual(expect.arrayContaining(readTools));
+      expect(chorusTools).toEqual(expect.arrayContaining([...readTools, "duet_send"]));
+      for (const tools of [duetTools, parentTools, chorusChildTools]) {
+        expect(tools).not.toContain("duet_send");
+      }
       expect(chorusTools).not.toContain("watch_pull_request");
       expect(duetTools).toContain("watch_pull_request");
       expect(duetTools).toContain("captain_read");
@@ -2210,11 +2214,13 @@ it.effect("uses the authenticated Duet profile to list Chorus read tools and hid
         }),
       ).toMatchObject({
         isError: true,
-        content: [{ text: expect.stringContaining("A Chorus cannot watch pull requests") }],
+        content: [{ text: expect.stringContaining("Agents cannot message or change the Chorus") }],
       });
       const findDuetRead = { query: "duet_read" };
       expect(yield* chorusSession.call("tool_search", findDuetRead)).toMatchObject({
-        structuredContent: { tools: [expect.objectContaining({ name: "duet_read" })] },
+        structuredContent: {
+          tools: expect.arrayContaining([expect.objectContaining({ name: "duet_read" })]),
+        },
       });
       expect(yield* duetSession.call("tool_search", findDuetRead)).toMatchObject({
         structuredContent: { tools: [] },

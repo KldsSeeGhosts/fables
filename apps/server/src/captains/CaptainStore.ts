@@ -5,7 +5,10 @@ import {
   CaptainError,
   CaptainMemory,
   ChatAttachment,
+  type EnvironmentId,
+  type OrchestrationV2RunStatus,
   CommandId,
+  isCaptainThreadId,
   MessageId,
   ModelSelection,
   OrchestrationMessageContext,
@@ -18,7 +21,7 @@ import {
   type ProviderThreadId,
   type RunId,
   type CaptainDeleteMemoryInput,
-  type CaptainId,
+  CaptainId,
   type CaptainSnapshot,
   type CaptainSubscribeInput,
   type CaptainUpdateDocumentInput,
@@ -98,6 +101,64 @@ const isActiveChorusUniqueViolation = (cause: unknown) =>
   cause.reason._tag === "UniqueViolation" &&
   cause.reason.constraint === "captains.kind";
 
+export class ChorusRouteDispatch extends Context.Service<
+  ChorusRouteDispatch,
+  {
+    readonly commandId: CommandId;
+    readonly messageId: MessageId;
+    readonly environmentId: EnvironmentId;
+    readonly sourceCaptainId: CaptainId;
+    readonly sourceThreadId: ThreadId;
+    readonly duetId: CaptainId;
+  }
+>()("t3/captains/CaptainStore/ChorusRouteDispatch") {}
+
+export const commitChorusRoute = Effect.fn("CaptainStore.commitChorusRoute")(function* (
+  route: ChorusRouteDispatch["Service"],
+  threadId: ThreadId,
+  sentAt: string,
+) {
+  const sql = yield* SqlClient.SqlClient;
+  const inserted = yield* sql`
+    INSERT INTO chorus_routes (
+      message_id, run_id, environment_id, source_captain_id, source_thread_id, duet_id,
+      thread_id, sent_at, last_seen_status
+    )
+    SELECT m.message_id, r.run_id, ${route.environmentId}, source.id, source.primary_thread_id,
+      destination.id, r.thread_id, ${sentAt}, r.status
+    FROM orchestration_v2_projection_messages AS m
+    JOIN orchestration_v2_projection_runs AS r ON r.run_id = m.run_id
+    JOIN captains AS source ON source.id = ${route.sourceCaptainId}
+    JOIN captains AS destination ON destination.id = ${route.duetId}
+    WHERE m.message_id = ${route.messageId} AND r.thread_id = ${threadId}
+      AND source.kind = 'chorus' AND source.archived_at IS NULL
+      AND source.primary_thread_id = ${route.sourceThreadId}
+      AND destination.kind = 'duet' AND destination.archived_at IS NULL
+      AND destination.primary_thread_id = r.thread_id
+    RETURNING message_id
+  `;
+  if (inserted.length === 0) {
+    return yield* new CaptainError({
+      code: "conflict",
+      message:
+        "The Chorus or destination Duet changed before routing could finish. Retry the route.",
+    });
+  }
+});
+
+export interface ChorusRoute {
+  readonly messageId: MessageId;
+  readonly runId: RunId;
+  readonly environmentId: EnvironmentId;
+  readonly sourceCaptainId: CaptainId;
+  readonly sourceThreadId: ThreadId;
+  readonly duetId: CaptainId;
+  readonly threadId: ThreadId;
+  readonly sentAt: string;
+  readonly lastSeenStatus: OrchestrationV2RunStatus | "unknown";
+  readonly result: string | null;
+}
+
 /** `profile` changes the Captain list; `content` only that Captain's documents or memories. */
 type CaptainChange = { readonly captainId: CaptainId; readonly kind: "profile" | "content" };
 
@@ -133,11 +194,14 @@ const make = Effect.gen(function* () {
   const findByConversation = Effect.fn("CaptainStore.findByConversation")(function* (
     threadId: ThreadId,
   ) {
-    const [row] = yield* sql`
-      ${profiles} WHERE primary_thread_id = ${threadId}
-        OR EXISTS (SELECT 1 FROM json_each(earlier_thread_ids) AS earlier WHERE earlier.value = ${threadId})
-    `;
-    return row === undefined ? undefined : yield* decodeCaptain(row);
+    if (!isCaptainThreadId(threadId)) return undefined;
+    const encodedId = threadId.slice("captain:".length, threadId.lastIndexOf(":"));
+    if (encodedId === "") return undefined;
+    const captain = yield* find(CaptainId.make(encodedId));
+    return captain !== undefined &&
+      (captain.primaryThreadId === threadId || captain.earlierThreadIds.includes(threadId))
+      ? captain
+      : undefined;
   }, Effect.catch(captainUnavailable));
 
   const byThread = Effect.fn("CaptainStore.byThread")(function* (threadId: ThreadId) {
@@ -244,6 +308,127 @@ const make = Effect.gen(function* () {
     Effect.catchTags({ SqlError: captainUnavailable, SchemaError: captainUnavailable }),
   );
 
+  const listChorusRoutes = Effect.fn("CaptainStore.listChorusRoutes")(function* (
+    sourceCaptainId: CaptainId,
+  ) {
+    return yield* sql<ChorusRoute>`
+        SELECT message_id AS messageId, run_id AS runId, environment_id AS environmentId,
+          source_captain_id AS sourceCaptainId, source_thread_id AS sourceThreadId,
+          duet_id AS duetId, thread_id AS threadId, sent_at AS sentAt,
+          last_seen_status AS lastSeenStatus, result
+        FROM chorus_routes
+        WHERE source_captain_id = ${sourceCaptainId}
+        ORDER BY sent_at, message_id
+      `;
+  }, Effect.catch(captainUnavailable));
+
+  const terminalChorusRouteRun = sql`run.status IN ${sql.in([
+    "completed",
+    "failed",
+    "cancelled",
+    "interrupted",
+    "rolled_back",
+  ] satisfies ReadonlyArray<OrchestrationV2RunStatus>)}`;
+  const listChorusRouteUpdates = Effect.fn("CaptainStore.listChorusRouteUpdates")(function* (
+    sourceCaptainId: CaptainId,
+    limit: number,
+  ) {
+    return yield* sql<{
+      readonly messageId: MessageId;
+      readonly threadId: ThreadId;
+      readonly duetName: string | null;
+      readonly runId: RunId;
+      readonly status: ChorusRoute["lastSeenStatus"];
+      readonly result: string | null;
+      readonly terminal: 0 | 1;
+    }>`
+      SELECT route.message_id AS messageId, route.thread_id AS threadId, duet.name AS duetName,
+        COALESCE(run.run_id, route.run_id) AS runId, COALESCE(run.status, 'unknown') AS status,
+        CASE WHEN ${terminalChorusRouteRun}
+          THEN COALESCE((
+            SELECT substr(json_extract(answer.payload_json, '$.text'), 1, 1000)
+            FROM orchestration_v2_projection_messages AS answer
+            WHERE answer.run_id = run.run_id AND answer.role = 'assistant' AND answer.streaming = 0
+            ORDER BY answer.created_at DESC, answer.message_id DESC LIMIT 1
+          ), route.result)
+        END AS result,
+        COALESCE(${terminalChorusRouteRun}, 0)
+          AS terminal
+      FROM chorus_routes AS route
+      LEFT JOIN orchestration_v2_projection_messages AS prompt ON prompt.message_id = route.message_id
+      LEFT JOIN orchestration_v2_projection_runs AS run
+        ON run.run_id = prompt.run_id AND run.thread_id = route.thread_id
+      LEFT JOIN captains AS duet ON duet.id = route.duet_id
+      WHERE route.source_captain_id = ${sourceCaptainId}
+        AND CASE WHEN ${terminalChorusRouteRun}
+          THEN route.settled_run_id = run.run_id
+          ELSE COALESCE(run.status, 'unknown') <> route.last_seen_status
+        END
+      ORDER BY route.sent_at, route.message_id
+      LIMIT ${limit}
+    `;
+  }, Effect.catch(captainUnavailable));
+
+  const settleChorusRouteRun = Effect.fn("CaptainStore.settleChorusRouteRun")(function* (
+    threadId: ThreadId,
+    runId: RunId,
+  ) {
+    yield* sql`
+      UPDATE chorus_routes SET settled_run_id = ${runId}, run_id = ${runId}
+      WHERE thread_id = ${threadId} AND settled_run_id IS NOT ${runId}
+        AND EXISTS (
+          SELECT 1 FROM orchestration_v2_projection_messages AS prompt
+          WHERE prompt.message_id = chorus_routes.message_id AND prompt.run_id = ${runId}
+        )
+    `;
+  }, Effect.catch(captainUnavailable));
+
+  const restoreChorusRouteSettlements = Effect.fn("CaptainStore.restoreChorusRouteSettlements")(
+    function* () {
+      yield* sql`
+        UPDATE chorus_routes AS route
+        SET settled_run_id = run.run_id, run_id = run.run_id
+        FROM orchestration_v2_projection_messages AS prompt
+        JOIN orchestration_v2_projection_runs AS run ON run.run_id = prompt.run_id
+        WHERE prompt.message_id = route.message_id AND run.thread_id = route.thread_id
+          AND route.settled_run_id IS NOT run.run_id
+          AND ${terminalChorusRouteRun}
+      `;
+    },
+    Effect.catch(captainUnavailable),
+  );
+
+  const acceptedChorusRouteThread = Effect.fn("CaptainStore.acceptedChorusRouteThread")(function* (
+    commandId: CommandId,
+  ) {
+    const [row] = yield* sql<{ readonly threadId: ThreadId }>`
+        SELECT aggregate_id AS threadId
+        FROM orchestration_command_receipts
+        WHERE command_id = ${commandId} AND aggregate_kind = 'thread' AND status = 'accepted'
+      `;
+    return row?.threadId;
+  }, Effect.catch(captainUnavailable));
+
+  const markChorusRoutesDelivered = Effect.fn("CaptainStore.markChorusRoutesDelivered")(
+    function* (
+      updates: ReadonlyArray<{
+        readonly messageId: MessageId;
+        readonly status: ChorusRoute["lastSeenStatus"];
+        readonly terminal: boolean;
+      }>,
+    ) {
+      for (const { messageId, status, terminal } of updates) {
+        if (terminal) {
+          yield* sql`DELETE FROM chorus_routes WHERE message_id = ${messageId}`;
+        } else {
+          yield* sql`UPDATE chorus_routes SET last_seen_status = ${status} WHERE message_id = ${messageId}`;
+        }
+      }
+    },
+    transact,
+    Effect.catch(captainUnavailable),
+  );
+
   const requireOwner = Effect.fn("CaptainStore.requireOwner")(function* (
     id: CaptainId,
     threadId: ThreadId | undefined,
@@ -304,12 +489,19 @@ const make = Effect.gen(function* () {
 
   const saveRolloverResend = Effect.fn("CaptainStore.saveRolloverResend")(function* (
     runId: RunId,
+    sourceMessageId: MessageId,
     send: typeof RolloverResendJson.Type,
   ) {
     const payload = yield* encodeRolloverResend(send);
     yield* sql`
         INSERT INTO captain_rollover_resends (command_id, source_run_id, thread_id, payload_json)
         VALUES (${send.commandId}, ${runId}, ${send.threadId}, ${payload})
+      `;
+    yield* sql`
+        UPDATE chorus_routes
+        SET message_id = ${send.messageId}, thread_id = ${send.threadId},
+            last_seen_status = 'unknown', result = NULL, settled_run_id = NULL
+        WHERE message_id = ${sourceMessageId}
       `;
   }, Effect.catch(captainUnavailable));
 
@@ -534,6 +726,12 @@ const make = Effect.gen(function* () {
     coveringDuetNames,
     repeatSoloProjects,
     withProfileLock,
+    listChorusRoutes,
+    listChorusRouteUpdates,
+    settleChorusRouteRun,
+    restoreChorusRouteSettlements,
+    acceptedChorusRouteThread,
+    markChorusRoutesDelivered,
     save,
     latestCompletedCompactionAt,
     saveRolloverResend,

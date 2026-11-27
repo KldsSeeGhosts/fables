@@ -323,6 +323,7 @@ const make = Effect.gen(function* () {
             if (immediate?.failedMessage !== undefined) {
               yield* store.saveRolloverResend(
                 immediate.run.id,
+                immediate.failedMessage.id,
                 rolloverSendInput(
                   primaryThreadId,
                   previous.projectId,
@@ -336,6 +337,7 @@ const make = Effect.gen(function* () {
               if (isRolloverCompactionMessage(message)) continue;
               yield* store.saveRolloverResend(
                 run.id,
+                message.id,
                 rolloverSendInput(primaryThreadId, previous.projectId, message, run, false),
               );
             }

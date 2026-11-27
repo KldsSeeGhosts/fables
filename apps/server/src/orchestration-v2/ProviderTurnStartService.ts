@@ -2329,14 +2329,18 @@ export const layer: Layer.Layer<
           const captain =
             compact || slashCommand || turnInput.resume
               ? undefined
-              : yield* readCaptainContext(projection.thread, {
-                  // A new native session under the same provider thread starts without the briefing.
-                  providerThreadId: `${runningProviderThread.id}:${runningProviderThread.nativeThreadRef?.nativeId ?? ""}`,
-                  usedTokens: runningProviderThread.contextUsage?.usedTokens ?? null,
-                  maxTokens: runningProviderThread.contextUsage?.maxTokens ?? null,
-                  autoCompactThreshold:
-                    runningProviderThread.contextUsage?.autoCompactThreshold ?? null,
-                });
+              : yield* readCaptainContext(
+                  projection.thread,
+                  {
+                    // A new native session under the same provider thread starts without the briefing.
+                    providerThreadId: `${runningProviderThread.id}:${runningProviderThread.nativeThreadRef?.nativeId ?? ""}`,
+                    usedTokens: runningProviderThread.contextUsage?.usedTokens ?? null,
+                    maxTokens: runningProviderThread.contextUsage?.maxTokens ?? null,
+                    autoCompactThreshold:
+                      runningProviderThread.contextUsage?.autoCompactThreshold ?? null,
+                  },
+                  message,
+                );
           const context = [delivery.context, sideChatContext, restartNote, captain?.text ?? ""]
             .filter((part) => part !== "")
             .join("\n\n");
@@ -2393,11 +2397,11 @@ export const layer: Layer.Layer<
                 : Effect.void,
             ),
           );
-          if (captain !== undefined && prompted) yield* captain.delivered;
           // Serialize acceptance writes against dropped-terminal restoration so neither overwrites the other.
           yield* inlineDeliveryLock.withPermits(1)(
             Effect.gen(function* () {
               if (promptDroppedOnTerminal) return;
+              if (captain !== undefined && prompted) yield* captain.delivered;
               // After provider acceptance, failed delivery bookkeeping must not stop live ingestion.
               const nativeThreadId = runningProviderThread.nativeThreadRef?.nativeId;
               yield* Effect.forEach(

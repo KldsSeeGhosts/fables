@@ -19,6 +19,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+import { makeReadRoutedByChorusLine } from "../captains/captainTurnContext.ts";
 import * as McpAppModelContext from "../mcpApps/McpAppModelContext.ts";
 import * as EventSink from "./EventSink.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
@@ -127,6 +128,7 @@ export const layer: Layer.Layer<
     const projections = yield* ProjectionStore.ProjectionStoreV2;
     const sessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
     const mcpAppModelContext = yield* McpAppModelContext.McpAppModelContext;
+    const readRoutedByChorusLine = yield* makeReadRoutedByChorusLine;
 
     const load = Effect.fn("ProviderTurnControlService.load")(function* (input: {
       readonly threadId: ThreadId;
@@ -470,6 +472,17 @@ export const layer: Layer.Layer<
             mcpAppModelContext,
             input.threadId,
           );
+          const routedByChorus = yield* readRoutedByChorusLine(
+            input.threadId,
+            message.senderThreadId,
+          );
+          const text = withMessageSenderNote(
+            message,
+            projectComposerContextForProvider({
+              text: message.text,
+              records: message.context?.records ?? [],
+            }),
+          );
           yield* loaded.session.value
             .steerTurn({
               threadId: input.threadId,
@@ -482,13 +495,7 @@ export const layer: Layer.Layer<
               ...(appContext.length === 0 ? {} : { appContext }),
               message: {
                 messageId: message.id,
-                text: withMessageSenderNote(
-                  message,
-                  projectComposerContextForProvider({
-                    text: message.text,
-                    records: message.context?.records ?? [],
-                  }),
-                ),
+                text: routedByChorus === "" ? text : `${routedByChorus}\n\n${text}`,
                 attachments: message.attachments,
                 createdBy: message.createdBy,
                 creationSource: message.creationSource,

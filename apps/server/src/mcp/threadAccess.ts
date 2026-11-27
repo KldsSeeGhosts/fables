@@ -267,6 +267,116 @@ export const privateChorusConversationIds = Effect.fn("mcp.privateChorusConversa
   },
 );
 
+type CaptainThreadShape = Pick<OrchestrationV2ThreadShell, "id" | "lineage">;
+
+const captainConversationKey = (thread: CaptainThreadShape): ThreadId | undefined => {
+  if (isCaptainThreadId(thread.id)) return thread.id;
+  const { parentThreadId, relationshipToParent, rootThreadId } = thread.lineage;
+  if (relationshipToParent !== "subagent") return undefined;
+  if (parentThreadId !== null && isCaptainThreadId(parentThreadId)) return parentThreadId;
+  return isCaptainThreadId(rootThreadId) ? rootThreadId : undefined;
+};
+
+const duetWriteDenied = (message: string) =>
+  Effect.fail(
+    new OrchestratorMcpFailure({
+      code: "capability_denied",
+      message,
+    }),
+  );
+
+/** Duet ownership applies to a conversation and the Solos it started. */
+export const assertDuetThreadWriteAllowed = Effect.fn("mcp.assertDuetThreadWriteAllowed")(
+  function* (input: {
+    readonly scope: McpInvocationContext.McpInvocationScope;
+    readonly caller: CaptainThreadShape | undefined;
+    readonly target: CaptainThreadShape;
+    readonly wake?: boolean;
+  }) {
+    const targetKey = captainConversationKey(input.target);
+    if (targetKey === undefined) return;
+    const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
+    const targetCaptain = Option.isSome(store)
+      ? yield* store.value.findByConversation(targetKey).pipe(Effect.mapError(unavailable))
+      : undefined;
+    if (
+      targetCaptain?.kind === "chorus" &&
+      targetKey === input.target.id &&
+      (input.wake ||
+        input.scope.thread?.threadId !== input.target.id ||
+        input.scope.thread.subagent === true)
+    ) {
+      return yield* duetWriteDenied(
+        "Agents cannot message or change the Chorus. The user can act in the Chorus thread directly.",
+      );
+    }
+    const callerKey = input.caller === undefined ? undefined : captainConversationKey(input.caller);
+    if (callerKey === targetKey) return;
+    const callerCaptain =
+      callerKey !== undefined && Option.isSome(store)
+        ? yield* store.value.findByConversation(callerKey).pipe(Effect.mapError(unavailable))
+        : undefined;
+    if (callerCaptain !== undefined && callerCaptain.id === targetCaptain?.id) return;
+    if (targetCaptain?.kind === "chorus") {
+      return yield* duetWriteDenied(
+        "Agents cannot change the Chorus or its Solos. The user can act in the Chorus thread directly.",
+      );
+    }
+    if (callerCaptain?.kind === "chorus" || input.scope.chorus === true) {
+      return yield* duetWriteDenied(
+        "A Chorus cannot wake or change another Duet's thread. Use duet_send for a routed request.",
+      );
+    }
+    if (callerKey !== undefined || input.scope.client?.linked === true) {
+      return yield* duetWriteDenied(
+        "A Duet, its Solo, or a linked agent cannot use generic tools to change another Duet's thread.",
+      );
+    }
+  },
+);
+
+export const assertChorusUsesDelegateTask = Effect.fn("mcp.assertChorusUsesDelegateTask")(
+  function* (scope: McpInvocationContext.McpInvocationScope) {
+    const threadId = scope.thread?.threadId;
+    if (threadId === undefined || !isCaptainThreadId(threadId)) return;
+    const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
+    const captain = Option.isSome(store)
+      ? yield* store.value.findByConversation(threadId).pipe(Effect.mapError(unavailable))
+      : undefined;
+    if (captain?.kind === "chorus" || scope.chorus === true) {
+      return yield* duetWriteDenied(
+        "Chorus starts Solos with delegate_task and routes covered project work with duet_send.",
+      );
+    }
+  },
+);
+
+export const assertScheduledThreadWriteAllowed = Effect.fn("mcp.assertScheduledThreadWriteAllowed")(
+  function* (
+    context: {
+      readonly scope: McpInvocationContext.McpInvocationScope;
+      readonly caller: CaptainThreadShape | undefined;
+      readonly threads: Pick<Caller["threads"], "getThreadShell">;
+    },
+    threadId: ThreadId | null,
+    wake = false,
+  ) {
+    if (threadId == null) return;
+    const callerKey =
+      context.caller === undefined ? undefined : captainConversationKey(context.caller);
+    const checkRequired =
+      isCaptainThreadId(threadId) ||
+      callerKey !== undefined ||
+      context.scope.client?.linked === true;
+    const shell = context.threads.getThreadShell(threadId);
+    const target = yield* checkRequired
+      ? shell.pipe(Effect.mapError(unavailable))
+      : shell.pipe(Effect.orElseSucceed(() => null));
+    if (target === null || target.deletedAt !== null) return;
+    yield* assertDuetThreadWriteAllowed({ ...context, target, wake });
+  },
+);
+
 export const assertReadableConversation = Effect.fn("mcp.assertReadableConversation")(function* (
   scope: McpInvocationContext.McpInvocationScope,
   threadId: ThreadId,

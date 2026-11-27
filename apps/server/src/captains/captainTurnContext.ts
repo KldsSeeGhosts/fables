@@ -3,6 +3,7 @@ import {
   type Captain,
   type CaptainMemory,
   type OrchestrationV2AppThreadLineage,
+  type OrchestrationV2ConversationMessage,
   type ProjectId,
   type ThreadId,
 } from "@t3tools/contracts";
@@ -55,10 +56,10 @@ const coordinatorBriefing = (captain: Captain) => `How you work:
 const chorusBriefing = (captain: Captain) => `How you work:
 - You are the Chorus, the fleet-level Duet. Answer cross-project and cross-Duet questions yourself from \`duet_list\`, \`duet_read\`, \`duet_memory_search\`, \`t3_thread_list\` and \`t3_thread_read\`.
 - When \`duet_send\` is available, use it to route requested project work to a Duet that covers the project. Otherwise name the Duet to the user and leave the work there. Reading across Duets never requires sending a message.
+- After a successful send, confirm the route and say that updates will arrive on the next user turn. End your turn without polling. Route updates never wake you.
 - To start a Solo, use \`delegate_task\` with \`isolation: "worktree"\`; never use \`t3_thread_launch\` or \`create_threads\` for one. Start one only for a one-off in a project no Duet covers. For project work, pass the project's exact id as \`target.projectId\`; never rely on the task text alone.
 - Before starting another Solo in a project where Chorus finished a Solo in the last 30 days, stop and offer the user the choice of widening an existing Duet's scope or creating a dedicated Duet. Do not inspect or edit the project first. Start the Solo only if the user says to go ahead anyway.
 - Relay each result to the user as one line plus the thread link. Do not paste Duet or Solo output.
-- While work runs, end your turn. Do not poll.
 - Keep project plans, open loops, and project rules out of your documents and memory. Use NOTES.md only for requests to Chorus itself.
 - ${crewWaitRule[captain.reportPolicy]}`;
 
@@ -148,7 +149,7 @@ export const formatCaptainBriefing = (input: {
     notesBody && `NOTES.md:\n${prefix(notesBody, 6_000)}`,
     captain.kind === "chorus"
       ? "Use captain_document_read for your Duet's NOTES.md, AGENTS.md, CREW.md, and DIGEST.md stored in T3. Use captain_memory_search for your Duet's memory."
-      : "Use captain_document_read and captain_memory_search to look up more Duet context.",
+      : "Use captain_document_read and captain_memory_search to look up more Duet context. When the user asks another Duet to do work, tell them you cannot route that request and direct them to Chorus.",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -200,6 +201,26 @@ export const formatCaptainReports = (
           return `- ${summary === "" ? label : `${label}: ${summary}`}${fullReportPointer(report, currentThreadId)}`;
         })
         .join("\n")}`;
+
+const CHORUS_ROUTE_UPDATE_LIMIT = 6;
+
+type ChorusRouteUpdate = Effect.Success<
+  ReturnType<CaptainStore.CaptainStore["Service"]["listChorusRouteUpdates"]>
+>[number];
+
+const formatChorusRouteUpdates = (updates: ReadonlyArray<ChorusRouteUpdate>) =>
+  updates.length === 0
+    ? ""
+    : `Routed since your last turn:
+${updates
+  .map((update) => {
+    const summary =
+      update.result === null || update.result.trim() === ""
+        ? ""
+        : ` ${firstParagraph(update.result)}`;
+    return `- ${prefix(update.duetName ?? "Unavailable Duet", 80)} [${update.runId}]: ${update.status}.${summary} Read the Duet thread with t3_thread_read(threadId: "${update.threadId}").`;
+  })
+  .join("\n")}`;
 
 export const formatCaptainCrewRules = (captain: Captain, crew: string) =>
   [
@@ -264,9 +285,30 @@ export const mayCarryCaptainContext = ({ id, lineage }: CaptainContextThread) =>
     lineage.parentThreadId !== null &&
     isCaptainThreadId(lineage.parentThreadId));
 
+export const makeReadRoutedByChorusLine = Effect.gen(function* () {
+  const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
+  return Effect.fn("CaptainService.routedByChorusLine")(
+    function* (threadId: ThreadId, senderThreadId: ThreadId | undefined) {
+      if (
+        !isCaptainThreadId(threadId) ||
+        senderThreadId === undefined ||
+        !isCaptainThreadId(senderThreadId) ||
+        Option.isNone(store)
+      )
+        return "";
+      const sender = yield* store.value.findByConversation(senderThreadId);
+      return sender?.kind === "chorus"
+        ? `This turn was routed by Chorus ${sender.name}. It carries the user's ask. Answer the user and ask any questions in this Duet thread.`
+        : "";
+    },
+    Effect.orElseSucceed(() => ""),
+  );
+});
+
 export const makeReadCaptainTurnContext = Effect.gen(function* () {
   const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
   const sql = yield* Effect.serviceOption(SqlClient.SqlClient);
+  const routedByChorusLine = yield* makeReadRoutedByChorusLine;
   const projects = yield* ProjectService.ProjectService;
   const peerLinks = yield* Effect.serviceOption(PeerLinks.PeerLinks);
   const briefings = makeCaptainBriefingLedger();
@@ -301,6 +343,33 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
     }));
   });
 
+  const readChorusRouteUpdates = Effect.fn("CaptainService.chorusRouteUpdates")(
+    function* (captain: Captain) {
+      return Option.isNone(store)
+        ? []
+        : yield* store.value.listChorusRouteUpdates(captain.id, CHORUS_ROUTE_UPDATE_LIMIT);
+    },
+    Effect.catch((cause) =>
+      Effect.logWarning("Could not read Chorus route updates.", { cause }).pipe(Effect.as([])),
+    ),
+  );
+
+  const markChorusRoutesDelivered = Effect.fn("CaptainService.markChorusRoutesDelivered")(
+    function* (updates: ReadonlyArray<ChorusRouteUpdate>) {
+      if (Option.isNone(store) || updates.length === 0) return;
+      yield* store.value.markChorusRoutesDelivered(
+        updates.map(({ messageId, status, terminal }) => ({
+          messageId,
+          status,
+          terminal: terminal === 1,
+        })),
+      );
+    },
+    Effect.catch((cause) =>
+      Effect.logWarning("Could not record Chorus route delivery.", { cause }),
+    ),
+  );
+
   // A delegated child gets the Captain's crew rules only, never its private profile or memories.
   const readCrewContext = Effect.fn("CaptainService.crewContext")(function* (
     parentThreadId: ThreadId,
@@ -320,7 +389,14 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
   });
 
   return Effect.fn("CaptainService.turnContext")(
-    function* (thread: CaptainContextThread, delivery?: CaptainBriefingDelivery) {
+    function* (
+      thread: CaptainContextThread,
+      delivery?: CaptainBriefingDelivery,
+      message?: Pick<
+        OrchestrationV2ConversationMessage,
+        "createdBy" | "senderThreadId" | "scheduledTaskId"
+      >,
+    ) {
       const threadId = thread.id;
       if (Option.isNone(store)) return NO_CONTEXT;
       if (!isCaptainThreadId(threadId)) {
@@ -405,6 +481,14 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
           : undefined;
       const repeatSoloProjects =
         captain.kind === "chorus" ? yield* readRepeatSoloProjects(captain) : [];
+      const chorusRouteUpdates =
+        captain.kind === "chorus" &&
+        message?.createdBy === "user" &&
+        message.scheduledTaskId === undefined
+          ? yield* readChorusRouteUpdates(captain)
+          : [];
+      const routedByChorus =
+        captain.kind === "duet" ? yield* routedByChorusLine(threadId, message?.senderThreadId) : "";
       const briefing = formatCaptainBriefing({
         captain,
         projects: scopedProjects,
@@ -442,6 +526,8 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
             ? longTermMemoryBlock
             : "",
           formatCaptainReports(reports, threadId),
+          formatChorusRouteUpdates(chorusRouteUpdates),
+          routedByChorus,
           delivery === undefined
             ? ""
             : formatCaptainContextPressure(
@@ -458,9 +544,12 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
         delivered:
           plan === undefined
             ? Effect.void
-            : Effect.sync(() => {
-                plan.commit();
-                longTermMemoryPlan?.commit();
+            : Effect.gen(function* () {
+                yield* Effect.sync(() => {
+                  plan.commit();
+                  longTermMemoryPlan?.commit();
+                });
+                yield* markChorusRoutesDelivered(chorusRouteUpdates);
               }),
       };
     },

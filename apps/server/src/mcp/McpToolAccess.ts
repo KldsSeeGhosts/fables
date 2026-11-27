@@ -35,6 +35,7 @@ import {
   assertBroadestAccess,
   assertFullAccess,
   assertLiveCaller,
+  assertDuetThreadWriteAllowed,
   assertTargetWithinLimits,
   type Caller,
   loadCaller,
@@ -223,24 +224,34 @@ export const writesWithCapability = <P, A, E, R>(handle: (params: P) => Effect.E
 export const writesThreads = <P, A, E, R>(
   threads: (params: P) => ReadonlyArray<ThreadId | undefined>,
   handle: (params: P) => Effect.Effect<A, E, R>,
-  checkCaller?: (
-    scope: McpInvocationContext.McpInvocationScope,
-  ) => Effect.Effect<void, OrchestratorMcpFailure>,
+  options?: {
+    readonly wake?: boolean;
+    readonly checkCaller?: (
+      scope: McpInvocationContext.McpInvocationScope,
+      params: P,
+    ) => Effect.Effect<void, OrchestratorMcpFailure>;
+  },
 ) => {
-  const checkedCaller =
-    checkCaller === undefined
-      ? writingCaller
-      : writingCaller.pipe(Effect.tap(({ scope }) => checkCaller(scope)));
+  const checkedCaller = writingCaller;
   return declare(
     (params: P) =>
       Effect.gen(function* () {
         const caller = yield* checkedCaller;
+        if (options?.checkCaller !== undefined) yield* options.checkCaller(caller.scope, params);
         for (const threadId of threads(params)) {
-          if (threadId === undefined || threadId === caller.scope.thread?.threadId) continue;
-          const target = yield* caller.threads
-            .getThreadShell(threadId)
-            .pipe(Effect.mapError(unavailable));
+          const isSelf = threadId === undefined || threadId === caller.caller?.id;
+          if (isSelf && !options?.wake && caller.scope.thread?.subagent !== true) continue;
+          const target = isSelf
+            ? (caller.caller ?? null)
+            : yield* caller.threads.getThreadShell(threadId).pipe(Effect.mapError(unavailable));
           if (target !== null && target.deletedAt === null) {
+            yield* assertDuetThreadWriteAllowed({
+              scope: caller.scope,
+              caller: caller.caller,
+              target,
+              wake: options?.wake ?? false,
+            });
+            if (isSelf) continue;
             yield* assertTargetWithinLimits(caller.limits, target);
             yield* assertSameLink(caller, target);
           }
@@ -258,7 +269,12 @@ export const writesThreads = <P, A, E, R>(
           ),
         );
       }),
-    () => checkedCaller,
+    (params: P) =>
+      checkedCaller.pipe(
+        Effect.tap(({ scope }) =>
+          options?.checkCaller === undefined ? Effect.void : options.checkCaller(scope, params),
+        ),
+      ),
   );
 };
 
@@ -290,8 +306,12 @@ export const startsThreads = <P, A, E, R>(
   },
   handle: (params: P, modes: StartedModes) => Effect.Effect<A, E, R>,
   linked: "stamped" | { readonly refused: string },
+  checkCaller?: (
+    scope: McpInvocationContext.McpInvocationScope,
+  ) => Effect.Effect<void, OrchestratorMcpFailure>,
 ) => {
   const started = Effect.fn("McpToolAccess.started")(function* (caller: Caller, params: P) {
+    if (checkCaller !== undefined) yield* checkCaller(caller.scope);
     const requested = modes(params);
     return {
       runtimeMode: yield* resolveRuntimeMode(caller.limits.runtimeMode, requested.runtimeMode),
