@@ -1,17 +1,17 @@
 @custom-variant dark (&:is(.dark, .dark *, :where(.black-chrome [data-chrome-scope], .black-chrome [data-chrome-scope] *)));
 
 /* A Captain's creature: the Duet orb's ink body and contrasting line, optionally on the orb's
-   subtle disc. Every state moves its HTML layers by transform only, so the compositor plays it
-   without repainting the SVG; only a working Captain moves continuously. */
+   subtle disc. Every state moves its HTML layers by transform and opacity only, so the compositor
+   plays it without repainting the SVG. Only a working Captain moves continuously; waiting,
+   celebrating, mounting and hover each play once and come to rest. */
 [data-captain-avatar] {
   --duet-creature-line: #141413;
   --duet-creature-disc: #ffffff;
   --duet-creature-rim: #ebebeb;
   --duet-creature-shadow: 0 1px 2px rgb(0 0 0 / 6%), 0 4px 14px rgb(0 0 0 / 7%);
-}
 
-@variant dark {
-  [data-captain-avatar] {
+  /* Nested so any dark scope, such as black sidebar chrome, flips the line, not only the root. */
+  @variant dark {
     --duet-creature-line: #ececec;
     --duet-creature-disc: #262626;
     --duet-creature-rim: #333333;
@@ -50,8 +50,8 @@
 
 @keyframes captain-avatar-scale-in {
   from {
-    opacity: 0.4;
-    transform: scale(0.82);
+    opacity: 0;
+    transform: scale(0.86);
   }
 
   to {
@@ -76,19 +76,19 @@
   }
 
   to {
-    transform: scale(1.07);
+    transform: scale(1.05);
   }
 }
 
 @keyframes captain-creature-pulse {
   from {
-    opacity: 0.5;
-    transform: scale(0.92);
+    opacity: 0.45;
+    transform: scale(0.94);
   }
 
   to {
     opacity: 1;
-    transform: scale(1.06);
+    transform: scale(1.04);
   }
 }
 
@@ -105,7 +105,32 @@
   }
 
   40% {
-    transform: translateY(-8%) scale(1.06);
+    transform: translateY(-7%) scale(1.04);
+  }
+
+  70% {
+    transform: translateY(1%) scale(0.99);
+  }
+}
+
+/* Two small hops, then rest: enough to catch the eye without nagging. */
+@keyframes captain-creature-attention {
+  0%,
+  56%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+
+  14% {
+    transform: translateY(-8%) scale(1.04);
+  }
+
+  28% {
+    transform: translateY(1%) scale(0.99);
+  }
+
+  40% {
+    transform: translateY(-5%) scale(1.025);
   }
 }
 
@@ -116,7 +141,7 @@
   }
 
   50% {
-    transform: translateX(-12%);
+    transform: translateX(-10%);
   }
 }
 
@@ -138,7 +163,7 @@
   }
 
   22% {
-    transform: translateX(-5%);
+    transform: translateX(-4%);
   }
 
   45% {
@@ -146,11 +171,11 @@
   }
 
   68% {
-    transform: translateX(-8%);
+    transform: translateX(-6%);
   }
 
   84% {
-    transform: translateX(-3%);
+    transform: translateX(-2.5%);
   }
 }
 
@@ -160,34 +185,34 @@
     transform: translateY(0) scale(1);
   }
 
-  42% {
-    transform: translateY(-5%) scale(1.03);
+  40% {
+    transform: translateY(-4%) scale(1.025);
   }
 
-  68% {
-    transform: translateY(1%) scale(0.99);
+  66% {
+    transform: translateY(0.5%) scale(0.995);
   }
 }
 
 @keyframes captain-creature-look {
   0%,
   100% {
-    transform: translateX(-4%) rotate(-2deg);
+    transform: translateX(-3%) rotate(-2deg);
   }
 
   50% {
-    transform: translateX(4%) rotate(2deg);
+    transform: translateX(3%) rotate(2deg);
   }
 }
 
 @keyframes captain-creature-sway {
   0%,
   100% {
-    transform: rotate(-3deg) translateY(0);
+    transform: rotate(-2.5deg) translateY(0);
   }
 
   50% {
-    transform: rotate(3deg) translateY(-1%);
+    transform: rotate(2.5deg) translateY(-1%);
   }
 }
 
@@ -197,23 +222,12 @@
     transform: translate(0, 0) scale(1);
   }
 
-  32% {
-    transform: translate(-7%, -4%) scale(1.02);
+  35% {
+    transform: translate(-5%, -3%) scale(1.02);
   }
 
-  64% {
-    transform: translate(7%, -8%) scale(1.06);
-  }
-}
-
-@keyframes captain-creature-attention-bob {
-  0%,
-  100% {
-    transform: translateY(0) scale(1);
-  }
-
-  50% {
-    transform: translateY(-4%) scale(1.025);
+  65% {
+    transform: translate(5%, -5%) scale(1.04);
   }
 }
 
@@ -222,12 +236,16 @@
     transform: translateY(0) scale(1);
   }
 
-  38% {
+  34% {
     transform: translateY(-12%) scale(1.08);
   }
 
-  68% {
-    transform: translateY(1%) scale(0.98);
+  62% {
+    transform: translateY(1.5%) scale(0.97);
+  }
+
+  82% {
+    transform: translateY(-1.5%) scale(1.01);
   }
 
   100% {
@@ -235,121 +253,121 @@
   }
 }
 
+/* Motion exists only for people who have not asked to reduce it. */
 @media (prefers-reduced-motion: no-preference) {
+  [data-captain-avatar] {
+    --captain-ease-calm: cubic-bezier(0.45, 0, 0.55, 1);
+    --captain-ease-hop: cubic-bezier(0.22, 0.9, 0.3, 1);
+  }
+
   [data-captain-avatar][data-captain-animate-on-mount="true"] {
-    animation: captain-avatar-scale-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: captain-avatar-scale-in 360ms var(--captain-ease-hop) both;
   }
 
   [data-captain-avatar][data-captain-state="working"] [data-captain-creature-line] {
     will-change: transform;
-    animation: captain-creature-roll 1.4s linear infinite;
+    animation: captain-creature-roll 1.8s linear infinite;
   }
 
   [data-captain-avatar][data-captain-state="working"] [data-captain-creature-body] {
     will-change: transform;
-    animation: captain-creature-breathe 1.2s ease-in-out infinite alternate;
+    animation: captain-creature-breathe 2.4s var(--captain-ease-calm) infinite alternate;
   }
 
   [data-captain-avatar][data-captain-state="working"] [data-captain-creature-halo="pulse"] {
     will-change: transform, opacity;
-    animation: captain-creature-pulse 1.2s ease-in-out infinite alternate;
+    animation: captain-creature-pulse 2.4s var(--captain-ease-calm) infinite alternate;
   }
 
   [data-captain-avatar][data-captain-state="working"] [data-captain-creature-halo="turn"] {
     will-change: transform;
-    animation: captain-creature-turn 3.2s linear infinite;
+    animation: captain-creature-turn 6s linear infinite;
   }
 
   [data-captain-avatar][data-captain-state="working"][data-captain-activity="reading"]
     [data-captain-creature-line] {
-    animation: captain-creature-scan 1.55s ease-in-out infinite;
+    animation: captain-creature-scan 2.2s var(--captain-ease-calm) infinite;
   }
 
   [data-captain-avatar][data-captain-state="working"][data-captain-activity="editing"]
     [data-captain-creature-line] {
-    animation: captain-creature-scribble 720ms ease-in-out infinite;
+    animation: captain-creature-scribble 1.1s var(--captain-ease-calm) infinite;
   }
 
   [data-captain-avatar][data-captain-state="working"][data-captain-activity="writing"]
     [data-captain-creature-line] {
-    animation: captain-creature-scribble 920ms ease-in-out infinite;
+    animation: captain-creature-scribble 1.4s var(--captain-ease-calm) infinite;
   }
 
   [data-captain-avatar][data-captain-state="working"][data-captain-activity="command"]
     [data-captain-creature-line] {
-    animation: captain-creature-roll 780ms linear infinite;
+    animation: captain-creature-roll 1.1s linear infinite;
   }
 
   [data-captain-avatar][data-captain-state="working"][data-captain-activity="command"]
     [data-captain-creature-body] {
-    animation: captain-creature-command-bounce 780ms cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+    animation: captain-creature-command-bounce 1.1s var(--captain-ease-hop) infinite;
   }
 
   [data-captain-avatar][data-captain-state="working"][data-captain-activity="searching"]
     [data-captain-creature-body] {
-    animation: captain-creature-look 1.8s ease-in-out infinite;
+    animation: captain-creature-look 2.4s var(--captain-ease-calm) infinite;
   }
 
   [data-captain-avatar][data-captain-state="working"][data-captain-activity="searching"]
     [data-captain-creature-line] {
-    animation: captain-creature-scan 1.2s ease-in-out infinite;
+    animation: captain-creature-scan 1.8s var(--captain-ease-calm) infinite;
   }
 
   [data-captain-avatar][data-captain-state="working"][data-captain-activity="browsing"]
     [data-captain-creature-body] {
-    animation: captain-creature-sway 2.7s ease-in-out infinite;
+    animation: captain-creature-sway 3.2s var(--captain-ease-calm) infinite;
   }
 
   [data-captain-avatar][data-captain-state="working"][data-captain-activity="browsing"]
     [data-captain-creature-line] {
-    animation: captain-creature-roll 2.2s linear infinite;
+    animation: captain-creature-roll 2.6s linear infinite;
   }
 
   [data-captain-avatar][data-captain-state="working"][data-captain-activity="thinking"]
     [data-captain-creature-body] {
-    animation: captain-creature-breathe 2.4s ease-in-out infinite alternate;
+    animation: captain-creature-breathe 3.2s var(--captain-ease-calm) infinite alternate;
   }
 
   [data-captain-avatar][data-captain-state="working"][data-captain-activity="thinking"]
     [data-captain-creature-halo="turn"] {
-    animation: captain-creature-turn 5s linear infinite;
+    animation: captain-creature-turn 9s linear infinite;
   }
 
   [data-captain-avatar][data-captain-state="working"][data-captain-activity="thinking"]
     [data-captain-creature-line] {
-    animation: captain-creature-roll 2.8s linear infinite;
+    animation: captain-creature-roll 3.6s linear infinite;
   }
 
   [data-captain-avatar][data-captain-state="working"][data-captain-activity="delegating"]
     [data-captain-creature-body] {
-    animation: captain-creature-handoff 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+    animation: captain-creature-handoff 1.8s var(--captain-ease-calm) infinite;
   }
 
-  [data-captain-avatar][data-captain-state="waiting"][data-captain-activity="waiting"]
-    [data-captain-creature] {
-    animation: captain-creature-attention-bob 2.4s ease-in-out infinite;
-  }
-
-  /* Waiting without a finer activity still hops twice when it starts, then holds still. */
-  [data-captain-avatar][data-captain-state="waiting"]:not([data-captain-activity])
-    [data-captain-creature] {
-    animation: captain-creature-nudge 520ms cubic-bezier(0.2, 0.8, 0.2, 1) 2;
+  /* Waiting asks once, with two hops, then holds still beside its amber ring. */
+  [data-captain-avatar][data-captain-state="waiting"] [data-captain-creature] {
+    animation: captain-creature-attention 1.6s var(--captain-ease-calm) 1 both;
   }
 
   [data-captain-avatar][data-captain-celebrate="true"] [data-captain-creature] {
-    animation: captain-creature-celebrate 620ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: captain-creature-celebrate 760ms var(--captain-ease-hop) both;
   }
 
   /* An idle creature glances once when its control is pointed at or focused. */
   :is(a, button, [role="button"]):is(:hover, :focus-visible)
     [data-captain-avatar][data-captain-state="idle"]
     [data-captain-creature-line] {
-    animation: captain-creature-glance 520ms ease-in-out;
+    animation: captain-creature-glance 600ms var(--captain-ease-calm);
   }
 
   :is(a, button, [role="button"]):is(:hover, :focus-visible)
     [data-captain-avatar][data-captain-state="idle"]
     [data-captain-creature-body] {
-    animation: captain-creature-nudge 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    animation: captain-creature-nudge 480ms var(--captain-ease-hop);
   }
 }

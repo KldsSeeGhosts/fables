@@ -1,9 +1,9 @@
 import type { DuetCreatureState } from "./DuetCreature";
 
-/** One there-and-back of the halo pulse, breathing and waiting bob (desktop: 1.2s alternate). */
-export const ORB_SWAY_MS = 2_400;
-export const ORB_TURN_MS = 3_200;
-export const ORB_DRIFT_MS = 1_400;
+/** One there-and-back of the pulse and breath (web: 2.4s alternate). */
+export const ORB_SWAY_MS = 4_800;
+export const ORB_TURN_MS = 6_000;
+export const ORB_DRIFT_MS = 1_800;
 
 /** CSS `ease-in-out`, as desktop's keyframes use. */
 function cssEaseInOut(x: number): number {

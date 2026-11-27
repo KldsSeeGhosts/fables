@@ -230,6 +230,24 @@ function CreatureEntrance(props: { readonly animate: boolean; readonly children:
 
 type Reaction = "none" | "nudge" | "attention" | "celebrate";
 
+const WAITING_MS = 1600;
+const ATTENTION_STOPS = [0, 0.14, 0.28, 0.4, 0.56, 1];
+const ATTENTION_LIFT = [0, -0.08, 0.01, -0.05, 0, 0];
+const ATTENTION_SCALE = [1, 1.04, 0.99, 1.025, 1, 1];
+const calmEase = WorkletEasing.bezier(0.45, 0, 0.55, 1).factory();
+
+function easeAttentionPhase(phase: number) {
+  "worklet";
+  for (let index = 1; index < ATTENTION_STOPS.length; index++) {
+    const end = ATTENTION_STOPS[index]!;
+    if (phase <= end) {
+      const start = ATTENTION_STOPS[index - 1]!;
+      return start + (end - start) * calmEase((phase - start) / (end - start));
+    }
+  }
+  return 1;
+}
+
 function CreatureReaction(props: {
   readonly state: DuetCreatureState;
   readonly visible: boolean;
@@ -265,11 +283,9 @@ function CreatureReaction(props: {
     progress.set(0);
     progress.set(
       withTiming(1, {
-        duration: { nudge: 1040, attention: 2400, celebrate: 620 }[next],
+        duration: next === "celebrate" ? 620 : WAITING_MS,
         reduceMotion: ReduceMotion.Never,
-        ...(next === "attention"
-          ? { easing: WorkletEasing.inOut(WorkletEasing.ease) }
-          : { easing: WorkletEasing.linear }),
+        easing: WorkletEasing.linear,
       }),
     );
     return () => {
@@ -283,16 +299,16 @@ function CreatureReaction(props: {
     let scale = 1;
     switch (reaction.get()) {
       case "nudge": {
-        const cycle = phase === 1 ? 1 : (phase * 2) % 1;
+        const cycle = phase >= 0.56 ? 1 : ((phase / 0.56) * 2) % 1;
         const amount = statusMotionEase.factory()(interpolate(cycle, [0, 0.4, 1], [0, 1, 0]));
         lift = -0.08 * amount;
         scale += 0.06 * amount;
         break;
       }
       case "attention": {
-        const amount = interpolate(phase, [0, 0.5, 1], [0, 1, 0]);
-        lift = -0.04 * amount;
-        scale += 0.025 * amount;
+        const eased = easeAttentionPhase(phase);
+        lift = interpolate(eased, ATTENTION_STOPS, ATTENTION_LIFT);
+        scale = interpolate(eased, ATTENTION_STOPS, ATTENTION_SCALE);
         break;
       }
       case "celebrate": {
@@ -318,9 +334,9 @@ function StatusCreatureLayers(props: {
   const { design, ink } = creatureOf(props.captain);
   const { halo, line } = design;
   const origin = `${design.origin[0]}% ${design.origin[1]}%`;
-  const breath = useRepeatingStatusProgress(working, 1200, true);
-  const roll = useRepeatingStatusProgress(working && line !== undefined, 1400);
-  const turn = useRepeatingStatusProgress(working && halo?.motion === "turn", 3200);
+  const breath = useRepeatingStatusProgress(working, ORB_SWAY_MS / 2, true);
+  const roll = useRepeatingStatusProgress(working && line !== undefined, ORB_DRIFT_MS);
+  const turn = useRepeatingStatusProgress(working && halo?.motion === "turn", ORB_TURN_MS);
   const glanceProgress = useSharedValue(1);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- plays one glance when the idle row is pointed at or focused
   useEffect(() => {
@@ -334,13 +350,13 @@ function StatusCreatureLayers(props: {
     halo?.motion === "turn"
       ? { transform: [{ rotate: `${turn.get() * 360}deg` }] }
       : {
-          opacity: working ? interpolate(breath.get(), [0, 1], [0.5, 1]) : 1,
-          transform: [{ scale: working ? interpolate(breath.get(), [0, 1], [0.92, 1.06]) : 1 }],
+          opacity: working ? interpolate(breath.get(), [0, 1], [0.45, 1]) : 1,
+          transform: [{ scale: working ? interpolate(breath.get(), [0, 1], [0.94, 1.04]) : 1 }],
         },
   );
   const bodyStyle = useAnimatedStyle(() => {
     if (working) {
-      return { transform: [{ scale: 1 + 0.07 * breath.get() }] };
+      return { transform: [{ scale: 1 + 0.05 * breath.get() }] };
     }
     const nudgePhase = Math.min(1, glanceProgress.get() * (520 / 420));
     const nudge = statusMotionEase.factory()(interpolate(nudgePhase, [0, 0.4, 1], [0, 1, 0]));
@@ -434,20 +450,15 @@ function nativeLoop(value: Animated.Value, duration: number, easing: (t: number)
  * Reanimated would commit a shadow tree every frame on iOS here (IOS_SYNCHRONOUSLY_UPDATE_UI_PROPS
  * is off) and drag any list scrolled beside it; see docs/internals/16_performance-regressions.md.
  */
-function MovingCreature(props: {
-  readonly captain: CreatureCaptain;
-  readonly size: number;
-  readonly state: "working" | "waiting";
-}) {
+function MovingCreature(props: { readonly captain: CreatureCaptain; readonly size: number }) {
   const tokens = useDuetTokens();
   const { design, ink } = creatureOf(props.captain);
-  const { size, state } = props;
+  const { size } = props;
   const unit = size / 100;
   const origin = `${design.origin[0]}% ${design.origin[1]}%`;
-  const working = state === "working";
   const { line, halo } = design;
-  const turns = working && halo?.motion === "turn";
-  const drifts = working && line !== undefined;
+  const turns = halo?.motion === "turn";
+  const drifts = line !== undefined;
   const lineWindow = line
     ? {
         left: line.window.x * unit,
@@ -460,7 +471,7 @@ function MovingCreature(props: {
   const turn = useAnimatedValue(0, { useNativeDriver: true });
   const drift = useAnimatedValue(0, { useNativeDriver: true });
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- starts the native-driver loops for this state and stops them on cleanup
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- starts the native-driver loops while working and stops them on cleanup
   useEffect(() => {
     const loops = [nativeLoop(sway, ORB_SWAY_MS, swayEasing)];
     if (turns) loops.push(nativeLoop(turn, ORB_TURN_MS, Easing.linear));
@@ -477,37 +488,25 @@ function MovingCreature(props: {
   const between = (from: number, to: number) =>
     sway.interpolate({ inputRange: [0, 1], outputRange: [from, to] });
   return (
-    <Animated.View
-      renderToHardwareTextureAndroid
-      style={[
-        layer(size),
-        working
-          ? null
-          : { transform: [{ translateY: between(0, -0.04 * size) }, { scale: between(1, 1.025) }] },
-      ]}
-    >
+    <View style={layer(size)}>
       {halo ? (
         <Animated.View
           renderToHardwareTextureAndroid
           style={[
             layer(size),
             { transformOrigin: origin },
-            halo.motion === "turn"
+            turns
               ? {
                   transform: [
                     {
-                      rotate: turns
-                        ? turn.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: ["-24deg", "336deg"],
-                          })
-                        : "-24deg",
+                      rotate: turn.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ["-24deg", "336deg"],
+                      }),
                     },
                   ],
                 }
-              : working
-                ? { opacity: between(0.5, 1), transform: [{ scale: between(0.92, 1.06) }] }
-                : null,
+              : { opacity: between(0.45, 1), transform: [{ scale: between(0.94, 1.04) }] },
           ]}
         >
           <Svg width={size} height={size} viewBox="0 0 100 100">
@@ -520,7 +519,7 @@ function MovingCreature(props: {
         style={[
           layer(size),
           { transformOrigin: origin },
-          working ? { transform: [{ scale: between(1, 1.07) }] } : null,
+          { transform: [{ scale: between(1, 1.05) }] },
         ]}
       >
         <Svg width={size} height={size} viewBox="0 0 100 100">
@@ -531,21 +530,18 @@ function MovingCreature(props: {
         <View style={{ position: "absolute", overflow: "hidden", ...lineWindow }}>
           <Animated.View
             renderToHardwareTextureAndroid
-            style={[
-              { width: lineWindow.width * 2, height: lineWindow.height },
-              drifts
-                ? {
-                    transform: [
-                      {
-                        translateX: drift.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0, -lineWindow.width],
-                        }),
-                      },
-                    ],
-                  }
-                : null,
-            ]}
+            style={{
+              width: lineWindow.width * 2,
+              height: lineWindow.height,
+              transform: [
+                {
+                  translateX: drift.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, -lineWindow.width],
+                  }),
+                },
+              ],
+            }}
           >
             <Svg
               width={lineWindow.width * 2}
@@ -565,7 +561,7 @@ function MovingCreature(props: {
           </Animated.View>
         </View>
       ) : null}
-    </Animated.View>
+    </View>
   );
 }
 
@@ -599,12 +595,18 @@ export function DuetFloatingOrb(props: {
           size={FLOATING_ORB_SIZE}
           state={moving && props.state === "working" ? "idle" : props.state}
         >
-          {moving && props.state !== "idle" ? (
-            <View style={{ width: stage, height: stage }}>
-              <MovingCreature captain={props.captain} size={stage} state={props.state} />
-            </View>
+          {moving && props.state === "working" ? (
+            <MovingCreature captain={props.captain} size={stage} />
           ) : (
-            <StaticCreature captain={props.captain} size={stage} />
+            <CreatureReaction
+              state={props.state}
+              visible={moving}
+              attention
+              size={stage}
+              completedRunId={undefined}
+            >
+              <StaticCreature captain={props.captain} size={stage} />
+            </CreatureReaction>
           )}
         </Disc>
       </View>
