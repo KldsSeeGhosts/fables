@@ -73,6 +73,15 @@ const secondCaptain = {
   primaryThreadId: ThreadId.make("captain:jordan:0"),
   earlierThreadIds: [],
 };
+const chorusCaptain = {
+  ...captain,
+  id: CaptainId.make("chorus"),
+  name: "Chorus",
+  primaryThreadId: ThreadId.make("captain:chorus:0"),
+  kind: "chorus",
+  coordinatorOnly: true,
+  earlierThreadIds: [],
+} satisfies Captain;
 const primaryThread = {
   id: captain.primaryThreadId,
   lineage: { parentThreadId: null, relationshipToParent: null },
@@ -237,6 +246,7 @@ const fixture = <R = never, E = never>(
     readonly token?: string | null;
     readonly readToken?: Effect.Effect<string, PlatformError.PlatformError>;
     readonly response?: BuildResponse;
+    readonly captains?: ReadonlyArray<Captain>;
   } = {},
 ) => {
   const requests: Array<{
@@ -285,9 +295,11 @@ const fixture = <R = never, E = never>(
         )
       : Effect.succeed(value);
   };
+  const captains = input.captains ?? [captain, secondCaptain];
   const store = Layer.mock(CaptainStore.CaptainStore)({
     byThread: (threadId) =>
-      Effect.succeed([captain, secondCaptain].find((duet) => duet.primaryThreadId === threadId)),
+      Effect.succeed(captains.find((duet) => duet.primaryThreadId === threadId)),
+    snapshot: () => Effect.succeed({ captains: [...captains], documents: [], memories: [] }),
     findByConversation: () => Effect.succeed(captain),
     document: (captain, name) =>
       Effect.succeed({
@@ -842,6 +854,18 @@ it.effect("propagates interruption from long-term memory and search", () =>
     }
   }),
 );
+
+it.effect("reads Chorus long-term memory across every Duet scope", () => {
+  const { layer, requests } = fixture({ captains: [chorusCaptain, captain, secondCaptain] });
+  return Effect.gen(function* () {
+    const service = yield* CaptainHonchoMemory.CaptainHonchoMemory;
+    assert.isTrue(Option.isSome(yield* service.longTermMemory(chorusCaptain)));
+    assert.deepStrictEqual(JSON.parse(requests[0]!.body), {
+      target: "user",
+      scope: ["duet_chorus", "duet_maria", "duet_jordan"],
+    });
+  }).pipe(Effect.provide(layer));
+});
 
 it.effect(
   "caps briefing recall, refreshes after compaction and keeps it out of crew context",

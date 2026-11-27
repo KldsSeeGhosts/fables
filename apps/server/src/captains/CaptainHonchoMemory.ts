@@ -590,12 +590,29 @@ const make = Effect.gen(function* () {
   ) {
     if (!enabled()) return Option.none<string>();
     const peerId = captainHonchoPeerId(captain.id);
+    const scope =
+      captain.kind !== "chorus" || Option.isNone(captainStore)
+        ? peerId
+        : yield* captainStore.value.snapshot({}).pipe(
+            Effect.map(({ captains }) => {
+              const seen = new Set([peerId]);
+              const scopes = [peerId];
+              for (const duet of captains) {
+                const duetPeerId = captainHonchoPeerId(duet.id);
+                if (seen.has(duetPeerId)) continue;
+                seen.add(duetPeerId);
+                scopes.push(duetPeerId);
+              }
+              return scopes.slice(0, 100);
+            }),
+            Effect.orElseSucceed(() => peerId),
+          );
     return yield* requestJson(
       "read duet long-term memory",
       HttpClientRequest.post(endpoint(`/peers/${peerId}/representation`)).pipe(
         HttpClientRequest.bodyJsonUnsafe({
           target: USER_PEER_ID,
-          scope: peerId,
+          scope,
         }),
       ),
       RepresentationResponse,
