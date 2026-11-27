@@ -345,6 +345,13 @@ it.effect("builds a Chorus brief from every active Duet without writing their do
         INSERT INTO orchestration_v2_projection_subagents (
           subagent_id, thread_id, parent_node_id, provider, origin, status,
           started_at, updated_at, payload_json
+        ) VALUES ('chorus-task', ${chorus.primaryThreadId}, 'node', 'codex', 'app_owned', 'running',
+          ${at}, ${at}, ${JSON.stringify({ title: "Chorus own solo" })})
+      `.pipe(Effect.orDie);
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_subagents (
+          subagent_id, thread_id, parent_node_id, provider, origin, status,
+          started_at, updated_at, payload_json
         ) VALUES ('archived-task', ${archived.primaryThreadId}, 'node', 'codex', 'app_owned', 'running',
           ${at}, ${at}, ${JSON.stringify({ title: "Archived active solo" })})
       `.pipe(Effect.orDie);
@@ -359,12 +366,15 @@ it.effect("builds a Chorus brief from every active Duet without writing their do
       const prompt = generationPrompts[0]!;
       assert.include(prompt, "Group items by Duet");
       assert.include(prompt, "nearest deadline first");
+      assert.include(prompt, "### Duet: Alpha");
+      assert.include(prompt, "### Duet: Beta");
       assert.include(prompt, "Alpha digest item due tomorrow");
       assert.include(prompt, "Beta digest item");
       assert.include(prompt, "Alpha active solo");
       assert.include(prompt, "Beta active solo");
       assert.include(prompt, "Approve the alpha release");
       assert.include(prompt, "Answer the beta question");
+      assert.notInclude(prompt, "Chorus own solo");
       assert.notInclude(prompt, "Archived digest item");
       assert.notInclude(prompt, "Archived active solo");
       assert.notInclude(prompt, "Alpha project detail that stays out");
