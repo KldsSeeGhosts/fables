@@ -4,7 +4,7 @@ import { useStableCallback } from "~/hooks/useStableCallback";
 import { type ResolvedKeybindingsConfig } from "@t3tools/contracts";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { ChevronRightIcon } from "lucide-react";
-import { type ReactNode, type RefObject, useState } from "react";
+import { memo, type ReactNode, type RefObject, useState } from "react";
 import { T } from "gt-react";
 import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
@@ -309,7 +309,7 @@ function CommandPaletteRowContent({ item }: { item: CommandPaletteResultItem }) 
   );
 }
 
-function CommandPaletteResultRow(props: {
+const CommandPaletteResultRow = memo(function CommandPaletteResultRow(props: {
   index?: number;
   item: CommandPaletteResultItem;
   isActive: boolean;
@@ -369,4 +369,4 @@ function CommandPaletteResultRow(props: {
       ) : null}
     </CommandItem>
   );
-}
+});
