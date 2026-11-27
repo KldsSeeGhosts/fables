@@ -1,6 +1,8 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { assert, it } from "@effect/vitest";
 import {
   CaptainId,
+  EnvironmentId,
   EventId,
   MessageId,
   NodeId,
@@ -27,12 +29,22 @@ import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter"
 
 import * as CaptainService from "../captains/CaptainService.ts";
 import * as CaptainStore from "../captains/CaptainStore.ts";
+import { makeReadCaptainTurnContext } from "../captains/captainTurnContext.ts";
+import * as McpInvocationContext from "../mcp/McpInvocationContext.ts";
+import * as OrchestratorMcp from "../mcp/OrchestratorMcpService.ts";
+import * as RemoteDelegation from "../peer/RemoteDelegation.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
+import * as SecretRequests from "../secrets/SecretRequests.ts";
+import * as ServerSettings from "../serverSettings.ts";
+import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as Sqlite from "../persistence/Sqlite.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import { ClaudeProviderCapabilitiesV2 } from "./Adapters/ClaudeAdapterV2.ts";
 import * as CaptainRolloverWorker from "./CaptainRolloverWorker.ts";
+import * as CommandReceiptStore from "./CommandReceiptStore.ts";
+import { layerNoTaskFolders } from "./ProviderTurnStartService.testkit.ts";
 import * as EventSink from "./EventSink.ts";
 import * as EventStore from "./EventStore.ts";
 import * as OrchestrationEventStore from "../persistence/OrchestrationEventStore.ts";
@@ -45,7 +57,7 @@ import * as ProviderReplayHarness from "./testkit/ProviderReplayHarness.ts";
 
 const projectId = ProjectId.make("rollover-project");
 const driver = ProviderDriverKind.make("claude");
-const providerInstanceId = ProviderInstanceId.make("claude");
+const providerInstanceId = ProviderInstanceId.make("claudeAgent");
 const providerThreadId = ProviderThreadId.make("rollover-session");
 const modelSelection = { instanceId: providerInstanceId, model: "claude-test" };
 const at = (second: number) => DateTime.makeUnsafe(Date.UTC(2026, 0, 1, 0, 0, second));
@@ -150,6 +162,23 @@ const makeFixture = Effect.fn("CaptainRolloverWorkerTest.makeFixture")(function*
       );
     }),
   );
+  const registry = ProviderAdapterRegistry.layerFromAdaptersEffect(
+    ProviderAdapter.ProviderAdapterV2.pipe(
+      Effect.map((adapter) => [adapter]),
+      Effect.provide(
+        Layer.mock(ProviderAdapter.ProviderAdapterV2)({
+          instanceId: providerInstanceId,
+          driver,
+          getCapabilities: () => Effect.succeed(ClaudeProviderCapabilitiesV2),
+        }),
+      ),
+    ),
+  );
+  const replay = ProviderReplayHarness.layerWithRegistry(
+    { name: "captain-rollover-steering" },
+    registry,
+    { runEffectWorker: false, databaseLayer: Sqlite.layerMemory },
+  );
   const persistence: Layer.Layer<
     | EventSink.EventSinkV2
     | ProjectionStore.ProjectionStoreV2
@@ -157,25 +186,7 @@ const makeFixture = Effect.fn("CaptainRolloverWorkerTest.makeFixture")(function*
     Error,
     SqlClient.SqlClient
   > = observeRunUpdates
-    ? Layer.merge(
-        ProjectionStore.layer,
-        ProviderReplayHarness.layerWithRegistry(
-          { name: "captain-rollover-steering" },
-          ProviderAdapterRegistry.layerFromAdaptersEffect(
-            ProviderAdapter.ProviderAdapterV2.pipe(
-              Effect.map((adapter) => [adapter]),
-              Effect.provide(
-                Layer.mock(ProviderAdapter.ProviderAdapterV2)({
-                  instanceId: providerInstanceId,
-                  driver,
-                  getCapabilities: () => Effect.succeed(ClaudeProviderCapabilitiesV2),
-                }),
-              ),
-            ),
-          ),
-          { runEffectWorker: false },
-        ),
-      )
+    ? Layer.merge(ProjectionStore.layer, replay)
     : Layer.merge(layerPersistence, ThreadCommandExecutor.layer);
   const base = CaptainService.layer.pipe(
     Layer.provideMerge(
@@ -198,6 +209,7 @@ const makeFixture = Effect.fn("CaptainRolloverWorkerTest.makeFixture")(function*
   );
   return {
     base,
+    replay,
     sends,
     firstSend,
     nextSent,
@@ -714,4 +726,288 @@ it.effect("moves an unread steer with queued follow-ups when the active turn ove
       );
     }).pipe(Effect.provide(CaptainRolloverWorker.layer.pipe(Layer.provideMerge(fixture.base))));
   }),
+);
+
+it.effect(
+  "routes to the current Duet after rollover and shows each result only on an accepted user turn",
+  () =>
+    Effect.gen(function* () {
+      const fixture = yield* makeFixture(true);
+      const dependencies = Layer.mergeAll(
+        fixture.base,
+        ServerSettings.layerTest(),
+        Layer.mock(ProviderRegistry.ProviderRegistry)({}),
+        Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({}),
+        Layer.mock(GitVcsDriver.GitVcsDriver)({}),
+        Layer.mock(SecretRequests.SecretRequests)({}),
+        Layer.mock(RemoteDelegation.RemoteDelegation)({}),
+        layerNoTaskFolders,
+        NodeCrypto.layer,
+      );
+      const threads = ThreadManagement.layer.pipe(
+        Layer.provide(
+          Layer.mergeAll(
+            fixture.replay,
+            ServerSettings.layerTest(),
+            CommandReceiptStore.layer,
+          ).pipe(Layer.provide(Sqlite.layerMemory)),
+        ),
+      );
+      const mcp = OrchestratorMcp.layer.pipe(
+        Layer.provide(threads),
+        Layer.provideMerge(dependencies),
+      );
+      yield* Effect.gen(function* () {
+        const captains = yield* CaptainService.CaptainService;
+        const store = yield* CaptainStore.CaptainStore;
+        const service = yield* OrchestratorMcp.OrchestratorMcpService;
+        const projections = yield* ProjectionStore.ProjectionStoreV2;
+        const sink = yield* EventSink.EventSinkV2;
+        const source = yield* captains.create({
+          ...newCaptain("chorus"),
+          name: "Chorus",
+          kind: "chorus",
+          reportPolicy: "react",
+        });
+        const duet = yield* captains.create(newCaptain("routed-duet"));
+        const destination = yield* captains.resetConversation({
+          captainId: duet.id,
+          expectedThreadId: duet.primaryThreadId,
+        });
+        assert.notEqual(destination.primaryThreadId, duet.primaryThreadId);
+
+        const callerRun = makeRun(source.primaryThreadId, 1, "running");
+        yield* sink.write({
+          events: [
+            {
+              id: EventId.make("chorus:active-run"),
+              type: "run.updated",
+              threadId: source.primaryThreadId,
+              occurredAt: callerRun.requestedAt,
+              payload: callerRun,
+            },
+          ],
+        });
+        const scope: McpInvocationContext.McpThreadInvocationScope = {
+          environmentId: EnvironmentId.make("local"),
+          requestNamespace: "chorus-test",
+          thread: {
+            threadId: source.primaryThreadId,
+            providerSessionId: "chorus-test",
+            providerInstanceId,
+          },
+          client: undefined,
+          issuedAt: 0,
+          capabilities: new Set(["orchestration"]),
+          captain: true,
+          chorus: true,
+        };
+        const request = {
+          duetId: duet.id,
+          message: "Fix the checkout test",
+          clientRequestId: "route",
+        };
+        const errorCode = (effect: ReturnType<typeof service.sendToDuet>) =>
+          effect.pipe(
+            Effect.flip,
+            Effect.map((error) => error.code),
+          );
+        assert.equal(
+          yield* errorCode(
+            service.sendToDuet(
+              {
+                ...scope,
+                thread: { ...scope.thread, threadId: destination.primaryThreadId },
+              },
+              request,
+            ),
+          ),
+          "capability_denied",
+        );
+        assert.equal(
+          yield* errorCode(
+            service.sendToDuet(
+              {
+                ...scope,
+                thread: { ...scope.thread, subagent: true },
+              },
+              request,
+            ),
+          ),
+          "capability_denied",
+        );
+        assert.equal(
+          yield* errorCode(service.sendToDuet({ ...scope, thread: undefined }, request)),
+          "thread_credential_required",
+        );
+        assert.equal(
+          yield* errorCode(
+            service.sendToDuet(
+              {
+                ...scope,
+                thread: { ...scope.thread, providerInstanceId: ProviderInstanceId.make("stale") },
+              },
+              request,
+            ),
+          ),
+          "parent_not_active",
+        );
+        assert.equal(
+          yield* errorCode(
+            service.sendToDuet(scope, { ...request, duetId: CaptainId.make("missing") }),
+          ),
+          "invalid_request",
+        );
+        assert.equal(
+          yield* errorCode(service.sendToDuet(scope, { ...request, duetId: source.id })),
+          "invalid_request",
+        );
+        assert.equal(
+          yield* errorCode(
+            service.sendToDuet(scope, {
+              ...request,
+              environmentId: EnvironmentId.make("linked"),
+            }),
+          ),
+          "invalid_request",
+        );
+        const archived = yield* captains.create(newCaptain("archived-duet"));
+        yield* captains.archive({ captainId: archived.id });
+        assert.equal(
+          yield* errorCode(service.sendToDuet(scope, { ...request, duetId: archived.id })),
+          "invalid_request",
+        );
+        assert.deepEqual(yield* store.listChorusRoutes(source.id), []);
+
+        const sent = yield* service.sendToDuet(scope, request);
+        assert.equal(sent.threadId, destination.primaryThreadId);
+        const [route] = yield* store.listChorusRoutes(source.id);
+        assert.include(route, {
+          runId: sent.runId,
+          messageId: sent.messageId,
+          threadId: sent.threadId,
+          result: null,
+        });
+        const received = yield* projections.getThreadRecords(sent.threadId, ["runs", "messages"]);
+        const routedMessage = received.messages.find(({ id }) => id === sent.messageId)!;
+        assert.equal(routedMessage.senderThreadId, source.primaryThreadId);
+        assert.deepEqual(
+          (yield* projections.getThreadRecords(duet.primaryThreadId, ["runs"])).runs,
+          [],
+        );
+
+        const readContext = yield* makeReadCaptainTurnContext;
+        const delivery = { providerThreadId: "chorus-test", usedTokens: null };
+        const senderThread = yield* projections.getThread(source.primaryThreadId);
+        const userTurn = { createdBy: "user" } as const;
+        assert.include(
+          (yield* readContext(received.thread, delivery, routedMessage)).text,
+          "routed by Chorus",
+        );
+        assert.notInclude(
+          (yield* readContext(received.thread, delivery, userTurn)).text,
+          "routed by Chorus",
+        );
+
+        const completedRun = {
+          ...received.runs.find(({ id }) => id === sent.runId)!,
+          status: "completed" as const,
+          completedAt: at(3),
+        };
+        const answer = "The checkout test now passes.\n\nImplementation details.";
+        yield* sink.write({
+          events: [
+            {
+              id: EventId.make("routed:assistant-answer"),
+              type: "message.updated",
+              threadId: sent.threadId,
+              occurredAt: at(2),
+              payload: {
+                ...message(completedRun, answer),
+                id: MessageId.make("routed:assistant-answer"),
+                role: "assistant",
+                createdBy: "agent",
+                creationSource: "provider",
+                createdAt: at(2),
+              },
+            },
+            {
+              id: EventId.make("routed:completed"),
+              type: "run.updated",
+              threadId: sent.threadId,
+              occurredAt: at(3),
+              payload: completedRun,
+            },
+          ],
+        });
+        assert.deepEqual(
+          (yield* projections.getThreadRecords(source.primaryThreadId, ["runs"])).runs.map(
+            ({ id }) => id,
+          ),
+          [callerRun.id],
+        );
+        const scheduled = yield* readContext(senderThread, delivery, { createdBy: "agent" });
+        assert.notInclude(scheduled.text, "Routed since your last turn");
+        yield* scheduled.delivered;
+
+        const nextTurn = yield* readContext(senderThread, delivery, userTurn);
+        assert.include(nextTurn.text, "Routed since your last turn");
+        assert.include(nextTurn.text, "The checkout test now passes.");
+        assert.notInclude(nextTurn.text, "Implementation details.");
+        assert.equal((yield* store.listChorusRoutes(source.id))[0]?.result, answer);
+        assert.include(
+          (yield* readContext(senderThread, delivery, userTurn)).text,
+          "The checkout test now passes.",
+        );
+        yield* nextTurn.delivered;
+
+        assert.equal((yield* service.sendToDuet(scope, request)).runId, sent.runId);
+        assert.deepEqual(yield* store.listChorusRoutes(source.id), []);
+        assert.notInclude(
+          (yield* readContext(senderThread, delivery, userTurn)).text,
+          "Routed since your last turn",
+        );
+
+        const running = makeRun(sent.threadId, 10, "running");
+        const updateRun = (run: OrchestrationV2Run) =>
+          sink.write({
+            events: [
+              {
+                id: EventId.make(`routed-rollover:${run.status}`),
+                type: "run.updated",
+                threadId: sent.threadId,
+                occurredAt: at(10),
+                payload: run,
+              },
+            ],
+          });
+        yield* updateRun(running);
+        const queued = yield* service.sendToDuet(scope, {
+          ...request,
+          mode: "queue",
+          clientRequestId: "pending-route",
+        });
+        assert.equal(queued.status, "queued");
+        const settled = { ...running, status: "completed" as const, completedAt: at(11) };
+        yield* updateRun(settled);
+        const nextAttempt = yield* projections.getThreadRecords(sent.threadId, [
+          "runs",
+          "messages",
+        ]);
+        const failedRun = {
+          ...nextAttempt.runs.find(({ id }) => id === queued.runId)!,
+          status: "failed" as const,
+          completedAt: at(12),
+        };
+        const failedMessage = nextAttempt.messages.find(({ id }) => id === queued.messageId)!;
+        yield* updateRun(failedRun);
+        const rolled = yield* captains.resetConversation(
+          { captainId: destination.id, expectedThreadId: sent.threadId },
+          { run: failedRun, failedMessage },
+        );
+        const [moved] = yield* store.listChorusRoutes(source.id);
+        assert.equal(moved?.threadId, rolled.primaryThreadId);
+        assert.equal(moved?.messageId, `captain-rollover:${queued.runId}`);
+      }).pipe(Effect.provide(mcp));
+    }),
 );

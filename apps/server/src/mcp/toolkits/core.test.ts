@@ -5,6 +5,8 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import {
   DEFAULT_SERVER_SETTINGS,
+  CaptainId,
+  type Captain,
   ChatImageAttachment,
   CommandId,
   EnvironmentId,
@@ -42,6 +44,8 @@ import {
   OrchestratorProviderSelectionBusyError,
 } from "../../orchestration-v2/Orchestrator.ts";
 
+import * as CaptainStore from "../../captains/CaptainStore.ts";
+import * as Sqlite from "../../persistence/Sqlite.ts";
 import * as ServerSecretStore from "../../auth/ServerSecretStore.ts";
 import * as ServerConfig from "../../config.ts";
 import * as ProviderAdapterRegistry from "../../orchestration-v2/ProviderAdapterRegistry.ts";
@@ -52,6 +56,9 @@ import * as ThreadManagement from "../../orchestration-v2/ThreadManagementServic
 import type * as ProjectionStore from "../../orchestration-v2/ProjectionStore.ts";
 import * as ThreadSearch from "../../orchestration-v2/ThreadSearch.ts";
 import * as PreviewBrowser from "../../preview/PreviewBrowser.ts";
+import * as ManagedProjectFolders from "../../project/ManagedProjectFolders.ts";
+import * as ProjectCloneTracker from "../../project/ProjectCloneTracker.ts";
+import * as SourceControlRepositoryService from "../../sourceControl/SourceControlRepositoryService.ts";
 import * as ProjectService from "../../project/ProjectService.ts";
 import * as ProviderRegistry from "../../provider/ProviderRegistry.ts";
 import * as SecretRequests from "../../secrets/SecretRequests.ts";
@@ -82,6 +89,7 @@ const declaredFailure = (result: McpSchema.CallToolResult) => {
 };
 import { htmlRenderFromToolItem } from "@t3tools/shared/toolOutput";
 
+const decodeScheduledTask = Schema.decodeSync(ScheduledTask);
 const decodeMcpAttachmentInput = Schema.decodeUnknownEffect(McpAttachmentInput);
 const decodeThreadReadResult = Schema.decodeUnknownEffect(OrchestratorMcpThreadReadResult);
 const decodeThreadSearchResult = Schema.decodeUnknownEffect(
@@ -1039,6 +1047,210 @@ it.effect("a read-only client reads threads and is refused every write before it
 );
 const dispatched: Array<string> = [];
 
+it.effect("generic tools cannot route or mutate work across Duets, or wake the Chorus", () => {
+  const chorus = ThreadId.make("captain:chorus:0");
+  const duet = ThreadId.make("captain:duet:0");
+  const duetSolo = ThreadId.make("duet-solo");
+  const chorusSolo = ThreadId.make("chorus-solo");
+  const ordinary = ThreadId.make("ordinary-thread");
+  const scheduleId = "bound-to-chorus";
+  const shell = (id: ThreadId) => {
+    const own = McpToolAccessTestkit.liveThreadShell(id);
+    const parent = id === duetSolo ? duet : id === chorusSolo ? chorus : null;
+    return parent === null
+      ? own
+      : {
+          ...own,
+          lineage: {
+            rootThreadId: parent,
+            parentThreadId: parent,
+            relationshipToParent: "subagent" as const,
+          },
+        };
+  };
+  const settings = ServerSettings.layerTest();
+  const schedules = Layer.mock(ScheduledTaskService.ScheduledTaskService)({
+    list: () =>
+      Effect.succeed({
+        tasks: [
+          {
+            ...decodeScheduledTask(scheduledTask(scheduleId, "full-access")),
+            threadId: chorus,
+            threadMode: "continue",
+          },
+        ],
+      }),
+  });
+  const dependencies = Layer.mergeAll(
+    NodeServices.layer,
+    NodeCrypto.layer,
+    settings,
+    ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-chorus-" }).pipe(
+      Layer.provide(NodeServices.layer),
+    ),
+    DocumentText.layer.pipe(Layer.provide(Layer.merge(NodeServices.layer, NodeCrypto.layer))),
+    Layer.mock(GitVcsDriver.GitVcsDriver)({}),
+    Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/unused" }),
+    Layer.mock(ProjectCloneTracker.ProjectCloneTracker)({}),
+    Layer.mock(SourceControlRepositoryService.SourceControlRepositoryService)({}),
+    Layer.mock(ThreadLaunchService.ThreadLaunchService)({}),
+    CaptainStore.layer.pipe(Layer.provide(Sqlite.layerMemory)),
+    Layer.mock(ProviderRegistry.ProviderRegistry)({}),
+    Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({}),
+    Layer.mock(ProjectService.ProjectService)({}),
+    Layer.mock(SecretRequests.SecretRequests)({}),
+    Layer.mock(PeerForwarding.PeerForwarding)({}),
+    Layer.mock(PeerLinkRequests.PeerLinkRequests)({}),
+    Layer.mock(PeerLinks.PeerLinks)({}),
+    Layer.mock(RemoteDelegation.RemoteDelegation)({}),
+    Layer.mock(ThreadManagement.ThreadManagementService)({
+      getThreadShell: (id) => Effect.succeed(shell(id)),
+      getThreadRecords: (id) =>
+        Effect.succeed(McpToolAccessTestkit.idleThreadProjection(shell(id))),
+      getProjectThreadRecords: ({ threadId }) =>
+        Effect.succeed(McpToolAccessTestkit.idleThreadProjection(shell(threadId))),
+      dispatch: (command) =>
+        command.type === "thread.archive" &&
+        (command.threadId === ordinary || command.threadId === duetSolo)
+          ? Effect.succeed({ sequence: 1, storedEvents: [] })
+          : Effect.die("A protected thread mutation reached dispatch"),
+    }),
+    schedules,
+  );
+  const toolkits = Layer.mergeAll(
+    layerOrchestratorToolkit,
+    McpHttpServer.layerThreadToolkit.pipe(Layer.provide(Layer.mock(ThreadSearch.ThreadSearch)({}))),
+    McpHttpServer.layerProjectRegistration,
+    McpHttpServer.layerAttachmentToolkit.pipe(
+      Layer.provide(AssetSigner.layer.pipe(Layer.provideMerge(ServerSecretStore.layer))),
+    ),
+  ).pipe(
+    Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+    Layer.provideMerge(dependencies),
+  );
+
+  return Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const store = yield* CaptainStore.CaptainStore;
+    for (const kind of ["duet", "chorus"] as const) {
+      yield* store.save({
+        id: CaptainId.make(kind),
+        primaryThreadId: kind === "duet" ? duet : chorus,
+        name: kind,
+        role: "",
+        avatar: { preset: "compass", color: "violet" },
+        instructions: "",
+        earlierThreadIds: [],
+        scopedProjectIds: [],
+        createdAt: "2026-11-24T00:00:00.000Z",
+        updatedAt: "2026-11-24T00:00:00.000Z",
+        archivedAt: null,
+        kind,
+        coordinatorOnly: kind === "chorus",
+        reportPolicy: kind === "chorus" ? "react" : "context",
+      } satisfies Captain);
+    }
+    const from = (threadId: ThreadId) => ({
+      ...scope,
+      thread: { ...scope.thread!, threadId },
+      ...(threadId === chorus ? { captain: true, chorus: true } : {}),
+    });
+    const oauth = clientScope("full-access");
+    const forwarded = { ...oauth, client: { ...oauth.client!, linked: true } };
+    const call = (
+      caller: McpInvocationContext.McpInvocationScope,
+      name: string,
+      args: Record<string, unknown>,
+    ) =>
+      server
+        .callTool({ name, arguments: args })
+        .pipe(
+          Effect.provideService(McpInvocationContext.McpInvocationContext, caller),
+          Effect.provideService(McpSchema.McpServerClient, client),
+        );
+    const deny = Effect.fnUntraced(function* (
+      caller: McpInvocationContext.McpInvocationScope,
+      name: string,
+      args: Record<string, unknown>,
+    ) {
+      expect(declaredFailure(yield* call(caller, name, args)), name).toMatchObject({
+        code: "capability_denied",
+      });
+    });
+
+    for (const caller of [
+      from(chorus),
+      from(duet),
+      from(duetSolo),
+      from(chorusSolo),
+      from(ordinary),
+      oauth,
+      forwarded,
+    ]) {
+      yield* deny(caller, "t3_thread_send", { threadId: chorus, message: "Wake up" });
+      yield* deny(caller, "t3_thread_send_attachments", {
+        threadId: chorus,
+        attachments: [
+          ChatImageAttachment.make({
+            type: "image",
+            id: "image",
+            name: "shot.png",
+            mimeType: "image/png",
+            sizeBytes: 1,
+          }),
+        ],
+      });
+      yield* deny(caller, "run_scheduled_task_now", { taskId: scheduleId });
+    }
+    yield* deny(from(duetSolo), "schedule_task", {
+      scheduledTaskId: scheduleId,
+      prompt: "Different work",
+    });
+    yield* deny(from(chorusSolo), "delete_scheduled_task", { scheduledTaskId: scheduleId });
+    for (const [caller, target] of [
+      [from(chorus), duet],
+      [from(chorus), duetSolo],
+      [from(chorusSolo), duet],
+      [from(duet), chorus],
+      [from(duetSolo), chorusSolo],
+      [forwarded, duetSolo],
+    ] as const) {
+      yield* deny(caller, "t3_thread_send", { threadId: target, message: "Wake up" });
+      yield* deny(caller, "t3_thread_interrupt", { threadId: target });
+      yield* deny(caller, "t3_thread_update", {
+        threadId: target,
+        action: "rename",
+        title: "Other title",
+      });
+      yield* deny(caller, "t3_thread_configure", {
+        threadId: target,
+        modelSelection: { instanceId: "codex", model: "gpt-5" },
+      });
+      yield* deny(caller, "t3_thread_organize", { threadId: target, action: "archive" });
+      yield* deny(caller, "t3_thread_transfer", { threadId: target, action: "fork" });
+      yield* deny(caller, "t3_thread_transfer", {
+        threadId: ordinary,
+        targetThreadId: target,
+        action: "merge_back",
+      });
+    }
+    yield* deny(from(chorus), "t3_thread_transfer", { action: "fork" });
+    yield* deny(from(chorus), "t3_thread_launch", { title: "Do project work" });
+    yield* deny(from(chorus), "t3_thread_launch", {
+      title: "Do project work",
+      environmentId: "linked-mac",
+    });
+    yield* deny(from(chorus), "create_threads", { threads: [{ prompt: "Do project work" }] });
+    expect(
+      (yield* call(scope, "t3_thread_organize", { threadId: ordinary, action: "archive" })).isError,
+    ).toBe(false);
+    expect(
+      (yield* call(from(duet), "t3_thread_organize", { threadId: duetSolo, action: "archive" }))
+        .isError,
+    ).toBe(false);
+  }).pipe(Effect.provide(toolkits));
+});
+
 it.effect("only a full-access client may change a thread's own agent mode", () =>
   Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
@@ -1064,12 +1276,11 @@ it.effect("only a full-access client may change a thread's own agent mode", () =
             ThreadManagement.ThreadManagementService.of({
               getThreadShell: () =>
                 Effect.succeed({
-                  id: ThreadId.make("agent-thread"),
-                  projectId: "project",
-                  runtimeMode: "approval-required",
-                  interactionMode: "default",
-                  deletedAt: null,
-                } as never),
+                  ...McpToolAccessTestkit.liveThreadShell(ThreadId.make("agent-thread"), {
+                    runtimeMode: "approval-required",
+                  }),
+                  projectId: ProjectId.make("project"),
+                }),
               getProjectThreadRecords: () =>
                 Effect.succeed({
                   thread: {
@@ -1378,13 +1589,11 @@ it.effect.each(["t3_thread_interrupt", "t3_workflow_stop"])(
           Layer.provide(NodeCrypto.layer),
           Layer.provide(
             Layer.mock(ThreadManagement.ThreadManagementService)({
-              getThreadShell: () =>
+              getThreadShell: (id) =>
                 Effect.succeed({
-                  projectId: "project-a",
-                  deletedAt: null,
-                  runtimeMode: "full-access",
-                  interactionMode: "default",
-                } as never),
+                  ...McpToolAccessTestkit.liveThreadShell(id),
+                  projectId: ProjectId.make("project-a"),
+                }),
               getProjectThreadRecords: () =>
                 Effect.succeed({
                   thread: {

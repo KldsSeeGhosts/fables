@@ -10,6 +10,7 @@ import { assert, it } from "@effect/vitest";
 import { vi } from "vite-plus/test";
 import {
   type ApplicationStoredEvent,
+  CaptainId,
   CheckpointId,
   CheckpointRef,
   CommandId,
@@ -57,6 +58,7 @@ import * as TestClock from "effect/testing/TestClock";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import { createAttachmentId } from "../attachmentStore.ts";
+import * as CaptainStore from "../captains/CaptainStore.ts";
 import * as CheckpointStore from "../checkpointing/CheckpointStore.ts";
 import * as GitWorkflow from "../git/GitWorkflowService.ts";
 import * as ServerConfig from "../config.ts";
@@ -356,6 +358,7 @@ const layerProjectionReplayTest = ProjectionReplay.layer.pipe(
 
 const layerTest = Layer.mergeAll(
   RuntimeLayer.layer,
+  CaptainStore.layer,
   layerProjectionReplayTest,
   RuntimeLayer.layerEventSink,
   ProjectStore.layer,
@@ -4475,6 +4478,77 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         watching: true,
       });
       assert.isTrue((yield* watchOf)?.checksPending);
+    }),
+  );
+
+  it.effect("records a PR watch change on Chorus without dispatching a wake", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const store = yield* CaptainStore.CaptainStore;
+      const threadId = ThreadId.make("captain:chorus:0");
+      const projectId = ProjectId.make("pr-watch-project");
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("chorus-watch-create"),
+        threadId,
+        projectId,
+        title: "Chorus",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+      });
+      const now = DateTime.formatIso(yield* DateTime.now);
+      yield* store.save({
+        id: CaptainId.make("chorus"),
+        primaryThreadId: threadId,
+        name: "Chorus",
+        role: "",
+        instructions: "",
+        avatar: { preset: "compass", color: "violet" },
+        scopedProjectIds: [],
+        earlierThreadIds: [],
+        kind: "chorus",
+        coordinatorOnly: true,
+        reportPolicy: "react",
+        createdAt: now,
+        updatedAt: now,
+        archivedAt: null,
+      });
+      const key = { host: "github.com", repository: "acme/web", number: 7 };
+      yield* orchestrator.dispatch({
+        type: "thread.pull-request.watch",
+        commandId: CommandId.make("chorus-watch-start"),
+        threadId,
+        ...key,
+        watching: true,
+        link: { url: "https://github.com/acme/web/pull/7", source: "manual" },
+      });
+      const watch = (yield* orchestrator.getThreadShell(threadId))?.pullRequests?.[0]?.watch;
+      assert.isDefined(watch);
+      yield* orchestrator.dispatch({
+        type: "thread.pull-request-watch.sync",
+        commandId: CommandId.make("chorus-watch-sync"),
+        threadId,
+        ...key,
+        startedAt: watch.startedAt,
+        watch: { ...watch, failedChecks: ["lint"] },
+        wake: {
+          messageId: MessageId.make("chorus-watch-wake"),
+          text: "Lint failed.",
+          notification: { source: { kind: "monitor" }, outcome: "updated", summary: "#7" },
+        },
+      });
+      const { thread, runs, messages } = yield* orchestrator.getThreadRecords(threadId, [
+        "runs",
+        "messages",
+      ]);
+      assert.deepEqual(thread.pullRequests?.[0]?.watch?.failedChecks, ["lint"]);
+      assert.deepEqual(runs, []);
+      assert.deepEqual(messages, []);
     }),
   );
 

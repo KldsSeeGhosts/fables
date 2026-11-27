@@ -102,7 +102,7 @@ export const CaptainToolkit = Toolkit.make(
   Tool.make("duet_send", {
     ...options,
     description:
-      "Route requested project work from the Chorus to another Duet. Use it when the user asks that Duet to do work, not for read-only questions. It resolves the Duet's current primary conversation at dispatch, records the route, and the result returns as context on the Chorus's next user turn. Do not use t3_thread_send for cross-Duet routing.",
+      "Route the user's work request to a Duet's current conversation. For questions, use duet_list or duet_read. Confirm the route with the returned thread link. The result appears the next time the user messages Chorus.",
     parameters: Schema.Struct({
       duetId: CaptainId,
       message: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100000)),
@@ -122,7 +122,7 @@ export const CaptainToolkit = Toolkit.make(
     }),
     failure: OrchestratorMcpFailure,
     failureMode: "return" as const,
-    dependencies: [...options.dependencies, OrchestratorMcpService.OrchestratorMcpService],
+    dependencies: [...writeOptions.dependencies, OrchestratorMcpService.OrchestratorMcpService],
   })
     .annotate(Tool.Destructive, true)
     .annotate(Tool.OpenWorld, true)
