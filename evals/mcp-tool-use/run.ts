@@ -58,6 +58,7 @@ import { PULL_REQUEST_LINKING_INSTRUCTIONS } from "@t3tools/provider-core/server
 import { makeSideChatContext } from "../../apps/server/src/orchestration-v2/ContextHandoffService.ts";
 import { withInlineContext } from "../../apps/server/src/orchestration-v2/ContextHandoffDelivery.ts";
 import { AttachmentToolkit } from "../../apps/server/src/mcp/toolkits/attachment/tools.ts";
+import { CaptainToolkit } from "../../apps/server/src/mcp/toolkits/captain/tools.ts";
 import { DeviceToolkit } from "../../apps/server/src/mcp/toolkits/device/tools.ts";
 import { FeedbackToolkit } from "../../apps/server/src/mcp/toolkits/feedback/tools.ts";
 import {
@@ -364,6 +365,8 @@ export const McpToolUseCase = Schema.Struct({
     context: Schema.optional(Schema.String),
     /** The turn is a coordinator Captain's: its generated briefing is inline ahead of the prompt. */
     captainBriefing: Schema.optional(Schema.Boolean),
+    /** Expose the matching role's tools and include its briefing. */
+    captainKind: Schema.optional(Contracts.CaptainKind),
     priorTurns: Schema.optional(
       Schema.Array(
         Schema.Struct({
@@ -472,6 +475,7 @@ const coordinatorCaptain = {
   scopedProjectIds: [],
   reportPolicy: "context",
   coordinatorOnly: true,
+  kind: "duet",
   createdAt: "2026-11-24T12:00:00.000Z",
   updatedAt: "2026-11-24T12:00:00.000Z",
   archivedAt: null,
@@ -479,6 +483,13 @@ const coordinatorCaptain = {
 
 const coordinatorCaptainBriefing = formatCaptainBriefing({
   captain: coordinatorCaptain,
+  projects: [],
+  memories: [],
+  agents: "",
+  notes: "",
+});
+const chorusCaptainBriefing = formatCaptainBriefing({
+  captain: { ...coordinatorCaptain, name: "Chorus", kind: "chorus", reportPolicy: "react" },
   projects: [],
   memories: [],
   agents: "",
@@ -530,6 +541,7 @@ export const normalizeToolInput = (name: string, input: unknown) => {
 const t3SourceTools: ReadonlyArray<Tool.Any> = [
   OrchestratorToolkit,
   ThreadToolkit,
+  CaptainToolkit,
   AttachmentToolkit,
   ProjectToolkit,
   EnvironmentToolkit,
@@ -602,6 +614,13 @@ const hiddenWhileLinksOff = enabledWhen(McpInvocationContext.hiddenWhileLinksOff
 const hiddenWhileFeedbackOff = enabledWhen(McpInvocationContext.hiddenWhileFeedbackOff);
 // T3 lists PR and CI tools only to a thread whose project is on a forge it reads.
 const hiddenWithoutForge = enabledWhen(McpInvocationContext.hiddenWithoutForge);
+const captainOnlyTools = enabledWhen(McpInvocationContext.captainOnly);
+const listingPredicates = new Map<string, McpInvocationContext.ListedWhen["Service"]>(
+  t3SourceTools.flatMap((tool) => {
+    const predicate = Context.getOrUndefined(tool.annotations, McpInvocationContext.ListedWhen);
+    return predicate === undefined ? [] : [[`${T3_PREFIX}${tool.name}`, predicate] as const];
+  }),
+);
 /**
  * `tools` is T3 as shipped. `raw` takes away T3's PR, CI and issue tools and their instructions,
  * so the agent works the forge with CLIs alone, to measure what the tools save.
@@ -621,16 +640,38 @@ const visibleT3Tools = (options: {
   readonly links?: boolean;
   readonly forge?: boolean;
   readonly agentFeedback?: Contracts.AgentFeedbackMode;
+  readonly captainKind?: Contracts.CaptainKind | undefined;
   readonly arm?: Arm;
-}) =>
-  t3Tools.filter(
+}) => {
+  const scope: McpInvocationContext.McpInvocationScope | undefined =
+    options.captainKind === undefined
+      ? undefined
+      : {
+          environmentId: EnvironmentId.make("eval"),
+          requestNamespace: "mcp-tool-use-eval",
+          thread: {
+            threadId: coordinatorCaptain.primaryThreadId,
+            providerSessionId: "mcp-tool-use-eval",
+            providerInstanceId: ProviderInstanceId.make("eval"),
+            subagent: options.subagent === true,
+          },
+          client: undefined,
+          capabilities: new Set(["orchestration"]),
+          issuedAt: 0,
+          captain: true,
+          chorus: options.captainKind === "chorus",
+        };
+  return t3Tools.filter(
     (tool) =>
       !(options.arm === "raw" && forgeToolNames.has(tool.name)) &&
       (options.links === true || !hiddenWhileLinksOff.has(tool.name)) &&
       ((options.agentFeedback ?? "off") !== "off" || !hiddenWhileFeedbackOff.has(tool.name)) &&
       (options.forge !== false || !hiddenWithoutForge.has(tool.name)) &&
-      !(options.subagent === true && hiddenFromSubagents.has(tool.name)),
+      !(options.subagent === true && hiddenFromSubagents.has(tool.name)) &&
+      (scope !== undefined || !captainOnlyTools.has(tool.name)) &&
+      (listingPredicates.get(tool.name)?.(scope) ?? true),
   );
+};
 
 /**
  * T3's Claude Code options for an eval thread: its system prompt append and its hooks. `device` and
@@ -751,6 +792,7 @@ export const buildBase = (
     readonly subagent?: boolean;
     readonly links?: boolean;
     readonly forge?: boolean;
+    readonly captainKind?: Contracts.CaptainKind | undefined;
     /** A native subagent starts from its task: T3 appends nothing to its system prompt. */
     readonly nativeSubagent?: boolean;
     /** false: the thread has no agent device access, so T3's text leaves devices out. */
@@ -854,6 +896,7 @@ const buildCodexBase = (
     readonly subagent?: boolean;
     readonly links?: boolean;
     readonly forge?: boolean;
+    readonly captainKind?: Contracts.CaptainKind | undefined;
     /** false: the thread has no agent device access, so T3's text leaves devices out. */
     readonly deviceAccess?: boolean;
     /** false: the thread has no agent browser access, so T3's text leaves the browser out. */
@@ -1294,7 +1337,11 @@ export const buildMessages = (sample: Sample) => {
       : projectComposerContextForProvider({ text: testCase.prompt, ...testCase.promptContext });
   const inlineContext = [
     sideChatContext ?? "",
-    testCase.setup.captainBriefing === true ? coordinatorCaptainBriefing : "",
+    testCase.setup.captainKind === "chorus"
+      ? chorusCaptainBriefing
+      : testCase.setup.captainKind === "duet" || testCase.setup.captainBriefing === true
+        ? coordinatorCaptainBriefing
+        : "",
   ]
     .filter((part) => part !== "")
     .join("\n\n");
@@ -3338,6 +3385,7 @@ const main = Effect.gen(function* () {
     links: boolean,
     forge: boolean,
     agentFeedback: Contracts.AgentFeedbackMode = "off",
+    captainKind?: Contracts.CaptainKind,
   ): Effect.Effect<Base, Schema.SchemaError> =>
     codex
       ? decodeCodexCapture(template).pipe(
@@ -3352,6 +3400,7 @@ const main = Effect.gen(function* () {
               deviceAccess,
               browserAccess,
               agentFeedback,
+              captainKind,
               arm: flags.arm,
             }),
           ),
@@ -3368,6 +3417,7 @@ const main = Effect.gen(function* () {
               deviceAccess,
               browserAccess,
               agentFeedback,
+              captainKind,
               arm: flags.arm,
             });
             return role === "native-subagent"
@@ -3379,9 +3429,9 @@ const main = Effect.gen(function* () {
         );
   // Codex has no native subagents; its cases with that role run as top-level threads.
   const baseKey = ({ setup }: McpToolUseCase) =>
-    `${codex && setup.role === "native-subagent" ? "top" : setup.role}:${setup.world?.deviceAgentAccess !== false}:${setup.world?.browserAgentAccess !== false}:${setup.linkedEnvironments === true}:${setup.forge !== false}:${setup.world?.agentFeedback ?? "off"}`;
+    `${codex && setup.role === "native-subagent" ? "top" : setup.role}:${setup.world?.deviceAgentAccess !== false}:${setup.world?.browserAgentAccess !== false}:${setup.linkedEnvironments === true}:${setup.forge !== false}:${setup.world?.agentFeedback ?? "off"}:${setup.captainKind ?? ""}`;
   const base = yield* buildFor("top", true, true, false, true);
-  const bases = new Map<string, Base>([["top:true:true:false:true:off", base]]);
+  const bases = new Map<string, Base>([["top:true:true:false:true:off:", base]]);
   for (const testCase of selected) {
     const key = baseKey(testCase);
     if (bases.has(key)) continue;
@@ -3402,6 +3452,7 @@ const main = Effect.gen(function* () {
         links === "true",
         forge === "true",
         feedback as Contracts.AgentFeedbackMode,
+        testCase.setup.captainKind,
       ),
     );
   }

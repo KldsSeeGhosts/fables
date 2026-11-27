@@ -111,7 +111,7 @@ export class PeerLinks extends Context.Service<
     ) => Effect.Effect<{ readonly link: PeerLink; readonly alreadyLinked: boolean }, PeerLinkError>;
     readonly list: Effect.Effect<ReadonlyArray<PeerLinkSummary>, PeerLinkError>;
     /** The unexpired links' names, from what is stored, without asking any peer. */
-    readonly names: Effect.Effect<ReadonlyArray<PeerLinkName>, PeerLinkError>;
+    readonly names: (limit?: number) => Effect.Effect<ReadonlyArray<PeerLinkName>, PeerLinkError>;
     /** The stored link, without asking the peer whether it answers. */
     readonly get: (
       environmentId: EnvironmentId,
@@ -647,14 +647,17 @@ const make = Effect.gen(function* () {
     });
   });
 
-  const names: PeerLinks["Service"]["names"] = Effect.gen(function* () {
-    const links = yield* Effect.forEach(yield* readRows, toLink);
-    const now = yield* DateTime.now;
-    return links.flatMap((link) =>
-      DateTime.isGreaterThan(link.expiresAt, now)
-        ? [{ environmentId: link.environmentId, label: link.label }]
-        : [],
-    );
+  const names = Effect.fn("PeerLinks.names")(function* (limit = -1) {
+    const now = DateTime.formatIso(yield* DateTime.now);
+    const rows = yield* sql<Pick<PeerLinkRow, "environment_id" | "label">>`
+      SELECT environment_id, label FROM peer_environment_links
+      WHERE CASE WHEN fenced = 1 THEN expires_at ELSE linked_at END > ${now}
+      ORDER BY label, environment_id LIMIT ${limit}
+    `.pipe(NodeSqliteClient.readOnly, Effect.catchTags({ SqlError: failStorage }));
+    return rows.map((row) => ({
+      environmentId: EnvironmentId.make(row.environment_id),
+      label: row.label,
+    }));
   });
 
   const get: PeerLinks["Service"]["get"] = (environmentId) =>

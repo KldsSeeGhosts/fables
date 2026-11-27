@@ -3,6 +3,7 @@ import {
   CaptainId,
   CaptainError,
   CaptainMemoryId,
+  EnvironmentId,
   captainPrimaryThreadId,
   ProjectId,
   ProviderInstanceId,
@@ -27,6 +28,7 @@ import {
 } from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as Sqlite from "../persistence/Sqlite.ts";
+import * as PeerLinks from "../peer/PeerLinks.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ScheduledTasks from "../scheduledTasks/ScheduledTaskService.ts";
@@ -998,6 +1000,91 @@ it.effect("streams only the changes a subscription shows", () =>
       );
       assert.equal(detail[1]?.documents.find(({ name }) => name === "NOTES.md")?.content, "Mine");
     }).pipe(Effect.provide(layer));
+  }),
+);
+
+it.effect("builds a bounded Chorus roster from local state and sends it only when needed", () =>
+  Effect.gen(function* () {
+    const { layer } = fixture();
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainService.CaptainService;
+      const store = yield* CaptainStore.CaptainStore;
+      const chorus = yield* service.create({ ...input, name: "Chorus", kind: "chorus" });
+      const duets = yield* Effect.forEach(
+        Array.from({ length: 14 }, (_, index) => index),
+        (index) => {
+          const id = `duet-${String(index).padStart(2, "0")}`;
+          return service.create({
+            ...input,
+            captainId: CaptainId.make(id),
+            name: id,
+            role: "Release",
+            scopedProjectIds: [project],
+          });
+        },
+      );
+      const archived = {
+        ...duets[0]!,
+        id: CaptainId.make("archived"),
+        name: "Archived Duet",
+        primaryThreadId: ThreadId.make("captain:archived:0"),
+        archivedAt: chorus.createdAt,
+      };
+      yield* store.save(archived);
+      const writeDigest = (captainId: CaptainId, summary: string, expectedRevision = 0) =>
+        store.updateDocument({
+          captainId,
+          name: "DIGEST.md",
+          expectedRevision,
+          content: `# Digest\n\n## New\n\n- ${summary}\n- Details\n\n## History\n- Old history`,
+        });
+      yield* writeDigest(duets[0]!.id, "Shipped the API");
+      const readContext = yield* makeReadCaptainTurnContext;
+      const thread = {
+        id: chorus.primaryThreadId,
+        lineage: { parentThreadId: null, relationshipToParent: null },
+      };
+      const delivery = { providerThreadId: "chorus-session", usedTokens: 100 };
+      const read = () => readContext(thread, delivery);
+      const roster = (text: string) =>
+        text.split("\n\n").find((block) => block.startsWith("Duets on this machine:")) ?? "";
+      const first = yield* read();
+      const initialRoster = roster(first.text);
+      assert.include(initialRoster, "duet-00 (Release). Scope: Workspace. Digest: Shipped the API");
+      assert.include(initialRoster, "Linked machines: Build Mac. Use `duet_list`");
+      assert.include(initialRoster, "2 more active Duets");
+      assert.lengthOf(initialRoster.match(/^- duet-/gm) ?? [], 12);
+      assert.notInclude(initialRoster, "Archived Duet");
+      assert.notInclude(initialRoster, "Chorus");
+      assert.notInclude(initialRoster, "Old history");
+      assert.notInclude(first.text, "Scoped local projects:");
+
+      assert.equal(roster((yield* read()).text), initialRoster);
+      yield* first.delivered;
+      assert.equal(roster((yield* read()).text), "");
+
+      for (const [index, duet] of duets.entries()) {
+        yield* writeDigest(duet.id, `New summary ${index} ${"x".repeat(200)}`, index === 0 ? 1 : 0);
+      }
+      const updatedRoster = roster((yield* read()).text);
+      assert.include(updatedRoster, "New summary 0");
+      assert.include(updatedRoster, "Linked machines: Build Mac. Use `duet_list`");
+      assert.isBelow(updatedRoster.match(/^- duet-/gm)?.length ?? 12, 12);
+      assert.isAtMost(updatedRoster.length, 2_000);
+    }).pipe(
+      Effect.provide(
+        Layer.merge(
+          layer,
+          Layer.mock(PeerLinks.PeerLinks)({
+            names: () =>
+              Effect.succeed([
+                { environmentId: EnvironmentId.make("build-mac"), label: "Build Mac" },
+              ]),
+            list: Effect.die("The briefing must not probe linked machines."),
+          }),
+        ),
+      ),
+    );
   }),
 );
 

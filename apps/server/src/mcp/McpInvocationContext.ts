@@ -162,6 +162,7 @@ export interface McpInvocationScope {
   /** True while Labs → Workflows is on here; `/mcp` reads it per request. Unset is off. */
   readonly workflows?: boolean;
   readonly captain?: boolean;
+  readonly chorus?: boolean;
   /**
    * The origin this `/mcp` request reached, e.g. a T3 Connect tunnel. Hosted clients cannot
    * see the URL they were configured with, so links they must fetch carry it. Unset in-process.
@@ -193,6 +194,12 @@ export class McpInvocationContext extends Context.Service<
   McpInvocationScope
 >()("t3/mcp/McpInvocationContext") {}
 
+/** Discovery only. The handler still authorizes explicit calls to a hidden tool. */
+export class ListedWhen extends Context.Service<
+  ListedWhen,
+  (scope: McpInvocationScope | undefined) => boolean
+>()("t3/mcp/McpInvocationContext/ListedWhen") {}
+
 /**
  * `McpSchema.EnabledWhen` for tools a delegated child must not see or call.
  * EnabledWhen only receives the MCP client profile, so read the T3 caller from the request fiber.
@@ -216,8 +223,12 @@ export const hiddenFromOutsideClients = (): boolean => {
 
 export const captainOnly = (): boolean => {
   const fiber = Fiber.getCurrent();
-  return Boolean(fiber && Context.getOrUndefined(fiber.context, McpInvocationContext)?.captain);
+  const scope = fiber && Context.getOrUndefined(fiber.context, McpInvocationContext);
+  return Boolean(scope?.captain);
 };
+
+export const chorusOnly = (scope: McpInvocationScope | undefined): boolean =>
+  scope?.thread !== undefined && scope.thread.subagent !== true && scope.chorus === true;
 
 /** `hiddenFromOutsideClients`, and hidden from a thread whose provider cannot hold for background work. */
 export const hiddenWithoutBackgroundWait = (): boolean => {

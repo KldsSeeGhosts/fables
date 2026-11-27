@@ -158,6 +158,35 @@ const make = Effect.gen(function* () {
     return row === undefined ? undefined : yield* decodeCaptain(row);
   }, Effect.catch(captainUnavailable));
 
+  const privateChorusConversationIds = Effect.fn("CaptainStore.privateChorusConversationIds")(
+    function* (callerId: ThreadId | undefined) {
+      const rows = yield* sql<{ readonly id: ThreadId }>`
+        WITH private_choruses AS (
+          SELECT primary_thread_id, earlier_thread_ids FROM captains
+          WHERE kind = 'chorus' AND (archived_at IS NOT NULL OR primary_thread_id <> ${callerId ?? ""})
+        )
+        SELECT primary_thread_id AS id FROM private_choruses
+        UNION ALL
+        SELECT earlier.value AS id FROM private_choruses, json_each(earlier_thread_ids) AS earlier
+      `;
+      return new Set(rows.map(({ id }) => id));
+    },
+    Effect.catchTags({ SqlError: captainUnavailable }),
+  );
+
+  const activeDuetRoster = Effect.fn("CaptainStore.activeDuetRoster")(
+    function* (limit: number) {
+      const rows = yield* sql<{ readonly total: number }>`
+        SELECT active.*, count(*) OVER () AS total
+        FROM (${profiles} WHERE kind = 'duet' AND archived_at IS NULL) AS active
+        ORDER BY createdAt, id LIMIT ${limit}
+      `;
+      const duets = yield* Effect.forEach(rows, (row) => decodeCaptain(row));
+      return { duets, total: rows[0]?.total ?? 0 };
+    },
+    Effect.catchTags({ SqlError: captainUnavailable, SchemaError: captainUnavailable }),
+  );
+
   const requireOwner = Effect.fn("CaptainStore.requireOwner")(function* (
     id: CaptainId,
     threadId: ThreadId | undefined,
@@ -272,11 +301,12 @@ const make = Effect.gen(function* () {
   }, Effect.catch(captainUnavailable));
 
   const listMemories = Effect.fn("CaptainStore.listMemories")(function* (
-    captainId: CaptainId,
+    captainId: CaptainId | undefined,
     options: { readonly essential?: boolean; readonly query?: string; readonly limit: number },
   ) {
     const rows = yield* sql`
-      ${memories} WHERE captain_id = ${captainId}
+      ${memories} WHERE 1 = 1
+        ${captainId === undefined ? sql`` : sql`AND captain_id = ${captainId}`}
         AND (${options.essential ? 1 : 0} = 0 OR essential = 1)
         AND instr(lower(text), lower(${options.query ?? ""})) > 0
       ORDER BY essential DESC, updated_at DESC, id LIMIT ${options.limit}
@@ -442,6 +472,8 @@ const make = Effect.gen(function* () {
     find,
     requireCaptain,
     findActiveChorus,
+    privateChorusConversationIds,
+    activeDuetRoster,
     save,
     latestCompletedCompactionAt,
     saveRolloverResend,

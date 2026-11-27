@@ -143,7 +143,13 @@ import {
   runtimeModeRank,
   taskPrompt,
 } from "./delegatedTaskModes.ts";
-import { assertTargetWithinLimits, isLiveCallerShell, threadNotFound } from "./threadAccess.ts";
+import {
+  assertReadableConversation,
+  assertTargetWithinLimits,
+  isLiveCallerShell,
+  privateChorusConversationIds,
+  threadNotFound,
+} from "./threadAccess.ts";
 import { WITHHELD, withoutWebhookUrlToken } from "../scheduledTasks/webhookUrlToken.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as PeerForwarding from "../peer/PeerForwarding.ts";
@@ -1682,6 +1688,7 @@ const make = Effect.gen(function* () {
     runLimit: number,
   ) {
     const { parent } = yield* loadCaller(scope, []);
+    yield* assertReadableConversation(scope, threadId);
     const shell = yield* threadManagement
       .getThreadShell(threadId)
       .pipe(Effect.mapError(threadManagementFailure));
@@ -3678,7 +3685,9 @@ const make = Effect.gen(function* () {
               ),
             )
           : null;
+      const privateConversations = yield* privateChorusConversationIds(scope);
       const candidates = projectThreads
+        .filter((thread) => privateConversations?.has(thread.id) !== true)
         .filter((thread) => mayBeLiveIds === null || mayBeLiveIds.has(thread.id))
         .filter(
           (thread) =>
@@ -3913,6 +3922,7 @@ const make = Effect.gen(function* () {
       } satisfies OrchestratorMcpThreadSendResult;
     }),
     waitForThread: Effect.fn("OrchestratorMcpService.waitForThread")(function* (scope, input) {
+      yield* assertReadableConversation(scope, input.threadId);
       const { parent, target } = yield* loadScopedThread(scope, input.threadId, []);
       const result = yield* threadManagement
         .waitForThread({

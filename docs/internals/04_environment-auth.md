@@ -59,6 +59,9 @@ model.
   picks its own modes, so only a caller at the broadest mode a thread may run in here (full access,
   or an administrator's ceiling below it) can start or change runs, change what workflows store, or
   read webhook paths. Narrower callers can still read runs.
+- **Chorus MCP access follows the active primary thread.** A Solo, an outside MCP client,
+  or an earlier Chorus conversation cannot use the cross-Duet read tools. Chorus conversations
+  are private to their own active primary thread in MCP reads, listings, and search.
 - **A project's worktree layout commands run only as a person approved them.** The commands come
   from the project folder's `t3.json` and run as the server's OS user, so each runs only after a
   client session holding `terminal:operate` approved its exact text for that project.

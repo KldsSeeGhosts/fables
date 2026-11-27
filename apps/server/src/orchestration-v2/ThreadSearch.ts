@@ -379,7 +379,10 @@ export class ThreadSearch extends Context.Service<
      * palette ranks them, then message matches for the remaining threads.
      */
     readonly searchThreads: (
-      input: OrchestrationSearchThreadsInput & { readonly projectId?: ProjectId | undefined },
+      input: OrchestrationSearchThreadsInput & {
+        readonly projectId?: ProjectId | undefined;
+        readonly excludedThreadIds?: ReadonlySet<ThreadId> | undefined;
+      },
     ) => Effect.Effect<{ readonly matches: ReadonlyArray<ThreadSearchHit> }, ThreadSearchError>;
     /**
      * The settled threads before `before` that clients omitting older settled threads should
@@ -643,7 +646,9 @@ export const make = Effect.gen(function* () {
     const now = DateTime.toEpochMillis(yield* DateTime.now);
     // Agents call this rarely, and a project has hundreds of threads, not
     // millions, so ranking every active thread in memory stays cheap.
-    const candidates = yield* read(titleCandidates({ projectId: input.projectId ?? null }));
+    const candidates = (yield* read(
+      titleCandidates({ projectId: input.projectId ?? null }),
+    )).filter(({ thread }) => input.excludedThreadIds?.has(thread.id) !== true);
     const subjectById = new Map(
       candidates.map((row): [ThreadId, ThreadSearchSubject] => [
         row.thread.id,
@@ -675,7 +680,8 @@ export const make = Effect.gen(function* () {
         title: item.thread.title,
         source: "title",
       }));
-    const shown = new Set(titleHits.map((hit) => hit.threadId));
+    const shown = new Set(input.excludedThreadIds);
+    for (const hit of titleHits) shown.add(hit.threadId);
     const { matches } = yield* searchMessages({
       query: input.query,
       limit: 50,

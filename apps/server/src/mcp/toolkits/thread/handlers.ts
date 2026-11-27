@@ -16,6 +16,7 @@ import * as McpToolAccess from "../../McpToolAccess.ts";
 import {
   dispatchFailure,
   newCommandId,
+  privateChorusConversationIds,
   readCaller,
   readThread,
   unavailable,
@@ -149,8 +150,13 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
       const { caller } = yield* readCaller();
       const scope = yield* McpInvocationContext.McpInvocationContext;
       const threadSearch = yield* ThreadSearch.ThreadSearch;
+      const excludedThreadIds = yield* privateChorusConversationIds(scope);
       const { matches } = yield* threadSearch
-        .searchThreads({ ...input, projectId: input.projectId ?? caller?.projectId })
+        .searchThreads({
+          ...input,
+          projectId: input.projectId ?? caller?.projectId,
+          excludedThreadIds,
+        })
         .pipe(Effect.mapError(unavailable));
       return {
         currentThreadId: scope.thread?.threadId ?? null,

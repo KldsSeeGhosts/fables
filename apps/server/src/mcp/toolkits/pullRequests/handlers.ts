@@ -1,6 +1,8 @@
 import {
   CommandId,
+  isCaptainThreadId,
   NonNegativeInt,
+  OrchestratorMcpFailure,
   type ProviderApprovalPushHooks,
   type PullRequestActivity,
   PullRequestListCursors,
@@ -24,6 +26,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import * as GitManager from "../../../git/GitManager.ts";
+import * as CaptainStore from "../../../captains/CaptainStore.ts";
 import * as Orchestrator from "../../../orchestration-v2/Orchestrator.ts";
 import * as ProjectService from "../../../project/ProjectService.ts";
 import * as PullRequestWatchService from "../../../pullRequest/PullRequestWatchService.ts";
@@ -114,6 +117,13 @@ const listCursors = {
       Effect.mapError(() => new PullRequestCursorInvalidError({})),
     ),
 };
+
+const chorusWatchDenied = () =>
+  new OrchestratorMcpFailure({
+    code: "capability_denied",
+    message:
+      "A Chorus cannot watch pull requests. Report the PR to the user; a Duet or the user can watch it.",
+  });
 
 /** Keeps one conversation page near the size of a capped CI log. */
 const CONVERSATION_PAGE_CHARS = 32_000;
@@ -338,6 +348,7 @@ const pushHooksQuestion = (
 };
 
 const make = Effect.gen(function* () {
+  const captainStore = yield* Effect.serviceOption(CaptainStore.CaptainStore);
   const engine = yield* Orchestrator.OrchestratorV2;
   const reviewGuides = yield* PullRequestReviewGuideService.PullRequestReviewGuideService;
   const watches = yield* PullRequestWatchService.PullRequestWatchService;
@@ -407,6 +418,16 @@ const make = Effect.gen(function* () {
     const scope = yield* McpInvocationContext.requireMcpCapability("pull-requests");
     const threadId = input.threadId ?? scope.thread?.threadId;
     if (threadId === undefined) return yield* new PullRequestThreadRequiredError();
+    if (watching && isCaptainThreadId(threadId) && Option.isSome(captainStore)) {
+      const target = yield* captainStore.value
+        .findByConversation(threadId)
+        .pipe(
+          Effect.mapError(
+            (cause) => new PullRequestWatchService.PullRequestWatchFailedError({ cause }),
+          ),
+        );
+      if (target?.kind === "chorus") return yield* chorusWatchDenied();
+    }
     return yield* watches
       .setWatching({ threadId, target: input, watching, until: input.until })
       .pipe(
@@ -965,7 +986,13 @@ const make = Effect.gen(function* () {
         Effect.map((thread) => listThreadPullRequests(thread, input.cursor, input.states)),
       ),
     ),
-    watch_pull_request: writesThread((input) => setWatching(input, true)),
+    watch_pull_request: McpToolAccess.writesThreads(
+      (input: PullRequestTargetInput & { readonly until?: PullRequestWatchUntil | undefined }) => [
+        input.threadId,
+      ],
+      (input) => setWatching(input, true),
+      (scope) => (McpInvocationContext.chorusOnly(scope) ? chorusWatchDenied() : Effect.void),
+    ),
     unwatch_pull_request: writesThread((input) => setWatching(input, false)),
     write_pull_request_guides: McpToolAccess.writesWithCapability((input) =>
       Effect.gen(function* () {

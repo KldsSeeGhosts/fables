@@ -9,6 +9,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as SqlClient from "effect/sql/SqlClient";
 
+import * as PeerLinks from "../peer/PeerLinks.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import {
   makeCaptainBriefingLedger,
@@ -16,6 +17,7 @@ import {
 } from "./captainBriefingLedger.ts";
 import * as CaptainHonchoMemory from "./CaptainHonchoMemory.ts";
 import * as CaptainStore from "./CaptainStore.ts";
+import { captainDigestSummary } from "./captainDigest.ts";
 import {
   CAPTAIN_HANDOFF_MAX_LENGTH,
   formatCaptainCompactionOpenLoops,
@@ -49,12 +51,64 @@ const coordinatorBriefing = (captain: Captain) => `How you work:
 - At the end of a substantial turn, keep NOTES.md current (plan, open loops, next step) with \`captain_document_write\`.
 - After reacting to Solo results, rewrite the \`## New\` section of DIGEST.md with one line per result that needs the user.`;
 
+const chorusBriefing = (captain: Captain) => `How you work:
+- You are the Chorus, the fleet-level Duet. Answer cross-project and cross-Duet questions yourself from \`duet_list\`, \`duet_read\`, \`duet_memory_search\`, \`t3_thread_list\` and \`t3_thread_read\`.
+- When \`duet_send\` is available, use it to route requested project work to a Duet that covers the project. Otherwise name the Duet to the user and leave the work there. Reading across Duets never requires sending a message.
+- Start a Solo only for a one-off in a project no Duet covers.
+- Relay each result to the user as one line plus the thread link. Do not paste Duet or Solo output.
+- While work runs, end your turn. Do not poll.
+- Keep no project plans or implementation state in NOTES.md. NOTES.md is only for what the user asked of Chorus itself.
+- ${crewWaitRule[captain.reportPolicy]}`;
+
+const CHORUS_ROSTER_DUET_LIMIT = 12;
+const CHORUS_ROSTER_LENGTH = 2_000;
+const CHORUS_ROSTER_LINK_LABEL_LENGTH = 500;
+
+const formatChorusRoster = (input: {
+  readonly duets: ReadonlyArray<{
+    readonly name: string;
+    readonly role: string;
+    readonly scopeTitles: ReadonlyArray<string>;
+    readonly digestSummary: string;
+  }>;
+  readonly totalDuets: number;
+  readonly linkedMachineLabels: ReadonlyArray<string>;
+}) => {
+  const oneLine = (value: string, limit: number) =>
+    prefix(value.replace(/\s+/gu, " ").trim(), limit);
+  const linked =
+    input.linkedMachineLabels.length === 0
+      ? "Linked machines: none linked."
+      : `Linked machines: ${prefix(input.linkedMachineLabels.map((label) => oneLine(label, 80)).join(", "), CHORUS_ROSTER_LINK_LABEL_LENGTH)}. Use \`duet_list\` for their Duets when it supports linked machines.`;
+  let local = "Duets on this machine:";
+  if (input.duets.length === 0) local += "\n- No active Duets on this machine.";
+  const more = (count: number) =>
+    count === 0 ? "" : `\n- ${count} more active Duets. Use \`duet_list\` for the full roster.`;
+  let shown = 0;
+  for (const duet of input.duets) {
+    const scope =
+      duet.scopeTitles.length === 0
+        ? "All local projects"
+        : oneLine(duet.scopeTitles.join(", "), 160);
+    const line = `\n- ${oneLine(duet.name, 80)}${duet.role ? ` (${oneLine(duet.role, 80)})` : ""}. Scope: ${scope}. Digest: ${oneLine(duet.digestSummary, 140)}`;
+    if (
+      local.length + line.length + more(input.totalDuets - shown - 1).length + linked.length + 1 >
+      CHORUS_ROSTER_LENGTH
+    )
+      break;
+    local += line;
+    shown++;
+  }
+  return `${local}${more(input.totalDuets - shown)}\n${linked}`;
+};
+
 export const formatCaptainBriefing = (input: {
   readonly captain: Captain;
   readonly projects: ReadonlyArray<{ readonly id: string; readonly title: string }>;
   readonly memories: ReadonlyArray<CaptainMemory>;
   readonly agents: string;
   readonly notes: string;
+  readonly fleetRoster?: string;
 }) => {
   const { captain, projects, memories, agents, notes } = input;
   const handoffSplit = splitCaptainHandoffSection(notes);
@@ -62,17 +116,23 @@ export const formatCaptainBriefing = (input: {
   return [
     `Duet profile: ${captain.name}${captain.role ? ` (${captain.role})` : ""}`,
     captain.instructions && `Instructions:\n${prefix(captain.instructions, 4_000)}`,
-    captain.coordinatorOnly && coordinatorBriefing(captain),
-    projects.length > 0
-      ? `Scoped local projects:\n${projects.map(({ id, title }) => `- ${prefix(title, 100)} [${prefix(id, 100)}]`).join("\n")}${captain.scopedProjectIds.length > projects.length ? "\n- Additional projects are listed in captain_read." : ""}`
-      : "Workspace scope: No projects selected.",
+    captain.kind === "chorus"
+      ? chorusBriefing(captain)
+      : captain.coordinatorOnly && coordinatorBriefing(captain),
+    captain.kind === "chorus" && input.fleetRoster !== undefined
+      ? input.fleetRoster
+      : projects.length > 0
+        ? `Scoped local projects:\n${projects.map(({ id, title }) => `- ${prefix(title, 100)} [${prefix(id, 100)}]`).join("\n")}${captain.scopedProjectIds.length > projects.length ? "\n- Additional projects are listed in captain_read." : ""}`
+        : "Workspace scope: No projects selected.",
     memories.length > 0 &&
       `Essential memories:\n${memories.map(({ text }) => `- ${prefix(text, 500)}`).join("\n")}`,
     agents && `AGENTS.md:\n${prefix(agents, 2_000)}`,
     handoffSplit.handoff &&
       `Conversation handoff:\n${prefix(handoffSplit.handoff, CAPTAIN_HANDOFF_MAX_LENGTH)}`,
     notesBody && `NOTES.md:\n${prefix(notesBody, 6_000)}`,
-    "Use captain_document_read and captain_memory_search to look up more Duet context.",
+    captain.kind === "chorus"
+      ? "Use captain_document_read for your Duet's NOTES.md, AGENTS.md, CREW.md, and DIGEST.md stored in T3. Use captain_memory_search for your Duet's memory."
+      : "Use captain_document_read and captain_memory_search to look up more Duet context.",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -137,11 +197,14 @@ export const formatCaptainCrewRules = (captain: Captain, crew: string) =>
 const CAPTAIN_CONTEXT_PRESSURE_RATIO = 0.75;
 
 // Provider compaction owns the context window; NOTES.md is the durable plan that survives it.
-export const formatCaptainContextPressure = (usage: {
-  readonly usedTokens: number | null;
-  readonly maxTokens: number | null;
-  readonly autoCompactThreshold: number | null;
-}) => {
+export const formatCaptainContextPressure = (
+  usage: {
+    readonly usedTokens: number | null;
+    readonly maxTokens: number | null;
+    readonly autoCompactThreshold: number | null;
+  },
+  kind: Captain["kind"] = "duet",
+) => {
   const limit = usage.autoCompactThreshold ?? usage.maxTokens;
   if (usage.usedTokens === null || limit === null || limit <= 0) return "";
   const ratio = usage.usedTokens / limit;
@@ -149,11 +212,15 @@ export const formatCaptainContextPressure = (usage: {
   const percent = Math.min(100, Math.round(ratio * 100));
   const measure =
     usage.autoCompactThreshold === null ? "full" : "of the way to automatic compaction";
-  return `Context check: this conversation is ${percent}% ${measure}. Keep NOTES.md current now (plan, open loops, next step) with \`captain_document_write\`; it is the durable plan when the provider compacts this conversation.`;
+  const notes =
+    kind === "chorus"
+      ? "Save only what the user asked of Chorus itself in NOTES.md with `captain_document_write`."
+      : "Keep NOTES.md current now (plan, open loops, next step) with `captain_document_write`; it is the durable plan when the provider compacts this conversation.";
+  return `Context check: this conversation is ${percent}% ${measure}. ${notes}`;
 };
 
 const unchangedBriefing = (captain: Captain) =>
-  `Duet ${captain.name}: your profile, instructions, scope, essential memories, AGENTS.md, NOTES.md and how you work are unchanged since they were last given in this conversation. Use captain_read, captain_document_read and captain_memory_search if you need them again.`;
+  `Duet ${captain.name}: your profile, instructions, ${captain.kind === "chorus" ? "Duet roster" : "scope"}, essential memories, AGENTS.md, NOTES.md and how you work are unchanged since they were last given in this conversation. Use captain_read, captain_document_read and captain_memory_search if you need them again.`;
 
 const unchangedCrewRules = (captain: Captain) =>
   `Duet ${captain.name}'s rules for Solos are unchanged since they were last given in this conversation.`;
@@ -185,10 +252,24 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
   const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
   const sql = yield* Effect.serviceOption(SqlClient.SqlClient);
   const projects = yield* ProjectService.ProjectService;
+  const peerLinks = yield* Effect.serviceOption(PeerLinks.PeerLinks);
   const briefings = makeCaptainBriefingLedger();
   const crewBriefings = makeCaptainBriefingLedger();
   const longTermMemoryBriefings = makeCaptainBriefingLedger();
   const honcho = yield* Effect.serviceOption(CaptainHonchoMemory.CaptainHonchoMemory);
+
+  const projectEntries = Effect.fnUntraced(function* (projectIds: Captain["scopedProjectIds"]) {
+    return yield* Effect.forEach(projectIds.slice(0, 12), (id) =>
+      projects.getById(id).pipe(
+        Effect.map(
+          Option.match({
+            onNone: () => ({ id, title: "Unavailable project" }),
+            onSome: (project) => ({ id, title: project.title }),
+          }),
+        ),
+      ),
+    );
+  });
 
   // A delegated child gets the Captain's crew rules only, never its private profile or memories.
   const readCrewContext = Effect.fn("CaptainService.crewContext")(function* (
@@ -225,16 +306,7 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
       const agents = yield* document(captain, "AGENTS.md");
       const notes = yield* document(captain, "NOTES.md");
       const memories = yield* listMemories(captain.id, { essential: true, limit: 8 });
-      const scopedProjects = yield* Effect.forEach(captain.scopedProjectIds.slice(0, 12), (id) =>
-        projects.getById(id).pipe(
-          Effect.map(
-            Option.match({
-              onNone: () => ({ id, title: "Unavailable project" }),
-              onSome: (project) => ({ id, title: project.title }),
-            }),
-          ),
-        ),
-      );
+      const scopedProjects = yield* projectEntries(captain.scopedProjectIds);
       // Earlier conversations can't be woken, so their late reports surface here under react too.
       const reportThreadIds =
         captain.reportPolicy === "context"
@@ -269,12 +341,44 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
           ORDER BY completed_at DESC, subagent_id DESC LIMIT 6
         `
           : [];
+      const fleetRoster =
+        captain.kind === "chorus"
+          ? yield* Effect.gen(function* () {
+              const { duets: shown, total } =
+                yield* store.value.activeDuetRoster(CHORUS_ROSTER_DUET_LIMIT);
+              const duets = yield* Effect.forEach(
+                shown,
+                (entry) =>
+                  Effect.gen(function* () {
+                    const digest = yield* store.value.document(entry, "DIGEST.md");
+                    const scope = yield* projectEntries(entry.scopedProjectIds);
+                    return {
+                      name: entry.name,
+                      role: entry.role,
+                      scopeTitles: scope.map((project) => project.title),
+                      digestSummary: captainDigestSummary(digest.content),
+                    };
+                  }),
+                { concurrency: 4 },
+              );
+              return formatChorusRoster({
+                duets,
+                totalDuets: total,
+                linkedMachineLabels: Option.isSome(peerLinks)
+                  ? (yield* peerLinks.value.names(CHORUS_ROSTER_LINK_LABEL_LENGTH)).map(
+                      (machine) => machine.label,
+                    )
+                  : [],
+              });
+            })
+          : undefined;
       const briefing = formatCaptainBriefing({
         captain,
         projects: scopedProjects,
         memories,
         agents: agents.content,
         notes: notes.content,
+        ...(fleetRoster === undefined ? {} : { fleetRoster }),
       });
       const longTermMemory =
         Option.isSome(honcho) && honcho.value.enabled
@@ -306,11 +410,14 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
           formatCaptainReports(reports, threadId),
           delivery === undefined
             ? ""
-            : formatCaptainContextPressure({
-                usedTokens: delivery.usedTokens,
-                maxTokens: delivery.maxTokens ?? null,
-                autoCompactThreshold: delivery.autoCompactThreshold ?? null,
-              }),
+            : formatCaptainContextPressure(
+                {
+                  usedTokens: delivery.usedTokens,
+                  maxTokens: delivery.maxTokens ?? null,
+                  autoCompactThreshold: delivery.autoCompactThreshold ?? null,
+                },
+                captain.kind,
+              ),
         ]
           .filter((part) => part !== "")
           .join("\n\n"),

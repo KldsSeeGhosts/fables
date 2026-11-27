@@ -27,10 +27,19 @@ Cases are JSON lines in `cases/`, one file per area. The case schema in `run.ts`
 - `kind`: `bad` reproduces a mistake, `guard` protects correct behavior, `control` is ordinary work.
 - `experience`: the real mistake, in a sentence. `source`: where it happened.
 - `setup`: the fake thread, its `world` (repo, branch, files, PRs, pages), `priorTurns`, and `mocks` for tool results. With `world.backgroundTasks`, `t3_background_wait` answers from T3's own handler and ThreadManagementService, so its result and errors are the checkout's; a prior wait with `"result": "default"` gets that result too. `captainBriefing: true` inlines the coordinator Captain briefing generated from this checkout ahead of the prompt.
+- Set `setup.captainKind` to `duet` or `chorus` to load that role's tool list and briefing. The remaining cases keep their standard tool lists.
 - `setup.priorTurns[].toolCalls[].resultFile`: load a repository-relative file as the tool result instead of copying its contents into the case. An empty `prompt` resumes a top-level thread after its last prior tool result without adding a user message. Side-chat and subagent setups require a nonempty prompt.
 - `expect`: the checks, such as `calls`, `callsMustNot`, `maxCalls`, `order`, `shellMust`, `textMust`, `finalTextMust` (the last text, once the turn ended), and `linked`. A call's `args` match partially: `~text` is a case-insensitive substring, `re:` a case-sensitive regex, `"<=N"` / `">=N"` bound a number, `null` matches a missing key, and keys may be dotted paths. For `calls` and `callsMustNot`, `argsAnyOf` accepts any one of its partial argument objects, in addition to `args`. Only `calls` supports `success: true`, which requires a recorded successful result. `distinctCalls` supports only `tool` and `args`. Device cases also use `device` to check every child brief, forbid raw UI commands, bound failed device actions per user turn, and require artifact paths in completed final answers. Secrets cases use `secret` (see [Secrets cases](#secrets-cases)).
 
 Check that the case builds with `--dry-run --case <id>`. Then run it on the text before your fix, where it must fail, and on the text after, where it must pass.
+
+## Chorus read cases
+
+`cases/chorus-reads.ndjson` uses synthetic Duet records to test [Fables issue #8](https://github.com/KldsSeeGhosts/fables/issues/8). The Chorus must look up local scopes and digests, read the right Duet's document, and attribute recalled facts to their owners. Sending a message, delegating work, or writing Duet state fails these cases. A normal Duet reading its own notes is the control.
+
+```sh
+pnpm mcp-tool-use --cases mcp-tool-use/cases/chorus-reads.ndjson --model opencode-go/deepseek-v4.1-flash --shell-model gpt-6.1-terra --samples 3 --out runs/chorus-reads
+```
 
 ## Device manager cases
 

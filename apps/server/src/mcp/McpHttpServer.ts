@@ -6,6 +6,7 @@ import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -390,16 +391,14 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
         ? undefined
         : yield* Cache.get(forgeOfThread, limited.thread.threadId);
     const threadId = limited.thread?.threadId;
-    const captain =
+    const captainProfile =
       threadId !== undefined && isCaptainThreadId(threadId) && Option.isSome(captainStore)
-        ? yield* captainStore.value.byThread(threadId).pipe(
-            Effect.map((profile) => profile !== undefined),
-            Effect.orElseSucceed(() => false),
-          )
-        : false;
+        ? yield* captainStore.value.byThread(threadId).pipe(Effect.orElseSucceed(() => undefined))
+        : undefined;
     return {
       ...limited,
-      captain,
+      captain: captainProfile !== undefined,
+      chorus: captainProfile?.kind === "chorus",
       linkedEnvironments,
       agentFeedback,
       workflows,
@@ -1402,6 +1401,29 @@ const provideRegistrationServices = <Services>() =>
     ),
   );
 
+const layerCallerToolListing = <Tools extends Record<string, Tool.Any>>(
+  toolkit: Toolkit.Toolkit<Tools>,
+) => {
+  if (
+    !Object.values(toolkit.tools).some(
+      (tool) =>
+        Context.getOrUndefined(tool.annotations, McpInvocationContext.ListedWhen) !== undefined,
+    )
+  ) {
+    return Layer.empty;
+  }
+  return McpServer.visibility(({ method, target }) => {
+    if (method !== "tools/list") return Effect.succeed(true);
+    const tool = toolkit.tools[target];
+    const predicate =
+      tool && Context.getOrUndefined(tool.annotations, McpInvocationContext.ListedWhen);
+    if (predicate === undefined) return Effect.succeed(true);
+    return Effect.serviceOption(McpInvocationContext.McpInvocationContext).pipe(
+      Effect.map((scope) => predicate(Option.getOrUndefined(scope))),
+    );
+  }).layer;
+};
+
 /**
  * Tools declare their handler services as request-level dependencies. Those
  * built with the server are provided here; `McpInvocationContext` is left to
@@ -1422,6 +1444,7 @@ export const toolkitRegistration = <Tools extends Record<string, Tool.Any>, EX, 
       ),
     ),
   ).pipe(
+    Layer.provide(layerCallerToolListing(toolkit)),
     Layer.provide(
       provideRegistrationServices<
         Exclude<Tool.Requirements<Tools[keyof Tools]>, McpInvocationContext.McpInvocationContext>
@@ -1583,16 +1606,28 @@ const layerToolExposure = Layer.effect(
   Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
     return McpToolExposure.make(
-      () =>
-        server.tools
-          // Search finds only what this caller could list; these predicates read the request's scope.
-          .filter(({ annotations }) => {
-            const enabledWhen = Context.getOrUndefined(annotations, McpSchema.EnabledWhen);
-            return (
-              enabledWhen === undefined || enabledWhen({ protocolVersion: "", capabilities: {} })
-            );
-          })
-          .map(({ tool }) => ({ name: tool.name, description: tool.description ?? "" })),
+      () => {
+        const fiber = Fiber.getCurrent();
+        const scope =
+          fiber && Context.getOrUndefined(fiber.context, McpInvocationContext.McpInvocationContext);
+        return (
+          server.tools
+            // Search finds only what this caller could list; these predicates read the request's scope.
+            .filter(({ annotations }) => {
+              const enabledWhen = Context.getOrUndefined(annotations, McpSchema.EnabledWhen);
+              const listedWhen = Context.getOrUndefined(
+                annotations,
+                McpInvocationContext.ListedWhen,
+              );
+              return (
+                (enabledWhen === undefined ||
+                  enabledWhen({ protocolVersion: "", capabilities: {} })) &&
+                (listedWhen === undefined || listedWhen(scope))
+              );
+            })
+            .map(({ tool }) => ({ name: tool.name, description: tool.description ?? "" }))
+        );
+      },
       () => server.notifications["notifications/tools/list_changed"]({}),
     );
   }),

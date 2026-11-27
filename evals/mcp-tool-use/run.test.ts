@@ -733,6 +733,48 @@ it("rebuilds the template from this checkout and sends a child T3's task prompt"
   assert.notEqual(prompt?.text, childCase.prompt);
 });
 
+it("selects the eval's Duet and Chorus tools by caller role", () => {
+  const options = { model: "claude-sonnet-5-5", keepUserInstructions: false } as const;
+  const names = (base: ReturnType<typeof buildBase>) =>
+    base.t3.map(({ name }) => normalizeToolName(name));
+  const regular = names(buildBase(template, options));
+  const duet = names(buildBase(template, { ...options, captainKind: "duet" }));
+  const chorus = names(buildBase(template, { ...options, captainKind: "chorus" }));
+  const solo = names(buildBase(template, { ...options, captainKind: "chorus", subagent: true }));
+  assert.notInclude(regular, "captain_document_read");
+  assert.includeMembers(duet, ["captain_document_read", "watch_pull_request"]);
+  assert.notInclude(duet, "duet_list");
+  assert.includeMembers(chorus, [
+    "captain_document_read",
+    "duet_list",
+    "duet_read",
+    "duet_memory_search",
+  ]);
+  assert.notInclude(chorus, "watch_pull_request");
+  assert.notInclude(solo, "duet_list");
+});
+
+it("grades which Duet recorded each memory", () => {
+  const testCase = NodeFS.readFileSync(
+    new URL("./cases/chorus-reads.ndjson", import.meta.url),
+    "utf8",
+  )
+    .trim()
+    .split("\n")
+    .map((line) => decodeDeviceCase(line))
+    .find(({ id }) => id === "chorus-search-memories")!;
+  const passes = (finalText: string) =>
+    gradeSample(testCase.expect, {
+      calls: [{ step: 0, tool: "duet_memory_search", input: {}, failed: false, output: "" }],
+      text: finalText,
+      finalText,
+      stopReason: "end_turn",
+    }).every(({ pass }) => pass);
+  assert.isTrue(passes("Maria requires staging approval. Lee freezes releases on Fridays."));
+  assert.isTrue(passes("Staging approval came from Maria. The Friday freeze came from Lee."));
+  assert.isFalse(passes("Lee requires staging approval. Maria freezes releases on Fridays."));
+});
+
 it("lists link tools only while a case turns the beta on, and sends chips as T3 projects them", () => {
   const off = buildBase(template, { model: "claude-sonnet-5-5", keepUserInstructions: false });
   const on = buildBase(template, {
