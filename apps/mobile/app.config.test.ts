@@ -31,10 +31,10 @@ it.each(["prod", ""])("rejects APP_VARIANT=%j before selecting production IDs", 
 });
 
 it.each([
-  [undefined, "com.t3tools.t3code", "Fables"],
-  ["development", "com.t3tools.t3code.dev", "Fables Dev"],
-  ["preview", "com.t3tools.t3code.preview", "Fables Preview"],
-  ["production", "com.t3tools.t3code", "Fables"],
+  [undefined, "com.t3tools.t3code", "T3 Code"],
+  ["development", "com.t3tools.t3code.dev", "T3 Code Dev"],
+  ["preview", "com.t3tools.t3code.preview", "Fables"],
+  ["production", "com.t3tools.t3code", "T3 Code"],
 ])(
   "updates the native label and keeps the identifiers for APP_VARIANT=%j",
   async (value, identifier, name) => {
