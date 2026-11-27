@@ -26,5 +26,18 @@ it("pins the Chorus ahead of every Duet without changing their order", () => {
     captain: { ...row("chorus").captain, kind: "chorus" as const },
   };
 
-  expect(orderCaptainHomeRows([first, chorus, second])).toEqual([chorus, first, second]);
+  const archivedChorus = {
+    ...chorus,
+    captain: {
+      ...chorus.captain,
+      id: CaptainId.make("archived-chorus"),
+      archivedAt: "2026-11-24T00:00:00.000Z",
+    },
+  };
+  expect(orderCaptainHomeRows([archivedChorus, first, chorus, second])).toEqual([
+    chorus,
+    first,
+    second,
+    archivedChorus,
+  ]);
 });

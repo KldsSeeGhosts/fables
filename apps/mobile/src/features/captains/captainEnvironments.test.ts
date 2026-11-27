@@ -87,6 +87,16 @@ describe("resolveCaptainEnvironments", () => {
     expect(environment?.captains.map(({ id }) => id)).toEqual(["comfy"]);
   });
 
+  it("keeps archived Choruses available for restore without showing archived Duets", () => {
+    const archivedAt = "2026-11-02T00:00:00.000Z";
+    const chorus = { ...captain("chorus", archivedAt), kind: "chorus" as const };
+    const [environment] = resolve({
+      readable: true,
+      live: AsyncResult.success(snapshot([captain("old", archivedAt), chorus])),
+    });
+    expect(environment?.captains).toEqual([chorus]);
+  });
+
   it("drops cached Captains when the host denies reading them or does not run Captains", () => {
     expect(resolve({ denied: true, cached: [captain("ye")] })).toEqual([]);
     expect(resolve({ capability: false, cached: [captain("ye")] })).toEqual([]);

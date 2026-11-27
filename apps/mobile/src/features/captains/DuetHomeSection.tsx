@@ -58,6 +58,8 @@ function Trail(props: { readonly trail: DuetRowTrail; readonly tokens: DuetToken
 export function DuetHomeSection(props: {
   readonly rows: ReadonlyArray<DuetHomeRow>;
   readonly waiting: number;
+  readonly chorusControls: ReactNode;
+  readonly fleetMachineCount: number;
   readonly showsEnvironment: boolean;
   readonly projects: ReadonlyArray<EnvironmentProject>;
   readonly selectedThreadKey: string | null;
@@ -66,10 +68,6 @@ export function DuetHomeSection(props: {
   const tokens = useDuetTokens();
   const navigation = useNavigation();
   const selectDetail = useSelectWorkspaceDetail();
-  const machineCount = new Set(props.rows.map((row) => row.environment.environmentId)).size;
-  const hasActiveChorus = props.rows.some(
-    (row) => row.captain.kind === "chorus" && row.captain.archivedAt === null,
-  );
   return (
     <View className="pb-2">
       <View className="h-11 flex-row items-center gap-1.5 pl-4 pr-1.5">
@@ -127,45 +125,24 @@ export function DuetHomeSection(props: {
           </View>
         </Pressable>
       </View>
-      {hasActiveChorus ? null : (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={gt("New Chorus")}
-          onPress={() => navigation.navigate("ChorusNew")}
-          className="mx-2 mb-1 min-h-[52px] flex-row items-center gap-3 rounded-[10px] pl-2 pr-2.5"
-          style={({ pressed }) => ({ backgroundColor: pressed ? tokens.row : undefined })}
-        >
-          <View
-            className="size-8 items-center justify-center rounded-full border border-dashed"
-            style={{ borderColor: tokens.hairline }}
-          >
-            <SymbolView name="plus" size={15} tintColor={tokens.icon} />
-          </View>
-          <View className="min-w-0 flex-1">
-            <Text className="font-t3-medium" style={{ fontSize: 15, color: tokens.foreground }}>
-              {gt("New Chorus")}
-            </Text>
-            <Text style={{ fontSize: 13, color: tokens.meta }} numberOfLines={1}>
-              {gt("One Duet for the whole fleet")}
-            </Text>
-          </View>
-        </Pressable>
-      )}
+      {props.chorusControls}
       {props.rows.map(({ environment, captain, activity }) => {
         const trail = duetRowTrail({ captain, activity });
         const scope = duetRowScope(environment.environmentId, captain, props.projects);
         const scopeText =
-          captain.kind === "chorus"
-            ? gt("All Duets across {count, plural, =1 {1 machine} other {{count} machines}}", {
-                count: machineCount,
-              })
-            : scope.kind === "project"
-              ? scope.title
-              : scope.kind === "projects"
-                ? gt("{count, plural, =1 {1 project} other {{count} projects}}", {
-                    count: scope.count,
-                  })
-                : gt("All projects");
+          captain.archivedAt !== null
+            ? gt("Archived")
+            : captain.kind === "chorus"
+              ? gt("All Duets across {count, plural, =1 {1 machine} other {{count} machines}}", {
+                  count: props.fleetMachineCount,
+                })
+              : scope.kind === "project"
+                ? scope.title
+                : scope.kind === "projects"
+                  ? gt("{count, plural, =1 {1 project} other {{count} projects}}", {
+                      count: scope.count,
+                    })
+                  : gt("All projects");
         const threadKey = scopedThreadKey(environment.environmentId, captain.primaryThreadId);
         const selected = threadKey === props.selectedThreadKey;
         return (
@@ -233,9 +210,9 @@ export function DuetHomeSection(props: {
                       {scope.badge}
                     </Text>
                   </View>
-                ) : (
+                ) : captain.kind !== "chorus" ? (
                   <SymbolView name="folder" size={13} tintColor={tokens.icon} />
-                )}
+                ) : null}
                 <Text
                   className="min-w-0 flex-1"
                   style={{ fontSize: 13, lineHeight: 18, color: tokens.meta }}

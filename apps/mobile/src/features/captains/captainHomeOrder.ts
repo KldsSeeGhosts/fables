@@ -14,7 +14,7 @@ export function orderCaptainHomeRows<
   const choruses = rows.filter((row) => row.captain.kind === "chorus");
   const duets = rows.filter((row) => row.captain.kind !== "chorus");
   return [
-    ...choruses,
+    ...choruses.filter(({ captain }) => captain.archivedAt === null),
     ...orderDuets(
       duets.map((row) => ({
         key: homeRowKey(row.environment.environmentId, row.captain),
@@ -23,5 +23,6 @@ export function orderCaptainHomeRows<
       })),
       [],
     ).map(({ row }) => row),
+    ...choruses.filter(({ captain }) => captain.archivedAt !== null),
   ];
 }

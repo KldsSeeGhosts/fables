@@ -27,7 +27,6 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { scheduledTaskDefaultModel } from "../settings/scheduledTaskDraft";
 import { useCaptainEnvironments } from "./useCaptainsDirectory";
 
-/** Creates the fleet-wide Chorus. Scope, report policy and coordinator-only stay fixed because the server forces them. */
 export function ChorusNewSheet() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -42,7 +41,11 @@ export function ChorusNewSheet() {
   const [environmentId, setEnvironmentId] = useState<EnvironmentId | null>(
     destinations[0]?.environmentId ?? null,
   );
-  const selectedEnvironmentId = environmentId ?? destinations[0]?.environmentId ?? null;
+  const selectedEnvironmentId =
+    destinations.find((destination) => destination.environmentId === environmentId)
+      ?.environmentId ??
+    destinations[0]?.environmentId ??
+    null;
   const config = useEnvironmentServerConfig(selectedEnvironmentId);
   const create = useAtomCommand(serverEnvironment.createCaptain, { reportFailure: false });
   const [name, setName] = useState("Chorus");
@@ -53,7 +56,7 @@ export function ChorusNewSheet() {
   const [error, setError] = useState<string | null>(null);
 
   const submit = async () => {
-    if (selectedEnvironmentId === null || pending || !name.trim()) return;
+    if (selectedEnvironmentId === null || active.length > 0 || pending || !name.trim()) return;
     const settings = config?.settings ?? DEFAULT_SERVER_SETTINGS;
     const modelSelection = scheduledTaskDefaultModel(config, null);
     if (modelSelection === null) {
@@ -119,9 +122,8 @@ export function ChorusNewSheet() {
           <View className="rounded-2xl border border-border-subtle p-3">
             <Text className="text-sm text-foreground-muted">
               <T>
-                Chorus always has no workspace scope, delegates project work, and uses the react
-                report policy. Linked machines that answer are checked before creation; offline or
-                older machines can make fleet results incomplete.
+                Fables checks reachable linked machines before creating a Chorus. Fleet results can
+                be incomplete while a machine is offline or running an older version.
               </T>
             </Text>
           </View>
@@ -146,13 +148,20 @@ export function ChorusNewSheet() {
           </View>
           <View className="gap-2">
             <Text className="font-t3-medium text-xs text-foreground-muted">{gt("Name")}</Text>
-            <AppTextInput value={name} onChangeText={setName} editable={!pending} maxLength={80} />
+            <AppTextInput
+              accessibilityLabel={gt("Name")}
+              value={name}
+              onChangeText={setName}
+              editable={!pending}
+              maxLength={80}
+            />
           </View>
           <View className="gap-2">
             <Text className="font-t3-medium text-xs text-foreground-muted">
               {gt("Role (optional)")}
             </Text>
             <AppTextInput
+              accessibilityLabel={gt("Role (optional)")}
               value={role}
               onChangeText={setRole}
               editable={!pending}
@@ -165,6 +174,7 @@ export function ChorusNewSheet() {
               {gt("Instructions")}
             </Text>
             <AppTextInput
+              accessibilityLabel={gt("Instructions")}
               value={instructions}
               onChangeText={setInstructions}
               editable={!pending}

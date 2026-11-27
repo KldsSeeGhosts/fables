@@ -82,7 +82,7 @@ export function resolveCaptainEnvironments(input: {
         status,
         snapshot,
         captains: (snapshot?.captains ?? cached ?? []).filter(
-          (captain) => captain.archivedAt === null,
+          (captain) => captain.archivedAt === null || captain.kind === "chorus",
         ),
       },
     ];

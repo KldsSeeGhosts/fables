@@ -40,10 +40,6 @@ function BriefSection(props: { readonly title: string; readonly children: ReactN
   );
 }
 
-/**
- * What a Captain knows, read only: its notes, what is new in its digest, and the memories it
- * always carries. Editing stays on the desktop app.
- */
 export function CaptainBriefSheet({ route }: StaticScreenProps<CaptainBriefParams>) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -79,7 +75,7 @@ export function CaptainBriefSheet({ route }: StaticScreenProps<CaptainBriefParam
   const canRestore = useAtomValue(serverEnvironment.unarchiveCaptain.permissionAtom(environmentId));
   const [archivePending, setArchivePending] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
-  const archived = captain?.archivedAt !== null;
+  const archived = captain !== undefined && captain.archivedAt !== null;
   const changeArchive = async () => {
     if (captain === undefined || archivePending || !(archived ? canRestore : canArchive)) return;
     setArchivePending(true);
@@ -101,7 +97,9 @@ export function CaptainBriefSheet({ route }: StaticScreenProps<CaptainBriefParam
       <View className="gap-2 border-t border-border-subtle px-4 py-4">
         <Text className="text-xs text-foreground-muted">
           {archived
-            ? gt("Restoring checks every reachable linked machine for another active Chorus.")
+            ? gt(
+                "This Chorus is archived. Fables checks reachable linked machines for an active Chorus before restoring it.",
+              )
             : gt("Archiving removes this Chorus from the fleet. You can restore it later.")}
         </Text>
         {archiveError !== null ? (
