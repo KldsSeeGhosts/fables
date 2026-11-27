@@ -8,7 +8,7 @@ import {
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/models";
 import type { Captain, EnvironmentId, FleetChorusState } from "@t3tools/contracts";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
-import { useNavigation } from "@react-navigation/native";
+import { StackActions, useNavigation } from "@react-navigation/native";
 import { useGT, useMessages } from "gt-react-native";
 import { Pressable, View } from "react-native";
 
@@ -130,30 +130,52 @@ export function CaptainsHomeSection(props: {
       "Chorus",
     );
   };
-  if (rows.length === 0) return null;
+  if (rows.length === 0 && environments.length === 0) return null;
+  const openOverview = () => navigation.dispatch(StackActions.push("CaptainsOverview"));
+  const overview = (
+    <Pressable
+      accessibilityRole="button"
+      onPress={openOverview}
+      className="mx-4 min-h-11 flex-row items-center gap-2 rounded-lg active:bg-subtle"
+    >
+      <SymbolView name="square.grid.2x2" size={14} tintColorClassName="accent-icon-muted" />
+      <Text className="font-t3-medium text-sm text-foreground">{gt("Duets overview")}</Text>
+      <SymbolView name="chevron.right" size={12} tintColorClassName="accent-icon-muted" />
+    </Pressable>
+  );
+  if (rows.length === 0) return overview;
   const inbox = captainInboxItems(
     environments,
     rows.flatMap(({ own }) => own),
   );
   if (isDuet) {
     return (
-      <DuetHomeSection
-        rows={rows}
-        waiting={duetInboxGroups(inbox).reduce((count, group) => count + group.items.length, 0)}
-        showsEnvironment={showsEnvironment}
-        projects={props.projects}
-        selectedThreadKey={props.selectedThreadKey}
-        onOpenFleet={openFleet}
-      />
+      <View>
+        {overview}
+        <DuetHomeSection
+          rows={rows}
+          waiting={duetInboxGroups(inbox).reduce((count, group) => count + group.items.length, 0)}
+          showsEnvironment={showsEnvironment}
+          projects={props.projects}
+          selectedThreadKey={props.selectedThreadKey}
+          onOpenFleet={openFleet}
+        />
+      </View>
     );
   }
   const waiting = inbox.length;
   return (
     <View className="gap-1 px-2 pb-3 pt-2">
       <View className="flex-row items-center gap-2 px-2 pb-1">
-        <Text className="min-w-0 flex-1 font-t3-medium text-xs text-foreground-muted">
-          {gt("Duets")}
-        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={gt("Duets overview")}
+          onPress={openOverview}
+          className="min-h-11 min-w-0 flex-1 flex-row items-center gap-1.5"
+        >
+          <Text className="font-t3-medium text-xs text-foreground-muted">{gt("Duets")}</Text>
+          <SymbolView name="chevron.right" size={10} tintColorClassName="accent-icon-muted" />
+        </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={
