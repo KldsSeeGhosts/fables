@@ -359,6 +359,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
   });
   // Recycle equality needs project/search data for titles and favicons; keep the minute clock on items to limit updates.
   const listExtraData = {
+    listVisible: props.visible,
     activeNewTask,
     selectedThreadKey: selectedThreadKey ?? "",
     projectByKey,

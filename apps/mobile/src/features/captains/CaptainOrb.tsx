@@ -16,7 +16,11 @@ export function CaptainOrb(props: {
   readonly size?: number;
   readonly working?: boolean;
   readonly attention?: number;
-  readonly motion?: { readonly visible: boolean; readonly glance: number };
+  readonly motion?: {
+    readonly visible: boolean;
+    readonly glance: number;
+    readonly completedRunId: string | undefined;
+  };
 }) {
   const size = props.size ?? 36;
   const swatch = DUET_PALETTE_SWATCH[captainPaletteOf(props.captain.avatar)];
@@ -45,7 +49,13 @@ export function CaptainOrb(props: {
         size={size * 0.625}
         {...(props.motion === undefined
           ? {}
-          : { state, visible: props.motion.visible, glance: props.motion.glance, attention: true })}
+          : {
+              state,
+              visible: props.motion.visible,
+              glance: props.motion.glance,
+              completedRunId: props.motion.completedRunId,
+              attention: true,
+            })}
       />
       {props.working ? (
         <View style={StyleSheet.absoluteFill} pointerEvents="none">

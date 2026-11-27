@@ -614,6 +614,7 @@ export function HomeScreen(props: HomeScreenProps) {
 
   // extraData changes invalidate every visible row; put the minute clock on items to limit updates.
   const v2ExtraData = {
+    listVisible: props.visible,
     activeNewTask,
     projectByKey,
     projectTitleByProjectKey: v2ProjectTitleByProjectKey,

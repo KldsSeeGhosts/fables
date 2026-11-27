@@ -1,4 +1,7 @@
-import { fleetChorusStateLabel } from "@t3tools/client-runtime/state/captains";
+import {
+  fleetChorusStateLabel,
+  type captainThreadActivity,
+} from "@t3tools/client-runtime/state/captains";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/models";
 import type { Captain, EnvironmentId, FleetChorusState } from "@t3tools/contracts";
 import { useNavigation } from "@react-navigation/native";
@@ -23,7 +26,7 @@ import { useDuetTokens } from "./useDuetTokens";
 export interface DuetHomeRow {
   readonly environment: { readonly environmentId: EnvironmentId; readonly label: string };
   readonly captain: Captain;
-  readonly activity: Parameters<typeof duetRowTrail>[0]["activity"];
+  readonly activity: ReturnType<typeof captainThreadActivity>;
   readonly fleetState?: FleetChorusState | undefined;
 }
 
@@ -172,6 +175,11 @@ export function DuetHomeSection(props: {
             sectionTop={sectionTop}
             visible={props.visible}
             captain={captain}
+            completedRunId={
+              activity.primary?.latestRun?.status === "completed"
+                ? activity.primary.latestRun.runId
+                : undefined
+            }
             selected={selected}
             disabled={disabled}
             trail={trail}
@@ -209,6 +217,7 @@ function DuetChannelRow(props: {
   readonly sectionTop: number;
   readonly visible: boolean;
   readonly captain: Captain;
+  readonly completedRunId: string | undefined;
   readonly selected: boolean;
   readonly disabled: boolean;
   readonly trail: DuetRowTrail;
@@ -257,6 +266,7 @@ function DuetChannelRow(props: {
         archived={captain.archivedAt !== null}
         visible={visible}
         glance={glance}
+        completedRunId={props.completedRunId}
       />
       <View className="min-w-0 flex-1">
         <View className="flex-row items-center gap-2">

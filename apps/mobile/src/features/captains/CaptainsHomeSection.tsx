@@ -236,6 +236,11 @@ export function CaptainsHomeSection(props: {
             sectionTop={sectionTop}
             visible={visible}
             captain={captain}
+            completedRunId={
+              activity.primary?.latestRun?.status === "completed"
+                ? activity.primary.latestRun.runId
+                : undefined
+            }
             working={activity.working}
             attention={activity.attention}
             detail={detail}
@@ -266,6 +271,7 @@ function StandardCaptainRow(props: {
   readonly sectionTop: number;
   readonly visible: boolean;
   readonly captain: Captain;
+  readonly completedRunId: string | undefined;
   readonly working: boolean;
   readonly attention: number;
   readonly detail: string | null;
@@ -305,6 +311,7 @@ function StandardCaptainRow(props: {
         motion={{
           visible: visibility.visible && !disabled && captain.archivedAt === null,
           glance,
+          completedRunId: props.completedRunId,
         }}
       />
       <View className="min-w-0 flex-1">

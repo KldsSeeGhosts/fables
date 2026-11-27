@@ -151,6 +151,7 @@ export function DuetCreature(props: {
   readonly animateOnMount?: boolean;
   readonly glance?: number;
   readonly attention?: boolean;
+  readonly completedRunId?: string | undefined;
   readonly archived?: boolean;
 }) {
   const state = props.state ?? "idle";
@@ -179,6 +180,7 @@ export function DuetCreature(props: {
         visible={visible}
         attention={props.attention ?? false}
         size={stage}
+        completedRunId={props.completedRunId}
       >
         {layers}
       </CreatureReaction>
@@ -232,24 +234,30 @@ function CreatureReaction(props: {
   readonly state: DuetCreatureState;
   readonly visible: boolean;
   readonly attention: boolean;
+  readonly completedRunId: string | undefined;
   readonly size: number;
   readonly children: ReactNode;
 }) {
-  const { state, visible, attention, size } = props;
-  const previous = useRef<DuetCreatureState | null>(null);
+  const { state, visible, attention, size, completedRunId } = props;
+  const previous = useRef<{ state: DuetCreatureState; completedRunId: string | undefined } | null>(
+    null,
+  );
   const reaction = useSharedValue<Reaction>("none");
   const progress = useSharedValue(1);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reflects state changes in one-shot UI-thread animations
   useEffect(() => {
     const before = previous.current;
-    if (visible) previous.current = state;
-    else if (before !== null) previous.current = state;
+    if (visible || before !== null) previous.current = { state, completedRunId };
     const next =
-      visible && before !== state && state === "waiting"
+      visible && before?.state !== state && state === "waiting"
         ? attention
           ? "attention"
           : "nudge"
-        : visible && before === "working" && state === "idle"
+        : visible &&
+            before?.state === "working" &&
+            state === "idle" &&
+            completedRunId !== undefined &&
+            completedRunId !== before.completedRunId
           ? "celebrate"
           : "none";
     if (next === "none") return;
@@ -268,7 +276,7 @@ function CreatureReaction(props: {
       cancelAnimation(progress);
       progress.set(1);
     };
-  }, [attention, progress, reaction, state, visible]);
+  }, [attention, completedRunId, progress, reaction, state, visible]);
   const style = useAnimatedStyle(() => {
     const phase = progress.get();
     let lift = 0;
