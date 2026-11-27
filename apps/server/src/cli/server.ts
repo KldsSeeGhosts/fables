@@ -1,3 +1,4 @@
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -6,6 +7,7 @@ import * as Schema from "effect/Schema";
 import { Command, GlobalFlag } from "effect/cli";
 import * as CliError from "effect/cli/CliError";
 
+import packageJson from "../../package.json" with { type: "json" };
 import { awaitServiceLauncherStop } from "../cloud/serviceLauncherClient.ts";
 import * as ServerConfig from "../config.ts";
 import { stopOnLauncherLoss } from "../launcherWatch.ts";
@@ -13,6 +15,7 @@ import * as DatabaseMaintenance from "../persistence/DatabaseMaintenance.ts";
 import * as ProcessRunner from "../processRunner.ts";
 import * as AutomaticPort from "./automaticPort.ts";
 import { type CliServerFlags, resolveServerConfig, sharedServerCommandFlags } from "./config.ts";
+import * as CliRuntime from "./runtime.ts";
 
 const encodeCommand = Schema.encodeEffect(Schema.fromJsonString(Schema.String));
 
@@ -45,7 +48,7 @@ const runServerCommand = Effect.fnUntraced(function* (
   return yield* stopOnLauncherLoss(run);
 });
 
-export const runDefaultServerCommand = Effect.fnUntraced(function* (flags: CliServerFlags) {
+const runDefaultServerCommand = Effect.fnUntraced(function* (flags: CliServerFlags) {
   if (Option.isSome(flags.cwd)) {
     const cwd = flags.cwd.value.trim();
     const fs = yield* FileSystem.FileSystem;
@@ -65,6 +68,21 @@ export const runDefaultServerCommand = Effect.fnUntraced(function* (flags: CliSe
   }
   return yield* runServerCommand(flags, { rejectRunningServer: true });
 });
+
+export const defaultServerCommand = Command.make("t3", { ...sharedServerCommandFlags }).pipe(
+  Command.withDescription(
+    "Run T3 Code in this terminal and open it in your browser. To use it from your other devices, run `t3 up`.",
+  ),
+  Command.withHandler(runDefaultServerCommand),
+);
+
+export function runDesktopBackend() {
+  Command.run(defaultServerCommand, { version: packageJson.version }).pipe(
+    Effect.scoped,
+    Effect.provide(CliRuntime.layer),
+    NodeRuntime.runMain,
+  );
+}
 
 export const startCommand = Command.make("start", { ...sharedServerCommandFlags }).pipe(
   Command.withDescription("Same as `t3`."),
