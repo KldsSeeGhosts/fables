@@ -13,6 +13,7 @@ export interface CaptainEnvironment {
   readonly status: CaptainEnvironmentStatus;
   readonly snapshot: CaptainSnapshot | null;
   readonly captains: ReadonlyArray<Captain>;
+  readonly archivedChoruses: ReadonlyArray<Captain>;
 }
 
 export interface CaptainEnvironmentCandidate {
@@ -75,14 +76,16 @@ export function resolveCaptainEnvironments(input: {
     const { status, snapshot } = supported
       ? environmentStatus(input.live.find((entry) => entry.environmentId === id)?.result)
       : { status: "loading" as const, snapshot: null };
+    const captains = snapshot?.captains ?? cached ?? [];
     return [
       {
         environmentId: id,
         label: candidate.label,
         status,
         snapshot,
-        captains: (snapshot?.captains ?? cached ?? []).filter(
-          (captain) => captain.archivedAt === null,
+        captains: captains.filter((captain) => captain.archivedAt === null),
+        archivedChoruses: captains.filter(
+          (captain) => captain.archivedAt !== null && captain.kind === "chorus",
         ),
       },
     ];

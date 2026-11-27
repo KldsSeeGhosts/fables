@@ -63,6 +63,20 @@ it("treats paragraphs as items and headings as labels", () => {
   ]);
 });
 
+it("keeps Chorus recap labels out of the collapsed item count", () => {
+  const markdown = "**Mac Studio**\n**Release**\n- one\n- two\n**Build box**\n- Offline";
+  const entries = captainBriefItems(markdown, { boldLabels: true });
+  expect(entries).toEqual([
+    { kind: "label", text: "Mac Studio" },
+    { kind: "label", text: "Release" },
+    item("one"),
+    item("two"),
+    { kind: "label", text: "Build box" },
+    item("Offline"),
+  ]);
+  expect(captainBriefVisible(entries, false).visible).toEqual(entries);
+});
+
 it("splits ordered markers", () => {
   expect(captainBriefItems("1. a\n2) b")).toEqual([item("a"), item("b")]);
 });

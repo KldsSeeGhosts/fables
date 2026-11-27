@@ -1,6 +1,7 @@
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/models";
 import type { Captain, EnvironmentId } from "@t3tools/contracts";
 import { useNavigation } from "@react-navigation/native";
+import type { ReactNode } from "react";
 import { useGT, useMessages } from "gt-react-native";
 import { Pressable, View } from "react-native";
 
@@ -58,6 +59,8 @@ function Trail(props: { readonly trail: DuetRowTrail; readonly tokens: DuetToken
 export function DuetHomeSection(props: {
   readonly rows: ReadonlyArray<DuetHomeRow>;
   readonly waiting: number;
+  readonly chorusControls: ReactNode;
+  readonly fleetMachineCount: number;
   readonly showsEnvironment: boolean;
   readonly projects: ReadonlyArray<EnvironmentProject>;
   readonly selectedThreadKey: string | null;
@@ -123,17 +126,24 @@ export function DuetHomeSection(props: {
           </View>
         </Pressable>
       </View>
+      {props.chorusControls}
       {props.rows.map(({ environment, captain, activity }) => {
         const trail = duetRowTrail({ captain, activity });
         const scope = duetRowScope(environment.environmentId, captain, props.projects);
         const scopeText =
-          scope.kind === "project"
-            ? scope.title
-            : scope.kind === "projects"
-              ? gt("{count, plural, =1 {1 project} other {{count} projects}}", {
-                  count: scope.count,
+          captain.archivedAt !== null
+            ? gt("Archived")
+            : captain.kind === "chorus"
+              ? gt("All Duets across {count, plural, =1 {1 machine} other {{count} machines}}", {
+                  count: props.fleetMachineCount,
                 })
-              : gt("All projects");
+              : scope.kind === "project"
+                ? scope.title
+                : scope.kind === "projects"
+                  ? gt("{count, plural, =1 {1 project} other {{count} projects}}", {
+                      count: scope.count,
+                    })
+                  : gt("All projects");
         const threadKey = scopedThreadKey(environment.environmentId, captain.primaryThreadId);
         const selected = threadKey === props.selectedThreadKey;
         return (
@@ -142,15 +152,22 @@ export function DuetHomeSection(props: {
             accessibilityRole="button"
             accessibilityState={{ selected }}
             accessibilityLabel={[captain.name, scopeText].join(", ")}
-            onPress={() =>
+            onPress={() => {
+              if (captain.kind === "chorus" && captain.archivedAt !== null) {
+                navigation.navigate("CaptainBrief", {
+                  environmentId: String(environment.environmentId),
+                  captainId: String(captain.id),
+                });
+                return;
+              }
               selectDetail({
                 name: "Thread",
                 params: {
                   environmentId: String(environment.environmentId),
                   threadId: String(captain.primaryThreadId),
                 },
-              })
-            }
+              });
+            }}
             className="mx-2 min-h-[60px] flex-row items-center gap-3 rounded-[10px] pl-2 pr-2.5"
             style={({ pressed }) => ({
               backgroundColor: selected || pressed ? tokens.row : undefined,
@@ -166,6 +183,14 @@ export function DuetHomeSection(props: {
                 >
                   {captain.name}
                 </Text>
+                {captain.kind === "chorus" ? (
+                  <View
+                    className="rounded-full border px-1.5 py-px"
+                    style={{ borderColor: tokens.hairline }}
+                  >
+                    <Text style={{ fontSize: 10, color: tokens.meta }}>{gt("Chorus")}</Text>
+                  </View>
+                ) : null}
                 <Trail trail={trail} tokens={tokens} />
               </View>
               <View className="mt-px flex-row items-center gap-1.5">
@@ -186,9 +211,9 @@ export function DuetHomeSection(props: {
                       {scope.badge}
                     </Text>
                   </View>
-                ) : (
+                ) : captain.kind !== "chorus" ? (
                   <SymbolView name="folder" size={13} tintColor={tokens.icon} />
-                )}
+                ) : null}
                 <Text
                   className="min-w-0 flex-1"
                   style={{ fontSize: 13, lineHeight: 18, color: tokens.meta }}

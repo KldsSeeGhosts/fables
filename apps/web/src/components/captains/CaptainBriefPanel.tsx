@@ -389,6 +389,7 @@ export function useCaptainProfile({
       setError(null);
       setConfirmDelete(false);
     },
+    dismissError: () => setError(null),
   };
 }
 
@@ -411,6 +412,32 @@ export function CaptainProfileDialogs({ profile }: { profile: CaptainProfile }) 
           onClose={profile.stopEditing}
           onSave={(_environmentId, saved) => profile.apply(saved)}
         />
+      ) : null}
+      {error !== null && !profile.confirmDelete && profile.editing === null ? (
+        <AlertDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) profile.dismissError();
+          }}
+        >
+          <AlertDialogPopup>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {profile.current.kind === "chorus" ? (
+                  <T>Could not update Chorus</T>
+                ) : (
+                  <T>Could not update Duet</T>
+                )}
+              </AlertDialogTitle>
+              <AlertDialogDescription>{error}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <Button variant="secondary" onClick={profile.dismissError}>
+                <T>Close</T>
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogPopup>
+        </AlertDialog>
       ) : null}
       {profile.confirmDelete ? (
         <AlertDialog

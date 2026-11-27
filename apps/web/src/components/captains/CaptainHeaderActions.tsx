@@ -174,37 +174,41 @@ export function CaptainHeaderActions({
                 profile.edit();
               }}
             >
-              <T>Edit Duet</T>
+              {current.kind === "chorus" ? <T>Edit Chorus</T> : <T>Edit Duet</T>}
             </CaptainMenuRow>
-            <button
-              type="button"
-              aria-expanded={policyOpen}
-              onClick={() => setPolicyOpen((currentOpen) => !currentOpen)}
-              className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-start text-foreground text-body outline-none hover:bg-accent focus-visible:bg-accent"
-            >
-              <span
-                aria-hidden
-                className="flex size-4 items-center justify-center text-muted-foreground"
-              >
-                <ScrollTextIcon className="size-4" />
-              </span>
-              <span className="min-w-0 flex-1 truncate" id={policyLabelId}>
-                <T>Report policy</T>
-              </span>
-              <ChevronDownIcon
-                aria-hidden
-                className={`size-3.5 text-muted-foreground transition-transform ${policyOpen ? "" : "-rotate-90"}`}
-              />
-            </button>
-            {policyOpen ? (
-              <div className="px-2 pb-1">
-                <CaptainReportPolicyPicker
-                  value={current.reportPolicy}
-                  disabled={!canUpdate || pending}
-                  labelledBy={policyLabelId}
-                  onChange={(reportPolicy) => void profile.save({ reportPolicy })}
-                />
-              </div>
+            {current.kind === "duet" ? (
+              <>
+                <button
+                  type="button"
+                  aria-expanded={policyOpen}
+                  onClick={() => setPolicyOpen((currentOpen) => !currentOpen)}
+                  className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-start text-foreground text-body outline-none hover:bg-accent focus-visible:bg-accent"
+                >
+                  <span
+                    aria-hidden
+                    className="flex size-4 items-center justify-center text-muted-foreground"
+                  >
+                    <ScrollTextIcon className="size-4" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate" id={policyLabelId}>
+                    <T>Report policy</T>
+                  </span>
+                  <ChevronDownIcon
+                    aria-hidden
+                    className={`size-3.5 text-muted-foreground transition-transform ${policyOpen ? "" : "-rotate-90"}`}
+                  />
+                </button>
+                {policyOpen ? (
+                  <div className="px-2 pb-1">
+                    <CaptainReportPolicyPicker
+                      value={current.reportPolicy}
+                      disabled={!canUpdate || pending}
+                      labelledBy={policyLabelId}
+                      onChange={(reportPolicy) => void profile.save({ reportPolicy })}
+                    />
+                  </div>
+                ) : null}
+              </>
             ) : null}
 
             <div aria-hidden className="my-1 h-px bg-border" />

@@ -1,16 +1,19 @@
+import { useAtomValue } from "@effect/atom-react";
 import { captainDocument } from "@t3tools/client-runtime/state/captains";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   captainDigestMarkdownExcerpt,
   captainDigestNewSection,
 } from "@t3tools/client-runtime/state/captain-digest";
 import { AuthOrchestrationReadScope, CaptainId, EnvironmentId } from "@t3tools/contracts";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
-import { useGT } from "gt-react-native";
-import type { ReactNode } from "react";
+import { T, useGT } from "gt-react-native";
+import { useState, type ReactNode } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/ui/AppText";
+import { Button } from "../../components/ui/Button";
 import { ScreenContent } from "../../components/ui/ScreenContent";
 import { SheetHeader } from "../../components/ui/SheetHeader";
 import { SelectableMarkdownText } from "../../native/SelectableMarkdownText";
@@ -18,6 +21,7 @@ import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentScope, useEnvironmentScopeDenied } from "../../state/session";
 import { useMarkdownPreviewStyles } from "../files/FileMarkdownPreview";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { CaptainOrb } from "./CaptainOrb";
 import { DuetBriefBody } from "./DuetBriefBody";
 import { useDuetShell } from "./useDuetShell";
@@ -36,10 +40,6 @@ function BriefSection(props: { readonly title: string; readonly children: ReactN
   );
 }
 
-/**
- * What a Captain knows, read only: its notes, what is new in its digest, and the memories it
- * always carries. Editing stays on the desktop app.
- */
 export function CaptainBriefSheet({ route }: StaticScreenProps<CaptainBriefParams>) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -69,6 +69,53 @@ export function CaptainBriefSheet({ route }: StaticScreenProps<CaptainBriefParam
   const memories = (live.data?.memories ?? []).filter(
     (memory) => memory.captainId === captainId && memory.essential,
   );
+  const archive = useAtomCommand(serverEnvironment.archiveCaptain, { reportFailure: false });
+  const restore = useAtomCommand(serverEnvironment.unarchiveCaptain, { reportFailure: false });
+  const canArchive = useAtomValue(serverEnvironment.archiveCaptain.permissionAtom(environmentId));
+  const canRestore = useAtomValue(serverEnvironment.unarchiveCaptain.permissionAtom(environmentId));
+  const [archivePending, setArchivePending] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const archived = captain !== undefined && captain.archivedAt !== null;
+  const changeArchive = async () => {
+    if (captain === undefined || archivePending || !(archived ? canRestore : canArchive)) return;
+    setArchivePending(true);
+    setArchiveError(null);
+    const result = await (archived ? restore : archive)({
+      environmentId,
+      input: { captainId: captain.id },
+    });
+    setArchivePending(false);
+    if (result._tag === "Failure") {
+      const failure = squashAtomCommandFailure(result);
+      setArchiveError(
+        failure instanceof Error ? failure.message : gt("Could not update the Chorus."),
+      );
+    }
+  };
+  const archiveControl =
+    captain?.kind === "chorus" ? (
+      <View className="gap-2 border-t border-border-subtle px-4 py-4">
+        <Text className="text-xs text-foreground-muted">
+          {archived
+            ? gt(
+                "This Chorus is archived. Fables checks reachable linked machines for an active Chorus before restoring it.",
+              )
+            : gt("Archiving removes this Chorus from the fleet. You can restore it later.")}
+        </Text>
+        {archiveError !== null ? (
+          <Text accessibilityLiveRegion="polite" className="text-sm text-danger-foreground">
+            {archiveError}
+          </Text>
+        ) : null}
+        <Button
+          label={archived ? gt("Restore Chorus") : gt("Archive Chorus")}
+          tone={archived ? "primary" : "secondary"}
+          loading={archivePending}
+          disabled={archived ? !canRestore : !canArchive}
+          onPress={() => void changeArchive()}
+        />
+      </View>
+    ) : null;
   const markdown = (text: string) => (
     <SelectableMarkdownText markdown={text} textStyle={markdownStyle} />
   );
@@ -148,6 +195,24 @@ export function CaptainBriefSheet({ route }: StaticScreenProps<CaptainBriefParam
               </BriefSection>
             </>
           )}
+          {captain?.kind === "chorus" && !archived ? (
+            <BriefSection title={gt("Linked machines")}>
+              <Text className="text-xs text-foreground-muted">
+                <T>
+                  Chorus recaps can be incomplete when a linked machine is offline or running an
+                  older version.
+                </T>
+              </Text>
+              <Text className="text-xs text-foreground-muted">
+                <T>
+                  Routing to a Duet on another machine requires a full-access link. A confirmed
+                  route can show an unknown status while that machine is offline. Routed results
+                  appear the next time you message Chorus.
+                </T>
+              </Text>
+            </BriefSection>
+          ) : null}
+          {archiveControl}
         </ScrollView>
       </ScreenContent>
     </View>

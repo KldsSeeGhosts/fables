@@ -47,6 +47,7 @@ it("shows Captain attention on the section and opens the primary thread on selec
     <SidebarProvider>
       <ul>
         <CaptainShelfList
+          fleetMachineCount={1}
           rows={[{ environmentId, captain, attention: 1, working: true }]}
           activeThread={null}
           onOpen={open}

@@ -285,3 +285,51 @@ it("shows a brief with four items in full and keeps 3+ references under the text
   for (const link of links)
     expect(link.getBoundingClientRect().top).toBeGreaterThanOrEqual(textBox.bottom - 1);
 });
+
+it("labels machine and Duet groups in a Chorus recap", async () => {
+  const chorus = {
+    ...captain,
+    id: CaptainId.make("chorus"),
+    primaryThreadId: ThreadId.make("captain:chorus:0"),
+    name: "Chorus",
+    kind: "chorus" as const,
+  } satisfies Captain;
+  const chorusSnapshot = {
+    ...snapshot,
+    captains: [chorus],
+    documents: [
+      {
+        ...document(
+          "DIGEST.md",
+          "## New\n\n**Mac Studio**\n\n**Maria**\n- Review the release.\n\n**Build box**\n- Machine unreachable: offline",
+        ),
+        captainId: chorus.id,
+      },
+    ],
+  } satisfies CaptainSnapshot;
+  using _fixture = useFixture([chorus], new Map([[chorus.id, chorusSnapshot]]));
+  await using screen = await render(<CaptainsWorkspace />, { router: "/captains" });
+
+  await expect.element(screen.getByText("Mac Studio")).toBeVisible();
+  await expect.element(screen.getByText("Maria")).toBeVisible();
+  await expect.element(screen.getByText(/Review the release/)).toBeVisible();
+  await expect.element(screen.getByText(/Machine unreachable: offline/)).toBeVisible();
+});
+
+it("warns when two active Choruses are visible", async () => {
+  const chorus = {
+    ...captain,
+    id: CaptainId.make("chorus"),
+    primaryThreadId: ThreadId.make("captain:chorus:0"),
+    name: "Chorus",
+    kind: "chorus" as const,
+  } satisfies Captain;
+  const other = {
+    ...chorus,
+    id: CaptainId.make("other-chorus"),
+    primaryThreadId: ThreadId.make("captain:other-chorus:0"),
+  } satisfies Captain;
+  using _fixture = useFixture([chorus, other], new Map());
+  await using screen = await render(<CaptainsWorkspace />, { router: "/captains" });
+  await expect.element(screen.getByText(/More than one Chorus is active/)).toBeVisible();
+});

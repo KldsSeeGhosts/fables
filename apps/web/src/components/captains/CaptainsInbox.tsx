@@ -1,5 +1,6 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
+  activeChoruses,
   captainInboxItems,
   captainThreadActivity,
   type CaptainInboxItem,
@@ -120,6 +121,7 @@ function blocked(thread: EnvironmentThreadShell) {
 function DuetOverviewCard({
   environmentId,
   captain,
+  chorusHost,
   activeThreads,
   attention,
   working,
@@ -128,6 +130,7 @@ function DuetOverviewCard({
 }: {
   readonly environmentId: EnvironmentId;
   readonly captain: Captain;
+  readonly chorusHost?: string | undefined;
   readonly activeThreads: ReadonlyArray<EnvironmentThreadShell>;
   readonly attention: number;
   readonly working: boolean;
@@ -155,7 +158,13 @@ function DuetOverviewCard({
       <ContentButton
         variant="selection-card"
         data-duet-overview-card=""
-        aria-label={gt("Open {name}", { name: captain.name })}
+        aria-label={
+          chorusHost !== undefined
+            ? gt("Open Chorus {name} on {machine}", { name: captain.name, machine: chorusHost })
+            : captain.kind === "chorus"
+              ? gt("Open Chorus")
+              : gt("Open {name}", { name: captain.name })
+        }
         onClick={onOpen}
         className="h-full w-full"
       >
@@ -165,9 +174,21 @@ function DuetOverviewCard({
           </span>
           <span className="grid min-w-0 flex-1 gap-1.5">
             <span className="grid min-w-0">
-              <Text variant="label" truncate>
-                {captain.name}
-              </Text>
+              <span className="flex min-w-0 items-center gap-2">
+                <Text variant="label" truncate>
+                  {captain.name}
+                </Text>
+                {captain.kind === "chorus" ? (
+                  <span className="shrink-0 rounded-full border border-border px-1.5 py-px text-micro text-muted-foreground">
+                    <T>Chorus</T>
+                  </span>
+                ) : null}
+              </span>
+              {chorusHost !== undefined ? (
+                <Text variant="meta" tone="muted" truncate>
+                  {chorusHost}
+                </Text>
+              ) : null}
               {captain.role ? (
                 <Text variant="meta" tone="muted" truncate>
                   {captain.role}
@@ -219,20 +240,29 @@ export function CaptainsInbox({
   const nowMs = now.getTime();
   const hello = useTimeOfDayGreeting();
   const items = captainInboxItems(environments, shells);
+  const fleetChoruses = activeChoruses(environments);
   const captainOf = (environmentId: EnvironmentId, captainId: Captain["id"]) =>
     environments
       .find((environment) => environment.environmentId === environmentId)
       ?.captains.find((captain) => captain.id === captainId);
   const active = environments
-    .flatMap(({ environmentId, captains }) =>
+    .flatMap(({ environmentId, label, captains }) =>
       captains.flatMap((captain) =>
         captain.archivedAt === null
-          ? [{ environmentId, captain, ...captainThreadActivity(environmentId, captain, shells) }]
+          ? [
+              {
+                environmentId,
+                label,
+                captain,
+                ...captainThreadActivity(environmentId, captain, shells),
+              },
+            ]
           : [],
       ),
     )
     .toSorted(
       (a, b) =>
+        Number(b.captain.kind === "chorus") - Number(a.captain.kind === "chorus") ||
         Number(b.attention > 0) - Number(a.attention > 0) ||
         Number(b.working) - Number(a.working) ||
         b.captain.updatedAt.localeCompare(a.captain.updatedAt),
@@ -276,13 +306,26 @@ export function CaptainsInbox({
         ) : null}
       </header>
 
+      {fleetChoruses.length > 1 ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-warning bg-warning/10 px-4 py-3 text-body text-warning-foreground"
+        >
+          <T>
+            More than one Chorus is active. This can happen after simultaneous creation or a restore
+            while another machine was offline. Archive all but one.
+          </T>
+        </div>
+      ) : null}
+
       {active.length > 0 ? (
         <ul className="grid grid-cols-1 gap-3 @lg:grid-cols-2 @3xl:grid-cols-3">
-          {active.map(({ environmentId, captain, children, attention, working }, index) => (
+          {active.map(({ environmentId, label, captain, children, attention, working }, index) => (
             <DuetOverviewCard
               key={`${environmentId}:${captain.id}`}
               environmentId={environmentId}
               captain={captain}
+              chorusHost={captain.kind === "chorus" && environments.length > 1 ? label : undefined}
               activeThreads={children}
               attention={attention}
               working={working}
@@ -296,6 +339,16 @@ export function CaptainsInbox({
           <T>No Duets yet. Create one to delegate work and get recaps.</T>
         </Text>
       )}
+
+      {fleetChoruses.length > 0 ? (
+        <Text variant="meta" tone="muted" render={<p />}>
+          <T>
+            Routing to a Duet on another machine requires a full-access link. A confirmed route can
+            show an unknown status while that machine is offline. Routed results appear the next
+            time you message Chorus.
+          </T>
+        </Text>
+      ) : null}
 
       <DuetSection title=<T>Needs you</T> count={items.length}>
         {items.length === 0 ? (
@@ -354,6 +407,14 @@ export function CaptainsInbox({
       </DuetSection>
 
       <DuetSection title=<T>Recaps</T>>
+        {fleetChoruses.length > 0 ? (
+          <Text variant="meta" tone="muted" render={<p />}>
+            <T>
+              Chorus recaps can be incomplete when a linked machine is offline or running an older
+              version.
+            </T>
+          </Text>
+        ) : null}
         {active.length > 0 ? (
           <MorningBriefs duets={active} now={now} onOpenCaptain={onOpenCaptain} />
         ) : (

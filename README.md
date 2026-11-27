@@ -6,6 +6,7 @@ Fables is a desktop, web, and mobile workspace for running coding agents on your
 
 ## What Fables adds
 
+- **Chorus.** A Duet that answers questions across your linked machines, routes work to the Duet that owns the project, and writes a fleet recap. See [Chorus](./docs/user/duet-chorus.md).
 - **Duets.** Long-running agent leads that delegate work to Solo threads across scoped projects, maintain structured documents (`NOTES.md`, `AGENTS.md`, `CREW.md`, `DIGEST.md`) and local memories, and automatically roll over long conversations when context fills up while stitching earlier conversations into the timeline.
 - **Optional Honcho memory.** Off by default. When [configured on the server](./docs/user/captain-honcho-memory.md), Fables mirrors user messages and final Duet answers to a Honcho server and includes recalled context in briefings and memory search.
 - **Duet interface.** Ships with the `ksg-salon` light and dark shell as the default across desktop, web, and mobile, including adaptive split-view and reading-width layouts for foldable phones and tablets.

@@ -115,7 +115,7 @@ function MorningBrief({
   const newSection = captainDigestNewSection(content);
   const brief = newSection ?? content.trim();
   const rest = captainDigestRest(content);
-  const entries = captainBriefItems(brief);
+  const entries = captainBriefItems(brief, { boldLabels: captain.kind === "chorus" });
   const { visible, collapsible, hiddenCount } = captainBriefVisible(entries, expanded);
 
   const controls =
