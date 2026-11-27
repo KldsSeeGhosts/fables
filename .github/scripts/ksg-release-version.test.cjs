@@ -2,9 +2,10 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { nextReleaseVersion } = require("./ksg-release-version.cjs");
 const { isFablesBridgeVersion } = require("../../packages/shared/src/fablesReleaseBridge.ts");
+const upstream = "v0.1.13-nightly.20261126.5305";
+const bridgeTag = `${upstream}05`;
 
 test("publishes an encoded bridge, then starts the plain series and advances it", () => {
-  const upstream = "v0.1.13-nightly.20261126.5305";
   const installed = `${upstream}01`;
   const tags = [installed, `${upstream}04`, `upstream/${upstream}`, "v0.1.12"];
   const bridge = nextReleaseVersion("bridge", tags, upstream);
@@ -23,8 +24,8 @@ test("publishes an encoded bridge, then starts the plain series and advances it"
 });
 
 test("requires the reserved bridge before starting the plain series and issues it only once", () => {
-  const upstream = "v0.1.13-nightly.20261126.5305";
   assert.throws(() => nextReleaseVersion("0.2", []), /Publish the Fables bridge/);
+  assert.throws(() => nextReleaseVersion("0.3", []), /Publish the Fables bridge/);
   assert.throws(() => nextReleaseVersion("bridge", [], `${upstream}1`), /must build on/);
   assert.throws(() => nextReleaseVersion("bridge", [`${upstream}05`], upstream), /must sort after/);
   assert.throws(() => nextReleaseVersion("bridge", [`${upstream}06`], upstream), /must sort after/);
@@ -34,8 +35,14 @@ test("requires the reserved bridge before starting the plain series and issues i
   );
 });
 
+test("reuses a published tag on the same source when a job reruns", () => {
+  const tags = [bridgeTag, "v0.2.0", "v0.2.1", "v0.3.0"];
+  assert.equal(nextReleaseVersion("bridge", tags, upstream, [bridgeTag]), bridgeTag.slice(1));
+  assert.equal(nextReleaseVersion("0.2", tags, upstream, ["v0.2.0"]), "0.2.0");
+});
+
 test("uses the highest patch and resets it on a minor or major bump", () => {
-  const tags = ["v0.2.9", "v0.2.10", "v0.2.7", "v0.2.99-preview.20261126.2", "v0.2.01"];
+  const tags = [bridgeTag, "v0.2.9", "v0.2.10", "v0.2.7", "v0.2.99-preview.20261126.2", "v0.2.01"];
   assert.equal(nextReleaseVersion("0.2", tags), "0.2.11");
   assert.equal(nextReleaseVersion("0.3", tags), "0.3.0");
   assert.equal(nextReleaseVersion("1.0", tags), "1.0.0");
