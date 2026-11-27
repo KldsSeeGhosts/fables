@@ -1,10 +1,10 @@
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import { isFablesBridgeVersion } from "./fablesReleaseBridge.ts";
+import { fablesBridgeVersion, isFablesBridgeVersion } from "./fablesReleaseBridge.ts";
 import { compareSemverVersions } from "./semver.ts";
 
-export { isFablesBridgeVersion } from "./fablesReleaseBridge.ts";
+export { fablesBridgeVersion, isFablesBridgeVersion } from "./fablesReleaseBridge.ts";
 
 export const CLI_RELEASE_REPOSITORY = "KldsSeeGhosts/fables";
 export const CLI_RELEASES_PAGE_URL = `https://github.com/${CLI_RELEASE_REPOSITORY}/releases`;
@@ -116,6 +116,14 @@ export function crossesReleaseTrack(fromVersion: string, toVersion: string): boo
   );
 }
 
+export function nextFablesUpdateTarget(fromVersion: string, targetVersion: string): string {
+  return /^\d+\.\d+\.\d+$/.test(targetVersion) &&
+    compareSemverVersions(targetVersion, "0.2.0") >= 0 &&
+    isFablesLegacyToBridge(fromVersion, fablesBridgeVersion)
+    ? fablesBridgeVersion
+    : targetVersion;
+}
+
 /** The desktop update track a build belongs to. Preview builds have no feed and read as Stable. */
 export function desktopUpdateChannelOf(version: string): "latest" | "nightly" {
   return cliReleaseChannelOf(version) === "nightly" ? "nightly" : "latest";
@@ -171,7 +179,9 @@ export function newestCliReleaseVersion(
   let newest: string | undefined;
   for (const release of releases) {
     if (release.draft) continue;
-    const version = /^v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(release.tag_name)?.[1];
+    const version = /^v(\d+\.\d+\.\d+(?:-(?:nightly|preview)\.\d{8}\.\d+)?)$/.exec(
+      release.tag_name,
+    )?.[1];
     if (version === undefined) continue;
     if (
       (cliReleaseChannelOf(version) === channel ||

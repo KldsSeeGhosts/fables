@@ -7,6 +7,8 @@ import {
 } from "@t3tools/contracts";
 import {
   CLI_RELEASES_PAGE_URL,
+  fablesBridgeVersion,
+  isFablesLegacyToBridge,
   cliReleaseChannelOf,
   cliReleaseIndexPageUrl,
   newestCliReleaseVersion,
@@ -53,6 +55,7 @@ const Release = Schema.Struct({
   tag_name: Schema.String,
   draft: Schema.optionalKey(Schema.Boolean),
 });
+const decodeRelease = Schema.decodeUnknownSync(Release);
 const decodeReleases = Schema.decodeUnknownSync(Schema.Array(Release));
 
 async function fetchReleases(url: string, accept: string, signal: AbortSignal) {
@@ -78,6 +81,22 @@ export async function findEnvironmentUpdate(currentVersion: string, signal: Abor
     ([, tag_name = ""]) => ({ tag_name }),
   );
   let version = newestCliReleaseVersion(releases, channel, currentVersion);
+  if (
+    isFablesLegacyToBridge(currentVersion, fablesBridgeVersion) &&
+    (version === undefined || compareSemverVersions(version, fablesBridgeVersion) < 0)
+  ) {
+    const pointer = await fetchReleases(
+      `${CLI_RELEASES_PAGE_URL}/download/update-feed/nightly.json`,
+      "application/json",
+      signal,
+    )
+      .then(async (response) => decodeRelease(await response.json()))
+      .catch((error: unknown) => {
+        if (signal.aborted) throw error;
+        return undefined;
+      });
+    if (pointer?.tag_name === `v${fablesBridgeVersion}`) version = fablesBridgeVersion;
+  }
 
   // Other releases can displace the requested channel from the ten-entry feed.
   for (let page = 1; version === undefined; page++) {
