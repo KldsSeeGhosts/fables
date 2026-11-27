@@ -17,7 +17,6 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import * as EventSink from "../orchestration-v2/EventSink.ts";
@@ -60,7 +59,6 @@ const make = Effect.gen(function* () {
   const folders = yield* ManagedProjectFolders.ManagedProjectFolders;
   const projects = yield* ProjectService.ProjectService;
   const schedules = yield* ScheduledTaskService.ScheduledTaskService;
-  const mutations = yield* Semaphore.make(1);
 
   const validateScope = Effect.fn("CaptainService.validateScope")(function* (
     ids: ReadonlyArray<ProjectId>,
@@ -154,7 +152,7 @@ const make = Effect.gen(function* () {
       return captain;
     },
     Effect.uninterruptible,
-    mutations.withPermits(1),
+    store.withProfileLock,
   );
 
   const update = Effect.fn("CaptainService.update")(
@@ -190,7 +188,7 @@ const make = Effect.gen(function* () {
       return captain;
     },
     Effect.uninterruptible,
-    mutations.withPermits(1),
+    store.withProfileLock,
   );
 
   const setArchived = Effect.fn("CaptainService.setArchived")(
@@ -214,7 +212,7 @@ const make = Effect.gen(function* () {
       return captain;
     },
     Effect.uninterruptible,
-    mutations.withPermits(1),
+    store.withProfileLock,
   );
 
   const requireQuietConversation = Effect.fn("CaptainService.requireQuietConversation")(function* (
@@ -392,7 +390,7 @@ const make = Effect.gen(function* () {
       return captain;
     },
     Effect.uninterruptible,
-    mutations.withPermits(1),
+    store.withProfileLock,
   );
 
   const deleteCaptain = Effect.fn("CaptainService.delete")(
@@ -400,7 +398,7 @@ const make = Effect.gen(function* () {
       yield* store.remove(captainId);
     },
     Effect.uninterruptible,
-    mutations.withPermits(1),
+    store.withProfileLock,
   );
 
   return {

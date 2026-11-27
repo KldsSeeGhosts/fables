@@ -3,6 +3,7 @@ import {
   type Captain,
   type CaptainMemory,
   type OrchestrationV2AppThreadLineage,
+  type ProjectId,
   type ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -54,10 +55,11 @@ const coordinatorBriefing = (captain: Captain) => `How you work:
 const chorusBriefing = (captain: Captain) => `How you work:
 - You are the Chorus, the fleet-level Duet. Answer cross-project and cross-Duet questions yourself from \`duet_list\`, \`duet_read\`, \`duet_memory_search\`, \`t3_thread_list\` and \`t3_thread_read\`.
 - When \`duet_send\` is available, use it to route requested project work to a Duet that covers the project. Otherwise name the Duet to the user and leave the work there. Reading across Duets never requires sending a message.
-- Start a Solo only for a one-off in a project no Duet covers.
+- To start a Solo, use \`delegate_task\` with \`isolation: "worktree"\`; never use \`t3_thread_launch\` or \`create_threads\` for one. Start one only for a one-off in a project no Duet covers. For project work, pass the project's exact id as \`target.projectId\`; never rely on the task text alone.
+- Before starting another Solo in a project where Chorus finished a Solo in the last 30 days, stop and offer the user the choice of widening an existing Duet's scope or creating a dedicated Duet. Do not inspect or edit the project first. Start the Solo only if the user says to go ahead anyway.
 - Relay each result to the user as one line plus the thread link. Do not paste Duet or Solo output.
 - While work runs, end your turn. Do not poll.
-- Keep no project plans or implementation state in NOTES.md. NOTES.md is only for what the user asked of Chorus itself.
+- Keep project plans, open loops, and project rules out of your documents and memory. Use NOTES.md only for requests to Chorus itself.
 - ${crewWaitRule[captain.reportPolicy]}`;
 
 const CHORUS_ROSTER_DUET_LIMIT = 12;
@@ -109,10 +111,17 @@ export const formatCaptainBriefing = (input: {
   readonly agents: string;
   readonly notes: string;
   readonly fleetRoster?: string;
+  readonly repeatSoloProjects?: ReadonlyArray<{
+    readonly id: ProjectId;
+    readonly title: string;
+    readonly count: number;
+    readonly latestCompletedAt: string;
+  }>;
 }) => {
   const { captain, projects, memories, agents, notes } = input;
   const handoffSplit = splitCaptainHandoffSection(notes);
   const notesBody = handoffSplit.rest.trim();
+  const repeatSoloProjects = input.repeatSoloProjects ?? [];
   return [
     `Duet profile: ${captain.name}${captain.role ? ` (${captain.role})` : ""}`,
     captain.instructions && `Instructions:\n${prefix(captain.instructions, 4_000)}`,
@@ -124,6 +133,13 @@ export const formatCaptainBriefing = (input: {
       : projects.length > 0
         ? `Scoped local projects:\n${projects.map(({ id, title }) => `- ${prefix(title, 100)} [${prefix(id, 100)}]`).join("\n")}${captain.scopedProjectIds.length > projects.length ? "\n- Additional projects are listed in captain_read." : ""}`
         : "Workspace scope: No projects selected.",
+    repeatSoloProjects.length > 0 &&
+      `Repeat Solo projects:\n${repeatSoloProjects
+        .map(
+          ({ id, title, count, latestCompletedAt }) =>
+            `- ${prefix(title, 100)} [${prefix(id, 100)}]: ${count} finished ${count === 1 ? "Solo" : "Solos"} in the last 30 days, latest ${latestCompletedAt.slice(0, 10)}. Suggest widening an existing Duet's scope or creating a dedicated Duet before starting another Solo here. If the user approves, pass this exact project id as target.projectId.`,
+        )
+        .join("\n")}`,
     memories.length > 0 &&
       `Essential memories:\n${memories.map(({ text }) => `- ${prefix(text, 500)}`).join("\n")}`,
     agents && `AGENTS.md:\n${prefix(agents, 2_000)}`,
@@ -271,6 +287,20 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
     );
   });
 
+  const readRepeatSoloProjects = Effect.fn("CaptainService.repeatSoloProjects")(function* (
+    captain: Captain,
+  ) {
+    if (Option.isNone(store)) return [];
+    const uncovered = yield* store.value.repeatSoloProjects(captain);
+    const entries = yield* projectEntries(uncovered.map(({ projectId }) => projectId));
+    return uncovered.map((row, index) => ({
+      id: row.projectId,
+      count: row.count,
+      latestCompletedAt: row.latestCompletedAt,
+      title: entries[index]?.title ?? "Unavailable project",
+    }));
+  });
+
   // A delegated child gets the Captain's crew rules only, never its private profile or memories.
   const readCrewContext = Effect.fn("CaptainService.crewContext")(function* (
     parentThreadId: ThreadId,
@@ -279,8 +309,9 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
     if (Option.isNone(store)) return NO_CONTEXT;
     const captain = yield* store.value.findByConversation(parentThreadId);
     if (captain === undefined || captain.archivedAt !== null) return NO_CONTEXT;
-    const crew = yield* store.value.document(captain, "CREW.md");
-    const rules = formatCaptainCrewRules(captain, crew.content);
+    const crew =
+      captain.kind === "chorus" ? "" : (yield* store.value.document(captain, "CREW.md")).content;
+    const rules = formatCaptainCrewRules(captain, crew);
     const plan = delivery === undefined ? undefined : crewBriefings.plan(delivery, rules);
     return {
       text: plan?.full === false ? unchangedCrewRules(captain) : rules,
@@ -372,6 +403,8 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
               });
             })
           : undefined;
+      const repeatSoloProjects =
+        captain.kind === "chorus" ? yield* readRepeatSoloProjects(captain) : [];
       const briefing = formatCaptainBriefing({
         captain,
         projects: scopedProjects,
@@ -379,6 +412,7 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
         agents: agents.content,
         notes: notes.content,
         ...(fleetRoster === undefined ? {} : { fleetRoster }),
+        ...(repeatSoloProjects.length === 0 ? {} : { repeatSoloProjects }),
       });
       const longTermMemory =
         Option.isSome(honcho) && honcho.value.enabled

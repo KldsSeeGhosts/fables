@@ -41,6 +41,12 @@ Check that the case builds with `--dry-run --case <id>`. Then run it on the text
 pnpm mcp-tool-use --cases mcp-tool-use/cases/chorus-reads.ndjson --model opencode-go/deepseek-v4.1-flash --shell-model gpt-6.1-terra --samples 3 --out runs/chorus-reads
 ```
 
+`cases/chorus-coverage.ndjson` uses synthetic project history to test the same issue's Solo coverage rules. A repeated uncovered project must first produce a dedicated-Duet suggestion, while explicit user approval and a first one-off must still start the Solo.
+
+```sh
+pnpm mcp-tool-use --cases mcp-tool-use/cases/chorus-coverage.ndjson --model opencode-go/deepseek-v4.1-flash --shell-model gpt-6.1-terra --samples 3 --out runs/chorus-coverage
+```
+
 ## Device manager cases
 
 `cases/device-manager.ndjson` ports nine mechanisms from the [device-routing investigation described in #25661](https://github.com/pingdotgg/t3code/pull/25661) and adds seven cases from t3dotgg’s 2026-10-26 fleet device investigation, and two from [#36192](https://github.com/pingdotgg/t3code/issues/36192). All prompts, files, hosts and prior turns are authored Acme data; the fleet cases cite finding ids without carrying source transcripts or identifiers.

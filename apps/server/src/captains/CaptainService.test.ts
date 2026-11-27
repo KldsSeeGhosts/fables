@@ -1144,3 +1144,97 @@ it.effect("surfaces reports from conversations before a reset on the current con
     }).pipe(Effect.provide(layer));
   }),
 );
+
+it.effect(
+  "hints only recent uncovered Chorus Solo projects and keeps Chorus CREW out of Solos",
+  () =>
+    Effect.gen(function* () {
+      const { layer } = fixture();
+      yield* Effect.gen(function* () {
+        const service = yield* CaptainService.CaptainService;
+        const sql = yield* SqlClient.SqlClient;
+        const store = yield* CaptainStore.CaptainStore;
+        const chorus = yield* service.create({ ...input, name: "Chorus", kind: "chorus" });
+        const now = yield* DateTime.now;
+        const recent = DateTime.formatIso(DateTime.toUtc(DateTime.subtract(now, { days: 2 })));
+        const old = DateTime.formatIso(DateTime.toUtc(DateTime.subtract(now, { days: 31 })));
+        const childThread = (id: string, projectId: ProjectId) => sql`
+        INSERT INTO orchestration_v2_projection_threads (
+          thread_id, project_id, title, default_provider, runtime_mode, interaction_mode,
+          created_at, updated_at, payload_json
+        ) VALUES (${id}, ${projectId}, ${id}, 'codex', 'approval-required',
+          'default', ${recent}, ${recent}, '{}')
+      `;
+        const solo = (
+          id: string,
+          childThreadId: string,
+          completedAt: string,
+          status = "completed",
+        ) => sql`
+        INSERT INTO orchestration_v2_projection_subagents (
+          subagent_id, thread_id, parent_node_id, provider, origin, status,
+          child_thread_id, completed_at, updated_at, payload_json
+        ) VALUES (${id}, ${chorus.primaryThreadId}, 'node', 'codex', 'app_owned', ${status},
+          ${childThreadId}, ${completedAt}, ${completedAt}, ${JSON.stringify({ title: id })})
+      `;
+        yield* childThread("thread:recent-a", project);
+        yield* childThread("thread:recent-b", project);
+        yield* childThread("thread:old", secondProject);
+        yield* solo("recent-a", "thread:recent-a", recent);
+        yield* solo("recent-b", "thread:recent-b", recent, "failed");
+        yield* solo("old", "thread:old", old);
+
+        const readContext = yield* makeReadCaptainTurnContext;
+        const read = () =>
+          readContext({
+            id: chorus.primaryThreadId,
+            lineage: { parentThreadId: null, relationshipToParent: null },
+          }).pipe(Effect.map(({ text }) => text));
+        const text = yield* read();
+        assert.include(text, "Repeat Solo projects:");
+        assert.include(text, "Workspace [project]: 2 finished Solos");
+        assert.notInclude(text, "[project-2]");
+
+        const covering = yield* service.create({
+          ...input,
+          captainId: CaptainId.make("covering"),
+          scopedProjectIds: [project],
+        });
+        assert.notInclude(yield* read(), "Repeat Solo projects:");
+
+        const coveredProjects = [project];
+        for (let index = 0; index < 4; index++) {
+          const id = `covered-${index}`;
+          const projectId = ProjectId.make(id);
+          coveredProjects.push(projectId);
+          yield* childThread(id, projectId);
+          yield* solo(id, id, recent);
+        }
+        yield* store.save({ ...covering, scopedProjectIds: coveredProjects });
+        yield* solo(
+          "second-project",
+          "thread:old",
+          DateTime.formatIso(DateTime.toUtc(DateTime.subtract(now, { days: 3 }))),
+        );
+        const afterCoverage = yield* read();
+        assert.include(afterCoverage, "[project-2]: 1 finished Solo");
+        assert.notInclude(afterCoverage, "[covered-0]");
+
+        yield* service.updateDocument({
+          captainId: chorus.id,
+          name: "CREW.md",
+          content: "Chorus-only crew rule",
+          expectedRevision: 0,
+        });
+        const crew = yield* readContext({
+          id: ThreadId.make("thread:chorus-solo"),
+          lineage: {
+            parentThreadId: chorus.primaryThreadId,
+            relationshipToParent: "subagent",
+          },
+        }).pipe(Effect.map(({ text }) => text));
+        assert.include(crew, "done-check from your brief passes");
+        assert.notInclude(crew, "Chorus-only crew rule");
+      }).pipe(Effect.provide(layer));
+    }),
+);

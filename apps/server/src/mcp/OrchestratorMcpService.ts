@@ -115,7 +115,10 @@ import {
   runOutcome,
 } from "../orchestration-v2/RestartBackgroundNote.ts";
 import * as CaptainStore from "../captains/CaptainStore.ts";
-import { captainDelegationProject } from "../captains/captainDelegation.ts";
+import {
+  assertChorusProjectUncovered,
+  captainDelegationProject,
+} from "../captains/captainDelegation.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import { placeholderThreadTitle } from "../orchestration-v2/placeholderThreadTitle.ts";
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
@@ -3036,19 +3039,36 @@ const make = Effect.gen(function* () {
           ? undefined
           : PeerForwarding.remoteTarget(callerScope, input.target.environmentId);
       const callerThreadId = callerScope.thread?.threadId;
-      const captain =
-        callerThreadId !== undefined &&
-        isCaptainThreadId(callerThreadId) &&
-        Option.isSome(captainStore)
-          ? yield* captainStore.value
-              .findPrimary(callerThreadId)
-              .pipe(Effect.mapError((error) => failure("orchestration_error", error.message)))
+      const callerCaptainStore =
+        callerThreadId !== undefined && isCaptainThreadId(callerThreadId)
+          ? Option.getOrUndefined(captainStore)
           : undefined;
-      if (captain?.archivedAt != null) {
+      const captain =
+        callerCaptainStore !== undefined && callerThreadId !== undefined
+          ? yield* Effect.gen(function* () {
+              const primary = yield* callerCaptainStore.findPrimary(callerThreadId);
+              return primary ?? (yield* callerCaptainStore.findByConversation(callerThreadId));
+            }).pipe(Effect.mapError((error) => failure("orchestration_error", error.message)))
+          : undefined;
+      if (captain?.kind === "chorus" && captain.primaryThreadId !== callerThreadId) {
+        return yield* failure(
+          "parent_not_active",
+          "The Duet's primary conversation has already changed.",
+        );
+      }
+      const currentCaptain = captain?.primaryThreadId === callerThreadId ? captain : undefined;
+      if (currentCaptain?.archivedAt != null) {
         return yield* failure("invalid_request", "Restore this Duet before delegating work.");
       }
+      const chorusStore = currentCaptain?.kind === "chorus" ? callerCaptainStore : undefined;
       if (input.target !== undefined && environmentId !== undefined) {
-        if (captain?.scopedProjectIds.length) {
+        if (chorusStore !== undefined) {
+          return yield* failure(
+            "invalid_request",
+            "Chorus can delegate only to local projects until linked environments can check Duet coverage.",
+          );
+        }
+        if (currentCaptain?.scopedProjectIds.length) {
           return yield* failure(
             "invalid_request",
             "A scoped Duet can delegate only to its local workspace projects.",
@@ -3066,8 +3086,10 @@ const make = Effect.gen(function* () {
           : readTask(scope, taskId, false, true);
       }
       const { scope, parent } = yield* loadThreadCaller(callerScope, "delegate_task");
+      const canChooseLocalProject =
+        chorusStore !== undefined || (currentCaptain?.scopedProjectIds.length ?? 0) > 0;
       if (
-        !captain?.scopedProjectIds.length &&
+        !canChooseLocalProject &&
         input.target?.projectId !== undefined &&
         input.target.projectId !== parent.thread.projectId
       ) {
@@ -3077,7 +3099,7 @@ const make = Effect.gen(function* () {
         );
       }
       const delegatedProjectId = yield* captainDelegationProject({
-        captain,
+        captain: currentCaptain,
         currentProjectId: parent.thread.projectId,
         requestedProjectId: input.target?.projectId,
       });
@@ -3109,7 +3131,6 @@ const make = Effect.gen(function* () {
           "Delegated tasks require an active run owned by this MCP provider session.",
         );
       }
-      const providers = yield* loadProviders;
       const key = yield* requestKey(input.clientRequestId);
       const commandId = stableCommandId({
         scope,
@@ -3117,6 +3138,12 @@ const make = Effect.gen(function* () {
         operation: "delegate-task",
       });
       const isRetryOfAcceptedDelegation = yield* threadManagement.hasReceipt(commandId);
+      const checkCoverage =
+        chorusStore === undefined || isRetryOfAcceptedDelegation
+          ? undefined
+          : assertChorusProjectUncovered(chorusStore, delegatedProjectId);
+      if (checkCoverage !== undefined) yield* checkCoverage;
+      const providers = yield* loadProviders;
       const target = yield* resolveTargetRechecking({
         parent: targetParent,
         target: input.target,
@@ -3151,7 +3178,7 @@ const make = Effect.gen(function* () {
           // ThreadManagementService.dispatch is the chokepoint for this command
           // type's own enablement check, using the same command id and its
           // receipt-replay exemption, so no separate assert runs here.
-          const result = yield* threadManagement
+          const dispatch = threadManagement
             .dispatch({
               type: "delegated_task.request",
               createdBy: "agent",
@@ -3182,6 +3209,32 @@ const make = Effect.gen(function* () {
                     ),
               ),
             );
+          // Profile mutations and this commit share a lock so coverage cannot change between them.
+          const result = yield* chorusStore === undefined || checkCoverage === undefined
+            ? dispatch
+            : chorusStore.withProfileLock(
+                Effect.gen(function* () {
+                  const current = yield* chorusStore
+                    .findPrimary(scope.thread.threadId)
+                    .pipe(
+                      Effect.mapError((error) => failure("orchestration_error", error.message)),
+                    );
+                  if (current === undefined) {
+                    return yield* failure(
+                      "parent_not_active",
+                      "The Duet's primary conversation has already changed.",
+                    );
+                  }
+                  if (current.archivedAt !== null) {
+                    return yield* failure(
+                      "invalid_request",
+                      "Restore this Duet before delegating work.",
+                    );
+                  }
+                  yield* checkCoverage;
+                  return yield* dispatch;
+                }),
+              );
           const taskEvent = result.storedEvents.find(
             (stored) =>
               stored.event.type === "subagent.updated" &&

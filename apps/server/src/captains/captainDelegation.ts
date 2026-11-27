@@ -10,6 +10,11 @@ import * as Option from "effect/Option";
 
 import * as CaptainStore from "./CaptainStore.ts";
 
+const nameList = (names: ReadonlyArray<string>) =>
+  names.length <= 2
+    ? names.join(" or ")
+    : `${names.slice(0, -1).join(", ")}, or ${names[names.length - 1]}`;
+
 export const captainDelegationProject = Effect.fn("CaptainService.delegationProject")(
   function* (input: {
     readonly captain: Captain | undefined;
@@ -29,6 +34,25 @@ export const captainDelegationProject = Effect.fn("CaptainService.delegationProj
     return projectId;
   },
 );
+
+export const assertChorusProjectUncovered = Effect.fn(
+  "CaptainService.assertChorusProjectUncovered",
+)(function* (store: CaptainStore.CaptainStore["Service"], projectId: ProjectId) {
+  const names = yield* store
+    .coveringDuetNames(projectId)
+    .pipe(
+      Effect.mapError(
+        (error) =>
+          new OrchestratorMcpFailure({ code: "orchestration_error", message: error.message }),
+      ),
+    );
+  if (names.length > 0) {
+    return yield* new OrchestratorMcpFailure({
+      code: "invalid_request",
+      message: `Route this with duet_send to ${nameList(names)}. Do not start a Solo for this project yourself.`,
+    });
+  }
+});
 
 export const makeCaptainCanWake = Effect.gen(function* () {
   const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
