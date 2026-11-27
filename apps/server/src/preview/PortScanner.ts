@@ -16,11 +16,11 @@ import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as PlatformError from "effect/PlatformError";
 import * as Ref from "effect/Ref";
-import * as Schedule from "effect/Schedule";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import { FetchHttpClient, HttpClient } from "effect/http";
@@ -579,6 +579,7 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
     terminalProcesses: new Map(),
     retainCount: 0,
   });
+  const retained = yield* Latch.make();
   const webProbeCacheRef = yield* Ref.make<ReadonlyMap<string, WebProbeCacheEntry>>(new Map());
   const scanSemaphore = yield* Semaphore.make(1);
   const lsofMissingRef = yield* Ref.make(false);
@@ -1051,19 +1052,23 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
     ),
   );
 
-  const pollIfRetained = Ref.get(stateRef).pipe(
-    Effect.flatMap((state) => (state.retainCount > 0 ? pollTick() : Effect.void)),
-  );
-  const scheduledPoll = backgroundPolicy.shouldRunOpportunisticWork.pipe(
+  const pollIfRetained = Effect.suspend(() => (retained.isOpen() ? pollTick() : Effect.void));
+  const pollInForeground = backgroundPolicy.shouldRunOpportunisticWork.pipe(
     Effect.flatMap((foreground) => (foreground ? pollIfRetained : Effect.void)),
   );
-  yield* Effect.forkScoped(scheduledPoll.pipe(Effect.repeat(Schedule.spaced(POLL_INTERVAL))));
+  // A timeout already in flight may finish after release. Only an open latch rearms it.
+  yield* retained.await.pipe(
+    Effect.andThen(Effect.sleep(POLL_INTERVAL)),
+    Effect.andThen(Effect.suspend(() => (retained.isOpen() ? pollInForeground : Effect.void))),
+    Effect.forever,
+    Effect.forkScoped,
+  );
 
   const acquireRetention = Effect.fn("PortDiscovery.retain")(function* () {
-    const wasIdle = yield* Ref.modify(stateRef, (state) => [
-      state.retainCount === 0,
-      { ...state, retainCount: state.retainCount + 1 },
-    ]);
+    const wasIdle = yield* Ref.modify(stateRef, (state) => {
+      if (state.retainCount === 0) retained.openUnsafe();
+      return [state.retainCount === 0, { ...state, retainCount: state.retainCount + 1 }];
+    });
     if (wasIdle) {
       yield* pollTick();
     }
@@ -1071,7 +1076,8 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
 
   const releaseRetention = Effect.gen(function* () {
     const idle = yield* Ref.modify(stateRef, (state) => {
-      const retainCount = Math.max(0, state.retainCount - 1);
+      const retainCount = state.retainCount - 1;
+      if (retainCount === 0) retained.closeUnsafe();
       return [retainCount === 0, { ...state, retainCount }];
     });
     if (!idle) return;
