@@ -3,8 +3,13 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import type { StackHeaderConfigProps } from "react-native-screens";
 import { expect, it, vi } from "vite-plus/test";
+import type { DeviceType } from "../lib/device-type";
 
-const bridge = vi.hoisted(() => ({ ios: undefined as StackHeaderConfigProps["ios"] }));
+const bridge = vi.hoisted(() => ({
+  ios: undefined as StackHeaderConfigProps["ios"],
+  deviceType: "phone" as DeviceType,
+  metrics: null as { width: number; height: number } | null,
+}));
 
 vi.mock("react-native", () => ({ StyleSheet: { flatten: (style: unknown) => style } }));
 vi.mock("react-native-keyboard-controller", () => ({
@@ -15,8 +20,8 @@ vi.mock("../lib/useMobileNavigationTheme", () => ({
   useMobileNavigationTheme: () => ({ colors: { card: "white" } }),
 }));
 vi.mock("./native-layout-metrics", () => ({
-  useDeviceType: () => "phone",
-  useNativeLayoutMetrics: () => null,
+  useDeviceType: () => bridge.deviceType,
+  useNativeLayoutMetrics: () => bridge.metrics,
 }));
 vi.mock("react-native-screens", () => ({
   Stack: {
@@ -28,6 +33,35 @@ vi.mock("react-native-screens", () => ({
 }));
 
 import { V5StackHeader } from "./V5StackHeader.ios";
+
+it.each([
+  ["duo-unfolded", { width: 951, height: 669 }, "onScrollUpWhenFolded", "never"],
+  ["duo-unfolded", { width: 669, height: 951 }, "onScrollUpWhenFolded", "never"],
+  ["duo-folded", { width: 393, height: 852 }, "onScrollUpWhenFolded", "onScrollUp"],
+  ["duo-unfolded", { width: 951, height: 669 }, "onScrollUp", "onScrollUp"],
+  ["phone", null, "onScrollUpWhenFolded", undefined],
+] as const)("configures %s on %j with %s", (deviceType, metrics, behavior, expected) => {
+  bridge.deviceType = deviceType;
+  bridge.metrics = metrics;
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const root = createRoot(document.createElement("div"));
+  try {
+    act(() =>
+      root.render(
+        <V5StackHeader
+          canGoBack={false}
+          options={{ unstable_headerMinimizationBehavior: behavior }}
+        />,
+      ),
+    );
+    expect(bridge.ios?.minimizationBehavior).toBe(expected);
+  } finally {
+    act(() => root.unmount());
+    bridge.deviceType = "phone";
+    bridge.metrics = null;
+    vi.unstubAllGlobals();
+  }
+});
 
 it.each(["leadingItems", "trailingItems", "toolbarItems"] as const)(
   "updates native enabled state after permissions change in %s",
