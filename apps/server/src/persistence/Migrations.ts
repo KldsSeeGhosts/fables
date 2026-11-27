@@ -138,6 +138,7 @@ import Migration0124 from "./Migrations/124_ScheduledTaskKind.ts";
 import Migration0125 from "./Migrations/125_CaptainKind.ts";
 import Migration0126 from "./Migrations/126_ChorusRoutes.ts";
 import Migration0127 from "./Migrations/127_RemoteChorusRoutes.ts";
+import Migration0128 from "./Migrations/128_PeerLinkChorusHome.ts";
 
 const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -269,6 +270,7 @@ const migrationEntries = [
   [125, "CaptainKind", Migration0125],
   [126, "ChorusRoutes", Migration0126],
   [127, "RemoteChorusRoutes", Migration0127],
+  [128, "PeerLinkChorusHome", Migration0128],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

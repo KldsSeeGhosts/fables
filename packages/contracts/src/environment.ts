@@ -215,6 +215,8 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   freshContext: Schema.optionalKey(Schema.Boolean),
   /** Server saves and runs scheduled task `threadMode`; older servers ignore it. */
   captains: Schema.optionalKey(Schema.Boolean),
+  /** Serves fleet Chorus home status and the hidden peer discovery tool. */
+  fleetChorus: Schema.optionalKey(Schema.Boolean),
   scheduledTaskThreadModes: Schema.optionalKey(Schema.Boolean),
   /** Server can transcribe 16 kHz mono PCM audio on the environment machine. */
   voiceTranscription: Schema.optionalKey(Schema.Boolean),

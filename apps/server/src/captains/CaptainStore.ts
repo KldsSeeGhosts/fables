@@ -258,6 +258,13 @@ const make = Effect.gen(function* () {
     return row === undefined ? undefined : yield* decodeCaptain(row);
   }, Effect.catch(captainUnavailable));
 
+  const findChorus = Effect.fn("CaptainStore.findChorus")(function* () {
+    const [row] = yield* sql`
+      ${profiles} WHERE kind = 'chorus' ORDER BY created_at, id LIMIT 1
+    `;
+    return row === undefined ? undefined : yield* decodeCaptain(row);
+  }, Effect.catch(captainUnavailable));
+
   const privateChorusConversationIds = Effect.fn("CaptainStore.privateChorusConversationIds")(
     function* (callerId: ThreadId | undefined) {
       const rows = yield* sql<{ readonly id: ThreadId }>`
@@ -867,6 +874,7 @@ const make = Effect.gen(function* () {
     find,
     requireCaptain,
     findActiveChorus,
+    findChorus,
     privateChorusConversationIds,
     activeDuetRoster,
     coveringDuetNames,

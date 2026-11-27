@@ -7,6 +7,7 @@ import {
   type ExecutionEnvironmentCapabilities,
   MCP_PEER_LINK_SOFTWARE_ID,
   type PeerLink,
+  ThreadId,
   type PeerLinkCreateInput,
   PeerLinkError,
   type PeerLinkName,
@@ -134,6 +135,20 @@ export class PeerLinks extends Context.Service<
       environmentId: EnvironmentId,
       expiresAt: DateTime.Utc,
     ) => Effect.Effect<void>;
+    /** Chorus home facts learned from this peer over the authenticated link. */
+    readonly chorusHomeRecords: Effect.Effect<
+      ReadonlyArray<{
+        readonly environmentId: EnvironmentId;
+        readonly label: string;
+        readonly threadId: ThreadId | null;
+        readonly capable: boolean | null;
+      }>,
+      PeerLinkError
+    >;
+    readonly recordChorusHome: (
+      environmentId: EnvironmentId,
+      update: { readonly threadId: ThreadId | null; readonly capable: boolean | null },
+    ) => Effect.Effect<void>;
   }
 >()("t3/peer/PeerLinks") {}
 
@@ -148,6 +163,9 @@ interface PeerLinkRow {
   readonly last_reached_at: string | null;
   readonly last_error: string | null;
   readonly fenced: number;
+  readonly chorus_home_thread_id: string | null;
+  readonly chorus_home_seen_at: string | null;
+  readonly chorus_home_capable: number | null;
 }
 
 const decodeUrls = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(Schema.String)));
@@ -816,6 +834,45 @@ const make = Effect.gen(function* () {
       WHERE environment_id = ${environmentId} AND expires_at < ${DateTime.formatIso(expiresAt)}
     `.pipe(Effect.asVoid, Effect.ignoreCause({ log: true }));
 
+  const chorusHomeRecords: PeerLinks["Service"]["chorusHomeRecords"] = sql<{
+    readonly environment_id: string;
+    readonly label: string;
+    readonly chorus_home_thread_id: string | null;
+    readonly chorus_home_capable: number | null;
+  }>`
+    SELECT environment_id, label, chorus_home_thread_id, chorus_home_capable
+    FROM peer_environment_links
+    WHERE chorus_home_thread_id IS NOT NULL OR chorus_home_capable IS NOT NULL
+  `.pipe(
+    NodeSqliteClient.readOnly,
+    Effect.map((rows) =>
+      rows.map((row) => ({
+        environmentId: EnvironmentId.make(row.environment_id),
+        label: row.label,
+        threadId:
+          row.chorus_home_thread_id === null ? null : ThreadId.make(row.chorus_home_thread_id),
+        capable: row.chorus_home_capable === null ? null : row.chorus_home_capable === 1,
+      })),
+    ),
+    Effect.catch(failStorage),
+  );
+
+  const recordChorusHome: PeerLinks["Service"]["recordChorusHome"] = (environmentId, update) =>
+    DateTime.now.pipe(
+      Effect.flatMap(
+        (now) =>
+          sql`
+          UPDATE peer_environment_links
+          SET chorus_home_thread_id = ${update.threadId},
+            chorus_home_seen_at = ${DateTime.formatIso(now)},
+            chorus_home_capable = ${update.capable === null ? null : Number(update.capable)}
+          WHERE environment_id = ${environmentId}
+        `,
+      ),
+      Effect.asVoid,
+      Effect.ignoreCause({ log: true }),
+    );
+
   return PeerLinks.of({
     enabled,
     link,
@@ -827,6 +884,8 @@ const make = Effect.gen(function* () {
     resolve,
     recordOutcome,
     recordExpiry,
+    chorusHomeRecords,
+    recordChorusHome,
   });
 });
 
