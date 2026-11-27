@@ -475,6 +475,7 @@ export const layer: Layer.Layer<
           const routedByChorus = yield* readRoutedByChorusLine(
             input.threadId,
             message.senderThreadId,
+            message.linkedSender,
           );
           const text = withMessageSenderNote(
             message,

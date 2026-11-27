@@ -8,6 +8,7 @@ import {
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 
 import { captainDigestNewLines } from "../../../captains/captainDigest.ts";
@@ -21,6 +22,8 @@ import * as OrchestratorMcpService from "../../OrchestratorMcpService.ts";
 import * as PeerForwarding from "../../../peer/PeerForwarding.ts";
 import * as PeerLinks from "../../../peer/PeerLinks.ts";
 import { CaptainToolkit } from "./tools.ts";
+
+const isMcpFailure = Schema.is(OrchestratorMcpFailure);
 
 const failed = (error: CaptainError) =>
   new OrchestratorMcpFailure({
@@ -245,11 +248,11 @@ export const layer = McpToolAccess.toLayer(
           const scope = yield* McpInvocationContext.McpInvocationContext;
           const machine = yield* localEnvironment;
           const readLocal = Effect.gen(function* () {
-            const captain = yield* store.requireCaptain(duetId).pipe(Effect.mapError(failed));
+            const captain = yield* store.requireCaptain(duetId);
             if (name === undefined) return { profile: captain };
-            const document = yield* store.document(captain, name).pipe(Effect.mapError(failed));
+            const document = yield* store.document(captain, name);
             return capDuetReadContent(document);
-          });
+          }).pipe(Effect.mapError(failed));
           if (
             McpInvocationContext.forwardedChorus(scope) !== undefined ||
             environmentId === scope.environmentId
@@ -299,7 +302,7 @@ export const layer = McpToolAccess.toLayer(
               };
             }
             if (
-              result.failure instanceof OrchestratorMcpFailure &&
+              isMcpFailure(result.failure) &&
               result.failure.code === "invalid_request" &&
               result.failure.message === "Duet not found."
             ) {
@@ -535,11 +538,66 @@ export const layer = McpToolAccess.toLayer(
           };
         }),
       ),
-      duet_send: McpToolAccess.actsAsCaller((input) =>
+      duet_send: McpToolAccess.writesThreads(
+        () => [],
+        (input) =>
+          Effect.gen(function* () {
+            const scope = yield* McpInvocationContext.McpInvocationContext;
+            const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+            const target = PeerForwarding.remoteTarget(scope, input.environmentId);
+            if (target === undefined) return yield* service.sendToDuet(scope, input);
+            const { captain, store } = yield* owner;
+            if (captain.kind !== "chorus" || !McpInvocationContext.chorusOnly(scope)) {
+              return yield* chorusDenied();
+            }
+            if (Option.isNone(forwarding)) return yield* duetStateUnavailable();
+            const peer = forwarding.value;
+            return yield* Effect.uninterruptibleMask((restore) =>
+              Effect.gen(function* () {
+                const sent = yield* restore(
+                  peer
+                    .call(scope, CaptainToolkit.tools.duet_send, target, {
+                      ...input,
+                      environmentId: target,
+                    })
+                    .pipe(
+                      Effect.timeout(FLEET_PEER_TIMEOUT),
+                      Effect.mapError((error) =>
+                        isMcpFailure(error)
+                          ? error
+                          : new OrchestratorMcpFailure({
+                              code: "orchestration_error",
+                              message: "The linked machine did not confirm the route in time.",
+                            }),
+                      ),
+                    ),
+                );
+                if (sent.environmentId !== target || sent.duetId !== input.duetId) {
+                  return yield* new OrchestratorMcpFailure({
+                    code: "orchestration_error",
+                    message: "The linked machine returned a receipt for a different destination.",
+                  });
+                }
+                yield* store
+                  .recordRemoteChorusRoute(captain.id, {
+                    ...sent,
+                    duetName: sent.duetName ?? sent.duetId,
+                  })
+                  .pipe(Effect.mapError(failed));
+                return sent;
+              }),
+            );
+          }),
+      ),
+      chorus_route_status: McpToolAccess.reads(({ messageId }) =>
         Effect.gen(function* () {
-          const scope = yield* McpInvocationContext.McpInvocationContext;
-          const service = yield* OrchestratorMcpService.OrchestratorMcpService;
-          return yield* service.sendToDuet(scope, input);
+          const { client } = yield* McpInvocationContext.McpInvocationContext;
+          if (client?.linked !== true) return yield* chorusDenied();
+          if (Option.isNone(store)) return yield* duetStateUnavailable();
+          const route = yield* store.value
+            .readIncomingChorusRoute(client.sessionId, messageId)
+            .pipe(Effect.mapError(failed));
+          return { route };
         }),
       ),
       captain_read: McpToolAccess.readsAsCaller(() =>

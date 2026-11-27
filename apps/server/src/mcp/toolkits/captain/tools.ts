@@ -10,14 +10,19 @@ import {
   CaptainMemoryId,
   CaptainMemoryText,
   EnvironmentId,
-  MessageId,
+  OrchestrationV2LinkedSender,
+  OrchestratorMcpThreadSendResult,
   OrchestratorMcpFailure,
-  RunId,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { McpSchema, Tool, Toolkit } from "effect/ai";
 
+import {
+  routeStatusInput,
+  routeStatusResult,
+  routeStatusTool,
+} from "../../../captains/remoteChorusRoutes.ts";
 import * as ThreadManagement from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as OrchestratorMcpService from "../../OrchestratorMcpService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -144,15 +149,12 @@ export const CaptainToolkit = Toolkit.make(
       clientRequestId: Schema.optional(Schema.String),
     }),
     success: Schema.Struct({
+      ...OrchestratorMcpThreadSendResult.fields,
       duetId: CaptainId,
       environmentId: EnvironmentId,
-      threadId: ThreadId,
       link: Schema.String,
-      messageId: MessageId,
-      runId: RunId,
-      taskId: Schema.optional(Schema.String),
-      status: Schema.String,
-      delivery: Schema.String,
+      linkedSender: Schema.optionalKey(OrchestrationV2LinkedSender),
+      duetName: Schema.optionalKey(Schema.String),
     }),
     failure: OrchestratorMcpFailure,
     failureMode: "return" as const,
@@ -160,8 +162,14 @@ export const CaptainToolkit = Toolkit.make(
   })
     .annotate(Tool.Destructive, true)
     .annotate(Tool.OpenWorld, true)
-    .annotate(McpSchema.EnabledWhen, McpInvocationContext.captainOnly)
     .annotate(McpInvocationContext.ListedWhen, McpInvocationContext.chorusOnly),
+  Tool.make(routeStatusTool, {
+    ...options,
+    parameters: routeStatusInput,
+    success: routeStatusResult,
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(McpInvocationContext.ListedWhen, () => false),
   Tool.make("captain_read", {
     ...options,
     description: "Read your Duet profile, workspace scope and report policy.",

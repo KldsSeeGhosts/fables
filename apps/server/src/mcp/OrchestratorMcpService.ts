@@ -11,6 +11,7 @@ import {
   NodeId,
   ORCHESTRATOR_MCP_RUNNING_TASK_NEXT,
   TurnItemId,
+  type OrchestrationV2LinkedSender,
   type OrchestrationV2Run,
   type OrchestrationV2Subagent,
   type OrchestrationV2ThreadProjection,
@@ -133,12 +134,14 @@ import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import {
+  forwardedChorus,
   clientModeCeiling,
   type McpInvocationScope,
   type McpThreadInvocationScope,
   requireThreadScope,
   threadLinkFor,
 } from "./McpInvocationContext.ts";
+import { assertSameLink } from "./linkOrigin.ts";
 import * as Metrics from "../observability/Metrics.ts";
 import {
   interactionModeRank,
@@ -213,6 +216,8 @@ export interface OrchestratorMcpDuetSendResult extends OrchestratorMcpThreadSend
   readonly link: string;
   readonly duetId: CaptainId;
   readonly environmentId: EnvironmentId;
+  readonly linkedSender?: OrchestrationV2LinkedSender;
+  readonly duetName?: string;
 }
 
 export interface OrchestratorMcpServiceShape {
@@ -2586,7 +2591,9 @@ const make = Effect.gen(function* () {
     input: OrchestratorMcpThreadSendInput,
     parent: Pick<OrchestrationV2ThreadProjection, "thread" | "runs"> | undefined,
     target: Pick<OrchestrationV2ThreadProjection, "thread">,
-    route?: Omit<CaptainStore.ChorusRouteDispatch["Service"], "messageId"> & {
+    route?: CaptainStore.ChorusRouteSource & {
+      readonly commandId: CommandId;
+      readonly duetId: CaptainId;
       readonly requestKey: string;
     },
   ) {
@@ -2607,7 +2614,7 @@ const make = Effect.gen(function* () {
         ...(parent === undefined ? {} : { senderThreadId: parent.thread.id }),
         // A linked environment's agent has no thread here; the link names it.
         ...(parent === undefined && scope.client?.senderThread !== undefined
-          ? { linkedSender: scope.client.senderThread }
+          ? { linkedSender: route?.source === "linked" ? route.sender : scope.client.senderThread }
           : {}),
         messageId,
         text: input.message,
@@ -4060,16 +4067,35 @@ const make = Effect.gen(function* () {
       if (Option.isNone(captainStore)) {
         return yield* failure("orchestration_error", "Duet state is unavailable.");
       }
-      const threadScope = yield* requireThreadScope(scope, "duet_send");
       const store = captainStore.value;
-      const chorus = yield* store
-        .byThread(threadScope.thread.threadId)
-        .pipe(Effect.mapError((error) => failure("orchestration_error", error.message)));
-      if (chorus?.kind !== "chorus" || threadScope.thread.subagent === true) {
-        return yield* failure(
-          "capability_denied",
-          "This tool belongs to the active primary thread of the Chorus.",
-        );
+      const sender = forwardedChorus(scope);
+      let source: CaptainStore.ChorusRouteSource;
+      if (sender !== undefined && scope.client !== undefined) {
+        if (scope.client.access === "read-only") {
+          return yield* failure("capability_denied", "This link is read-only.");
+        }
+        source = {
+          source: "linked",
+          sender: { ...sender, captainKind: "chorus" },
+          senderSessionId: scope.client.sessionId,
+        };
+      } else {
+        const threadScope = yield* requireThreadScope(scope, "duet_send");
+        const chorus = yield* store
+          .byThread(threadScope.thread.threadId)
+          .pipe(Effect.mapError((error) => failure("orchestration_error", error.message)));
+        if (chorus?.kind !== "chorus" || threadScope.thread.subagent === true) {
+          return yield* failure(
+            "capability_denied",
+            "This tool belongs to the active primary thread of the Chorus.",
+          );
+        }
+        source = {
+          source: "local",
+          environmentId: scope.environmentId,
+          sourceCaptainId: chorus.id,
+          sourceThreadId: threadScope.thread.threadId,
+        };
       }
       const duet = yield* store
         .requireCaptain(input.duetId)
@@ -4084,13 +4110,19 @@ const make = Effect.gen(function* () {
       if (duet.archivedAt !== null) {
         return yield* failure("invalid_request", `Duet ${duet.name} is archived.`);
       }
-      if (duet.kind !== "duet" || duet.id === chorus.id) {
+      if (duet.kind !== "duet") {
         return yield* failure(
           "invalid_request",
           "duet_send routes to another Duet, not the Chorus.",
         );
       }
       const key = yield* requestKey(input.clientRequestId);
+      if (source.source === "linked") {
+        scope = {
+          ...scope,
+          requestNamespace: `${scope.requestNamespace}:${source.sender.environmentId}`,
+        };
+      }
       const commandId = stableCommandId({ scope, requestKey: key, operation: "duet-send" });
       const acceptedThread = store
         .acceptedChorusRouteThread(commandId)
@@ -4099,12 +4131,13 @@ const make = Effect.gen(function* () {
         const { parent, limits, target } = yield* loadScopedThread(scope, threadId, ["runs"]);
         yield* assertLiveCallerForOtherThread(scope, parent, target);
         yield* assertTargetWithinLimits(limits, target.thread);
+        if (source.source === "linked") {
+          yield* assertSameLink({ scope, caller: undefined }, target.thread);
+        }
         return yield* sendToThreadCore(scope, { ...input, threadId }, parent, target, {
+          ...source,
           requestKey: key,
           commandId,
-          environmentId: scope.environmentId,
-          sourceCaptainId: chorus.id,
-          sourceThreadId: threadScope.thread.threadId,
           duetId: duet.id,
         }).pipe(Effect.provideService(DispatchModeLimit, limits));
       });
@@ -4135,7 +4168,12 @@ const make = Effect.gen(function* () {
                 ),
               ),
             );
-      return { ...sent, duetId: duet.id, environmentId: scope.environmentId };
+      return {
+        ...sent,
+        duetId: duet.id,
+        environmentId: scope.environmentId,
+        ...(source.source === "linked" ? { linkedSender: source.sender, duetName: duet.name } : {}),
+      };
     }),
     waitForThread: Effect.fn("OrchestratorMcpService.waitForThread")(function* (scope, input) {
       yield* assertReadableConversation(scope, input.threadId);

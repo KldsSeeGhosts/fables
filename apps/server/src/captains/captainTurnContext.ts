@@ -5,6 +5,7 @@ import {
   type OrchestrationV2AppThreadLineage,
   type OrchestrationV2ConversationMessage,
   type ProjectId,
+  type OrchestrationV2LinkedSender,
   type ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -218,7 +219,7 @@ ${updates
       update.result === null || update.result.trim() === ""
         ? ""
         : ` ${firstParagraph(update.result)}`;
-    return `- ${prefix(update.duetName ?? "Unavailable Duet", 80)} [${update.runId}]: ${update.status}.${summary} Read the Duet thread with t3_thread_read(threadId: "${update.threadId}").`;
+    return `- ${prefix(update.duetName ?? "Unavailable Duet", 80)} [${update.runId}]: ${update.status}.${summary} Read the Duet thread with t3_thread_read(threadId: "${update.threadId}"${update.remote === 1 ? `, environmentId: "${update.environmentId}"` : ""}).`;
   })
   .join("\n")}`;
 
@@ -288,18 +289,25 @@ export const mayCarryCaptainContext = ({ id, lineage }: CaptainContextThread) =>
 export const makeReadRoutedByChorusLine = Effect.gen(function* () {
   const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
   return Effect.fn("CaptainService.routedByChorusLine")(
-    function* (threadId: ThreadId, senderThreadId: ThreadId | undefined) {
-      if (
-        !isCaptainThreadId(threadId) ||
-        senderThreadId === undefined ||
-        !isCaptainThreadId(senderThreadId) ||
-        Option.isNone(store)
-      )
-        return "";
-      const sender = yield* store.value.findByConversation(senderThreadId);
-      return sender?.kind === "chorus"
-        ? `This turn was routed by Chorus ${sender.name}. It carries the user's ask. Answer the user and ask any questions in this Duet thread.`
-        : "";
+    function* (
+      threadId: ThreadId,
+      senderThreadId: ThreadId | undefined,
+      linkedSender?: OrchestrationV2LinkedSender,
+    ) {
+      if (!isCaptainThreadId(threadId) || Option.isNone(store)) return "";
+      const sender =
+        senderThreadId !== undefined && isCaptainThreadId(senderThreadId)
+          ? yield* store.value.findByConversation(senderThreadId)
+          : undefined;
+      const name =
+        linkedSender?.captainKind === "chorus"
+          ? linkedSender.title
+          : sender?.kind === "chorus"
+            ? sender.name
+            : undefined;
+      return name === undefined
+        ? ""
+        : `This turn was routed by Chorus ${prefix(name, 200)}. It carries the user's ask. Answer the user and ask any questions in this Duet thread.`;
     },
     Effect.orElseSucceed(() => ""),
   );
@@ -358,8 +366,9 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
     function* (updates: ReadonlyArray<ChorusRouteUpdate>) {
       if (Option.isNone(store) || updates.length === 0) return;
       yield* store.value.markChorusRoutesDelivered(
-        updates.map(({ messageId, status, terminal }) => ({
+        updates.map(({ messageId, environmentId, remote, status, terminal }) => ({
           messageId,
+          ...(remote === 1 ? { remoteEnvironmentId: environmentId } : {}),
           status,
           terminal: terminal === 1,
         })),
@@ -394,7 +403,7 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
       delivery?: CaptainBriefingDelivery,
       message?: Pick<
         OrchestrationV2ConversationMessage,
-        "createdBy" | "senderThreadId" | "scheduledTaskId"
+        "createdBy" | "senderThreadId" | "linkedSender" | "scheduledTaskId"
       >,
     ) {
       const threadId = thread.id;
@@ -488,7 +497,9 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
           ? yield* readChorusRouteUpdates(captain)
           : [];
       const routedByChorus =
-        captain.kind === "duet" ? yield* routedByChorusLine(threadId, message?.senderThreadId) : "";
+        captain.kind === "duet"
+          ? yield* routedByChorusLine(threadId, message?.senderThreadId, message?.linkedSender)
+          : "";
       const briefing = formatCaptainBriefing({
         captain,
         projects: scopedProjects,
@@ -549,6 +560,7 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
                   plan.commit();
                   longTermMemoryPlan?.commit();
                 });
+                // A crash after provider acceptance and before this acknowledgement can replay a routed result.
                 yield* markChorusRoutesDelivered(chorusRouteUpdates);
               }),
       };

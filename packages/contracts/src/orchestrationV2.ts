@@ -159,6 +159,7 @@ export const OrchestrationV2LinkedSender = Schema.Struct({
   environmentId: EnvironmentId,
   threadId: ThreadId,
   title: Schema.String,
+  captainKind: Schema.optionalKey(Schema.Literal("chorus")),
 });
 export type OrchestrationV2LinkedSender = typeof OrchestrationV2LinkedSender.Type;
 
