@@ -95,6 +95,12 @@ const isActiveChorusUniqueViolation = (cause: unknown) =>
   cause.reason._tag === "UniqueViolation" &&
   cause.reason.constraint === "captains.kind";
 
+const activeChorusConflict = () =>
+  new CaptainError({
+    code: "conflict",
+    message: "An active Chorus already exists on this machine.",
+  });
+
 export type ChorusRouteSource =
   | {
       readonly source: "local";
