@@ -1922,8 +1922,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       }
     })();
   };
+  const handleSettle = useStableCallback(attemptSettle);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers this sidebar's settle handler in the module-level settleAndAdvance registry
-  useEffect(() => registerSettleAndAdvance(attemptSettle), [attemptSettle]);
+  useEffect(() => registerSettleAndAdvance(handleSettle), [handleSettle]);
   const settleThreads = (threadKeys: readonly string[]) => {
     const coSettlingKeys = new Set(threadKeys);
     for (const threadKey of threadKeys) {
@@ -3913,7 +3914,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             isRenaming={renamingThreadKey === threadKey}
                             renamingTitle={renamingThreadKey === threadKey ? renamingTitle : ""}
                             onContextMenu={handleThreadContextMenu}
-                            onSettle={attemptSettle}
+                            onSettle={handleSettle}
                             onActionSweepStart={startActionSweep}
                             onUnsettle={attemptUnsettle}
                             onSnooze={attemptSnooze}

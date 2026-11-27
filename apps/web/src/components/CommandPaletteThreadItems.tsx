@@ -168,7 +168,9 @@ function useThreadActionItems(input: {
   const providerEntryByEnvironmentAndInstanceId = useProviderEntryByEnvironmentAndInstanceId();
   const { projectByKey } = useProjectLookups();
   const recentThreads = useRecentThreads(activeThread, delegatedUnderParent);
-  const nowMs = Date.parse(`${useNowMinute()}:00.000Z`);
+  // Read the clock before formatting so the compiler can cache the item list on the minute.
+  const nowMinute = useNowMinute();
+  const nowMs = Date.parse(`${nowMinute}:00.000Z`);
   return buildThreadActionItems(
     {
       threads: includeAllThreads ? threads : recentThreads,
