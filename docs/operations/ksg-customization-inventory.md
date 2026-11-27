@@ -18,9 +18,9 @@ Use the check commands from the repository root after resolving a merge. They ar
 
 ## Duets server model, delegation, and rollover
 
-Owners: `apps/server/src/captains/`, `apps/server/src/orchestration-v2/CaptainRolloverWorker.ts`, `apps/server/src/mcp/toolkits/captain/`, `packages/contracts/src/captain.ts`, `packages/client-runtime/src/state/captain*.ts`, `packages/client-runtime/src/state/duetOrder.ts`, Captain migrations `112` through `115`, and `evals/mcp-tool-use/cases/captain.ndjson`.
+Owners: `apps/server/src/captains/`, `apps/server/src/orchestration-v2/CaptainRolloverWorker.ts`, `apps/server/src/mcp/toolkits/captain/`, `packages/contracts/src/captain.ts`, `packages/client-runtime/src/state/captain*.ts`, `packages/client-runtime/src/state/duetOrder.ts`, Captain migrations `112` through `115` and Chorus migrations `125` through `127`, and `evals/mcp-tool-use/cases/captain.ndjson`.
 
-Must survive: Captain profiles and kinds, including the one-active fleet Chorus, scoped projects, documents, local and optional [Honcho memory](../user/captain-honcho-memory.md), archive and reset behavior, fleet read and routing tools, coverage-limited Chorus Solos, route ledgers, delegation to crew threads, earlier conversation identity, rollover end reasons, durable resends, coordinator-only Captains, Captain MCP tools, and the client projection that tracks attention across current and earlier conversations.
+Must survive: Captain profiles and kinds, including checks for an active Chorus on reachable linked machines, scoped projects, documents, local and optional [Honcho memory](../user/captain-honcho-memory.md), archive and reset behavior, fleet read and routing tools, coverage-limited Chorus Solos, route ledgers, delegation to crew threads, earlier conversation identity, rollover end reasons, durable resends, coordinator-only Captains, Captain MCP tools, and the client projection that tracks attention across current and earlier conversations.
 
 Checks:
 
@@ -30,6 +30,7 @@ git grep -n 'class CaptainHonchoMemory' -- apps/server/src/captains/CaptainHonch
 git grep -n 'CaptainRolloverWorker' -- apps/server/src/orchestration-v2 apps/server/src
 git grep -n 'captainEarlierConversations' -- packages/contracts/src/captain.ts
 git grep -n '\[112, "Captains"' -- apps/server/src/persistence/Migrations.ts
+git grep -n -E '"CaptainKind"|"ChorusRoutes"|"RemoteChorusRoutes"' -- apps/server/src/persistence/Migrations.ts
 ```
 
 ## Duet web experience
@@ -42,6 +43,7 @@ Checks:
 
 ```sh
 git grep -n 'export function CaptainsWorkspace' -- apps/web/src/components/captains/CaptainsWorkspace.tsx
+git grep -n 'canCreateChorus' -- apps/web/src/components/captains/CaptainEditorDialog.tsx
 git grep -n 'export function CaptainEarlierConversations' -- apps/web/src/components/captains/CaptainEarlierConversations.tsx
 git grep -n 'export function DuetHeaderTitle' -- apps/web/src/components/chat/DuetHeaderTitle.tsx
 git grep -n 'resolveThreadToolCallVisibility' -- apps/web/src/components/chat/MessagesTimeline.tsx packages/client-runtime/src/toolCallVisibility.ts
@@ -57,6 +59,7 @@ Checks:
 
 ```sh
 git grep -n 'CaptainsHomeSection' -- apps/mobile/src/features/home/HomeScreen.tsx
+git grep -n 'ChorusNewSheet' -- apps/mobile/src/Stack.tsx
 git grep -n 'DuetConversationOrb' -- apps/mobile/src/features/threads/ThreadRouteScreen.tsx
 git grep -n 'ksg-salon' -- apps/mobile/src/features/captains/duetShell.ts apps/mobile/src/lib/mobileTheme.ts
 git grep -n 'duetToolCallVisibility' -- apps/mobile/src/persistence/mobile-preferences.ts packages/contracts/src/settings.ts
@@ -198,12 +201,13 @@ git grep -n 'kidsseeghosts\|0db5bfe2-75db-4fa0-a957-e2ef19fac1d8' -- apps/mobile
 
 ## Migration renumbering
 
-KSG databases already recorded Captain migrations `112` through `115`. Newly integrated upstream migrations with IDs `112` or higher must move forward by four in the filename, manifest ID, and manifest import. In the 5258 baseline this means upstream `112` through `119` are KSG `116` through `123`. Keep all previously shipped migration IDs and files intact.
+KSG databases already recorded Captain migrations `112` through `115` and Chorus migrations `125` through `127`. Newly integrated upstream migrations with IDs `112` or higher must move forward by four in the filename, manifest ID, and manifest import. In the 5258 baseline this means upstream `112` through `119` are KSG `116` through `123`. Keep all previously shipped migration IDs and files intact.
 
 Checks:
 
 ```sh
 git grep -n '\[112, "Captains"' -- apps/server/src/persistence/Migrations.ts
+git grep -n -E '"CaptainKind"|"ChorusRoutes"|"RemoteChorusRoutes"' -- apps/server/src/persistence/Migrations.ts
 git grep -n '\[116, "LayoutCommandApprovals"' -- apps/server/src/persistence/Migrations.ts
 test -f apps/server/src/persistence/Migrations/116_LayoutCommandApprovals.ts
 test -f apps/server/src/persistence/Migrations/123_WorkflowRunSubject.ts
