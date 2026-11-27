@@ -6,7 +6,11 @@ import { enableCliCompileCache } from "./cliCompileCache.ts";
 export async function runCliCommand() {
   const command = process.argv[2];
   // Install the socket guard before importing code that can open outbound connections.
-  const { ignoreMacosTypeOfServiceEinval } = await import("./outboundHttp.ts");
+  const {
+    extendConnectionAttemptTimeout,
+    ignoreMacosTypeOfServiceEinval,
+    keepOutboundFetchOnHttp1,
+  } = await import("./outboundHttp.ts");
   ignoreMacosTypeOfServiceEinval();
   if (command === "__document-text") {
     const { extractDocumentText } = await import("./provider/documentTextWorker.ts");
@@ -41,11 +45,28 @@ export async function runCliCommand() {
     // Windows desktop launches without stdin; attach before reading, except on fast paths using pipes.
     const { attachConsoleStdin } = await import("./cli/consoleStdin.ts");
     attachConsoleStdin();
+    // Electron launches the bundled backend with a bootstrap pipe and no other CLI arguments.
+    const desktopBackend =
+      process.env.ELECTRON_RUN_AS_NODE === "1" &&
+      command === "--bootstrap-fd" &&
+      process.argv[3] === "3" &&
+      process.argv.length === 4 &&
+      !process.stdin.isTTY &&
+      !process.stdout.isTTY;
     const importStart = performance.now();
-    const { runCli } = await import("./binCli.ts");
+    const run = desktopBackend
+      ? (await import("./cli/server.ts")).runDesktopBackend
+      : (await import("./binCli.ts")).runCli;
     if (process.env.T3CODE_STARTUP_PROFILE_DIR) {
-      performance.measure("server.import.binCli", { start: importStart });
+      performance.measure(
+        desktopBackend ? "server.import.desktopBackend" : "server.import.binCli",
+        {
+          start: importStart,
+        },
+      );
     }
-    runCli();
+    extendConnectionAttemptTimeout();
+    keepOutboundFetchOnHttp1();
+    run();
   }
 }

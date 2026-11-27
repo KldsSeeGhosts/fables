@@ -17,6 +17,9 @@ it.live("loads the CLI with its cache settings only when the command needs it", 
       registerHooks({ resolve(specifier, context, nextResolve) {
         if (specifier === './binMain.ts') console.error('LOADED_CLI_MAIN');
         if (specifier === './binCli.ts') console.error('CACHE=' + (getCompileCacheDir() ?? 'disabled'));
+        if (specifier === '../server.ts' && process.argv[2] === '--bootstrap-fd') {
+          throw new Error('Stopped at server import for desktop startup test');
+        }
         return nextResolve(specifier, context);
       } });
     `;
@@ -60,6 +63,12 @@ it.live("loads the CLI with its cache settings only when the command needs it", 
     expect(normal.stderr).toContain("LOADED_CLI_MAIN");
     expect(normal.stderr.replaceAll("\\", "/")).toContain(
       `CACHE=${root}/cache/t3code/compile-cache`.replaceAll("\\", "/"),
+    );
+    const desktop = yield* run({ ELECTRON_RUN_AS_NODE: "1" }, ["--bootstrap-fd", "3"]);
+    expect(desktop.exitCode).toBe(1);
+    expect(desktop.stderr).not.toContain("CACHE=");
+    expect(desktop.stdout + desktop.stderr).toContain(
+      "Stopped at server import for desktop startup test",
     );
     const launcher = yield* run({ T3CODE_HOME: "" }, ["__service-launcher"]);
     expect(launcher.exitCode).toBe(1);

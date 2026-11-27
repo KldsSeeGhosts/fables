@@ -275,7 +275,8 @@ effectIt.effect("stops probing a subscriber's configured paths after its scope c
         : new Response("not found", { status: 404 }),
     );
   }) as typeof globalThis.fetch;
-  const layer = layerLsofScanner({ pid: () => 1234, fetch: fetchFn });
+  let pid = 1234;
+  const layer = layerLsofScanner({ pid: () => pid, fetch: fetchFn });
 
   return Effect.gen(function* () {
     const scanner = yield* PortScanner.PortDiscovery;
@@ -290,8 +291,9 @@ effectIt.effect("stops probing a subscriber's configured paths after its scope c
     yield* scanner.retain;
     yield* Scope.close(docsScope, Exit.void);
 
+    pid = 1235;
     requests.length = 0;
-    yield* TestClock.adjust(Duration.seconds(15));
+    yield* TestClock.adjust(Duration.seconds(3));
     expect(requests).toContain(adminUrl);
     expect(requests).not.toContain(docsUrl);
   }).pipe(Effect.scoped, Effect.provide(layer));
@@ -330,6 +332,46 @@ effectIt.effect("skips scheduled scans while no client is in the foreground", ()
     yield* TestClock.adjust(Duration.seconds(3));
     expect(lsofRuns).toBeGreaterThan(afterInitialScan);
   }).pipe(Effect.scoped, Effect.provide(layer));
+});
+
+effectIt.effect("runs one scheduled poll only while clients retain the scanner", () => {
+  let scheduledPolls = 0;
+  const layer = layerLsofScanner({
+    pid: () => 1234,
+    fetch: (() => Promise.resolve(new Response("not found", { status: 404 }))) as typeof fetch,
+    backgroundPolicy: Layer.mock(BackgroundPolicy.BackgroundPolicy)({
+      shouldRunOpportunisticWork: Effect.sync(() => {
+        scheduledPolls += 1;
+        return false;
+      }),
+    }),
+  });
+
+  return Effect.gen(function* () {
+    const scanner = yield* PortScanner.PortDiscovery;
+    yield* TestClock.adjust(Duration.seconds(9));
+    expect(scheduledPolls).toBe(0);
+
+    const first = yield* Scope.make();
+    const second = yield* Scope.make();
+    yield* scanner.retain.pipe(Scope.provide(first));
+    yield* scanner.retain.pipe(Scope.provide(second));
+    yield* TestClock.adjust(Duration.seconds(6));
+    expect(scheduledPolls).toBe(2);
+
+    yield* Scope.close(first, Exit.void);
+    yield* TestClock.adjust(Duration.seconds(3));
+    expect(scheduledPolls).toBe(3);
+
+    yield* Scope.close(second, Exit.void);
+    yield* TestClock.adjust(Duration.seconds(9));
+    expect(scheduledPolls).toBe(3);
+
+    yield* Effect.scoped(
+      scanner.retain.pipe(Effect.andThen(TestClock.adjust(Duration.seconds(3)))),
+    );
+    expect(scheduledPolls).toBe(4);
+  }).pipe(Effect.provide(layer));
 });
 
 effectIt.effect("uses the current configured fragment when readiness comes from cache", () => {
