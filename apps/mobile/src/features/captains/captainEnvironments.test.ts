@@ -87,7 +87,7 @@ describe("resolveCaptainEnvironments", () => {
     expect(environment?.captains.map(({ id }) => id)).toEqual(["comfy"]);
   });
 
-  it("keeps archived Choruses available for restore without showing archived Duets", () => {
+  it("keeps archived profiles in the snapshot and out of the Home list", () => {
     const archivedAt = "2026-11-02T00:00:00.000Z";
     const chorus = { ...captain("chorus", archivedAt), kind: "chorus" as const };
     const [environment] = resolve({
@@ -95,7 +95,7 @@ describe("resolveCaptainEnvironments", () => {
       live: AsyncResult.success(snapshot([captain("old", archivedAt), chorus])),
     });
     expect(environment?.captains).toEqual([]);
-    expect(environment?.archivedChoruses).toEqual([chorus]);
+    expect(environment?.snapshot?.captains).toContain(chorus);
   });
 
   it("drops cached Captains when the host denies reading them or does not run Captains", () => {

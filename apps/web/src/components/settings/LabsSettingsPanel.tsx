@@ -32,7 +32,7 @@ import {
 } from "./useScopedSettings";
 import { useOptionalSettingsScope, useSettingsScope } from "./SettingsScopeContext";
 import { firstManagedDenial, usePrimaryManagedPolicy } from "~/state/managedPolicy";
-import { useFleetChorus } from "../captains/captainsDirectory";
+import { useFleetChorusStatus } from "../captains/captainsDirectory";
 
 /** Features still settling in. */
 export function LabsSettingsPanel() {
@@ -266,7 +266,7 @@ function ChorusHomeRow() {
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   const settingsScope = useOptionalSettingsScope();
-  const fleet = useFleetChorus();
+  const { fleet, refresh } = useFleetChorusStatus();
   const gt = useGT();
   const targets = settingsScope?.connectedEnvironments ?? [];
   const canSelectHome =
@@ -291,6 +291,7 @@ function ChorusHomeRow() {
         ) : undefined
       }
     >
+      {fleet !== null ? <InlineButton onClick={refresh}>{gt("Refresh")}</InlineButton> : null}
       {fleet?.status.state === "conflict" ? (
         <p role="alert" className="mt-2 text-body text-warning-foreground">
           {fleet.status.conflictingHomes.length > 0

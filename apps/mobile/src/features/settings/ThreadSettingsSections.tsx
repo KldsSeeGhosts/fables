@@ -28,7 +28,7 @@ import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { planAutoSettleSettingsSync, type AutoSettleSettings } from "./autoSettleSettingsSync";
 import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
-import { useFleetChorus } from "../captains/useCaptainsDirectory";
+import { useFleetChorusStatus } from "../captains/useCaptainsDirectory";
 import {
   managedSettingReason,
   resolveMobileSettingsTargets,
@@ -353,7 +353,7 @@ function AgentFeedbackSection() {
 /** The Chorus home switch for every machine new enough to host the fleet row. */
 function ChorusHomeBetaSection() {
   const gt = useGT();
-  const fleet = useFleetChorus();
+  const { fleet, refresh } = useFleetChorusStatus();
   return (
     <>
       <MachineBetaSection
@@ -365,6 +365,7 @@ function ChorusHomeBetaSection() {
           "Keep the fleet's one Chorus on this machine. It appears in every connected app; turning this off archives the local row.",
         )}
       />
+      {fleet !== null ? <Button label={gt("Refresh")} size="compact" onPress={refresh} /> : null}
       {fleet?.status.state === "conflict" ? (
         <Text className="-mt-3 px-2 text-sm text-warning-foreground">
           {fleet.status.conflictingHomes.length > 0

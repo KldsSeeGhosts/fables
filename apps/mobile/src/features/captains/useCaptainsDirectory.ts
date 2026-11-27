@@ -1,4 +1,4 @@
-import { useAtomValue } from "@effect/atom-react";
+import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import {
   captainConversationKeys,
   captainForEarlierConversation,
@@ -14,7 +14,7 @@ import {
 } from "@t3tools/contracts";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { AsyncResult } from "effect/reactivity";
-import { useEffect } from "react";
+import { useContext, useEffect } from "react";
 
 import { useEnvironmentServerConfig } from "../../state/entities";
 import { useEnvironments } from "../../state/environments";
@@ -63,7 +63,8 @@ export function useCaptainEnvironments(environmentId?: EnvironmentId | null) {
 }
 
 /** The one fleet Chorus projection, chosen from connected servers that understand it. */
-export function useFleetChorus(): FleetChorusView | null {
+export function useFleetChorusStatus() {
+  const registry = useContext(RegistryContext);
   const { environments } = useEnvironments();
   const readable = useEnvironmentsWithScope(environments, AuthOrchestrationReadScope);
   const supporting = environments.filter(
@@ -71,12 +72,11 @@ export function useFleetChorus(): FleetChorusView | null {
       readable.has(environment.environmentId) &&
       environment.serverConfig?.environment.capabilities.fleetChorus === true,
   );
+  const environmentIds = supporting.map(({ environmentId }) => environmentId);
   const live = useAtomValue(
-    serverEnvironment.fleetChorusLiveAcross(
-      JSON.stringify(supporting.map(({ environmentId }) => environmentId)),
-    ),
+    serverEnvironment.fleetChorusLiveAcross(JSON.stringify(environmentIds)),
   );
-  return selectFleetChorus(
+  const fleet = selectFleetChorus(
     live.map(({ environmentId, result }) => ({
       environmentId,
       connected:
@@ -85,6 +85,18 @@ export function useFleetChorus(): FleetChorusView | null {
       status: AsyncResult.getOrElse(result, () => null),
     })),
   );
+  return {
+    fleet,
+    refresh: () => {
+      for (const environmentId of environmentIds) {
+        registry.refresh(serverEnvironment.fleetChorusLive({ environmentId, input: {} }));
+      }
+    },
+  };
+}
+
+export function useFleetChorus(): FleetChorusView | null {
+  return useFleetChorusStatus().fleet;
 }
 
 // Snapshots already handed to the cache; an unchanged live list keeps its snapshot object.

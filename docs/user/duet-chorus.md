@@ -8,7 +8,7 @@ One machine owns Chorus. In **Settings → Labs**, select the machine you want t
 
 The pinned Chorus row appears above your Duets in web, desktop, and mobile apps. The app can connect to the home or to an updated machine that has a link to the home. Opening from another machine uses the linked thread relay to read the conversation. Connect to the home to send Chorus a message.
 
-If a known home machine is offline or needs a server update, the pinned row says so. If the connected machine doesn't know a home, the row asks you to choose one in Settings. If two machines claim the role, Settings shows a warning. Turn **Chorus home** off on all but one machine.
+If a known home machine is offline or needs a server update, the pinned row says so. If the connected machine doesn't know a home, the row asks you to choose one in Settings. If two machines claim the role, Settings shows a warning. Turn **Chorus home** off on all but one machine. Use **Refresh** next to the home setting to recheck linked machines after a home change, outage, or update.
 
 Turning **Chorus home** off archives that machine's Chorus and keeps its history. The pinned row follows the remaining home or asks you to choose one. The home adopts its existing active Chorus, or restores its most recently archived Chorus if it has one. Other machines archive their old local Choruses.
 

@@ -1,7 +1,8 @@
-import { useAtomValue } from "@effect/atom-react";
+import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import { AuthOrchestrationReadScope, type Captain, type EnvironmentId } from "@t3tools/contracts";
 import { selectFleetChorus, type FleetChorusView } from "@t3tools/client-runtime/state/captains";
 import { AsyncResult } from "effect/reactivity";
+import { useContext } from "react";
 
 import { useThreadShells } from "../../state/entities";
 import { environmentAtomList, environmentIdsKey } from "../../state/environmentAtomList";
@@ -33,22 +34,36 @@ export function useCaptainEnvironments() {
 }
 
 /** The one fleet Chorus projection, chosen from the connected servers that understand it. */
-export function useFleetChorus(): FleetChorusView | null {
+export function useFleetChorusStatus() {
+  const registry = useContext(RegistryContext);
   const { environments } = useEnvironments();
   const readable = useEnvironmentsWithScope(environments, AuthOrchestrationReadScope);
   const fleetEnvironments = environments.filter(
     ({ environmentId, serverConfig }) =>
       readable.has(environmentId) && serverConfig?.environment.capabilities.fleetChorus === true,
   );
-  const key = environmentIdsKey(fleetEnvironments.map(({ environmentId }) => environmentId));
+  const environmentIds = fleetEnvironments.map(({ environmentId }) => environmentId);
+  const key = environmentIdsKey(environmentIds);
   const results = useAtomValue(fleetChorusResults(key));
-  return selectFleetChorus(
+  const fleet = selectFleetChorus(
     fleetEnvironments.map(({ environmentId, connection }, index) => ({
       environmentId,
       connected: connection.phase === "connected",
       status: AsyncResult.getOrElse(results[index]!, () => null),
     })),
   );
+  return {
+    fleet,
+    refresh: () => {
+      for (const environmentId of environmentIds) {
+        registry.refresh(serverEnvironment.fleetChorusLive({ environmentId, input: {} }));
+      }
+    },
+  };
+}
+
+export function useFleetChorus(): FleetChorusView | null {
+  return useFleetChorusStatus().fleet;
 }
 
 /** Where a new Captain can be created, preferring the primary environment. */

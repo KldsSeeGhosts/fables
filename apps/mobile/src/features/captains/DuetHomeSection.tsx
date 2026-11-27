@@ -144,14 +144,16 @@ export function DuetHomeSection(props: {
                   : gt("All projects");
         const threadKey = scopedThreadKey(environment.environmentId, captain.primaryThreadId);
         const selected = threadKey === props.selectedThreadKey;
+        const disabled = fleetState !== undefined && fleetState !== "ready";
         return (
           <Pressable
             key={`${environment.environmentId}:${captain.id}`}
             accessibilityRole="button"
             accessibilityState={{
               selected,
-              disabled: fleetState !== undefined && fleetState !== "ready",
+              disabled,
             }}
+            disabled={disabled}
             accessibilityLabel={[captain.name, scopeText].join(", ")}
             onPress={() => {
               if (fleetState !== undefined) {

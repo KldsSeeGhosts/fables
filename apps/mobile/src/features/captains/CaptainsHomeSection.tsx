@@ -218,11 +218,13 @@ export function CaptainsHomeSection(props: {
           showsEnvironment && fleetState === undefined
             ? [state, environment.label].filter((part) => part !== null).join(" · ")
             : state;
+        const disabled = fleetState !== undefined && fleetState !== "ready";
         return (
           <Pressable
             key={`${environment.environmentId}:${captain.id}`}
             accessibilityRole="button"
-            accessibilityState={{ disabled: fleetState !== undefined && fleetState !== "ready" }}
+            accessibilityState={{ disabled }}
+            disabled={disabled}
             accessibilityLabel={[captain.name, detail].filter(Boolean).join(", ")}
             onPress={() => {
               if (fleetState !== undefined) {
