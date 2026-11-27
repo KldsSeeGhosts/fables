@@ -185,6 +185,8 @@ export function CaptainOverviewRecap(props: {
       ? serverEnvironment.captainsLive({ environmentId, input: { captainId: captain.id } })
       : null,
   );
+  // A live subscription stays `isPending` while it streams, so only the first load blocks refresh.
+  const loading = live.data === null && live.error === null;
   const [expanded, setExpanded] = useState(false);
   const [restOpen, setRestOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -241,8 +243,8 @@ export function CaptainOverviewRecap(props: {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={gt("Refresh recap for {name}", { name: captain.name })}
-            accessibilityState={{ busy: live.isPending }}
-            disabled={live.isPending}
+            accessibilityState={{ busy: loading }}
+            disabled={loading}
             onPress={live.refresh}
             className="h-11 w-11 items-center justify-center rounded-full active:bg-subtle"
           >
