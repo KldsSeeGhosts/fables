@@ -353,8 +353,9 @@ const layerFeedbackStoreProvided = FeedbackStore.layer.pipe(
 const layerTextGenerationProvided = TextGeneration.layer.pipe(
   Layer.provide(ProviderInstallationGate.layer),
 );
+const layerChorusPeers = PeerMcpClient.layer.pipe(Layer.provideMerge(PeerLinks.layer));
 const layerCaptainBriefProvided = CaptainBriefService.layer.pipe(
-  Layer.provide(Layer.mergeAll(CaptainStore.layer, layerTextGenerationProvided)),
+  Layer.provide(Layer.mergeAll(CaptainStore.layer, layerTextGenerationProvided, layerChorusPeers)),
 );
 const layerScheduledTaskProvided = ScheduledTaskService.layer.pipe(
   Layer.provide(
@@ -372,6 +373,7 @@ const layerCaptainProvided = CaptainService.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
       CaptainStore.layer,
+      layerChorusPeers,
       layerEventSink,
       layerThreadManagementProvided,
       layerThreadLaunchProvided,
@@ -386,6 +388,7 @@ const layerCaptainRolloverWorkerProvided = CaptainRolloverWorker.layer.pipe(
     Layer.mergeAll(
       ThreadCommandExecutor.layer,
       layerCaptainProvided,
+      layerCaptainBriefProvided,
       CaptainStore.layer,
       layerThreadManagementProvided,
     ),

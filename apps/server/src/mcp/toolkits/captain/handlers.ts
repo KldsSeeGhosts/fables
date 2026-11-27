@@ -11,6 +11,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 
+import * as CaptainBriefService from "../../../captains/CaptainBriefService.ts";
 import { captainDigestNewLines } from "../../../captains/captainDigest.ts";
 import * as CaptainHonchoMemory from "../../../captains/CaptainHonchoMemory.ts";
 import * as CaptainStore from "../../../captains/CaptainStore.ts";
@@ -100,6 +101,7 @@ export const layer = McpToolAccess.toLayer(
   CaptainToolkit,
   Effect.gen(function* () {
     const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
+    const briefs = yield* Effect.serviceOption(CaptainBriefService.CaptainBriefService);
     const honcho = yield* Effect.serviceOption(CaptainHonchoMemory.CaptainHonchoMemory);
     const random = yield* SecureRandom.SecureRandom;
     const projects = yield* ProjectService.ProjectService;
@@ -588,6 +590,24 @@ export const layer = McpToolAccess.toLayer(
               }),
             );
           }),
+      ),
+      chorus_active: McpToolAccess.reads(() =>
+        Effect.gen(function* () {
+          const { client } = yield* McpInvocationContext.McpInvocationContext;
+          if (client?.linked !== true) return yield* chorusDenied();
+          if (Option.isNone(store)) return yield* duetStateUnavailable();
+          const active = yield* store.value.findActiveChorus().pipe(Effect.mapError(failed));
+          return { active: active !== undefined };
+        }),
+      ),
+      chorus_machine_activity: McpToolAccess.reads(() =>
+        Effect.gen(function* () {
+          const scope = yield* McpInvocationContext.McpInvocationContext;
+          if (McpInvocationContext.forwardedChorus(scope) === undefined)
+            return yield* chorusDenied();
+          if (Option.isNone(briefs)) return yield* duetStateUnavailable();
+          return yield* briefs.value.readLocalChorusMachineActivity().pipe(Effect.mapError(failed));
+        }),
       ),
       chorus_route_status: McpToolAccess.reads(({ messageId }) =>
         Effect.gen(function* () {

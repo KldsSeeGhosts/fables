@@ -12,21 +12,29 @@ import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 
+import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import { resolveBriefModelSelection } from "../serverSettings.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import * as CaptainHandoff from "./captainHandoff.ts";
 import * as CaptainStore from "./CaptainStore.ts";
+import {
+  BRIEF_OPEN_ITEM_LIMIT,
+  CHORUS_DUET_LIMIT,
+  ChorusMachineActivity,
+  chorusActivityTool,
+  makeReadChorusFleet,
+} from "./chorusFleet.ts";
 
 const missing = () => new CaptainError({ code: "not_found", message: "Duet not found." });
 const isDocumentContent = Schema.is(CaptainDocumentContent);
 const BRIEF_DOCUMENT_CONTEXT_LIMIT = 4_000;
 const BRIEF_ACTIVITY_LIMIT = 4_000;
-const CHORUS_DUET_LIMIT = 16;
-const BRIEF_OPEN_ITEM_LIMIT = 8;
+const CHORUS_RECAP_PEER_LIMIT = 8;
 
 /** Replaces only DIGEST.md's `## New` section, or adds it after the title when the digest has none. */
 export const replaceCaptainDigestNewSection = (content: string, section: string): string => {
@@ -56,7 +64,7 @@ export const replaceCaptainDigestNewSection = (content: string, section: string)
 
 const compactLine = (value: string | null | undefined) => value?.replace(/\s+/g, " ").trim();
 const excerpt = (value: string, limit: number) =>
-  value.length <= limit ? value : `${value.slice(0, limit - 1)}…`;
+  limit <= 0 ? "" : value.length <= limit ? value : `${value.slice(0, limit - 1)}…`;
 
 interface BriefActivity {
   readonly activeTasks: ReadonlyArray<{
@@ -74,20 +82,6 @@ interface BriefActivity {
     readonly result?: string | undefined;
     readonly completedAt: string;
   }>;
-}
-
-interface ChorusDuetActivity {
-  readonly name: string;
-  readonly digestNew: string;
-  readonly activeTasks: BriefActivity["activeTasks"];
-  readonly pendingRequests: BriefActivity["pendingRequests"];
-}
-
-interface ChorusMachineActivity {
-  readonly label: string;
-  readonly duets: ReadonlyArray<ChorusDuetActivity>;
-  readonly omittedDuets?: boolean;
-  readonly unreachableReason?: string | undefined;
 }
 
 const captainDigestNewSection = (content: string) => {
@@ -117,34 +111,39 @@ const formatActivity = (activity: BriefActivity) => {
   return lines.length === 0 ? "- No recent delegated activity." : lines.join("\n");
 };
 
-const formatChorusActivity = (machines: ReadonlyArray<ChorusMachineActivity>) => {
+const formatChorusActivity = (machines: ReadonlyArray<ChorusMachineActivity>, omitted: boolean) => {
+  const omittedMachines = omitted ? "- Additional linked machines omitted." : "";
+  const machineLimit =
+    Math.floor((BRIEF_ACTIVITY_LIMIT - omittedMachines.length) / Math.max(machines.length, 1)) - 2;
   const machineSections = machines.map((machine) => {
+    const heading = `## Machine: ${compactLine(machine.label)}`;
     if (machine.unreachableReason !== undefined) {
       const reason = compactLine(machine.unreachableReason) || "No response";
-      return `## Machine: ${machine.label}\n\n- Machine unreachable: ${excerpt(reason, 200)}`;
+      return excerpt(`${heading}\n\n- Machine unreachable: ${reason}`, machineLimit);
     }
-    const heading = `## Machine: ${machine.label}`;
     if (machine.duets.length === 0) return `${heading}\n\n- No active Duets.`;
 
-    const footer = machine.omittedDuets ? "- Additional active Duets omitted." : "";
-    const duetLimit = Math.floor(
-      (BRIEF_ACTIVITY_LIMIT - heading.length - footer.length - 2) / machine.duets.length,
-    );
-    const duetSections = machine.duets.map((activity) => {
-      const name = `### Duet: ${compactLine(activity.name)}\n\nDIGEST.md New:\n`;
+    const footer = "- Additional active Duets omitted.";
+    const room = machineLimit - heading.length - footer.length - 4;
+    const duets = machine.duets.slice(0, Math.max(1, Math.floor(room / 150)));
+    const duetLimit = Math.floor(room / duets.length) - 2;
+    const duetSections = duets.map((activity) => {
+      const name = `### Duet: ${excerpt(compactLine(activity.name) ?? "", 100)}\n\nDIGEST.md New:\n`;
       const openHeading = "\n\nOpen activity:\n";
-      const contentLimit = duetLimit - name.length - openHeading.length - 2;
+      const contentLimit = Math.max(0, duetLimit - name.length - openHeading.length);
       const digest = activity.digestNew || "(empty)";
       const open = formatActivity({ ...activity, completedTasks: [] });
       const digestLimit = Math.max(Math.floor(contentLimit / 2), contentLimit - open.length);
       const digestExcerpt = excerpt(digest, digestLimit);
-      return (
-        name + digestExcerpt + openHeading + excerpt(open, contentLimit - digestExcerpt.length)
+      return excerpt(
+        name + digestExcerpt + openHeading + excerpt(open, contentLimit - digestExcerpt.length),
+        duetLimit,
       );
     });
-    return [heading, ...duetSections, ...(footer ? [footer] : [])].join("\n\n");
+    const moreDuets = machine.omittedDuets || duets.length < machine.duets.length;
+    return [heading, ...duetSections, ...(moreDuets ? [footer] : [])].join("\n\n");
   });
-  return machineSections.length === 0 ? "- No machine activity." : machineSections.join("\n\n");
+  return [...machineSections, ...(omitted ? [omittedMachines] : [])].join("\n\n");
 };
 
 interface BriefPromptInput {
@@ -173,7 +172,7 @@ const chorusBriefPrompt = (
   input: BriefPromptInput,
 ) => `Write the next "## New" section of ${input.captain.name}'s DIGEST.md recap.
 
-${input.captain.name} is a Chorus covering the user's fleet of Duets. The recap should contain up to 8 Markdown bullets, one line per item that needs the user's attention or decision. Group items by Duet; when the activity includes multiple machines, group first by machine and then by Duet. Put items with the nearest deadline first. Keep every item on one bullet line and use bold labels instead of section headings. Leave out the "## New" heading, code fences, and commentary. Use plain language. Use the existing digest for continuity. If nothing needs attention, leave the recap empty.
+${input.captain.name} is a Chorus covering the user's fleet of Duets. The recap should contain up to 8 Markdown bullets, one line per item that needs the user's attention or decision. Group items by Duet; when the activity includes multiple machines, group first by machine and then by Duet. Put items with the nearest deadline first. Include a line for each unreachable machine. Keep every item on one bullet line and use bold labels instead of section headings. Leave out the "## New" heading, code fences, and commentary. Use plain language. Use the existing digest for continuity. If nothing needs attention, leave the recap empty.
 
 ## NOTES.md
 ${excerpt(input.notes.trim(), BRIEF_DOCUMENT_CONTEXT_LIMIT) || "(empty)"}
@@ -190,6 +189,10 @@ const briefPrompt = (input: BriefPromptInput) =>
 export class CaptainBriefService extends Context.Service<
   CaptainBriefService,
   {
+    readonly readLocalChorusMachineActivity: () => Effect.Effect<
+      ChorusMachineActivity,
+      CaptainError
+    >;
     readonly generate: (input: {
       readonly captainId: CaptainId;
       readonly projectId?: ProjectId | undefined;
@@ -208,6 +211,8 @@ const make = Effect.gen(function* () {
   const store = yield* CaptainStore.CaptainStore;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const textGeneration = yield* TextGeneration.TextGeneration;
+  const environment = yield* Effect.serviceOption(ServerEnvironment.ServerEnvironment);
+  const readFleet = yield* makeReadChorusFleet;
 
   const recentCompletedTasks = Effect.fn("CaptainBriefService.recentCompletedTasks")(
     function* (captain: Captain) {
@@ -329,8 +334,8 @@ const make = Effect.gen(function* () {
         SELECT content FROM captain_documents WHERE captain_id = ${duet.id} AND name = 'DIGEST.md'
       `;
       return {
-        name: duet.name,
-        digestNew: captainDigestNewSection(digest?.content ?? ""),
+        name: excerpt(duet.name, 120),
+        digestNew: excerpt(captainDigestNewSection(digest?.content ?? ""), 700),
         activeTasks: activeTaskRows.map(({ title, status, progress }) => ({
           title,
           status,
@@ -340,7 +345,7 @@ const make = Effect.gen(function* () {
           kind,
           detail: detail ?? undefined,
         })),
-      } satisfies ChorusDuetActivity;
+      } satisfies ChorusMachineActivity["duets"][number];
     },
   );
 
@@ -364,6 +369,38 @@ const make = Effect.gen(function* () {
     Effect.catchTags({ SqlError: CaptainStore.captainUnavailable }),
   );
 
+  const readChorusActivity = Effect.fn("CaptainBriefService.readChorusActivity")(function* (
+    captain: Captain,
+  ) {
+    const local = yield* readLocalChorusMachineActivity();
+    if (Option.isNone(environment) || captain.archivedAt !== null) {
+      return formatChorusActivity([local], false);
+    }
+    const environmentId = yield* environment.value.getEnvironmentId;
+    const { machines, omitted } = yield* readFleet({
+      tool: chorusActivityTool,
+      success: ChorusMachineActivity,
+      limit: CHORUS_RECAP_PEER_LIMIT,
+      sender: { environmentId, threadId: captain.primaryThreadId, title: captain.name },
+    }).pipe(Effect.catch(CaptainStore.captainUnavailable));
+    return formatChorusActivity(
+      [
+        local,
+        ...machines.map(({ label, reply }) => {
+          const boundedLabel = excerpt(label, 120);
+          return reply._tag === "Success"
+            ? { ...reply.success, label: boundedLabel }
+            : {
+                label: boundedLabel,
+                duets: [],
+                unreachableReason: excerpt(reply.failure.message, 200),
+              };
+        }),
+      ],
+      omitted,
+    );
+  });
+
   const generateForCaptain = Effect.fn("CaptainBriefService.generate")(function* (input: {
     readonly captain: Captain;
     readonly projectId?: ProjectId | undefined;
@@ -374,10 +411,7 @@ const make = Effect.gen(function* () {
     const digestBeforeGeneration = yield* store.document(captain, "DIGEST.md");
     const activity =
       captain.kind === "chorus"
-        ? formatChorusActivity([
-            // Linked machines can be appended here; each machine already formats as its own group.
-            yield* readLocalChorusMachineActivity(),
-          ])
+        ? yield* readChorusActivity(captain)
         : yield* Effect.gen(function* () {
             const openLoops = yield* readOpenLoops(captain);
             const completedTasks = yield* recentCompletedTasks(captain);
@@ -461,7 +495,7 @@ const make = Effect.gen(function* () {
     });
   });
 
-  return CaptainBriefService.of({ generate, generateForThread });
+  return CaptainBriefService.of({ generate, generateForThread, readLocalChorusMachineActivity });
 });
 
 export const layer = Layer.effect(CaptainBriefService, make);
