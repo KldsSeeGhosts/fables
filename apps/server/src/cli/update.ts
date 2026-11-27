@@ -74,6 +74,7 @@ const RELEASE_INDEX_MAX_PAGES = 10;
 
 export const resolveNewestVersion = Effect.fn("cli.update.resolve_newest")(function* (
   channel: CliReleaseChannel,
+  currentVersion?: string,
 ) {
   const httpClient = yield* HttpClient.HttpClient;
   const environment = yield* HostProcess.Environment;
@@ -100,7 +101,7 @@ export const resolveNewestVersion = Effect.fn("cli.update.resolve_newest")(funct
         () => new CliUpdateError({ reason: "The t3 release index had an unexpected shape." }),
       ),
     );
-    const version = newestCliReleaseVersion(releases, channel);
+    const version = newestCliReleaseVersion(releases, channel, currentVersion);
     if (version !== undefined) return version;
     if (releases.length === 0) break;
   }
@@ -359,6 +360,7 @@ export const runUpdate = Effect.fn("cli.update.run")(function* (input: {
   readonly requestedVersion: string | undefined;
   readonly allowDowngrade: boolean;
   readonly assumeYes: boolean;
+  readonly currentVersion?: string | undefined;
 }) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -371,7 +373,7 @@ export const runUpdate = Effect.fn("cli.update.run")(function* (input: {
   const policy = yield* ManagedPolicy.ManagedPolicy;
   const mirror = managedUpdateMirror(policy.document);
 
-  const currentVersion = packageJson.version;
+  const currentVersion = input.currentVersion ?? packageJson.version;
   const channel = input.channel ?? cliReleaseChannelOf(currentVersion);
   const refusal = managedUpdateRefusal(
     policy.document,
@@ -391,7 +393,7 @@ export const runUpdate = Effect.fn("cli.update.run")(function* (input: {
     input.requestedVersion !== undefined
       ? Effect.succeed(input.requestedVersion)
       : mirror === undefined
-        ? resolveNewestVersion(channel)
+        ? resolveNewestVersion(channel, currentVersion)
         : resolveMirrorVersion(mirror, channel)
   ).pipe(Effect.ensuring(Effect.sync(progress.finish)));
   const targetChannel = cliReleaseChannelOf(targetVersion);

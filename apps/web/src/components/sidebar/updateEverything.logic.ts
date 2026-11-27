@@ -9,7 +9,11 @@ import {
   type ServerConfig,
   type ServerSelfUpdateCapability,
 } from "@t3tools/contracts";
-import { cliReleaseChannelOf, desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
+import {
+  cliReleaseChannelOf,
+  desktopUpdateChannelOf,
+  isFablesLegacyToBridge,
+} from "@t3tools/shared/cliRelease";
 import { compareSemverVersions } from "@t3tools/shared/semver";
 import { msg } from "gt-react";
 
@@ -131,6 +135,7 @@ export function collectServerUpdateTargets(
     // Nightly host behind a Stable target has something newer; a Stable host may not.
     if (
       serverChannel !== cliReleaseChannelOf(targetVersion) &&
+      !isFablesLegacyToBridge(config.environment.serverVersion, targetVersion) &&
       (selfUpdate !== "desktop-managed" || serverChannel === "stable")
     ) {
       skip(resolve(msg("on the {channel} channel", { channel: serverChannel })));

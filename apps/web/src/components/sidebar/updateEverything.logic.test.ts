@@ -82,6 +82,21 @@ describe("collectServerUpdateTargets", () => {
     expect(skipped).toEqual([]);
   });
 
+  it("plans the bridge for legacy services and 0.2.0 for bridged services", () => {
+    const legacy = "0.1.13-nightly.20261126.530501";
+    const bridge = "0.1.13-nightly.20261126.530504";
+    const machines = [
+      machine("legacy", legacy, "boot-service"),
+      machine("bridged", bridge, "boot-service"),
+    ];
+    expect(
+      collectServerUpdateTargets(machines, bridge).targets.map((target) => target.serverLabel),
+    ).toEqual(["legacy"]);
+    expect(
+      collectServerUpdateTargets(machines, "0.2.0").targets.map((target) => target.serverLabel),
+    ).toEqual(["bridged"]);
+  });
+
   it("updates remote servers that can move to the target and names every skipped one", () => {
     const { targets, skipped } = collectServerUpdateTargets(
       [

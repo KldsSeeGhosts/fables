@@ -24,7 +24,7 @@ import {
   normalizeLinuxPasswordStorePreference,
   type LinuxPasswordStorePreference,
 } from "../linuxSecretStorage.ts";
-import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
+import { desktopUpdateChannelOf, isFablesBridgeVersion } from "@t3tools/shared/cliRelease";
 import { isValidDistroName } from "../wsl/wslPathParsing.ts";
 
 export interface DesktopSettings {
@@ -547,7 +547,23 @@ export const make = Effect.gen(function* () {
           ),
         ),
       );
-      return yield* SynchronizedRef.setAndGet(settingsRef, settings);
+      yield* SynchronizedRef.set(settingsRef, settings);
+      if (settings.updateChannel === "nightly" && isFablesBridgeVersion(environment.appVersion)) {
+        const toStable = (current: DesktopSettings): DesktopSettings => ({
+          ...current,
+          updateChannel: "latest",
+          updateChannelConfiguredByUser: false,
+        });
+        const change = yield* persist(toStable).pipe(
+          Effect.catch((cause) =>
+            Effect.logWarning("Could not save the bridge's Stable update track.", cause).pipe(
+              Effect.andThen(updateInMemory(toStable)),
+            ),
+          ),
+        );
+        return change.settings;
+      }
+      return settings;
     }).pipe(Effect.withSpan("desktop.settings.load")),
     setMainWindowBounds: Effect.fn("desktop.settings.setMainWindowBounds")(
       function* (bounds, isMaximized) {

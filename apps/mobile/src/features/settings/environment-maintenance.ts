@@ -77,7 +77,7 @@ export async function findEnvironmentUpdate(currentVersion: string, signal: Abor
     (await response.text()).matchAll(/<id>tag:github\.com,2008:Repository\/\d+\/([^<]+)<\/id>/g),
     ([, tag_name = ""]) => ({ tag_name }),
   );
-  let version = newestCliReleaseVersion(releases, channel);
+  let version = newestCliReleaseVersion(releases, channel, currentVersion);
 
   // Other releases can displace the requested channel from the ten-entry feed.
   for (let page = 1; version === undefined; page++) {
@@ -87,7 +87,7 @@ export async function findEnvironmentUpdate(currentVersion: string, signal: Abor
       signal,
     );
     const releases = decodeReleases(await response.json());
-    version = newestCliReleaseVersion(releases, channel);
+    version = newestCliReleaseVersion(releases, channel, currentVersion);
     if (releases.length < 100) break;
   }
 

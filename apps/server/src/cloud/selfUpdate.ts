@@ -75,43 +75,44 @@ export class ServerSelfUpdate extends Context.Service<
  * updates can go. The boot service says so through its IPC context. The SSH launcher and the
  * install script's `t3` start this home's pinned runtime directly, without one.
  */
-export const pruneRuntimesOnStart = Effect.fn("cloud.server_self_update.prune_on_start")(
-  function* (input: { readonly baseDir: string; readonly managed: boolean }) {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const platform = yield* HostProcess.Platform;
-    const executablePath = yield* HostProcess.ExecutablePath;
-    const { entryPath } = pinnedRuntimePaths(path, input.baseDir, packageJson.version, platform);
-    // The executable path is resolved, so it names the real path of a symlinked T3 home.
-    const realEntryPath = yield* fs.realPath(entryPath).pipe(Effect.orElseSucceed(() => entryPath));
-    if (!input.managed && executablePath !== entryPath && executablePath !== realEntryPath) {
-      return [];
-    }
-    const unitPath = yield* bootServiceUnitPath();
-    // A stopped service's unit still names the launcher runtime it will start.
-    const unit =
-      unitPath === undefined
-        ? Option.none<string>()
-        : yield* fs.readFile(unitPath).pipe(Effect.map(decodeServiceUnit), Effect.option);
-    const program = Option.flatMapNullishOr(unit, bootServiceProgramOf);
-    // The unit may name it through another spelling of a symlinked T3 home.
-    const references = Option.isNone(program)
-      ? []
-      : [
-          program.value,
-          yield* fs.realPath(program.value).pipe(Effect.orElseSucceed(() => program.value)),
-        ];
-    const removed = yield* prunePinnedRuntimes({
-      baseDir: input.baseDir,
-      keep: [packageJson.version],
-      references,
-    });
-    if (removed.length > 0) {
-      yield* Effect.logInfo("Removed unused t3 runtimes.", { versions: removed });
-    }
-    return removed;
-  },
-);
+export const pruneRuntimesOnStart = Effect.fn("cloud.server_self_update.prune_on_start")(function* (
+  input: { readonly baseDir: string; readonly managed: boolean },
+  currentVersion = packageJson.version,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const platform = yield* HostProcess.Platform;
+  const executablePath = yield* HostProcess.ExecutablePath;
+  const { entryPath } = pinnedRuntimePaths(path, input.baseDir, currentVersion, platform);
+  // The executable path is resolved, so it names the real path of a symlinked T3 home.
+  const realEntryPath = yield* fs.realPath(entryPath).pipe(Effect.orElseSucceed(() => entryPath));
+  if (!input.managed && executablePath !== entryPath && executablePath !== realEntryPath) {
+    return [];
+  }
+  const unitPath = yield* bootServiceUnitPath();
+  // A stopped service's unit still names the launcher runtime it will start.
+  const unit =
+    unitPath === undefined
+      ? Option.none<string>()
+      : yield* fs.readFile(unitPath).pipe(Effect.map(decodeServiceUnit), Effect.option);
+  const program = Option.flatMapNullishOr(unit, bootServiceProgramOf);
+  // The unit may name it through another spelling of a symlinked T3 home.
+  const references = Option.isNone(program)
+    ? []
+    : [
+        program.value,
+        yield* fs.realPath(program.value).pipe(Effect.orElseSucceed(() => program.value)),
+      ];
+  const removed = yield* prunePinnedRuntimes({
+    baseDir: input.baseDir,
+    keep: [currentVersion],
+    references,
+  });
+  if (removed.length > 0) {
+    yield* Effect.logInfo("Removed unused t3 runtimes.", { versions: removed });
+  }
+  return removed;
+});
 
 /** The client checks this when planning; the host checks again because its database may have
  * moved on since (another client updated it). Stable and Nightly each build their own commits,
@@ -133,7 +134,9 @@ export function trackSwitchBlockReason(input: {
     : null;
 }
 
-export const make = Effect.fn("cloud.server_self_update.make")(function* () {
+export const make = Effect.fn("cloud.server_self_update.make")(function* (
+  currentVersion = packageJson.version,
+) {
   const serverConfig = yield* ServerConfig.ServerConfig;
   const desktopAppUpdate = yield* DesktopAppUpdate.DesktopAppUpdate;
   const policy = yield* ManagedPolicy.ManagedPolicy;
@@ -150,9 +153,10 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
     Option.getOrUndefined(yield* Config.String(CLI_RELEASE_BASE_URL_ENV).pipe(Config.option));
   const inFlight = yield* Ref.make(false);
 
-  yield* pruneRuntimesOnStart({ baseDir: serverConfig.baseDir, managed: launcher.managed }).pipe(
-    Effect.forkScoped,
-  );
+  yield* pruneRuntimesOnStart(
+    { baseDir: serverConfig.baseDir, managed: launcher.managed },
+    currentVersion,
+  ).pipe(Effect.forkScoped);
 
   const capability: ServerSelfUpdateCapability | null =
     serverConfig.mode === "desktop" ? "desktop-managed" : launcher.managed ? "boot-service" : null;
@@ -163,7 +167,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
 
   const crossesTrackUnsafely = (input: ServerSelfUpdateInput) =>
     trackSwitchBlockReason({
-      serverVersion: packageJson.version,
+      serverVersion: currentVersion,
       targetVersion: input.targetVersion,
       targetDatabaseMigration: input.targetDatabaseMigration,
       databaseMigration: () => databaseMigrationHead(serverConfig.dbPath),

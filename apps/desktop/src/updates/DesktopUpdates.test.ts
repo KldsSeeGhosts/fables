@@ -190,6 +190,22 @@ describe("DesktopUpdates", () => {
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
 
+  it.effect("offers 0.2.0 to the encoded bridge on its default track", () => {
+    const harness = makeHarness({ appVersion: "0.1.13-nightly.20261126.530504" });
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        const offered = yield* nextPublishedState(() =>
+          harness.emit("update-available", { version: "0.2.0" }),
+        );
+        assert.equal(offered.channel, "latest");
+        assert.equal(offered.status, "available");
+        assert.equal(offered.availableVersion, "0.2.0");
+      }),
+    ).pipe(Effect.provide(harness.layer));
+  });
+
   it.effect.each([
     {
       name: "shows no notes for a Stable release missing from the releases feed",

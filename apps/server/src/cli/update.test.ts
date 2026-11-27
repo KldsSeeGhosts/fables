@@ -699,8 +699,38 @@ it.layer(NodeServices.layer)("t3 update checks the database before switching", (
       ),
       failure: undefined,
     },
-  ])("$name", ({ targetVersion, launcherProtocol, preflight, failure }) =>
+    ...[
+      {
+        name: "discovers the bridge before moving a legacy CLI to plain semver",
+        currentVersion: "0.1.13-nightly.20261126.530501",
+        targetVersion: "0.1.13-nightly.20261126.530504",
+      },
+      {
+        name: "discovers 0.2.0 from the bridge without a channel or version flag",
+        currentVersion: "0.1.13-nightly.20261126.530504",
+        targetVersion: "0.2.0",
+      },
+      {
+        name: "discovers the next plain patch without a channel or version flag",
+        currentVersion: "0.2.0",
+        targetVersion: "0.2.1",
+      },
+    ].map((test) => ({
+      ...test,
+      launcherProtocol: SERVICE_LAUNCHER_PROTOCOL,
+      preflight: preflightOutput(
+        JSON.stringify({
+          status: "ready",
+          version: test.targetVersion,
+          launcherProtocol: SERVICE_LAUNCHER_PROTOCOL,
+        }),
+      ),
+      failure: undefined,
+    })),
+  ])("$name", (test) =>
     Effect.gen(function* () {
+      const { targetVersion, launcherProtocol, preflight, failure } = test;
+      const currentVersion = "currentVersion" in test ? test.currentVersion : undefined;
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-update-" });
@@ -732,15 +762,17 @@ it.layer(NodeServices.layer)("t3 update checks the database before switching", (
         },
       });
 
+      const releaseLookups: string[] = [];
       const exit = yield* runUpdate({
         baseDir,
         logsDir: baseDir,
         databasePath,
         serverRuntimeStatePath: path.join(baseDir, "server-runtime.json"),
         channel: undefined,
-        requestedVersion: targetVersion,
-        allowDowngrade: true,
+        requestedVersion: currentVersion === undefined ? targetVersion : undefined,
+        allowDowngrade: currentVersion === undefined,
         assumeYes: true,
+        currentVersion,
       }).pipe(
         Effect.exit,
         Effect.provide(
@@ -750,7 +782,22 @@ it.layer(NodeServices.layer)("t3 update checks the database before switching", (
             ManagedPolicy.layerTest(),
             Layer.succeed(
               HttpClient.HttpClient,
-              HttpClient.make(() => Effect.die("unexpected release lookup")),
+              HttpClient.make((request) => {
+                assert.isDefined(currentVersion);
+                releaseLookups.push(request.url);
+                return Effect.succeed(
+                  HttpClientResponse.fromWeb(
+                    request,
+                    Response.json([
+                      { tag_name: "v0.1.13-nightly.20261126.530504", prerelease: true },
+                      { tag_name: "v0.2.0", prerelease: true },
+                      ...(targetVersion === "0.2.1"
+                        ? [{ tag_name: "v0.2.1", prerelease: true }]
+                        : []),
+                    ]),
+                  ),
+                );
+              }),
             ),
             Layer.fresh(TestConsole.layer),
           ),
@@ -760,6 +807,10 @@ it.layer(NodeServices.layer)("t3 update checks the database before switching", (
       const error = Option.getOrUndefined(Exit.findErrorOption(exit));
       assert.equal(error?.message, failure);
       assert.equal(Exit.isSuccess(exit), failure === undefined);
+      assert.deepEqual(
+        releaseLookups,
+        currentVersion === undefined ? [] : [cliReleaseIndexPageUrl(1)],
+      );
       assert.deepEqual(preflightArgs, [
         [
           "__service-preflight",

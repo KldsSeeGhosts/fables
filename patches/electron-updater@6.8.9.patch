@@ -247,11 +247,11 @@ index e768d24e7a..bc20fb0717 100644
          try {
 -            if (this.updater.allowPrerelease) {
 +            if (this.usesFablesPlainReleaseFeed) {
-+                // Fables uses plain semver tags on GitHub prereleases, with nightly metadata assets.
++                // Fables plain tags use nightly metadata. The installed tag answers while plain releases are pending.
 +                for (const element of feed.getElements("entry")) {
 +                    const candidate = hrefRegExp.exec(element.element("link").attribute("href"))?.[1];
-+                    if (candidate != null && semver.valid(candidate) && semver.prerelease(candidate) === null &&
-+                        (tag === null || semver.gt(candidate, tag))) {
++                    if (candidate != null && semver.valid(candidate) && (semver.prerelease(candidate) === null
++                        ? tag === null || semver.prerelease(tag) !== null || semver.gt(candidate, tag) : tag === null && semver.eq(candidate, this.updater.currentVersion))) {
 +                        tag = candidate;
 +                        latestRelease = element;
 +                    }
@@ -274,7 +274,7 @@ index e768d24e7a..bc20fb0717 100644
 +                if (tag === null) throw e;
 +                return null;
 +            });
-+            if (apiRelease !== null && (tag === null || semver.gt(apiRelease.tag_name, tag))) {
++            if (apiRelease !== null && (tag === null || semver.prerelease(tag) !== null || semver.gt(apiRelease.tag_name, tag))) {
 +                tag = apiRelease.tag_name;
 +            }
 +            else {

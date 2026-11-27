@@ -125,12 +125,22 @@ in the release feed and loads the existing `nightly.yml`, `nightly-mac.yml`,
 or `nightly-linux.yml` asset. A managed mirror uses the configured desktop
 track name, so it serves plain versions with `latest*.yml`.
 
-Installed encoded builds filter on `-nightly` before looking up the manifest
-and cannot move directly to a plain version through auto-update. If `0.2.0`
-ships first, install the matching desktop package once. In Settings → About,
-select Stable if the previous installation explicitly selected Nightly. For a
-standalone CLI or boot-service installation, run `t3 update 0.2.0` on the host.
-An automatic cutover needs a separate bridge release before `0.2.0`.
+### One-time bridge to 0.2.0
+
+1. Push the bridge changes to `ksg/dev` with the release series set to
+   `bridge`. Keep the included upstream nightly at
+   `v0.1.13-nightly.20261126.5305` for this release. The workflow continues
+   the fork counter, starting at `0.1.13-nightly.20261126.530504`. Existing
+   Nightly clients pick it up through their usual updater.
+2. Wait for the bridge release to publish with all three nightly manifests and
+   the CLI archives. Check that a legacy desktop can install it and that
+   enrolled servers can stage it. The bridge desktop moves a saved Nightly
+   choice to Stable. The bridge CLI and server also follow Stable.
+3. Change the series line from `bridge` to `0.2` and push to `ksg/dev`
+   again. The workflow publishes `0.2.0` on the same GitHub feed with the same
+   nightly manifest names. The bridge can now offer it through the normal
+   update flow. Keep the bridge published so legacy clients that come back
+   online later can take both updates.
 
 CLI archives and the release-availability check use this fork's GitHub
 releases. For desktop release builds, GitHub Actions supplies

@@ -123,11 +123,14 @@ describe("environment release checks", () => {
     expect(await findEnvironmentUpdate("1.0.0-preview.20260925.1", signal)).toBeNull();
   });
 
-  it("offers the next plain Fables release from the prerelease feed", async () => {
-    const fetchRelease = vi
-      .fn()
-      .mockResolvedValue(feed("v0.2.0", "v0.2.1", "v0.1.13-nightly.20261126.530501"));
+  it("offers the bridge to legacy hosts and plain updates to hosts past the bridge", async () => {
+    const legacy = "0.1.13-nightly.20261126.530501";
+    const bridge = "0.1.13-nightly.20261126.530504";
+    const fetchRelease = vi.fn(async () => feed(`v${bridge}`, `v${legacy}`, "v0.2.0"));
     vi.stubGlobal("fetch", fetchRelease);
+    expect(await findEnvironmentUpdate(legacy, signal)).toBe(bridge);
+    expect(await findEnvironmentUpdate(bridge, signal)).toBe("0.2.0");
+    fetchRelease.mockImplementation(async () => feed("v0.2.0", "v0.2.1", `v${bridge}`));
     expect(await findEnvironmentUpdate("0.2.0", signal)).toBe("0.2.1");
     expect(fetchRelease).toHaveBeenCalledWith(
       "https://github.com/KldsSeeGhosts/fables/releases.atom",

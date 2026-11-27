@@ -423,6 +423,29 @@ describe("DesktopSettings", () => {
     ),
   );
 
+  it.effect("moves and persists the bridge's saved Nightly selection to Stable", () =>
+    withSettings(
+      Effect.gen(function* () {
+        const settings = yield* DesktopAppSettings.DesktopAppSettings;
+        yield* writeSettingsPatch({
+          updateChannel: "nightly",
+          updateChannelConfiguredByUser: true,
+          tailscaleServePort: 8443,
+        });
+        assert.equal((yield* settings.load).updateChannel, "latest");
+        const environment = yield* DesktopEnvironment.DesktopEnvironment;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const persisted = yield* fileSystem
+          .readFileString(environment.desktopSettingsPath)
+          .pipe(Effect.flatMap(decodeDesktopSettingsPatch));
+        assert.isUndefined(persisted.updateChannel);
+        assert.isUndefined(persisted.updateChannelConfiguredByUser);
+        assert.equal(persisted.tailscaleServePort, 8443);
+      }),
+      { appVersion: "0.1.13-nightly.20261126.530504" },
+    ),
+  );
+
   it.effect("persists wsl backend toggle and normalizes invalid distro names", () =>
     withSettings(
       Effect.gen(function* () {

@@ -110,12 +110,13 @@ describe("GitHubProvider nightly lookup", () => {
 describe("Fables plain releases on GitHub's prerelease feed", () => {
   const repo = "/KldsSeeGhosts/fables";
   const legacy = "v0.1.13-nightly.20261126.530501";
+  const bridge = "v0.1.13-nightly.20261126.530504";
 
   const lookup = (
     platform: NodeJS.Platform,
     arch: string,
     tags: ReadonlyArray<string>,
-    options: { legacy?: boolean; listed?: string } = {},
+    options: { current?: string; legacy?: boolean; listed?: string } = {},
   ) => {
     const requested: string[] = [];
     const manifest =
@@ -127,8 +128,10 @@ describe("Fables plain releases on GitHub's prerelease feed", () => {
     const request = async ({ path = "" }: { readonly path?: string | null }) => {
       requested.push(path ?? "");
       if (path === `${repo}/releases.atom`) return atomFeed(tags, repo);
-      if (path === `${repo}/releases/download/v0.2.1/${manifest}`) {
-        return "version: 0.2.1\npath: KSG-Code.exe\nsha512: abc\n";
+      for (const tag of [bridge, "v0.2.0", "v0.2.1"]) {
+        if (path === `${repo}/releases/download/${tag}/${manifest}`) {
+          return `version: ${tag.slice(1)}\npath: KSG-Code.exe\nsha512: abc\n`;
+        }
       }
       if (path?.startsWith(`/repos${repo}/releases?`)) {
         return JSON.stringify(
@@ -149,7 +152,9 @@ describe("Fables plain releases on GitHub's prerelease feed", () => {
       {
         allowPrerelease: options.legacy === true,
         channel: options.legacy ? "nightly" : "latest",
-        currentVersion: semver.parse(options.legacy ? legacy.slice(1) : "0.2.0"),
+        currentVersion: semver.parse(
+          (options.current ?? (options.legacy ? legacy : "v0.2.0")).slice(1),
+        ),
         fullChangelog: false,
       } as ProviderArgs[1],
       { isUseMultipleRangeRequest: false, platform, executor: { request } } as ProviderArgs[2],
@@ -158,20 +163,31 @@ describe("Fables plain releases on GitHub's prerelease feed", () => {
   };
 
   it.each(["darwin", "win32", "linux"] as const)(
-    "resolves v0.2.1 and reads its nightly manifest for %s",
+    "follows both bridge hops and the next plain patch via nightly manifests for %s",
     async (platform) => {
-      const { manifest, requested, result } = lookup(
-        platform,
-        HostProcess.Architecture.defaultValue(),
-        ["v0.2.0", "v0.2.1", legacy],
-      );
-      expect(await result).toMatchObject({ tag: "v0.2.1", version: "0.2.1" });
-      expect(requested).toEqual([
-        `${repo}/releases.atom`,
-        `${repo}/releases/download/v0.2.1/${manifest}`,
-      ]);
+      for (const { current, target, tags, legacy: useLegacyLookup } of [
+        { current: legacy, target: bridge, tags: ["v0.2.0", bridge, legacy], legacy: true },
+        { current: bridge, target: "v0.2.0", tags: [bridge, "v0.2.0", legacy], legacy: false },
+        { current: "v0.2.0", target: "v0.2.1", tags: ["v0.2.0", "v0.2.1", bridge], legacy: false },
+      ]) {
+        const { manifest, requested, result } = lookup(
+          platform,
+          HostProcess.Architecture.defaultValue(),
+          tags,
+          { current, legacy: useLegacyLookup },
+        );
+        expect(await result).toMatchObject({ tag: target, version: target.slice(1) });
+        expect(requested.filter((path) => path.endsWith(".yml"))).toEqual([
+          `${repo}/releases/download/${target}/${manifest}`,
+        ]);
+      }
     },
   );
+
+  it("returns the installed bridge while the first plain release is pending", async () => {
+    const { result } = lookup("win32", "x64", [bridge, legacy], { current: bridge });
+    expect(await result).toMatchObject({ tag: bridge, version: bridge.slice(1) });
+  });
 
   it("finds a plain prerelease after other tags displace it from Atom", async () => {
     const { result } = lookup("win32", "x64", [legacy], { listed: "v0.2.1" });
