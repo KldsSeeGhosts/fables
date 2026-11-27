@@ -6,6 +6,7 @@ import {
   SourceControlProviderKind,
   type PullRequestDetailView,
 } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 import appCss from "~/index.css?inline";
@@ -16,7 +17,7 @@ import { act, fakeTimers, render } from "../../../test/render";
 const { command, permissions, reads, shown } = vi.hoisted(() => ({
   command: vi.fn(),
   permissions: { checkout: true, operate: true },
-  reads: { diff: [] as unknown[] },
+  reads: { diff: [] as unknown[], refreshDetail: vi.fn() },
   shown: { detail: null as PullRequestDetailView | null },
 }));
 
@@ -39,7 +40,7 @@ vi.mock(import("./usePullRequestDetail"), async (original) => ({
   ...(await original()),
   usePullRequestDetail: (() => ({
     canWriteSourceControl: permissions.checkout,
-    detailQuery: { isPending: false, refresh: vi.fn() },
+    detailQuery: { isPending: false, refresh: reads.refreshDetail },
     activityQuery: { isPending: false, refresh: vi.fn(), error: null },
     activity: null,
     sharedSummary: shown.detail,
@@ -213,6 +214,7 @@ function setup() {
   permissions.checkout = true;
   permissions.operate = true;
   reads.diff = [];
+  reads.refreshDetail.mockReset();
   shown.detail = detail;
   command.mockReset();
   useComposerDraftStore.setState({ draftsByThreadKey: {} });
@@ -273,11 +275,15 @@ it("keeps a merge and a review on the head the reader was shown until they load 
   shown.detail = at("shown-head");
   await using screen = await render(panel());
   await expect.element(screen.getByRole("button", { name: "Squash and merge" })).toBeVisible();
-  // A background refresh brings a push the reader has not looked at.
-  shown.detail = at("pushed-head");
+  // The host refuses the pinned merge after a push. Its next read reveals the new head.
+  command.mockResolvedValueOnce({ _tag: "Failure", cause: Cause.fail("Head changed") });
+  reads.refreshDetail.mockImplementationOnce(() => {
+    shown.detail = at("pushed-head");
+  });
+  await merge();
+  await vi.waitFor(() => expect(reads.refreshDetail).toHaveBeenCalled());
   await screen.rerender(panel());
   await expect.element(screen.getByText(/still applies to shown-h/)).toBeVisible();
-  await merge();
   await screen.getByRole("button", { name: "Review pull request" }).click();
   // The composer popup is portalled outside the rendered tree.
   await page.getByRole("button", { name: "Submit review" }).click();

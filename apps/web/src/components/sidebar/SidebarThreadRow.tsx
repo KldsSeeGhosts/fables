@@ -1723,7 +1723,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                           <T>Un-settle thread</T>
                         </>
                       }
-                      side="top"
+                      side="right"
                     >
                       <Undo2Icon className="size-3.5" />
                     </SharedTooltipTrigger>
@@ -1747,7 +1747,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                           <T>Settle thread</T>
                         </>
                       }
-                      side="top"
+                      side="right"
                     >
                       <CheckIcon className="size-3" />
                       <T>Settle</T>
@@ -1943,6 +1943,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                               <T>Settle thread</T>
                             </>
                           }
+                          side="right"
                         >
                           <CheckIcon className="size-3.5" />
                           {isDuet ? null : <T>Settle</T>}

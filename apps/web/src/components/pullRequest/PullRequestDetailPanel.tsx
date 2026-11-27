@@ -934,6 +934,8 @@ export function PullRequestDetailPanel({
         title: actionFailureLabels(changeRequestTermKind(terminology))[action],
         description: readableFailure(failure, hint),
       });
+      // A refused merge usually means new commits, so show what the host has now.
+      if (action === "merge" || action === "enable-auto-merge") refreshDetail();
       onActed?.(action, "failed");
       return false;
     }
