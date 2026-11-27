@@ -90,12 +90,6 @@ export const captainUnavailable = (cause: unknown) =>
 
 const missing = () => new CaptainError({ code: "not_found", message: "Duet not found." });
 
-export const activeChorusConflict = () =>
-  new CaptainError({
-    code: "conflict",
-    message: "An active Chorus already exists on this machine.",
-  });
-
 const isActiveChorusUniqueViolation = (cause: unknown) =>
   SqlError.isSqlError(cause) &&
   cause.reason._tag === "UniqueViolation" &&

@@ -4,7 +4,6 @@ import {
   CaptainError,
   CaptainMemoryId,
   EnvironmentId,
-  OrchestratorMcpFailure,
   captainPrimaryThreadId,
   ProjectId,
   ProviderInstanceId,
@@ -30,8 +29,6 @@ import {
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as Sqlite from "../persistence/Sqlite.ts";
 import * as PeerLinks from "../peer/PeerLinks.ts";
-import * as PeerMcpClient from "../peer/PeerMcpClient.ts";
-import * as Schema from "effect/Schema";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ScheduledTasks from "../scheduledTasks/ScheduledTaskService.ts";
@@ -215,112 +212,37 @@ it.effect("round-trips coordinatorOnly and decodes rows that omit it as false", 
   }),
 );
 
-it.effect("forces Chorus fields and rejects a second active Chorus", () =>
+it.effect("forces Chorus fields for automatic creation and rejects client creation", () =>
   Effect.gen(function* () {
     const { layer, launches } = fixture();
     yield* Effect.gen(function* () {
       const service = yield* CaptainService.CaptainService;
-      const store = yield* CaptainStore.CaptainStore;
-      const [created, failures] = yield* Effect.partition(
-        [CaptainId.make("chorus"), CaptainId.make("second-chorus")],
-        (captainId) =>
-          service.create({
-            ...input,
-            captainId,
-            kind: "chorus",
-            scopedProjectIds: [ProjectId.make("missing")],
-            coordinatorOnly: false,
-            reportPolicy: "context",
-          }),
-        { concurrency: 2 },
-      );
-      assert.lengthOf(created, 1);
-      assert.deepStrictEqual(
-        failures.map(({ code }) => code),
-        ["conflict"],
-      );
-      const chorus = created[0]!;
+      const chorus = yield* service.create({
+        ...input,
+        captainId: CaptainId.make("chorus"),
+        kind: "chorus",
+        creationSource: "server" as const,
+        scopedProjectIds: [ProjectId.make("missing")],
+        coordinatorOnly: false,
+        reportPolicy: "context",
+      });
       assert.equal(chorus.kind, "chorus");
       assert.deepStrictEqual(chorus.scopedProjectIds, []);
       assert.isTrue(chorus.coordinatorOnly);
       assert.equal(chorus.reportPolicy, "react");
       assert.equal(launches.get(chorus.primaryThreadId)?.projectId, scratch);
-      assert.equal(launches.size, 1);
 
-      yield* service.archive({ captainId: chorus.id });
-      const replacement = yield* service.create({
-        ...input,
-        captainId: CaptainId.make("replacement-chorus"),
-        kind: "chorus",
-      });
-      assert.equal(replacement.kind, "chorus");
-      assert.equal(launches.size, 2);
-
-      const unarchiveConflict = yield* Effect.flip(service.unarchive({ captainId: chorus.id }));
-      assert.equal(unarchiveConflict.code, "conflict");
-      assert.isNotNull((yield* store.requireCaptain(chorus.id)).archivedAt);
-
-      const backstopId = CaptainId.make("backstop-chorus");
-      const backstopConflict = yield* Effect.flip(
-        store.save({
-          ...replacement,
-          id: backstopId,
-          primaryThreadId: captainPrimaryThreadId(backstopId, 0),
+      const manual = yield* Effect.flip(
+        service.create({
+          ...input,
+          captainId: CaptainId.make("manual-chorus"),
+          kind: "chorus",
         }),
       );
-      assert.equal(backstopConflict.code, "conflict");
-
-      yield* service.archive({ captainId: replacement.id });
-      assert.isNull((yield* service.unarchive({ captainId: chorus.id })).archivedAt);
-      assert.equal(launches.size, 2);
+      assert.equal(manual.code, "invalid_request");
+      assert.include(manual.message, "created automatically");
+      assert.equal(launches.size, 1);
     }).pipe(Effect.provide(layer));
-  }),
-);
-
-it.effect("checks reachable linked machines on Chorus creation and restore", () =>
-  Effect.gen(function* () {
-    const { layer, launches } = fixture();
-    const studio = EnvironmentId.make("studio");
-    let active = true;
-    const peers = Layer.mergeAll(
-      Layer.mock(PeerLinks.PeerLinks)({
-        enabled: Effect.succeed(true),
-        names: () =>
-          Effect.succeed([
-            { environmentId: EnvironmentId.make("offline"), label: "Offline" },
-            { environmentId: studio, label: "Studio" },
-          ]),
-      }),
-      Layer.mock(PeerMcpClient.PeerMcpClient)({
-        call: ({ environmentId, tool, success }) => {
-          assert.equal(tool, "chorus_active");
-          return environmentId === studio
-            ? Schema.decodeEffect(success)({ active }).pipe(Effect.orDie)
-            : Effect.fail(
-                new OrchestratorMcpFailure({
-                  code: "orchestration_error",
-                  message: "Peer did not answer.",
-                }),
-              );
-        },
-      }),
-    );
-    yield* Effect.gen(function* () {
-      const service = yield* CaptainService.CaptainService;
-      const chorusInput = { ...input, kind: "chorus" } as const;
-      const conflict = yield* service.create(chorusInput).pipe(Effect.flip);
-      assert.equal(conflict.code, "conflict");
-      assert.include(conflict.message, "Studio");
-      assert.equal(launches.size, 0);
-
-      active = false;
-      const local = yield* service.create(chorusInput);
-      yield* service.archive({ captainId: local.id });
-      active = true;
-      const restoreConflict = yield* service.unarchive({ captainId: local.id }).pipe(Effect.flip);
-      assert.equal(restoreConflict.code, "conflict");
-      assert.include(restoreConflict.message, "Studio");
-    }).pipe(Effect.provide(layer.pipe(Layer.provide(peers))));
   }),
 );
 
@@ -333,6 +255,7 @@ it.effect("keeps a Chorus unscoped, coordinator-only, and on the react report po
         ...input,
         captainId: CaptainId.make("chorus"),
         kind: "chorus",
+        creationSource: "server" as const,
       });
 
       const unchanged = yield* service.update({
@@ -372,7 +295,12 @@ it.effect("explains the project requirements for each kind when Scratch is unava
       assert.equal(error.code, "invalid_request");
       assert.include(error.message, "workspace scope");
       const chorusError = yield* Effect.flip(
-        service.create({ ...input, kind: "chorus", scopedProjectIds: [project] }),
+        service.create({
+          ...input,
+          kind: "chorus",
+          creationSource: "server" as const,
+          scopedProjectIds: [project],
+        }),
       );
       assert.equal(chorusError.code, "invalid_request");
       assert.include(chorusError.message, "Chorus requires a scratch folder");
@@ -1059,7 +987,12 @@ it.effect("builds a bounded Chorus roster from local state and sends it only whe
     yield* Effect.gen(function* () {
       const service = yield* CaptainService.CaptainService;
       const store = yield* CaptainStore.CaptainStore;
-      const chorus = yield* service.create({ ...input, name: "Chorus", kind: "chorus" });
+      const chorus = yield* service.create({
+        ...input,
+        name: "Chorus",
+        kind: "chorus",
+        creationSource: "server" as const,
+      });
       const duets = yield* Effect.forEach(
         Array.from({ length: 14 }, (_, index) => index),
         (index) => {
@@ -1204,7 +1137,12 @@ it.effect(
         const service = yield* CaptainService.CaptainService;
         const sql = yield* SqlClient.SqlClient;
         const store = yield* CaptainStore.CaptainStore;
-        const chorus = yield* service.create({ ...input, name: "Chorus", kind: "chorus" });
+        const chorus = yield* service.create({
+          ...input,
+          name: "Chorus",
+          kind: "chorus",
+          creationSource: "server" as const,
+        });
         const now = yield* DateTime.now;
         const recent = DateTime.formatIso(DateTime.toUtc(DateTime.subtract(now, { days: 2 })));
         const old = DateTime.formatIso(DateTime.toUtc(DateTime.subtract(now, { days: 31 })));
