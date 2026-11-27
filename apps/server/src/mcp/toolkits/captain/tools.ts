@@ -50,9 +50,34 @@ const DuetListEntry = Schema.Struct({
   digestNew: Schema.Array(Schema.String),
 });
 
-const DuetReadResult = Schema.Union([
+const DuetReadPayload = Schema.Union([
   Schema.Struct({ profile: Captain }),
   Schema.Struct({ document: CaptainDocument, truncated: Schema.Boolean }),
+]);
+
+const DuetEnvironmentTarget = Schema.optional(
+  EnvironmentId.annotate({
+    description: "Linked machine to read or act in. Omit to fan out across the fleet.",
+  }),
+);
+
+const UnreachableMachine = Schema.Struct({
+  environmentId: EnvironmentId,
+  environmentLabel: Schema.String,
+  reason: Schema.String.check(Schema.isMaxLength(300)),
+});
+
+const DuetReadResult = Schema.Union([
+  DuetReadPayload,
+  Schema.Struct({
+    results: Schema.Array(
+      Schema.Struct({
+        ...DuetEnvironment.fields,
+        result: DuetReadPayload,
+      }),
+    ),
+    unreachableMachines: Schema.optional(Schema.Array(UnreachableMachine)),
+  }),
 ]);
 
 const DuetMemorySearchResult = Schema.Struct({
@@ -64,6 +89,7 @@ const DuetMemorySearchResult = Schema.Struct({
       memory: CaptainMemory,
     }),
   ),
+  unreachableMachines: Schema.optional(Schema.Array(UnreachableMachine)),
   note: Schema.optional(Schema.String.check(Schema.isMaxLength(160))),
 });
 
@@ -71,17 +97,22 @@ export const CaptainToolkit = Toolkit.make(
   Tool.make("duet_list", {
     ...options,
     description:
-      "List every Duet on this machine, including archived ones, with role, kind, workspace scope titles, current primary thread, and the first lines of DIGEST.md's ## New section. Use this first for cross-Duet questions. Read-only: it changes nothing and sends nothing.",
-    success: Schema.Struct({ duets: Schema.Array(DuetListEntry) }),
+      "List Duets across the fleet, including archived ones, with machine, role, kind, workspace scope titles, current primary thread, and the first lines of DIGEST.md's ## New section. Omit environmentId for every linked machine; unreachable machines are reported without failing the call. Use this first for cross-Duet questions. Read-only: it changes nothing and sends nothing.",
+    parameters: Schema.Struct({ environmentId: DuetEnvironmentTarget }),
+    success: Schema.Struct({
+      duets: Schema.Array(DuetListEntry),
+      unreachableMachines: Schema.optional(Schema.Array(UnreachableMachine)),
+    }),
   })
     .annotate(Tool.Readonly, true)
     .annotate(McpInvocationContext.ListedWhen, McpInvocationContext.chorusOnly),
   Tool.make("duet_read", {
     ...options,
     description:
-      "Read one Duet's profile, or one of its NOTES.md, AGENTS.md, CREW.md, or DIGEST.md documents with its revision. Document content is capped at 16,000 characters and marked when truncated. Read-only: it changes nothing and sends nothing.",
+      "Read one Duet's profile, or one of its NOTES.md, AGENTS.md, CREW.md, or DIGEST.md documents with its revision, across the fleet when environmentId is omitted. Document content is capped at 16,000 characters and marked when truncated. Read-only: it changes nothing and sends nothing.",
     parameters: Schema.Struct({
       duetId: CaptainId,
+      environmentId: DuetEnvironmentTarget,
       document: Schema.optional(CaptainDocumentName),
     }),
     success: DuetReadResult,
@@ -91,10 +122,11 @@ export const CaptainToolkit = Toolkit.make(
   Tool.make("duet_memory_search", {
     ...options,
     description:
-      "Search local memories and long-term recall across every Duet on this machine, or omit query for recent memories. Narrow with duetId. Results are labelled by Duet and source. Read-only: it changes nothing and sends nothing.",
+      "Search local memories and long-term recall across every Duet on each machine, or omit query for recent memories. Narrow with duetId or environmentId. Results are labelled by machine, Duet, and source; each machine contributes at most 20 matches. Read-only: it changes nothing and sends nothing.",
     parameters: Schema.Struct({
       query: Schema.optional(Schema.String.check(Schema.isMaxLength(500))),
       duetId: Schema.optional(CaptainId),
+      environmentId: DuetEnvironmentTarget,
     }),
     success: DuetMemorySearchResult,
   })
@@ -103,9 +135,10 @@ export const CaptainToolkit = Toolkit.make(
   Tool.make("duet_send", {
     ...options,
     description:
-      "Route the user's work request to a Duet's current conversation. For questions, use duet_list or duet_read. Confirm the route with the returned thread link. The result appears the next time the user messages Chorus.",
+      "Route the user's work request to a Duet's current conversation on its machine. For questions, use duet_list or duet_read. Confirm the route with the returned thread link. The result appears the next time the user messages Chorus.",
     parameters: Schema.Struct({
       duetId: CaptainId,
+      environmentId: DuetEnvironmentTarget,
       message: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100000)),
       mode: Schema.optional(Schema.Literals(["auto", "queue", "steer", "restart"])),
       clientRequestId: Schema.optional(Schema.String),
