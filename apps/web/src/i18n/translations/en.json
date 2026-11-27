@@ -3647,7 +3647,7 @@
   "1f2882bd71e6f64e": "Working instructions the Duet receives at the start of each conversation.",
   "ca3ddea1cd077828": "Long-term notes the Duet receives at the start of each conversation.",
   "ec3d85e1af3528ff": "Rules passed to every task this Duet delegates.",
-  "3d441eaf5dfb2e06": "A running summary written by the recap.",
+  "e2d07a5080691f83": "Recaps of what this Duet has done.",
   "9fec8d8f72a0de4d": "Empty",
   "8b4eabdfc58b5fa0": "Edit",
   "158f2bab621f146e": "Could not save the document.",
