@@ -23,11 +23,15 @@ update feed, signing settings, and Electron profile paths.
   installed bundle's basename matches its current `CFBundleExecutable` and
   the destination is free. A custom bundle name or an occupied destination
   leaves the existing bundle path in use, with the new executable inside.
+  On macOS 11 or later, relaunch can fail after a rename because ShipIt tries
+  to restart its helper at the old path. If Fables does not reopen, open it
+  from Applications.
   Dock pins, login items, and shortcuts that refer to the old path may need
   updating. Electron still reads its profile from
-  `~/Library/Application Support/t3code-v2`. See
-  [SQRLUpdater.m](https://github.com/Squirrel/Squirrel.Mac/blob/fffea30e4a339a7f7d69a3391314b72548d209bd/Squirrel/SQRLUpdater.m#L1073-L1083)
-  and [SQRLInstaller.m](https://github.com/Squirrel/Squirrel.Mac/blob/fffea30e4a339a7f7d69a3391314b72548d209bd/Squirrel/SQRLInstaller.m#L550-L569).
+  `~/Library/Application Support/t3code-v2`. See the ShipIt sources for the
+  [rename flag](https://github.com/Squirrel/Squirrel.Mac/blob/fffea30e4a339a7f7d69a3391314b72548d209bd/Squirrel/SQRLUpdater.m#L1073-L1083),
+  [destination](https://github.com/Squirrel/Squirrel.Mac/blob/fffea30e4a339a7f7d69a3391314b72548d209bd/Squirrel/SQRLInstaller.m#L550-L569),
+  and [relaunch](https://github.com/Squirrel/Squirrel.Mac/blob/fffea30e4a339a7f7d69a3391314b72548d209bd/Squirrel/ShipIt-main.m#L168-L206).
 - **Windows.** Keep `win.executableName` on the existing filename.
   electron-updater's `out/NsisUpdater.js` launches the NSIS installer.
   electron-builder's `out/targets/nsis/NsisTarget.js` derives the install
