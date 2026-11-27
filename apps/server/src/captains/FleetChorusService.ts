@@ -255,9 +255,6 @@ const make = Effect.gen(function* () {
     }),
   );
 
-  yield* ensureHome();
-  yield* refresh().pipe(Effect.repeat(REFRESH_INTERVAL), Effect.forkScoped);
-
   return FleetChorusService.of({
     ensureHome: ensureHome(),
     status,
@@ -267,3 +264,12 @@ const make = Effect.gen(function* () {
 });
 
 export const layer = Layer.effect(FleetChorusService, make);
+
+/** Startup reconciliation plus the slow peer re-check loop. Kept separate so tests can drive one step. */
+export const worker = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const service = yield* FleetChorusService;
+    yield* service.ensureHome;
+    yield* service.refresh.pipe(Effect.repeat(REFRESH_INTERVAL), Effect.forkScoped);
+  }),
+);
