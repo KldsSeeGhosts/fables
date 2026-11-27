@@ -44,15 +44,16 @@ function stopWorkingClock() {
   workingGeneration.set(workingGeneration.get() + 1);
 }
 
+function subscribeWorkingClock() {
+  if (workingConsumers++ === 0) scheduleOnUI(startWorkingClock);
+  return () => {
+    if (--workingConsumers === 0) scheduleOnUI(stopWorkingClock);
+  };
+}
+
 export function useRepeatingStatusProgress(enabled: boolean, duration: number, alternate = false) {
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- starts the UI clock for visible working views and stops it after the last one leaves
-  useEffect(() => {
-    if (!enabled) return;
-    if (workingConsumers++ === 0) scheduleOnUI(startWorkingClock);
-    return () => {
-      if (--workingConsumers === 0) scheduleOnUI(stopWorkingClock);
-    };
-  }, [enabled]);
+  useEffect(() => (enabled ? subscribeWorkingClock() : undefined), [enabled]);
 
   // Batch updates across rows at 30 Hz to limit Fabric commits while the list scrolls.
   return useDerivedValue(() => {
