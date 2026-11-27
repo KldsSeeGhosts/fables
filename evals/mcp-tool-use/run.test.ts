@@ -740,6 +740,7 @@ it("selects the eval's Duet and Chorus tools by caller role", () => {
   const regular = names(buildBase(template, options));
   const duet = names(buildBase(template, { ...options, captainKind: "duet" }));
   const chorus = names(buildBase(template, { ...options, captainKind: "chorus" }));
+  const solo = names(buildBase(template, { ...options, captainKind: "chorus", subagent: true }));
   assert.notInclude(regular, "captain_document_read");
   assert.includeMembers(duet, ["captain_document_read", "watch_pull_request"]);
   assert.notInclude(duet, "duet_list");
@@ -750,6 +751,28 @@ it("selects the eval's Duet and Chorus tools by caller role", () => {
     "duet_memory_search",
   ]);
   assert.notInclude(chorus, "watch_pull_request");
+  assert.notInclude(solo, "duet_list");
+});
+
+it("grades which Duet recorded each memory", () => {
+  const testCase = NodeFS.readFileSync(
+    new URL("./cases/chorus-reads.ndjson", import.meta.url),
+    "utf8",
+  )
+    .trim()
+    .split("\n")
+    .map(decodeDeviceCase)
+    .find(({ id }) => id === "chorus-search-memories")!;
+  const passes = (finalText: string) =>
+    gradeSample(testCase.expect, {
+      calls: [{ step: 0, tool: "duet_memory_search", input: {}, failed: false, output: "" }],
+      text: finalText,
+      finalText,
+      stopReason: "end_turn",
+    }).every(({ pass }) => pass);
+  assert.isTrue(passes("Maria requires staging approval. Lee freezes releases on Fridays."));
+  assert.isTrue(passes("Staging approval came from Maria. The Friday freeze came from Lee."));
+  assert.isFalse(passes("Lee requires staging approval. Maria freezes releases on Fridays."));
 });
 
 it("lists link tools only while a case turns the beta on, and sends chips as T3 projects them", () => {

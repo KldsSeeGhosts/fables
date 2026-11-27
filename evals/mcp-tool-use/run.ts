@@ -653,6 +653,7 @@ const visibleT3Tools = (options: {
             threadId: coordinatorCaptain.primaryThreadId,
             providerSessionId: "mcp-tool-use-eval",
             providerInstanceId: ProviderInstanceId.make("eval"),
+            subagent: options.subagent === true,
           },
           client: undefined,
           capabilities: new Set(["orchestration"]),

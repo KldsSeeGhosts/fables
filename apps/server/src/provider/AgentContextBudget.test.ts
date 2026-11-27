@@ -1,10 +1,11 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
-import { ProviderInstanceId } from "@t3tools/contracts";
+import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import { McpProviderSessions } from "@t3tools/provider-core/server/McpProviderSessions";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as Effect from "effect/Effect";
+import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import { McpServer } from "effect/ai";
 
@@ -17,6 +18,7 @@ import { GitManager } from "../git/GitManager.ts";
 import { GitWorkflowService } from "../git/GitWorkflowService.ts";
 import { TaskFolders } from "../workspace/TaskFolders.ts";
 import * as McpHttpServer from "../mcp/McpHttpServer.ts";
+import * as McpInvocationContext from "../mcp/McpInvocationContext.ts";
 import { PreviewAutomationBroker } from "../mcp/PreviewAutomationBroker.ts";
 import {
   CLAUDE_PROVIDER,
@@ -152,19 +154,38 @@ it.effect("only request_secret and send_to_user ask Claude Code to load them up 
 it.effect("agent context matches the committed budget", () =>
   Effect.gen(function* () {
     const mcp = yield* McpServer.McpServer;
+    const toolListBytes = (scope?: McpInvocationContext.McpInvocationScope) =>
+      utf8Bytes(
+        JSON.stringify(
+          mcp.tools.flatMap(({ annotations, tool }) => {
+            const listedWhen = Context.getOrUndefined(annotations, McpInvocationContext.ListedWhen);
+            // This is the ceiling across client capabilities. Measure the Chorus-only listings separately.
+            if (listedWhen !== undefined && !listedWhen(scope)) return [];
+            return [
+              { name: tool.name, description: tool.description, inputSchema: tool.inputSchema },
+            ];
+          }),
+        ),
+      );
     const measured = {
       claudeSystemAppendBytes: utf8Bytes(claudeSystemAppend()),
       codexAdditionalContextBytes: utf8Bytes(codexAdditionalContext()),
       // The model sees these fields. outputSchema and annotations are protocol metadata.
-      mcpToolListJsonBytes: utf8Bytes(
-        JSON.stringify(
-          mcp.tools.map(({ tool }) => ({
-            name: tool.name,
-            description: tool.description,
-            inputSchema: tool.inputSchema,
-          })),
-        ),
-      ),
+      mcpToolListJsonBytes: toolListBytes(),
+      chorusMcpToolListJsonBytes: toolListBytes({
+        environmentId: EnvironmentId.make("context-budget"),
+        thread: {
+          threadId: ThreadId.make("captain:context-budget:0"),
+          providerSessionId: "context-budget",
+          providerInstanceId: ProviderInstanceId.make("codex"),
+        },
+        requestNamespace: "context-budget",
+        capabilities: new Set(),
+        client: undefined,
+        issuedAt: 0,
+        captain: true,
+        chorus: true,
+      }),
     };
 
     expect(
