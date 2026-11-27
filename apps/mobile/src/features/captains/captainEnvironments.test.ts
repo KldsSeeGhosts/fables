@@ -94,7 +94,8 @@ describe("resolveCaptainEnvironments", () => {
       readable: true,
       live: AsyncResult.success(snapshot([captain("old", archivedAt), chorus])),
     });
-    expect(environment?.captains).toEqual([chorus]);
+    expect(environment?.captains).toEqual([]);
+    expect(environment?.archivedChoruses).toEqual([chorus]);
   });
 
   it("drops cached Captains when the host denies reading them or does not run Captains", () => {

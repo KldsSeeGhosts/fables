@@ -91,7 +91,11 @@ export function ChorusNewSheet() {
       setError(failure instanceof Error ? failure.message : gt("Could not create Chorus."));
       return;
     }
-    navigation.goBack();
+    if (result.value.kind !== "chorus") {
+      setError(gt("This machine created a Duet. Update it before creating a Chorus."));
+      return;
+    }
+    if (navigation.isFocused()) navigation.goBack();
   };
 
   return (

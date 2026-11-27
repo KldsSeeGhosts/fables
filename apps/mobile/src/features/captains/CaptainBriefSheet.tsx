@@ -7,7 +7,7 @@ import {
 } from "@t3tools/client-runtime/state/captain-digest";
 import { AuthOrchestrationReadScope, CaptainId, EnvironmentId } from "@t3tools/contracts";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
-import { useGT } from "gt-react-native";
+import { T, useGT } from "gt-react-native";
 import { useState, type ReactNode } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -195,6 +195,23 @@ export function CaptainBriefSheet({ route }: StaticScreenProps<CaptainBriefParam
               </BriefSection>
             </>
           )}
+          {captain?.kind === "chorus" && !archived ? (
+            <BriefSection title={gt("Linked machines")}>
+              <Text className="text-xs text-foreground-muted">
+                <T>
+                  Chorus recaps can be incomplete when a linked machine is offline or running an
+                  older version.
+                </T>
+              </Text>
+              <Text className="text-xs text-foreground-muted">
+                <T>
+                  Routing to a Duet on another machine requires a full-access link. A confirmed
+                  route can show an unknown status while that machine is offline. Routed results
+                  appear the next time you message Chorus.
+                </T>
+              </Text>
+            </BriefSection>
+          ) : null}
           {archiveControl}
         </ScrollView>
       </ScreenContent>

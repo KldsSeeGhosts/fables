@@ -1,6 +1,7 @@
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/models";
 import type { Captain, EnvironmentId } from "@t3tools/contracts";
 import { useNavigation } from "@react-navigation/native";
+import type { ReactNode } from "react";
 import { useGT, useMessages } from "gt-react-native";
 import { Pressable, View } from "react-native";
 

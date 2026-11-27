@@ -47,7 +47,7 @@ export function CaptainsHomeSection(props: {
   const byConversation = captainShellsByConversation(shells);
   const rows = orderCaptainHomeRows(
     environments.flatMap((environment) =>
-      environment.captains
+      [...environment.captains, ...environment.archivedChoruses]
         .filter(
           (captain) =>
             captain.kind === "chorus" ||
