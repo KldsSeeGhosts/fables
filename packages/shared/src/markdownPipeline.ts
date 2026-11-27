@@ -31,7 +31,7 @@ import { isWindowsAbsolutePath } from "./path.ts";
 import {
   CHAT_MARKDOWN_SANITIZE_SCHEMA,
   chatMarkdownImageSource,
-  rehypeNormalizeLocalEditorLinks,
+  rehypeNormalizeLocalFileLinks,
   rehypePreserveImageSourceMeta,
   type ChatMarkdownImageProperties,
 } from "./markdownHast.ts";
@@ -211,7 +211,7 @@ const chatMarkdownRehypePlugins = (sanitizeSchema: Schema): PluggableList => [
   rehypePreserveBareAnchorPlaceholders,
   rehypeRawWhenPresent,
   rehypePreserveImageSourceMeta,
-  rehypeNormalizeLocalEditorLinks,
+  rehypeNormalizeLocalFileLinks,
   [rehypeSanitize, sanitizeSchema],
 ];
 

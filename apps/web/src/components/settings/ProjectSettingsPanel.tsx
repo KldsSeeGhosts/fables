@@ -44,7 +44,7 @@ import { projectEnvironment } from "../../state/projects";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { Badge } from "../ui/badge";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
@@ -456,39 +456,42 @@ function ProjectDetail({
     else checkoutsByEnvironment.set(member.environmentId, [member]);
   }
   const checkoutRemoveButton = (member: SidebarProjectGroupMember) => (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            size="icon-sm"
-            variant="ghost-destructive"
-            disabled={!editableIds.has(member.environmentId)}
-            onClick={() => void removeMembers([member])}
-            aria-label={gt("Remove checkout {path}", { path: member.workspaceRoot })}
-          >
-            <Trash2Icon />
-          </Button>
-        }
-      />
-      <TooltipPopup side="top">
-        <T>Remove checkout</T>
-      </TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={
+        <Button
+          size="icon-sm"
+          variant="ghost-destructive"
+          disabled={!editableIds.has(member.environmentId)}
+          onClick={() => void removeMembers([member])}
+          aria-label={gt("Remove checkout {path}", { path: member.workspaceRoot })}
+        >
+          <Trash2Icon />
+        </Button>
+      }
+      label={
+        <>
+          <T>Remove checkout</T>
+        </>
+      }
+      side="top"
+    />
   );
   const checkoutControls = (member: SidebarProjectGroupMember) => (
     <div className="flex w-full min-w-0 items-center gap-2 @min-[32rem]/settings-row:w-auto">
       <div className="min-w-0 flex-1 @min-[32rem]/settings-row:w-44 @min-[32rem]/settings-row:flex-none">
-        <Tooltip>
-          <TooltipTrigger render={<div />}>
-            <CheckoutGroupingSelect member={member} />
-          </TooltipTrigger>
-          <TooltipPopup>
-            <T>
-              Grouping rule decides how each checkout joins project groups in the sidebar. Changing
-              it can move a checkout to a different project.
-            </T>
-          </TooltipPopup>
-        </Tooltip>
+        <SharedTooltipTrigger
+          render={<div />}
+          label={
+            <>
+              <T>
+                Grouping rule decides how each checkout joins project groups in the sidebar.
+                Changing it can move a checkout to a different project.
+              </T>
+            </>
+          }
+        >
+          <CheckoutGroupingSelect member={member} />
+        </SharedTooltipTrigger>
       </div>
       {hasMultipleCheckouts ? checkoutRemoveButton(member) : null}
     </div>
@@ -517,14 +520,12 @@ function ProjectDetail({
               key={member.physicalProjectKey}
               title={member.environmentLabel ?? gt("Environment")}
               description={
-                <Tooltip>
-                  <TooltipTrigger
-                    render={<span className="block truncate font-mono" tabIndex={0} />}
-                  >
-                    {member.workspaceRoot}
-                  </TooltipTrigger>
-                  <TooltipPopup>{member.workspaceRoot}</TooltipPopup>
-                </Tooltip>
+                <SharedTooltipTrigger
+                  render={<span className="block truncate font-mono" tabIndex={0} />}
+                  label={member.workspaceRoot}
+                >
+                  {member.workspaceRoot}
+                </SharedTooltipTrigger>
               }
               leading={
                 <EnvironmentMachineIcon
@@ -566,12 +567,12 @@ function ProjectDetail({
                   <span className="block truncate">{labels.secondary}</span>
                 ) : null}
                 {!hasMultiple ? (
-                  <Tooltip>
-                    <TooltipTrigger render={<span className="block truncate font-mono" />}>
-                      {firstMember.workspaceRoot}
-                    </TooltipTrigger>
-                    <TooltipPopup>{firstMember.workspaceRoot}</TooltipPopup>
-                  </Tooltip>
+                  <SharedTooltipTrigger
+                    render={<span className="block truncate font-mono" />}
+                    label={firstMember.workspaceRoot}
+                  >
+                    {firstMember.workspaceRoot}
+                  </SharedTooltipTrigger>
                 ) : null}
               </>
             }
@@ -589,16 +590,14 @@ function ProjectDetail({
                     key={member.physicalProjectKey}
                     className="flex min-w-0 flex-col gap-1.5 @min-[36rem]/settings-row:flex-row @min-[36rem]/settings-row:items-center @min-[36rem]/settings-row:justify-between @min-[36rem]/settings-row:gap-3"
                   >
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <span className="min-w-0 max-w-full truncate font-mono text-meta text-muted-foreground/80" />
-                        }
-                      >
-                        {member.workspaceRoot}
-                      </TooltipTrigger>
-                      <TooltipPopup>{member.workspaceRoot}</TooltipPopup>
-                    </Tooltip>
+                    <SharedTooltipTrigger
+                      render={
+                        <span className="min-w-0 max-w-full truncate font-mono text-meta text-muted-foreground/80" />
+                      }
+                      label={member.workspaceRoot}
+                    >
+                      {member.workspaceRoot}
+                    </SharedTooltipTrigger>
                     <div className="shrink-0">{checkoutControls(member)}</div>
                   </div>
                 ))}
@@ -666,15 +665,21 @@ function ProjectDetail({
             title={gt("Project icon")}
             description={
               projectIcon?.kind === "lucide" ? (
-                <Tooltip>
-                  <TooltipTrigger render={<span tabIndex={0} />}>{projectIcon.name}</TooltipTrigger>
-                  <TooltipPopup side="top">{projectIcon.color}</TooltipPopup>
-                </Tooltip>
+                <SharedTooltipTrigger
+                  render={<span tabIndex={0} />}
+                  label={projectIcon.color}
+                  side="top"
+                >
+                  {projectIcon.name}
+                </SharedTooltipTrigger>
               ) : projectIcon?.kind === "monogram" ? (
-                <Tooltip>
-                  <TooltipTrigger render={<span tabIndex={0} />}>{projectIcon.text}</TooltipTrigger>
-                  <TooltipPopup side="top">{projectIcon.color}</TooltipPopup>
-                </Tooltip>
+                <SharedTooltipTrigger
+                  render={<span tabIndex={0} />}
+                  label={projectIcon.color}
+                  side="top"
+                >
+                  {projectIcon.text}
+                </SharedTooltipTrigger>
               ) : projectIcon?.kind === "emoji" ? (
                 projectIcon.emoji
               ) : (

@@ -43,6 +43,7 @@ import { Button } from "../ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "../ui/input-group";
 import { Skeleton } from "../ui/skeleton";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { useOptionalSettingsScope } from "./SettingsScopeContext";
 import {
   isProjectScopedSettingKey,
@@ -296,20 +297,19 @@ export function SettingsSection({
     "Environment-wide settings. Select an environment to change them.",
   );
   const lockIndicator = lock.locked ? (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <span
-            tabIndex={0}
-            aria-label={environmentWideSectionMessage}
-            className="inline-flex size-5 items-center justify-center rounded-badge text-dim-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          />
-        }
-      >
-        <LockIcon aria-hidden className="size-3" />
-      </TooltipTrigger>
-      <TooltipPopup side="top">{environmentWideSectionMessage}</TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={
+        <span
+          tabIndex={0}
+          aria-label={environmentWideSectionMessage}
+          className="inline-flex size-5 items-center justify-center rounded-badge text-dim-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        />
+      }
+      label={environmentWideSectionMessage}
+      side="top"
+    >
+      <LockIcon aria-hidden className="size-3" />
+    </SharedTooltipTrigger>
   ) : null;
 
   return (
@@ -333,20 +333,19 @@ export function SettingsSection({
             </h2>
             {titleAction}
             {warning ? (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <span
-                      tabIndex={0}
-                      aria-label={warning}
-                      className="inline-flex size-5 shrink-0 items-center justify-center rounded-badge text-warning-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                    />
-                  }
-                >
-                  <TriangleAlertIcon aria-hidden className="size-3.5" />
-                </TooltipTrigger>
-                <TooltipPopup side="top">{warning}</TooltipPopup>
-              </Tooltip>
+              <SharedTooltipTrigger
+                render={
+                  <span
+                    tabIndex={0}
+                    aria-label={warning}
+                    className="inline-flex size-5 shrink-0 items-center justify-center rounded-badge text-warning-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  />
+                }
+                label={warning}
+                side="top"
+              >
+                <TriangleAlertIcon aria-hidden className="size-3.5" />
+              </SharedTooltipTrigger>
             ) : null}
           </div>
           {headerAction || lockIndicator ? (
@@ -558,24 +557,23 @@ export function SettingsRow({
       resetAction
     );
   const inertControl = (message: string) => (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <span
-            tabIndex={0}
-            className="flex w-full items-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring @min-[26rem]/settings-row:w-auto"
-          />
-        }
+    <SharedTooltipTrigger
+      render={
+        <span
+          tabIndex={0}
+          className="flex w-full items-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring @min-[26rem]/settings-row:w-auto"
+        />
+      }
+      label={message}
+      side="top"
+    >
+      <div
+        inert
+        className="flex w-full items-center gap-2 opacity-64 @min-[26rem]/settings-row:w-auto"
       >
-        <div
-          inert
-          className="flex w-full items-center gap-2 opacity-64 @min-[26rem]/settings-row:w-auto"
-        >
-          {control}
-        </div>
-      </TooltipTrigger>
-      <TooltipPopup side="top">{message}</TooltipPopup>
-    </Tooltip>
+        {control}
+      </div>
+    </SharedTooltipTrigger>
   );
   const lackingPermissionMessage = () => {
     const environments = context
@@ -827,30 +825,29 @@ export function SettingResetButton({
     );
   }
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            size="icon-micro"
-            variant="ghost-muted"
-            aria-label={ariaLabel}
-            disabled={disabled}
-            onClick={(event) => {
-              event.stopPropagation();
-              // A reset usually unmounts this button. Keep focus beside the setting, or focus
-              // recovery sends it to the area's default control and scrolls that into view.
-              event.currentTarget.parentElement
-                ?.closest<HTMLElement>("[tabindex]")
-                ?.focus({ preventScroll: true });
-              onClick();
-            }}
-          >
-            <Undo2Icon className="size-3" />
-          </Button>
-        }
-      />
-      <TooltipPopup side="top">{tooltip ?? gt("Reset to default")}</TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={
+        <Button
+          size="icon-micro"
+          variant="ghost-muted"
+          aria-label={ariaLabel}
+          disabled={disabled}
+          onClick={(event) => {
+            event.stopPropagation();
+            // A reset usually unmounts this button. Keep focus beside the setting, or focus
+            // recovery sends it to the area's default control and scrolls that into view.
+            event.currentTarget.parentElement
+              ?.closest<HTMLElement>("[tabindex]")
+              ?.focus({ preventScroll: true });
+            onClick();
+          }}
+        >
+          <Undo2Icon className="size-3" />
+        </Button>
+      }
+      label={tooltip ?? gt("Reset to default")}
+      side="top"
+    />
   );
 }
 

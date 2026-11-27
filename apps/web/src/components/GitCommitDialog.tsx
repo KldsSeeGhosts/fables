@@ -130,7 +130,7 @@ export function GitCommitDialog({
   /** A new branch also moves the thread onto it. */
   canChangeThreadBranch: boolean;
   canOpenFiles: boolean;
-  onSubmit: (submission: GitCommitDialogSubmission) => void;
+  onSubmit: (submission: GitCommitDialogSubmission) => Promise<boolean>;
   onOpenFile: (path: string) => void;
   /** A message a failed commit left behind, offered again when the dialog reopens. */
   retainedMessage?: string;
@@ -142,13 +142,19 @@ export function GitCommitDialog({
   const [excludedFiles, setExcludedFiles] = useState<ReadonlySet<string>>(() => new Set());
   const [branchTarget, setBranchTarget] = useState<CommitBranchTarget>("current");
 
-  // Every opening starts from the whole working tree on the current branch.
+  const refName = gitStatus?.refName ?? null;
+  const [selectionBranch, setSelectionBranch] = useState(refName);
+  if (gitStatus && selectionBranch !== refName) {
+    setSelectionBranch(refName);
+    setExcludedFiles(new Set());
+  }
+
+  // Retry exclusions on the same branch, even after the dialog closes.
   const [openSeen, setOpenSeen] = useState(open);
   if (openSeen !== open) {
     setOpenSeen(open);
     if (open) {
       setCommitMessage(retainedMessage);
-      setExcludedFiles(new Set());
       setBranchTarget("current");
     }
   }
@@ -158,7 +164,6 @@ export function GitCommitDialog({
   const allSelected = selectedFiles.length === allFiles.length;
   const noneSelected = selectedFiles.length === 0;
   const excludedCount = allFiles.length - selectedFiles.length;
-  const refName = gitStatus?.refName ?? null;
   const branchItems = [
     { value: "current", label: refName ?? gt("(detached HEAD)") },
     { value: "new", label: gt("New branch") },
@@ -178,10 +183,13 @@ export function GitCommitDialog({
   const submit = () => {
     if (submitDisabled) return;
     const trimmedMessage = commitMessage.trim();
-    onSubmit({
+    void onSubmit({
       commitMessage: trimmedMessage.length > 0 ? trimmedMessage : null,
       filePaths: allSelected ? null : selectedFiles.map((file) => file.path),
       featureBranch: branchTarget === "new",
+    }).then((committed) => {
+      if (committed)
+        setExcludedFiles((current) => (current === excludedFiles ? new Set() : current));
     });
   };
 

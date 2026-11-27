@@ -31,7 +31,7 @@ import { m, type MessageResolver } from "~/i18n/messages";
 import { tickTextContent } from "~/lib/tickTextContent";
 import { BackgroundWorkDetails } from "./BackgroundWorkDetails";
 import { Button, InlineButton } from "../ui/button";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import type { ComposerBannerStackItem } from "./ComposerBannerStack";
 import type { ThreadNowItem } from "./ThreadNow";
@@ -321,19 +321,22 @@ export function branchMismatchBannerItem(
     icon: <GitBranchIcon />,
     title: resolve(msg("Branch changed")),
     description: (
-      <Tooltip>
-        <TooltipTrigger render={<span className="min-w-0 truncate" />}>
-          <T>
-            was <Var>{mismatch.threadBranch}</Var>
-          </T>
-        </TooltipTrigger>
-        <TooltipPopup side="top">
-          <T>
-            This thread last ran on <Var>{mismatch.threadBranch}</Var>. Sending will continue on{" "}
-            <Var>{mismatch.currentBranch}</Var>.
-          </T>
-        </TooltipPopup>
-      </Tooltip>
+      <SharedTooltipTrigger
+        render={<span className="min-w-0 truncate" />}
+        label={
+          <>
+            <T>
+              This thread last ran on <Var>{mismatch.threadBranch}</Var>. Sending will continue on{" "}
+              <Var>{mismatch.currentBranch}</Var>.
+            </T>
+          </>
+        }
+        side="top"
+      >
+        <T>
+          was <Var>{mismatch.threadBranch}</Var>
+        </T>
+      </SharedTooltipTrigger>
     ),
     actions: (
       <Button

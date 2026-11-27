@@ -56,6 +56,7 @@ import { toastManager } from "../ui/toast";
 import { AttachmentImage } from "../media/AttachmentImage";
 import { m } from "../../i18n/messages";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import type { TimestampFormat } from "@t3tools/contracts/settings";
 import { GuestMessageName } from "./guestMessageStyle";
 import { TimelineRowTimestamp } from "./TimelineRowParts";
@@ -424,30 +425,10 @@ export function QueuedRunsControl({
               >
                 {canSendRun(item.freshContext) && !isEditing ? (
                   <>
-                    <Tooltip>
-                      <TooltipTrigger render={<span className="flex shrink-0" />}>
-                        <Button
-                          size="xs"
-                          variant="ghost-muted"
-                          disabled={item.runId === null || busyRunId !== null}
-                          onClick={() => {
-                            if (item.runId !== null) {
-                              void sendQueuedMessage(item.runId);
-                            }
-                          }}
-                        >
-                          <CornerUpRightIcon />
-                          {workflow?.canSendNow ? (
-                            <T>Send now</T>
-                          ) : (
-                            gt("Steer", {
-                              $context: "verb, steers the running turn with this message",
-                            })
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipPopup>
-                        {item.serverIndex === 0 && props.steerShortcutLabel
+                    <SharedTooltipTrigger
+                      render={<span className="flex shrink-0" />}
+                      label={
+                        item.serverIndex === 0 && props.steerShortcutLabel
                           ? workflow?.canSendNow
                             ? gt("Start a turn with this message ({shortcut})", {
                                 shortcut: props.steerShortcutLabel,
@@ -469,9 +450,29 @@ export function QueuedRunsControl({
                               ? gt("Skip compaction and send this message")
                               : movesCommandFirst
                                 ? gt("Move this command to the front of the queue")
-                                : gt("Send into the current turn")}
-                      </TooltipPopup>
-                    </Tooltip>
+                                : gt("Send into the current turn")
+                      }
+                    >
+                      <Button
+                        size="xs"
+                        variant="ghost-muted"
+                        disabled={item.runId === null || busyRunId !== null}
+                        onClick={() => {
+                          if (item.runId !== null) {
+                            void sendQueuedMessage(item.runId);
+                          }
+                        }}
+                      >
+                        <CornerUpRightIcon />
+                        {workflow?.canSendNow ? (
+                          <T>Send now</T>
+                        ) : (
+                          gt("Steer", {
+                            $context: "verb, steers the running turn with this message",
+                          })
+                        )}
+                      </Button>
+                    </SharedTooltipTrigger>
                   </>
                 ) : null}
                 {item.pending ? (
@@ -532,29 +533,28 @@ export function QueuedRunsControl({
                             : gt("Edit in the composer"))}
                       </TooltipPopup>
                     </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <Button
-                            size="icon-xs"
-                            variant="ghost-muted"
-                            aria-label={gt("Remove queued message")}
-                            className="-me-1 sm:-me-[3px]"
-                            disabled={item.runId !== null && busyRunId !== null}
-                            onClick={() => {
-                              if (item.runId !== null) void remove(item.runId);
-                              else if (item.messageId !== null)
-                                props.onRemovePending(item.messageId);
-                            }}
-                          />
-                        }
-                      >
-                        <XIcon />
-                      </TooltipTrigger>
-                      <TooltipPopup>
-                        <T>Remove from queue</T>
-                      </TooltipPopup>
-                    </Tooltip>
+                    <SharedTooltipTrigger
+                      render={
+                        <Button
+                          size="icon-xs"
+                          variant="ghost-muted"
+                          aria-label={gt("Remove queued message")}
+                          className="-me-1 sm:-me-[3px]"
+                          disabled={item.runId !== null && busyRunId !== null}
+                          onClick={() => {
+                            if (item.runId !== null) void remove(item.runId);
+                            else if (item.messageId !== null) props.onRemovePending(item.messageId);
+                          }}
+                        />
+                      }
+                      label={
+                        <>
+                          <T>Remove from queue</T>
+                        </>
+                      }
+                    >
+                      <XIcon />
+                    </SharedTooltipTrigger>
                   </>
                 )}
               </QueuedMessage>
@@ -698,44 +698,39 @@ function QueuedMessage(props: {
             )}
           >
             {thumbnail ? (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label={gt("Preview {name}", { name: thumbnail.name })}
-                      disabled={!thumbnail.previewUrl}
-                      className="flex shrink-0 enabled:cursor-zoom-in"
-                      onPointerDown={(event) => event.preventDefault()}
-                      onClick={() => {
-                        const preview = buildExpandedImagePreview(props.thumbnails, thumbnail.id);
-                        if (preview) props.onImageExpand(preview);
-                      }}
-                    />
-                  }
-                >
-                  <span className="flex items-center gap-1">
-                    <span className="size-[1lh] shrink-0 overflow-hidden rounded-md border border-border/70 bg-background">
-                      {thumbnail.previewUrl ? (
-                        <AttachmentImage
-                          src={thumbnail.previewUrl}
-                          name={thumbnail.name}
-                          alt={thumbnail.name}
-                          className="size-full object-cover"
-                        />
-                      ) : (
-                        <span aria-label={thumbnail.name} className="block size-full bg-muted/60" />
-                      )}
-                    </span>
-                    {props.thumbnails.length > 1 ? (
-                      <span>+{props.thumbnails.length - 1}</span>
-                    ) : null}
+              <SharedTooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={gt("Preview {name}", { name: thumbnail.name })}
+                    disabled={!thumbnail.previewUrl}
+                    className="flex shrink-0 enabled:cursor-zoom-in"
+                    onPointerDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      const preview = buildExpandedImagePreview(props.thumbnails, thumbnail.id);
+                      if (preview) props.onImageExpand(preview);
+                    }}
+                  />
+                }
+                label={props.thumbnails.map((image) => image.name).join("\n")}
+                className="whitespace-pre-wrap"
+              >
+                <span className="flex items-center gap-1">
+                  <span className="size-[1lh] shrink-0 overflow-hidden rounded-md border border-border/70 bg-background">
+                    {thumbnail.previewUrl ? (
+                      <AttachmentImage
+                        src={thumbnail.previewUrl}
+                        name={thumbnail.name}
+                        alt={thumbnail.name}
+                        className="size-full object-cover"
+                      />
+                    ) : (
+                      <span aria-label={thumbnail.name} className="block size-full bg-muted/60" />
+                    )}
                   </span>
-                </TooltipTrigger>
-                <TooltipPopup className="whitespace-pre-wrap">
-                  {props.thumbnails.map((image) => image.name).join("\n")}
-                </TooltipPopup>
-              </Tooltip>
+                  {props.thumbnails.length > 1 ? <span>+{props.thumbnails.length - 1}</span> : null}
+                </span>
+              </SharedTooltipTrigger>
             ) : null}
             {/* In full, like a sent turn: a queued message is read before it is sent. */}
             {props.previewText ? (

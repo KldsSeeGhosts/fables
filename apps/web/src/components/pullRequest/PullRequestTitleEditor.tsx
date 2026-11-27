@@ -144,6 +144,7 @@ export function WorkItemTitleEditor({
             onSave(draft);
           } else if (event.key === "Escape") {
             event.preventDefault();
+            event.stopPropagation();
             onDraftChange(null);
           }
         }}

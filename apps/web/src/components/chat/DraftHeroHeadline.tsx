@@ -38,7 +38,7 @@ import { ProjectEnvironmentBadge } from "../ProjectEnvironmentBadge";
 import { isProjectPinShortcut } from "../ProjectPinButton";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { useSortedProjectGroups } from "../CommandPaletteLookups";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { Button } from "../ui/button";
 import { Kbd } from "../ui/kbd";
 import { MiddleTruncate } from "../ui/middle-truncate";
@@ -212,26 +212,25 @@ export function ProjectPickerRows({
         {...(onFocusEntry ? { onFocus: () => onFocusEntry(entry) } : {})}
         action={
           model.canPinProjectGroup(group) ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    variant="ghost-muted"
-                    size="icon-micro"
-                    aria-label={
-                      pinned
-                        ? gt("Unpin {name}", { name: group.displayName })
-                        : gt("Pin {name}", { name: group.displayName })
-                    }
-                    aria-pressed={pinned}
-                    onClick={() => model.toggleProjectGroupPin(group)}
-                  />
-                }
-              >
-                {pinned ? <PinOffIcon /> : <PinIcon />}
-              </TooltipTrigger>
-              <TooltipPopup side="top">{pinned ? gt("Unpin") : gt("Pin")}</TooltipPopup>
-            </Tooltip>
+            <SharedTooltipTrigger
+              render={
+                <Button
+                  variant="ghost-muted"
+                  size="icon-micro"
+                  aria-label={
+                    pinned
+                      ? gt("Unpin {name}", { name: group.displayName })
+                      : gt("Pin {name}", { name: group.displayName })
+                  }
+                  aria-pressed={pinned}
+                  onClick={() => model.toggleProjectGroupPin(group)}
+                />
+              }
+              label={pinned ? gt("Unpin") : gt("Pin")}
+              side="top"
+            >
+              {pinned ? <PinOffIcon /> : <PinIcon />}
+            </SharedTooltipTrigger>
           ) : null
         }
       />

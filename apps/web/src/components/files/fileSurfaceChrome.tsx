@@ -15,7 +15,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { Button } from "~/components/ui/button";
 import { Toggle } from "~/components/ui/toggle";
 import { Toggle as ToggleGroupItem, ToggleGroup } from "~/components/ui/toggle-group";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+import { SharedTooltipTrigger } from "~/components/ui/shared-tooltip";
 import { DIFF_SURFACE_THEME_UNSAFE_CSS } from "~/lib/diffRendering";
 import { cn } from "~/lib/utils";
 
@@ -83,38 +83,36 @@ export function FileSurfaceAction(props: {
 }) {
   const pressed = props.pressed;
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          pressed === undefined ? (
-            <Button
-              type="button"
-              className="shrink-0"
-              disabled={props.disabled ?? false}
-              onClick={props.onPress}
-              aria-label={props.label}
-              variant="ghost"
-              size="icon-sm"
-            >
-              {props.children}
-            </Button>
-          ) : (
-            <Toggle
-              className="shrink-0"
-              pressed={pressed}
-              disabled={props.disabled ?? false}
-              onPressedChange={props.onPress}
-              aria-label={props.label}
-              variant="ghost"
-              size="sm"
-            >
-              {props.children}
-            </Toggle>
-          )
-        }
-      />
-      <TooltipPopup>{props.label}</TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={
+        pressed === undefined ? (
+          <Button
+            type="button"
+            className="shrink-0"
+            disabled={props.disabled ?? false}
+            onClick={props.onPress}
+            aria-label={props.label}
+            variant="ghost"
+            size="icon-sm"
+          >
+            {props.children}
+          </Button>
+        ) : (
+          <Toggle
+            className="shrink-0"
+            pressed={pressed}
+            disabled={props.disabled ?? false}
+            onPressedChange={props.onPress}
+            aria-label={props.label}
+            variant="ghost"
+            size="sm"
+          >
+            {props.children}
+          </Toggle>
+        )
+      }
+      label={props.label}
+    />
   );
 }
 

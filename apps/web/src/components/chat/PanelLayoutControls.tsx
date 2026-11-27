@@ -18,7 +18,7 @@ import { Button } from "../ui/button";
 import { PopoverCreateHandle, PopoverTrigger } from "../ui/popover";
 import { useMobileSidebarSheetMounted } from "../ui/sidebar";
 import { Toggle } from "../ui/toggle";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 export interface RightPanelToggleControl {
   readonly open: boolean;
@@ -44,26 +44,27 @@ function DuetRightPanelToggle({ control }: { control: RightPanelToggleControl })
   const gt = useGT();
   const label = gt("Toggle right panel");
   return (
-    <Tooltip>
-      <TooltipTrigger render={<span className="flex shrink-0" />}>
-        <button
-          type="button"
-          aria-label={label}
-          aria-pressed={control.open}
-          onClick={control.onToggle}
-          data-duet-header-icon=""
-          data-right-panel-toggle=""
-          className="shrink-0 [-webkit-app-region:no-drag]"
-        >
-          <PanelRightIcon aria-hidden className="size-4" strokeWidth={2.25} />
-        </button>
-      </TooltipTrigger>
-      <TooltipPopup side="bottom">
-        {control.shortcutLabel
+    <SharedTooltipTrigger
+      render={<span className="flex shrink-0" />}
+      label={
+        control.shortcutLabel
           ? gt("Toggle right panel ({shortcut})", { shortcut: control.shortcutLabel })
-          : label}
-      </TooltipPopup>
-    </Tooltip>
+          : label
+      }
+      side="bottom"
+    >
+      <button
+        type="button"
+        aria-label={label}
+        aria-pressed={control.open}
+        onClick={control.onToggle}
+        data-duet-header-icon=""
+        data-right-panel-toggle=""
+        className="shrink-0 [-webkit-app-region:no-drag]"
+      >
+        <PanelRightIcon aria-hidden className="size-4" strokeWidth={2.25} />
+      </button>
+    </SharedTooltipTrigger>
   );
 }
 
@@ -73,23 +74,22 @@ function DuetClosePaneControl({ tabId }: { tabId: string }) {
   const shortcut = shortcutLabelForCommand(keybindings, "tab.close");
   const label = gt("Close");
   return (
-    <Tooltip>
-      <TooltipTrigger render={<span className="flex shrink-0" />}>
-        <button
-          type="button"
-          aria-label={label}
-          onClick={() => closeLayoutTabByUser(tabId)}
-          data-duet-header-icon=""
-          data-layout-tab-close=""
-          className="shrink-0 [-webkit-app-region:no-drag]"
-        >
-          <XIcon aria-hidden className="size-4" strokeWidth={2.25} />
-        </button>
-      </TooltipTrigger>
-      <TooltipPopup side="bottom">
-        {shortcut ? gt("Close ({shortcut})", { shortcut }) : label}
-      </TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={<span className="flex shrink-0" />}
+      label={shortcut ? gt("Close ({shortcut})", { shortcut }) : label}
+      side="bottom"
+    >
+      <button
+        type="button"
+        aria-label={label}
+        onClick={() => closeLayoutTabByUser(tabId)}
+        data-duet-header-icon=""
+        data-layout-tab-close=""
+        className="shrink-0 [-webkit-app-region:no-drag]"
+      >
+        <XIcon aria-hidden className="size-4" strokeWidth={2.25} />
+      </button>
+    </SharedTooltipTrigger>
   );
 }
 
@@ -166,21 +166,22 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
     </Button>
   );
   const threadPanelControl = (
-    <Tooltip>
-      <TooltipTrigger render={<span className="flex shrink-0" data-thread-panel-toggle />}>
-        {threadPanelPresentation === "popover" ? (
-          <PopoverTrigger handle={threadPanelPopoverHandle} render={threadPanelToggle} />
-        ) : (
-          threadPanelToggle
-        )}
-      </TooltipTrigger>
-      <TooltipPopup side="bottom">
-        {disabledReason ??
-          (threadPanelShortcutLabel
-            ? gt("Toggle thread details ({shortcut})", { shortcut: threadPanelShortcutLabel })
-            : gt("Toggle thread details"))}
-      </TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={<span className="flex shrink-0" data-thread-panel-toggle />}
+      label={
+        disabledReason ??
+        (threadPanelShortcutLabel
+          ? gt("Toggle thread details ({shortcut})", { shortcut: threadPanelShortcutLabel })
+          : gt("Toggle thread details"))
+      }
+      side="bottom"
+    >
+      {threadPanelPresentation === "popover" ? (
+        <PopoverTrigger handle={threadPanelPopoverHandle} render={threadPanelToggle} />
+      ) : (
+        threadPanelToggle
+      )}
+    </SharedTooltipTrigger>
   );
 
   return (
@@ -207,26 +208,25 @@ export const RightPanelMaximizeControl = memo(function RightPanelMaximizeControl
   if (mobileSidebarSheetMounted) return null;
   const label = maximized ? gt("Restore panel size") : gt("Maximize panel");
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Toggle
-            className="shrink-0 [-webkit-app-region:no-drag]"
-            pressed={maximized}
-            onPressedChange={onToggle}
-            aria-label={label}
-            variant="ghost"
-            size="sm"
-          >
-            {maximized ? (
-              <Minimize2Icon className="size-3.5" />
-            ) : (
-              <Maximize2Icon className="size-3.5" />
-            )}
-          </Toggle>
-        }
-      />
-      <TooltipPopup side="bottom">{label}</TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={
+        <Toggle
+          className="shrink-0 [-webkit-app-region:no-drag]"
+          pressed={maximized}
+          onPressedChange={onToggle}
+          aria-label={label}
+          variant="ghost"
+          size="sm"
+        >
+          {maximized ? (
+            <Minimize2Icon className="size-3.5" />
+          ) : (
+            <Maximize2Icon className="size-3.5" />
+          )}
+        </Toggle>
+      }
+      label={label}
+      side="bottom"
+    />
   );
 });

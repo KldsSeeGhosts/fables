@@ -1,3 +1,4 @@
+import { parseKeybindingShortcut } from "@t3tools/shared/keybindings";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m as resolveMessage } from "~/i18n/messages";
 import { useEnvironmentScope } from "../../state/session";
@@ -15,7 +16,15 @@ import {
 import { useScrollingWorkspacesEnabled } from "../../hooks/useSettings";
 import { isScrollingWorkspaceCommand } from "../../layout/layoutBehavior";
 import { useLayoutPageLocation } from "../../layout/pageNavigation";
-import { type KeyboardEvent, type ReactNode, useEffect, useReducer, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  type ReactNode,
+  useEffect,
+  useDeferredValue,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import { flushSync } from "react-dom";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
 import {
@@ -37,12 +46,13 @@ import {
 
 import { isElectron } from "../../env";
 import { useOpenInPreferredEditor } from "../../editorPreferences";
-import { formatShortcutLabel } from "../../keybindings";
+import { formatShortcutKeyParts, formatShortcutLabel } from "../../keybindings";
 import { cn } from "../../lib/utils";
 import { serverEnvironment } from "../../state/server";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { useClientSettings } from "../../hooks/useSettings";
 import { Badge } from "../ui/badge";
+import { Skeleton } from "../ui/skeleton";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "../ui/input-group";
@@ -97,42 +107,16 @@ import {
 } from "./settingsLayout";
 import { keybindingSearchAnchorId, useSearchableSetting } from "./settingsSearch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { useAtomCommand } from "../../state/use-atom-command";
 
 function KeybindingPill({ value }: { value: string }) {
-  // A literal "+" key ends the value ("mod++") and splits into trailing empty strings,
-  // read back as one "+" key the way parseKeybindingShortcut does.
-  const tokens = value.split("+");
-  const endsWithPlusKey = tokens.at(-1) === "";
-  while (tokens.at(-1) === "") tokens.pop();
-  if (endsWithPlusKey) tokens.push("+");
-  // React keys stay unique when a part repeats.
-  const seenParts = new Map<string, number>();
-  const parts = tokens.map((part) => {
-    const seen = seenParts.get(part) ?? 0;
-    seenParts.set(part, seen + 1);
-    return { part, key: seen === 0 ? part : `${part}-${seen}` };
-  });
+  const shortcut = parseKeybindingShortcut(value);
+  const parts = shortcut ? formatShortcutKeyParts(shortcut) : [value];
   return (
     <KbdGroup>
-      {parts.map(({ part, key }) => (
-        <Kbd key={key}>
-          {part === "mod"
-            ? navigator.platform.toLowerCase().includes("mac")
-              ? "⌘"
-              : "Ctrl"
-            : part === "shift"
-              ? "⇧"
-              : part === "alt"
-                ? navigator.platform.toLowerCase().includes("mac")
-                  ? "⌥"
-                  : "Alt"
-                : part === "ctrl"
-                  ? "⌃"
-                  : part.length === 1
-                    ? part.toUpperCase()
-                    : part}
-        </Kbd>
+      {parts.map((part) => (
+        <Kbd key={part}>{part}</Kbd>
       ))}
     </KbdGroup>
   );
@@ -213,23 +197,21 @@ function WarningTooltipIcon({
   children: ReactNode;
 }) {
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <span
-            tabIndex={focusable ? 0 : undefined}
-            aria-label={label}
-            className={cn(
-              "inline-flex size-5 shrink-0 items-center justify-center rounded-kbd text-warning-foreground outline-none transition-colors hover:bg-warning/10 focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-warning/25",
-              className,
-            )}
-          />
-        }
-      >
-        <TriangleAlertIcon className="size-3.5" />
-      </TooltipTrigger>
-      <TooltipPopup side="top">{children}</TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={
+        <span
+          tabIndex={focusable ? 0 : undefined}
+          aria-label={label}
+          className={cn(
+            "inline-flex size-5 shrink-0 items-center justify-center rounded-kbd text-warning-foreground outline-none transition-colors hover:bg-warning/10 focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-warning/25",
+            className,
+          )}
+        />
+      }
+      label={children}
+    >
+      <TriangleAlertIcon className="size-3.5" />
+    </SharedTooltipTrigger>
   );
 }
 
@@ -1476,25 +1458,25 @@ function NewKeybindingCancelIcon({
 }) {
   const gt = useGT();
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            type="button"
-            variant="ghost-muted"
-            size="icon-sm"
-            disabled={isSaving}
-            aria-label={gt("Cancel new keybinding")}
-            onClick={onCancel}
-          />
-        }
-      >
-        <XIcon className="size-3.5" />
-      </TooltipTrigger>
-      <TooltipPopup side="top">
-        <T>Cancel</T>
-      </TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={
+        <Button
+          type="button"
+          variant="ghost-muted"
+          size="icon-sm"
+          disabled={isSaving}
+          aria-label={gt("Cancel new keybinding")}
+          onClick={onCancel}
+        />
+      }
+      label={
+        <>
+          <T>Cancel</T>
+        </>
+      }
+    >
+      <XIcon className="size-3.5" />
+    </SharedTooltipTrigger>
   );
 }
 
@@ -1581,6 +1563,21 @@ function useActiveKeybindingRows(rows: ReadonlyArray<KeybindingRow>) {
     return () => observer.disconnect();
   }, [rows]);
   return { tableRef, activeRows };
+}
+
+function KeybindingsGroupsSkeleton() {
+  return (
+    <>
+      <div aria-hidden className="space-y-2.5">
+        <Skeleton shape="pill" className="h-3 w-24" />
+        <Skeleton shape="card" className="h-96" />
+      </div>
+      <div aria-hidden className="space-y-2.5">
+        <Skeleton shape="pill" className="h-3 w-24" />
+        <Skeleton shape="card" className="h-72" />
+      </div>
+    </>
+  );
 }
 
 /** The add-binding row, one settings row per binding, and the empty state. */
@@ -1722,7 +1719,8 @@ export function KeybindingsSettingsPanel() {
   }
   const whenVariables = buildWhenVariableOptions();
   const { commandOptions, allRows } = useKeybindingCatalog();
-  const rows = filterKeybindingRows(allRows, query, m);
+  const matchedRows = filterKeybindingRows(allRows, query, m);
+  const rows = useDeferredValue(matchedRows, null);
 
   const openKeybindingsFile = () => {
     if (
@@ -1857,7 +1855,7 @@ export function KeybindingsSettingsPanel() {
   };
 
   const listProps: KeybindingsListProps = {
-    rows,
+    rows: rows ?? [],
     allRows,
     commandOptions,
     variables: whenVariables,
@@ -1916,7 +1914,7 @@ export function KeybindingsSettingsPanel() {
           </p>
         ) : null}
         <div inert={!canWriteSettings} className="@container/keybindings">
-          <KeybindingsList {...listProps} />
+          {rows === null ? <KeybindingsGroupsSkeleton /> : <KeybindingsList {...listProps} />}
         </div>
       </SettingsSection>
     </SettingsPageContainer>

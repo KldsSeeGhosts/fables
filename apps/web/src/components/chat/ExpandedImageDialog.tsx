@@ -31,7 +31,7 @@ import {
   SnapShotContentsButton,
   snapShotAccessibilityDetails,
 } from "./SnapShotAttachmentDetails";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { ZoomableImage, type ZoomableImageHandle, type ZoomableImageView } from "./ZoomableImage";
 import { readLocalApi } from "../../localApi";
 import { toastManager } from "../ui/toast";
@@ -118,23 +118,22 @@ function MediaBarButton({
   children: ReactNode;
 }) {
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            aria-label={label}
-            disabled={disabled}
-            onClick={onClick}
-          />
-        }
-      >
-        {children}
-      </TooltipTrigger>
-      <TooltipPopup side="bottom">{label}</TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          aria-label={label}
+          disabled={disabled}
+          onClick={onClick}
+        />
+      }
+      label={label}
+      side="bottom"
+    >
+      {children}
+    </SharedTooltipTrigger>
   );
 }
 
@@ -338,25 +337,24 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
             className="flex h-10 w-0 min-w-full items-center gap-2 rounded-card surface-popover px-1.5"
           >
             {/* Back sits first, away from where the window's own close button is. */}
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    ref={closeButtonRef}
-                    size="icon-sm"
-                    variant="secondary"
-                    onClick={close}
-                    aria-label={
-                      isVideo ? gt("Back, close video preview") : gt("Back, close image preview")
-                    }
-                  />
-                }
-              >
-                <ArrowLeftIcon aria-hidden="true" />
-              </TooltipTrigger>
-              <TooltipPopup side="bottom">{gt("Back")}</TooltipPopup>
-            </Tooltip>
+            <SharedTooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  ref={closeButtonRef}
+                  size="icon-sm"
+                  variant="secondary"
+                  onClick={close}
+                  aria-label={
+                    isVideo ? gt("Back, close video preview") : gt("Back, close image preview")
+                  }
+                />
+              }
+              label={gt("Back")}
+              side="bottom"
+            >
+              <ArrowLeftIcon aria-hidden="true" />
+            </SharedTooltipTrigger>
             <ImageIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
             <span
               className="min-w-0 truncate text-label text-foreground"
@@ -369,50 +367,51 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
               </span>
             </span>
             {meta || item.sizeBytes !== undefined ? (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <span
-                      tabIndex={0}
-                      className="shrink-0 text-meta text-dim-foreground tabular-nums max-sm:hidden"
-                    />
-                  }
-                >
-                  {meta ?? formatAttachmentSize(item.sizeBytes!, messages)}
-                </TooltipTrigger>
-                <TooltipPopup>
-                  {meta ? <span className="block">{meta}</span> : null}
-                  {item.sizeBytes !== undefined ? (
-                    <span className="block">{formatAttachmentSize(item.sizeBytes, messages)}</span>
-                  ) : null}
-                </TooltipPopup>
-              </Tooltip>
+              <SharedTooltipTrigger
+                render={
+                  <span
+                    tabIndex={0}
+                    className="shrink-0 text-meta text-dim-foreground tabular-nums max-sm:hidden"
+                  />
+                }
+                label={
+                  <>
+                    {meta ? <span className="block">{meta}</span> : null}
+                    {item.sizeBytes !== undefined ? (
+                      <span className="block">
+                        {formatAttachmentSize(item.sizeBytes, messages)}
+                      </span>
+                    ) : null}
+                  </>
+                }
+              >
+                {meta ?? formatAttachmentSize(item.sizeBytes!, messages)}
+              </SharedTooltipTrigger>
             ) : null}
             <span className="flex-1" />
             {accessibilityDetails && item.source ? (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant={showingAccessibilityDetails ? "secondary" : "ghost"}
-                      aria-label={contentsLabel}
-                      aria-pressed={showingAccessibilityDetails}
-                      onClick={() =>
-                        setAccessibilityDetailsSrc(showingAccessibilityDetails ? null : item.src)
-                      }
-                    />
-                  }
-                >
-                  {showingAccessibilityDetails ? (
-                    <ImageGlyphIcon aria-hidden="true" />
-                  ) : (
-                    <TextGlyphIcon aria-hidden="true" />
-                  )}
-                </TooltipTrigger>
-                <TooltipPopup side="bottom">{contentsLabel}</TooltipPopup>
-              </Tooltip>
+              <SharedTooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant={showingAccessibilityDetails ? "secondary" : "ghost"}
+                    aria-label={contentsLabel}
+                    aria-pressed={showingAccessibilityDetails}
+                    onClick={() =>
+                      setAccessibilityDetailsSrc(showingAccessibilityDetails ? null : item.src)
+                    }
+                  />
+                }
+                label={contentsLabel}
+                side="bottom"
+              >
+                {showingAccessibilityDetails ? (
+                  <ImageGlyphIcon aria-hidden="true" />
+                ) : (
+                  <TextGlyphIcon aria-hidden="true" />
+                )}
+              </SharedTooltipTrigger>
             ) : item.source ? (
               <SnapShotContentsButton source={item.source} side="bottom" />
             ) : null}

@@ -93,7 +93,6 @@ import { NumberField, NumberFieldGroup, NumberFieldInput } from "../ui/number-fi
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Group } from "../ui/group";
 import { Switch } from "../ui/switch";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   getClientSettings,
   persistClientSettingsUpdate,
@@ -115,6 +114,7 @@ import { commitNumberFieldOnEnter } from "./commitNumberFieldOnEnter";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { BrowserImportWizard, type WizardTarget } from "./BrowserImportWizard";
 import type { ImportOutcome } from "./browserImportWizard.logic";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 const FILL_VALUE = "fill";
 const RESPONSIVE_VALUE = "responsive";
@@ -453,30 +453,30 @@ function BrowserViewportSetting({ disabled }: { readonly disabled: boolean }) {
                   />
                 </NumberFieldGroup>
               </NumberField>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      size="icon-sm"
-                      variant="ghost-muted"
-                      disabled={disabled}
-                      aria-label={
-                        presentedSize.height >= presentedSize.width
-                          ? gt("Rotate to landscape")
-                          : gt("Rotate to portrait")
-                      }
-                      onClick={() =>
-                        updateSettings({ browserDefaultViewport: rotateViewport(sized) })
-                      }
-                    >
-                      <ScreenRotationIcon />
-                    </Button>
-                  }
-                />
-                <TooltipPopup side="top">
-                  <T>Rotate</T>
-                </TooltipPopup>
-              </Tooltip>
+              <SharedTooltipTrigger
+                render={
+                  <Button
+                    size="icon-sm"
+                    variant="ghost-muted"
+                    disabled={disabled}
+                    aria-label={
+                      presentedSize.height >= presentedSize.width
+                        ? gt("Rotate to landscape")
+                        : gt("Rotate to portrait")
+                    }
+                    onClick={() =>
+                      updateSettings({ browserDefaultViewport: rotateViewport(sized) })
+                    }
+                  >
+                    <ScreenRotationIcon />
+                  </Button>
+                }
+                label={
+                  <>
+                    <T>Rotate</T>
+                  </>
+                }
+              />
             </div>
           ) : null}
         </div>

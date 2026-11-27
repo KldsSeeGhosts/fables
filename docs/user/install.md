@@ -1,12 +1,10 @@
 # Install Fables
 
-Fables runs coding agents on your computer and lets you control them from its
-desktop, web, or mobile app. Set up the machine where the agents will work first.
+Fables runs coding agents on your computer (or server) and lets you control them from the desktop app, web app, or mobile app. Install Fables on the machine where your agents will run first.
 
 ## Requirements
 
-You need an installed, authenticated provider before starting a thread. You can
-launch Fables and configure providers afterwards.
+You need at least one installed, authenticated coding agent (provider) before starting a thread. You can launch Fables first and set up providers from the [Welcome page](./welcome-page.md) or **Settings → Providers**.
 
 ## Command line
 
@@ -52,9 +50,6 @@ cd ksgcode && vp i && vp run build:desktop
 node apps/server/dist/bin.mjs
 ```
 
-`t3 update` and the background service do not apply to a server run this way;
-update it with `git pull` and a rebuild.
-
 ## Desktop app
 
 Download a release from
@@ -87,41 +82,13 @@ Package manager distributions of upstream T3 Code do not install Fables.
 
 ### The `t3` command
 
-The desktop app includes the `t3` command-line tool. A new install sets it up
-on first launch; after an update, or any time, choose **Install** next to
-**t3 command** in **Settings → About**. On macOS and Linux it adds a `t3` link
-in `~/.local/bin` (or `~/bin`); on Windows it adds the app's command folder to
-your `PATH`. Open a new terminal afterwards. If the folder is not on your
-`PATH`, **Add to PATH** on the Welcome page or in **Settings → About** adds one
-line to your shell's startup file. **Remove** takes it off, and the app does not
-add it again. If you already have another `t3`, it stays as it is.
+The desktop app bundles `t3` and sets it up on first launch (manage anytime under **Settings → About → t3 command**). Use **Add to PATH** if needed, then open a new terminal.
+
+- **Open a folder in the running desktop app**: Run `t3 app` (or `t3 app ../my-project`) from a terminal, or drag folders from your file manager onto the desktop sidebar.
 
 ### Windows Subsystem for Linux
 
-Choose a WSL distro in **Settings → Sharing & access** to run agents and projects
-there. Install the provider CLIs inside that distro. Fables installs its own
-server runtime there automatically; the first launch after an app update can
-take longer.
-
-### Open a project from a terminal
-
-With the desktop app already running on the same machine:
-
-```bash
-t3 app
-```
-
-This opens a new thread for the current directory, adding the project if needed.
-Pass a path, such as `t3 app ../my-project`, to open another directory. It requires
-the desktop app, so a standalone server or an SSH session is not enough. If the
-command cannot reach the app, start or update the desktop app and try again.
-
-### Drop a folder on the sidebar
-
-Drag one or more folders from Finder, Explorer, or your file manager onto the
-sidebar. Each one opens as a project on this computer, the same as `t3 app`.
-Files dropped on a thread still attach to that thread. Browsers do not share
-folder paths, so in the web app use **Add project** instead.
+Select a WSL distro in **Settings → Sharing & access** to run agents and projects inside WSL (install provider CLIs inside that distro). T3 Code manages its own server runtime inside WSL automatically.
 
 ## Mobile app
 
@@ -141,11 +108,8 @@ on web and desktop. The store apps work with both stable and Nightly servers. Te
 - **Android:** download an APK from the
   [Android beta releases](https://github.com/pingdotgg/t3code/releases?q=android-beta-).
 
-If the app crashes during launch, open Settings → Diagnostics on the next launch
-that succeeds. It lists startup crashes from the last 7 days with the error and
-component stack that store crash reports leave out. Copy the report and paste it
-into a GitHub issue. Error messages can quote values from the app, so read it over
-before sharing.
+- Store builds work with both Stable and Nightly servers. Optional Android beta APKs are under [Android beta releases](https://github.com/pingdotgg/t3code/releases?q=android-beta-).
+- If the mobile app crashes on launch, open **Settings → Diagnostics** on the next launch to copy recent startup crash reports.
 
 ## Providers
 
@@ -211,50 +175,30 @@ For provider-specific setup and accounts, see [Codex](./providers-codex.md),
 
 ### Provider check timeouts
 
-If a provider works in its CLI but Fables reports a timeout while checking it,
-allow more time in the T3 server's environment. For example, give Codex and
-Claude readiness checks 60 seconds:
+If a working CLI times out during Fables’ readiness check, increase its probe deadline (in milliseconds) in the server's environment (or systemd override / `service.env`) and restart:
 
 ```bash
 T3CODE_CODEX_PROBE_TIMEOUT_MS=60000 T3CODE_CLAUDE_PROBE_TIMEOUT_MS=60000 t3 serve
 ```
 
-For a remote environment, set these on the machine running the T3 server.
-Keep them in your launcher or service configuration to retain them across
-updates, then restart the server. For systemd, add
-`Environment=T3CODE_CODEX_PROBE_TIMEOUT_MS=60000` under `[Service]` in a service
-override, reload systemd, and restart the service. Provider instances can also
-set their own overrides in Settings → Providers.
-
-Each variable extends that provider's readiness-probe deadlines; a phase whose
-default is already longer keeps its default. Providers with several phases can
-take longer than one deadline in total. Values must be whole milliseconds no
-greater than 2147483647; unset or invalid values keep the defaults.
-
-| Provider            | Environment variable                   |
-| ------------------- | -------------------------------------- |
-| Codex               | `T3CODE_CODEX_PROBE_TIMEOUT_MS`        |
-| Claude              | `T3CODE_CLAUDE_PROBE_TIMEOUT_MS`       |
-| Cursor              | `T3CODE_CURSOR_PROBE_TIMEOUT_MS`       |
-| Antigravity         | `T3CODE_ANTIGRAVITY_PROBE_TIMEOUT_MS`  |
-| Grok                | `T3CODE_GROK_PROBE_TIMEOUT_MS`         |
-| Kiro                | `T3CODE_KIRO_PROBE_TIMEOUT_MS`         |
-| fx                  | `T3CODE_FX_PROBE_TIMEOUT_MS`           |
-| Pi                  | `T3CODE_PI_PROBE_TIMEOUT_MS`           |
-| Muse Code           | `T3CODE_MUSE_PROBE_TIMEOUT_MS`         |
-| OpenCode            | `T3CODE_OPENCODE_PROBE_TIMEOUT_MS`     |
-| ACP Registry agents | `T3CODE_ACP_REGISTRY_PROBE_TIMEOUT_MS` |
-
-Longer deadlines also take longer to report a stalled check. These overrides
-cover readiness and discovery, including OpenCode server startup. Usage and
-config enrichment retain their own shorter limits. Turn execution, package
-installation, update checks, and shutdown limits keep their existing behavior.
+| Provider     | Environment variable                   |
+| ------------ | -------------------------------------- |
+| Codex        | `T3CODE_CODEX_PROBE_TIMEOUT_MS`        |
+| Claude       | `T3CODE_CLAUDE_PROBE_TIMEOUT_MS`       |
+| Cursor       | `T3CODE_CURSOR_PROBE_TIMEOUT_MS`       |
+| Antigravity  | `T3CODE_ANTIGRAVITY_PROBE_TIMEOUT_MS`  |
+| Grok         | `T3CODE_GROK_PROBE_TIMEOUT_MS`         |
+| Kiro         | `T3CODE_KIRO_PROBE_TIMEOUT_MS`         |
+| fx           | `T3CODE_FX_PROBE_TIMEOUT_MS`           |
+| Pi           | `T3CODE_PI_PROBE_TIMEOUT_MS`           |
+| Muse Code    | `T3CODE_MUSE_PROBE_TIMEOUT_MS`         |
+| OpenCode     | `T3CODE_OPENCODE_PROBE_TIMEOUT_MS`     |
+| ACP Registry | `T3CODE_ACP_REGISTRY_PROBE_TIMEOUT_MS` |
 
 ## Next steps
 
+- [User guide index](./README.md): overview of how T3 Code works.
 - [Working with threads](./thread-sidebar.md): start tasks and organize parallel work.
-- [Permission modes](./permission-modes.md): choose when agents ask before acting.
+- [Permission modes](./permission-modes.md): control when agents ask before acting.
 - [Remote access](./remote-access.md): connect from another device.
-- [Running in the background](./background-service.md): keep a host available.
-- [Updating Fables](./updating.md): update the app and connected servers.
-- [Managed policy](./managed-policy.md): configure Fables for everyone on a machine.
+- [Updating Fables](./updating.md): keep apps, servers, and providers up to date.

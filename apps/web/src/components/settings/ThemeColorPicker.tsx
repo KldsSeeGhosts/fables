@@ -6,7 +6,7 @@ import { cn } from "../../lib/utils";
 import { hexToHsv, hsvToHex, type HsvColor } from "../../lib/color";
 import { ColorHueSlider, ColorSaturationValuePlane } from "../ui/color-picker";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 const THEME_ROLE_LABELS: Partial<Record<ThemeColorRole, string>> = {
   canvas: msg("Background"),
   toolbar: msg("Toolbar background"),
@@ -418,30 +418,29 @@ export const ThemeColorField = memo(function ThemeColorField({
           </button>
         }
       />
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <button
-              aria-label={
-                selected ? gt("Hide {label} usage", { label }) : gt("Show {label} usage", { label })
-              }
-              aria-pressed={selected}
-              className="group flex min-w-0 flex-1 cursor-pointer text-left outline-none"
-              onClick={() => onToggleSelected?.(role)}
-              type="button"
-            >
-              <span className="truncate rounded-sm text-body text-foreground group-focus-visible:ring-2 group-focus-visible:ring-inset group-focus-visible:ring-ring">
-                {label}
-              </span>
-            </button>
-          }
-        />
-        <TooltipPopup side="top">
-          {selected
+      <SharedTooltipTrigger
+        render={
+          <button
+            aria-label={
+              selected ? gt("Hide {label} usage", { label }) : gt("Show {label} usage", { label })
+            }
+            aria-pressed={selected}
+            className="group flex min-w-0 flex-1 cursor-pointer text-left outline-none"
+            onClick={() => onToggleSelected?.(role)}
+            type="button"
+          >
+            <span className="truncate rounded-sm text-body text-foreground group-focus-visible:ring-2 group-focus-visible:ring-inset group-focus-visible:ring-ring">
+              {label}
+            </span>
+          </button>
+        }
+        label={
+          selected
             ? gt("Hide where {label} is used", { label })
-            : gt("Show where {label} is used", { label })}
-        </TooltipPopup>
-      </Tooltip>
+            : gt("Show where {label} is used", { label })
+        }
+        side="top"
+      />
       <ThemeColorHexInput
         label={label}
         onChange={(nextValue) => onChange(role, nextValue)}

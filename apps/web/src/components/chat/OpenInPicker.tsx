@@ -1,4 +1,4 @@
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
 import { useLayoutPane } from "../../layout/layoutPaneContext";
 import {
@@ -440,44 +440,42 @@ export const OpenInPicker = memo(function OpenInPicker({
         role="group"
         aria-label={gt("Open in editor")}
       >
-        <Tooltip>
-          <TooltipTrigger
+        <SharedTooltipTrigger
+          render={
+            <ThreadDetailsControl
+              part="icon"
+              aria-label={primaryLabel}
+              disabled={!canOpenPreferredEditor}
+              {...(enableShortcut && (focused || related) && !backgroundThread
+                ? { [OPEN_FAVORITE_EDITOR_ATTRIBUTE]: "" }
+                : {})}
+              onClick={handleOpenPreferredEditor}
+            />
+          }
+          label={primaryLabel}
+        >
+          {primaryOption ? (
+            <primaryOption.Icon className={getOpenInIconClass(primaryOption.kind)} />
+          ) : (
+            <AppWindowIcon />
+          )}
+        </SharedTooltipTrigger>
+        <Menu open={menuOpen} onOpenChange={setMenuOpen}>
+          <SharedTooltipTrigger
             render={
-              <ThreadDetailsControl
-                part="icon"
-                aria-label={primaryLabel}
-                disabled={!canOpenPreferredEditor}
-                {...(enableShortcut && (focused || related) && !backgroundThread
-                  ? { [OPEN_FAVORITE_EDITOR_ATTRIBUTE]: "" }
-                  : {})}
-                onClick={handleOpenPreferredEditor}
+              <MenuTrigger
+                disabled={isHostEditorDenied}
+                render={<ThreadDetailsControl part="icon" aria-label={gt("Choose editor")} />}
               />
             }
+            label={
+              <>
+                <T>Choose editor</T>
+              </>
+            }
           >
-            {primaryOption ? (
-              <primaryOption.Icon className={getOpenInIconClass(primaryOption.kind)} />
-            ) : (
-              <AppWindowIcon />
-            )}
-          </TooltipTrigger>
-          <TooltipPopup>{primaryLabel}</TooltipPopup>
-        </Tooltip>
-        <Menu open={menuOpen} onOpenChange={setMenuOpen}>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <MenuTrigger
-                  disabled={isHostEditorDenied}
-                  render={<ThreadDetailsControl part="icon" aria-label={gt("Choose editor")} />}
-                />
-              }
-            >
-              <ChevronDownIcon />
-            </TooltipTrigger>
-            <TooltipPopup>
-              <T>Choose editor</T>
-            </TooltipPopup>
-          </Tooltip>
+            <ChevronDownIcon />
+          </SharedTooltipTrigger>
           <MenuPopup side="bottom" align="end">
             {editorItems}
           </MenuPopup>
@@ -493,69 +491,69 @@ export const OpenInPicker = memo(function OpenInPicker({
       role="group"
       {...(ghost ? { className: "flex shrink-0 items-center gap-0.5" } : {})}
     >
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <ThreadDetailsControl
-              aria-label={primaryControlLabel}
-              // Tooltip replaces the button data-slot, so toolbar theming needs a separate hook.
-              data-toolbar-control=""
-              size={ghost ? "icon-sm" : "xs"}
-              variant={ghost ? "ghost" : "secondary"}
-              panel={false}
-              disabled={!canOpenPreferredEditor}
-              {...(enableShortcut && (focused || related) && !backgroundThread
-                ? { [OPEN_FAVORITE_EDITOR_ATTRIBUTE]: "" }
-                : {})}
-              onClick={handleOpenPreferredEditor}
-            />
+      <SharedTooltipTrigger
+        render={
+          <ThreadDetailsControl
+            aria-label={primaryControlLabel}
+            // Tooltip replaces the button data-slot, so toolbar theming needs a separate hook.
+            data-toolbar-control=""
+            size={ghost ? "icon-sm" : "xs"}
+            variant={ghost ? "ghost" : "secondary"}
+            panel={false}
+            disabled={!canOpenPreferredEditor}
+            {...(enableShortcut && (focused || related) && !backgroundThread
+              ? { [OPEN_FAVORITE_EDITOR_ATTRIBUTE]: "" }
+              : {})}
+            onClick={handleOpenPreferredEditor}
+          />
+        }
+        label={primaryControlLabel}
+        side="top"
+      >
+        {primaryOption?.Icon ? (
+          <primaryOption.Icon
+            aria-hidden="true"
+            className={cn("size-3.5", getOpenInIconClass(primaryOption.kind))}
+          />
+        ) : null}
+        <span
+          className={
+            compact
+              ? "sr-only"
+              : "sr-only @4xl/header-actions:not-sr-only @4xl/header-actions:ml-0.5"
           }
         >
-          {primaryOption?.Icon ? (
-            <primaryOption.Icon
-              aria-hidden="true"
-              className={cn("size-3.5", getOpenInIconClass(primaryOption.kind))}
-            />
-          ) : null}
-          <span
-            className={
-              compact
-                ? "sr-only"
-                : "sr-only @4xl/header-actions:not-sr-only @4xl/header-actions:ml-0.5"
-            }
-          >
-            {primaryLabel}
-          </span>
-        </TooltipTrigger>
-        <TooltipPopup side="top">{primaryControlLabel}</TooltipPopup>
-      </Tooltip>
+          {primaryLabel}
+        </span>
+      </SharedTooltipTrigger>
       {ghost ? null : (
         <GroupSeparator {...(!compact ? { className: "hidden @4xl/header-actions:block" } : {})} />
       )}
       <Menu open={menuOpen} onOpenChange={setMenuOpen}>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <MenuTrigger
-                disabled={isHostEditorDenied}
-                render={
-                  <ThreadDetailsControl
-                    aria-label={gt("Choose editor")}
-                    data-toolbar-control=""
-                    size={ghost ? "icon-sm" : "icon-xs"}
-                    variant={ghost ? "ghost" : "secondary"}
-                    panel={false}
-                  />
-                }
-              />
-            }
-          >
-            <ChevronDownIcon aria-hidden="true" className={ghost ? "size-3.5" : "size-4"} />
-          </TooltipTrigger>
-          <TooltipPopup side="top">
-            <T>Choose editor</T>
-          </TooltipPopup>
-        </Tooltip>
+        <SharedTooltipTrigger
+          render={
+            <MenuTrigger
+              disabled={isHostEditorDenied}
+              render={
+                <ThreadDetailsControl
+                  aria-label={gt("Choose editor")}
+                  data-toolbar-control=""
+                  size={ghost ? "icon-sm" : "icon-xs"}
+                  variant={ghost ? "ghost" : "secondary"}
+                  panel={false}
+                />
+              }
+            />
+          }
+          label={
+            <>
+              <T>Choose editor</T>
+            </>
+          }
+          side="top"
+        >
+          <ChevronDownIcon aria-hidden="true" className={ghost ? "size-3.5" : "size-4"} />
+        </SharedTooltipTrigger>
         <MenuPopup align="end" className="min-w-60">
           <MenuGroup>
             <MenuGroupLabel>

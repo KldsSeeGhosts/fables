@@ -6,28 +6,19 @@ descriptions, branch names, Duet morning briefs, and voice transcript cleanup. P
 **Settings → Voice** can each pick a different one. To choose a model for scheduled Duet morning
 briefs, use **Settings → Threads → Brief model**.
 
-By default, a coding agent such as Codex or Claude writes this text, starting a session for each
-request. A **text generator** — a model API that only writes text — is usually faster and cheaper.
+By default, a coding agent handles these tasks by starting a session per request. Adding a dedicated **text generator** API is usually much faster and cheaper.
 
 ## Add a text generator
 
-Go to **Settings → Providers → Text generators** and choose **Add generator**:
+Open **Settings → Providers → Text generators → Add generator** (stored per environment; API keys support [Secrets](./secrets.md)):
 
-- **OpenAI** or **Anthropic** — enter an API key.
-- **OpenRouter** — enter an OpenRouter key to use any model it serves.
-- **Custom (OpenAI-compatible)** — enter the base URL of any other endpoint, such as Ollama at
-  `http://localhost:11434/v1` or LM Studio. Local endpoints usually need no key. The environment's
-  server makes the requests, so on a remote environment `localhost` means that machine, not yours.
+- **OpenAI** or **Anthropic**: Enter an API key.
+- **OpenRouter**: Enter an OpenRouter API key to use any model it serves.
+- **Custom (OpenAI-compatible)**: Enter a base URL (e.g. Ollama at `http://localhost:11434/v1` or LM Studio—`localhost` resolves on the environment's server).
 
-Give it a name if you add more than one from the same service. Your key is stored on the
-environment, like other [secrets](./secrets.md), and can come from a secret provider instead of
-being typed in.
+Click **Test** beside a model picker to verify the key works, or **Show models** to refresh the catalog. Disabling or removing a generator falls back to the environment's default text generation model.
 
-Fables lists the service's models to check the connection, then shows the model picker for each
-text task so you can switch any of them to the new generator, or keep what they use. **Test** next
-to a picker has the chosen model answer a tiny prompt, which proves the key works; some services
-list their models without checking it. **Show models** in the generator's menu lists its models
-and refreshes the list after the service adds some.
+## Limitations
 
 Each request sends the API what the task needs. For a scheduled Duet morning brief, the request
 includes excerpts from NOTES.md and DIGEST.md, open requests, and recent delegated work.

@@ -1,6 +1,6 @@
 import type { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
 import { isAtomCommandInterrupted } from "@t3tools/client-runtime/state/runtime";
-import { useMessages } from "gt-react";
+import { T, useMessages, Var } from "gt-react";
 import { parsePullRequestAnchor, pullRequestLinkCommit } from "@t3tools/shared/pullRequestAnchor";
 import type { EnvironmentId, PullRequestActor, PullRequestRef } from "@t3tools/contracts";
 import {
@@ -22,6 +22,7 @@ import { useEnvironmentQuery } from "~/state/query";
 import { PreviewCard, PreviewCardPopup, PreviewCardTrigger } from "../ui/preview-card";
 import { Skeleton } from "../ui/skeleton";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { pullRequestLinkSubject, pullRequestReviewOutcome } from "./pullRequestDetail.logic";
 import {
   PullRequestActorAvatar,
@@ -223,12 +224,12 @@ export function WorkItemPreviewCardHeader({
           {state.label}
         </span>
       ) : (
-        <Tooltip>
-          <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
-            <state.Icon aria-label={state.label} className={`size-3 ${state.toneClassName}`} />
-          </TooltipTrigger>
-          <TooltipPopup>{state.label}</TooltipPopup>
-        </Tooltip>
+        <SharedTooltipTrigger
+          render={<span className="inline-flex shrink-0" />}
+          label={state.label}
+        >
+          <state.Icon aria-label={state.label} className={`size-3 ${state.toneClassName}`} />
+        </SharedTooltipTrigger>
       )}
     </div>
   );
@@ -328,17 +329,24 @@ function LinkedComment({
   subject: Extract<ReturnType<typeof pullRequestLinkSubject>, { kind: "comment" }>;
 }) {
   const outcome = pullRequestReviewOutcome(subject.reviewState);
+  const author = (
+    <span className="min-w-0 truncate font-medium text-foreground">
+      {actorLabel(subject.author)}
+    </span>
+  );
   return (
     <div className="mt-2 min-w-0">
       <div className="flex min-w-0 items-center gap-1.5 text-meta text-muted-foreground">
         <PullRequestActorAvatar actor={subject.author} className="size-4" />
-        <span className="min-w-0 truncate text-label text-foreground">
-          {actorLabel(subject.author)}
-        </span>
         {outcome === null ? (
-          <span className="shrink-0">commented</span>
+          <T>
+            <Var>{author}</Var> <span className="shrink-0">commented</span>
+          </T>
         ) : (
-          <PullRequestReviewOutcomeBadge outcome={outcome} className="shrink-0" />
+          <>
+            {author}
+            <PullRequestReviewOutcomeBadge outcome={outcome} className="shrink-0" />
+          </>
         )}
         <span className="shrink-0">
           <RelativeTime timestamp={subject.createdAt} />

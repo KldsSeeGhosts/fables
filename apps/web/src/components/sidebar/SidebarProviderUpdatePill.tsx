@@ -12,6 +12,7 @@ import {
   type ProviderUpdateSidebarPillView,
 } from "../ProviderUpdateLaunchNotification.logic";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 // Matches the pill's `duration-180` class.
 const PROVIDER_UPDATE_PILL_EXIT_MS = 180;
@@ -193,23 +194,23 @@ export function SidebarProviderUpdatePill() {
         <TooltipPopup side="top">{displayedView.description}</TooltipPopup>
       </Tooltip>
       {displayedView.dismissible && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                aria-label={gt("Dismiss provider update notice")}
-                className="relative z-[1] mr-1 flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-md opacity-70 outline-none hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                onClick={() => startExit(displayedView.key, null, displayedView.dismissKeys)}
-              >
-                <XIcon className="size-3.5 shrink-0" />
-              </button>
-            }
-          />
-          <TooltipPopup side="top">
-            <T>Dismiss until provider status changes</T>
-          </TooltipPopup>
-        </Tooltip>
+        <SharedTooltipTrigger
+          render={
+            <button
+              type="button"
+              aria-label={gt("Dismiss provider update notice")}
+              className="relative z-[1] mr-1 flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-md opacity-70 outline-none hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              onClick={() => startExit(displayedView.key, null, displayedView.dismissKeys)}
+            >
+              <XIcon className="size-3.5 shrink-0" />
+            </button>
+          }
+          label={
+            <>
+              <T>Dismiss until provider status changes</T>
+            </>
+          }
+        />
       )}
     </div>
   );

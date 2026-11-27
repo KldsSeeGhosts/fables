@@ -1,14 +1,6 @@
 # Voice input
 
-Dictate into the composer instead of typing. The transcript lands in your draft
-for review, and only sending the message sends anything to an agent. Dictation
-also works in citation comments, diff and file annotations, pull request
-comments, replies, and review summaries, and in the desktop app's browser
-annotation editor.
-
-On iPhone and Android, voice input transcribes on the device by default. To opt in
-to a named environment on that phone, open **Settings → Voice → Transcribe on**. See
-[Voice input on mobile](./composer.md#voice-input-on-mobile).
+Dictate into the composer, citation comments, diff/file annotations, PR comments, and desktop browser annotations. Transcripts land in your draft for review—nothing is sent to an agent until you submit.
 
 ## Choose where audio goes
 
@@ -116,58 +108,27 @@ are down, and **Toggle** always needs a second press. Change the chord itself in
 
 ## Improve recognition
 
-- **Language** picks what you speak. **Auto** lets a multilingual model detect
-  it. Models that translate offer **Translate to English**.
-- **Dictionary** holds names and terms the model should get right. Add an alias
-  under a term when transcription keeps producing a particular misspelling.
-  Your dictionary is saved on this device. The name of the project you dictate
-  in is sent along as a hint.
-- **Project dictionary** is vocabulary saved with a project on its environment,
-  so everyone who dictates in that project gets the same spellings. Pick the
-  project at the top of Settings to edit it; with an environment selected, the
-  entries apply to every project there. Project spellings win when they overlap
-  your personal dictionary. Each recording carries up to 100 entries from the
-  two combined.
-- **Silence filtering** is on by default. Your chosen environment skips non-speech
-  audio before transcription. Turn it off to keep those sections. Filtering happens
-  after upload: it does not grant permission to send audio or reduce how much is sent.
-- **Remove filler words** drops hesitation sounds from finished transcripts.
+## Set up a local transcription model
 
-Language and these preferences travel with each recording to the chosen
-environment; nothing else about the project is sent.
+In **Settings → Voice → Transcription**, filter by language, download a model, and select **Use model** (reuses matching files from Handy or the Hugging Face cache, or link an existing file via **Use existing**—Core ML/ONNX/MLX builds aren't supported).
 
-## Clean up transcripts
+- **Advanced**: Configure GPU/CPU (**Auto** falls back to CPU once on GPU error), idle unload timeout, and **Streaming transcription** (disable if live preview lags).
 
-**Transcript cleanup** is a separate choice and is off by default. When on, the
-finished transcript and up to 1,024 characters each from before, inside, and
-after your selection are sent to the cleanup model on the draft's environment,
-which fixes punctuation, numbers, and spoken corrections such as "make it 42,
-sorry, 24". Depending on the model, that can involve an external service. Audio is never
-sent to it. Use the built-in instructions or write your own, press **Skip**
-while cleanup runs to insert the raw transcript, and if cleanup fails the raw
-transcript is inserted.
+## Dictate and shortcuts
 
-Cleanup uses the environment's text generation model unless you pick a
-**Cleanup model** for that environment, for example a cheaper or faster one.
-It can be a text generator instead of a coding agent; see
-[text generation models](./text-generation.md).
+- Press the microphone button or `mod+shift+d` to start/stop (`Esc` discards; max recording length: **5 minutes**).
+- Configure tap vs. hold behavior in **Settings → Voice → Dictation shortcut** (**Auto**, **Hold**, or **Toggle**), or remap the chord in [Keybindings](./keybindings.md).
+- Pressing **Send** (or Save/Comment/Submit) while recording finishes transcription and submits automatically.
 
-If cleanup misses the way you correct yourself, set a **Correction cue**: the
-word or phrase you say to flag a correction, such as "scratch that". Cleanup
-applies the correction only where the context shows one and drops the cue, and
-the model hears the cue as a dictionary hint.
+## Improve recognition and cleanup
 
-## Test and troubleshoot
+- **Language & translation**: Pick a language or **Auto** (plus **Translate to English** where supported).
+- **Personal & project dictionaries**: Add custom terms and common misspelling aliases in **Settings → Voice** (device-level) or scoped to a project/environment (up to 100 combined entries; project entries take priority).
+- **Silence filtering & filler removal**: Skip silence (on by default) and strip hesitation words.
+- **Transcript cleanup** (off by default): Sends the finished transcript and surrounding draft text (never audio) to your [text generation model](./text-generation.md) (or a dedicated **Cleanup model**) to fix punctuation, numbers, and spoken self-corrections (optionally using a custom **Correction cue** like "scratch that"). Press **Skip** during cleanup to insert raw text.
 
-In **Settings → Voice**, voice input uses the first connected microphone in the
-**Microphone** list. A microphone joins the list below System default the first
-time it is seen, so nothing changes until you move it up. If a preferred
-microphone is unplugged, the next connected one is used.
+## Microphones and testing
 
-**Test microphone** records from that microphone for up to ten seconds and
-plays it back in your browser; the audio stays on this device and is never transcribed, so silent playback
-points at the microphone. **Test model** on the selected model shows a transcript using the
-same environment, language, and dictionary as the composer, but skips transcript
-cleanup even when it is on, so you see what the model heard. Browser recording
-needs HTTPS or localhost and microphone permission; for a remote server over
-plain HTTP, use the desktop app.
+- **Microphone priority**: Rank built-in, wired, Bluetooth, and CarPlay (iOS) devices in **Settings → Voice**—T3 Code uses the first connected device in the list.
+- **Test**: Use **Test microphone** (local 10-second loopback, no transcription) to verify input, and **Test model** to preview raw transcription without cleanup.
+- Browser recording requires **HTTPS** or `localhost`—for plain-HTTP remote servers, use the desktop app.

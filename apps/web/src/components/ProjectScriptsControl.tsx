@@ -64,7 +64,7 @@ import {
   MenuSubPopup,
 } from "./ui/menu";
 import { stackedThreadToast, toastManager } from "./ui/toast";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { SharedTooltipTrigger } from "./ui/shared-tooltip";
 
 export type { NewProjectScriptInput, ProjectScriptActionResult };
 
@@ -484,47 +484,45 @@ export default function ProjectScriptsControl({
             </ThreadDetailsControl>
           )}
           {supportsStop && runningScriptServer?.pid != null ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <ThreadDetailsControl
-                    part="icon"
-                    aria-label={gt("Stop {name}", { name: primaryScript?.name ?? "" })}
-                    disabled={!canStopServer || stoppingServer}
-                    onClick={async () => {
-                      setStoppingServer(true);
-                      await stopServer({
-                        environmentId,
-                        input: { pid: runningScriptServer.pid!, port: runningScriptServer.port },
-                      });
-                      setStoppingServer(false);
-                    }}
-                  />
-                }
-              >
-                <SquareIcon />
-              </TooltipTrigger>
-              <TooltipPopup>{gt("Stop {name}", { name: primaryScript?.name ?? "" })}</TooltipPopup>
-            </Tooltip>
+            <SharedTooltipTrigger
+              render={
+                <ThreadDetailsControl
+                  part="icon"
+                  aria-label={gt("Stop {name}", { name: primaryScript?.name ?? "" })}
+                  disabled={!canStopServer || stoppingServer}
+                  onClick={async () => {
+                    setStoppingServer(true);
+                    await stopServer({
+                      environmentId,
+                      input: { pid: runningScriptServer.pid!, port: runningScriptServer.port },
+                    });
+                    setStoppingServer(false);
+                  }}
+                />
+              }
+              label={gt("Stop {name}", { name: primaryScript?.name ?? "" })}
+            >
+              <SquareIcon />
+            </SharedTooltipTrigger>
           ) : null}
           <Menu
             open={actionsMenuOpen.scripts}
             onOpenChange={(open) => openActionsMenu({ scripts: open, imports: false })}
           >
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <MenuTrigger
-                    render={<ThreadDetailsControl part="icon" aria-label={gt("Project actions")} />}
-                  />
-                }
-              >
-                <ChevronDownIcon />
-              </TooltipTrigger>
-              <TooltipPopup>
-                <T>Project actions</T>
-              </TooltipPopup>
-            </Tooltip>
+            <SharedTooltipTrigger
+              render={
+                <MenuTrigger
+                  render={<ThreadDetailsControl part="icon" aria-label={gt("Project actions")} />}
+                />
+              }
+              label={
+                <>
+                  <T>Project actions</T>
+                </>
+              }
+            >
+              <ChevronDownIcon />
+            </SharedTooltipTrigger>
             <MenuPopup side="bottom" align="end">
               {scriptItems}
             </MenuPopup>
@@ -532,60 +530,60 @@ export default function ProjectScriptsControl({
         </div>
       ) : primaryScript ? (
         <Group role="group" aria-label={gt("Project scripts")}>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <ThreadDetailsControl
-                  size="sm"
-                  variant="secondary"
-                  panel={false}
-                  className="w-8 sm:w-7 @4xl/header-actions:w-auto!"
-                  aria-label={gt("Run {name}", { name: primaryScript.name })}
-                  // Tooltip replaces the button data-slot, so toolbar theming needs a separate hook.
-                  data-toolbar-control=""
-                  aria-disabled={!onRunScript || undefined}
-                  onClick={() => onRunScript?.(primaryScript)}
-                />
-              }
-            >
-              <ScriptIcon icon={primaryScript.icon} />
-              <span className="sr-only @4xl/header-actions:not-sr-only @4xl/header-actions:ml-0.5">
-                {primaryScript.name}
-              </span>
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              {onRunScript
+          <SharedTooltipTrigger
+            render={
+              <ThreadDetailsControl
+                size="sm"
+                variant="secondary"
+                panel={false}
+                className="w-8 sm:w-7 @4xl/header-actions:w-auto!"
+                aria-label={gt("Run {name}", { name: primaryScript.name })}
+                // Tooltip replaces the button data-slot, so toolbar theming needs a separate hook.
+                data-toolbar-control=""
+                aria-disabled={!onRunScript || undefined}
+                onClick={() => onRunScript?.(primaryScript)}
+              />
+            }
+            label={
+              onRunScript
                 ? gt("Run {name}", { name: primaryScript.name })
-                : gt("Pair this client again with permission to run terminal commands.")}
-            </TooltipPopup>
-          </Tooltip>
+                : gt("Pair this client again with permission to run terminal commands.")
+            }
+            side="top"
+          >
+            <ScriptIcon icon={primaryScript.icon} />
+            <span className="sr-only @4xl/header-actions:not-sr-only @4xl/header-actions:ml-0.5">
+              {primaryScript.name}
+            </span>
+          </SharedTooltipTrigger>
           <GroupSeparator className="hidden @4xl/header-actions:block" />
           <Menu
             open={actionsMenuOpen.scripts}
             onOpenChange={(open) => openActionsMenu({ scripts: open, imports: false })}
           >
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <MenuTrigger
-                    render={
-                      <ThreadDetailsControl
-                        size="icon-sm"
-                        variant="secondary"
-                        panel={false}
-                        aria-label={gt("Script actions")}
-                        data-toolbar-control=""
-                      />
-                    }
-                  />
-                }
-              >
-                <ChevronDownIcon className="size-3" />
-              </TooltipTrigger>
-              <TooltipPopup side="top">
-                <T>Script actions</T>
-              </TooltipPopup>
-            </Tooltip>
+            <SharedTooltipTrigger
+              render={
+                <MenuTrigger
+                  render={
+                    <ThreadDetailsControl
+                      size="icon-sm"
+                      variant="secondary"
+                      panel={false}
+                      aria-label={gt("Script actions")}
+                      data-toolbar-control=""
+                    />
+                  }
+                />
+              }
+              label={
+                <>
+                  <T>Script actions</T>
+                </>
+              }
+              side="top"
+            >
+              <ChevronDownIcon className="size-3" />
+            </SharedTooltipTrigger>
             <MenuPopup align="end" className="min-w-64">
               <MenuGroup>
                 <MenuGroupLabel>
@@ -616,27 +614,26 @@ export default function ProjectScriptsControl({
           <MenuPopup align="end">{scriptItems}</MenuPopup>
         </Menu>
       ) : (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <ThreadDetailsControl
-                size="sm"
-                variant="secondary"
-                panel={false}
-                className="w-8 sm:w-7 @4xl/header-actions:w-auto!"
-                aria-label={gt("Add action")}
-                data-toolbar-control=""
-                onClick={openAddDialog}
-              />
-            }
-          >
-            <PlusIcon className="size-3.5" />
-            <span className="sr-only @4xl/header-actions:not-sr-only @4xl/header-actions:ml-0.5">
-              {gt("Add action")}
-            </span>
-          </TooltipTrigger>
-          <TooltipPopup side="top">{gt("Add action")}</TooltipPopup>
-        </Tooltip>
+        <SharedTooltipTrigger
+          render={
+            <ThreadDetailsControl
+              size="sm"
+              variant="secondary"
+              panel={false}
+              className="w-8 sm:w-7 @4xl/header-actions:w-auto!"
+              aria-label={gt("Add action")}
+              data-toolbar-control=""
+              onClick={openAddDialog}
+            />
+          }
+          label={gt("Add action")}
+          side="top"
+        >
+          <PlusIcon className="size-3.5" />
+          <span className="sr-only @4xl/header-actions:not-sr-only @4xl/header-actions:ml-0.5">
+            {gt("Add action")}
+          </span>
+        </SharedTooltipTrigger>
       )}
 
       <ProjectScriptEditorDialog

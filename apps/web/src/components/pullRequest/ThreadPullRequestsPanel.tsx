@@ -45,6 +45,7 @@ import { ThreadDetailsIssueRows } from "../chat/ThreadDetailsIssueRows";
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { openLinkPullRequestDialog } from "./LinkPullRequestDialog";
 import {
   PULL_REQUEST_ROW_CLASS,
@@ -81,16 +82,16 @@ function ChecksGlyph({
   const resolve = useMessages();
   const presentation = pullRequestChecksStatePresentation(state, resolve);
   return (
-    <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
-        <presentation.Icon
-          role="img"
-          aria-label={presentation.label}
-          className={cn("size-3.5", presentation.toneClassName)}
-        />
-      </TooltipTrigger>
-      <TooltipPopup>{presentation.label}</TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={<span className="inline-flex shrink-0" />}
+      label={presentation.label}
+    >
+      <presentation.Icon
+        role="img"
+        aria-label={presentation.label}
+        className={cn("size-3.5", presentation.toneClassName)}
+      />
+    </SharedTooltipTrigger>
   );
 }
 
@@ -228,17 +229,19 @@ function LinkRowImpl({
             open ? (
               <>
                 {watching ? (
-                  <Tooltip>
-                    <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
-                      <EyeIcon role="img" aria-label={gt("Watching")} className="size-3.5" />
-                    </TooltipTrigger>
-                    <TooltipPopup>
-                      <T>
-                        Watching: the agent wakes when checks finish, someone comments, or the
-                        branch conflicts
-                      </T>
-                    </TooltipPopup>
-                  </Tooltip>
+                  <SharedTooltipTrigger
+                    render={<span className="inline-flex shrink-0" />}
+                    label={
+                      <>
+                        <T>
+                          Watching: the agent wakes when checks finish, someone comments, or the
+                          branch conflicts
+                        </T>
+                      </>
+                    }
+                  >
+                    <EyeIcon role="img" aria-label={gt("Watching")} className="size-3.5" />
+                  </SharedTooltipTrigger>
                 ) : null}
                 {snapshot?.checksState ? <ChecksGlyph state={snapshot.checksState} /> : null}
                 {snapshot?.reviewDecision ? (
@@ -272,17 +275,12 @@ function LinkRowImpl({
           meta={
             <>
               {stack ? (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <span className="inline-flex shrink-0 items-center gap-0.5 text-foreground/70" />
-                    }
-                  >
-                    <PullRequestGlyph.stack aria-hidden className="size-3" />
-                    {stack.size}
-                  </TooltipTrigger>
-                  <TooltipPopup>
-                    {stack.kind === "native"
+                <SharedTooltipTrigger
+                  render={
+                    <span className="inline-flex shrink-0 items-center gap-0.5 text-foreground/70" />
+                  }
+                  label={
+                    stack.kind === "native"
                       ? gt("{host} stack of {size}: merging a layer lands the ones below it.", {
                           host: sourceControlClients.hostLabelForChangeRequestUrl(link.url),
                           size: stack.size,
@@ -293,9 +291,12 @@ function LinkRowImpl({
                             size: stack.size,
                             terms: changeRequestTermKind(linkHost.changeRequest),
                           },
-                        )}
-                  </TooltipPopup>
-                </Tooltip>
+                        )
+                  }
+                >
+                  <PullRequestGlyph.stack aria-hidden className="size-3" />
+                  {stack.size}
+                </SharedTooltipTrigger>
               ) : null}
               {snapshot?.author ? (
                 <PullRequestRowAuthor
@@ -600,55 +601,57 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
           className="min-h-0 flex-1 overscroll-contain p-1.5 pt-under-header-1.5"
         />
         <footer className="flex items-center justify-between border-t border-border py-1.5 ps-4 pe-2.25 text-meta text-muted-foreground">
-          <Tooltip>
-            <TooltipTrigger render={<span className="flex min-w-0 flex-wrap gap-x-2" />}>
-              {linkCount > 0 ? (
-                <>
-                  <span>
-                    {gt("{count, plural, one {{count} linked} other {{count} linked}}", {
-                      count: linkCount,
-                    })}
-                  </span>
-                  <span>
-                    {gt("{count, plural, one {{count} open} other {{count} open}}", {
-                      count: openCount,
-                    })}
-                  </span>
-                </>
-              ) : null}
-              {lastSynced ? (
-                <span>
-                  <T context="followed by a relative time such as 5m ago or just now">
-                    synced{" "}
-                    <Var>
-                      <RelativeTime timestamp={lastSynced} />
-                    </Var>
-                  </T>
+          <SharedTooltipTrigger
+            render={<span className="flex min-w-0 flex-wrap gap-x-2" />}
+            label={
+              <>
+                <span className="flex flex-col gap-0.5">
+                  {linkCount > 0 ? (
+                    <span>
+                      {gt("{count, plural, one {{count} open} other {{count} open}}", {
+                        count: openCount,
+                      })}
+                    </span>
+                  ) : null}
+                  {lastSynced ? (
+                    <span>
+                      <T context="followed by a relative time such as 5m ago or just now">
+                        synced{" "}
+                        <Var>
+                          <RelativeTime timestamp={lastSynced} />
+                        </Var>
+                      </T>
+                    </span>
+                  ) : null}
                 </span>
-              ) : null}
-            </TooltipTrigger>
-            <TooltipPopup>
-              <span className="flex flex-col gap-0.5">
-                {linkCount > 0 ? (
-                  <span>
-                    {gt("{count, plural, one {{count} open} other {{count} open}}", {
-                      count: openCount,
-                    })}
-                  </span>
-                ) : null}
-                {lastSynced ? (
-                  <span>
-                    <T context="followed by a relative time such as 5m ago or just now">
-                      synced{" "}
-                      <Var>
-                        <RelativeTime timestamp={lastSynced} />
-                      </Var>
-                    </T>
-                  </span>
-                ) : null}
+              </>
+            }
+          >
+            {linkCount > 0 ? (
+              <>
+                <span>
+                  {gt("{count, plural, one {{count} linked} other {{count} linked}}", {
+                    count: linkCount,
+                  })}
+                </span>
+                <span>
+                  {gt("{count, plural, one {{count} open} other {{count} open}}", {
+                    count: openCount,
+                  })}
+                </span>
+              </>
+            ) : null}
+            {lastSynced ? (
+              <span>
+                <T context="followed by a relative time such as 5m ago or just now">
+                  synced{" "}
+                  <Var>
+                    <RelativeTime timestamp={lastSynced} />
+                  </Var>
+                </T>
               </span>
-            </TooltipPopup>
-          </Tooltip>
+            ) : null}
+          </SharedTooltipTrigger>
           {/* Borderless: the footer's 9px end padding puts its ink, 7px inside, on the 16px line. */}
           <Button size="xs" variant="ghost" onClick={openLinkDialog}>
             <PlusIcon className="size-3.5" />

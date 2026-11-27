@@ -19,7 +19,7 @@ import { GlobalVoiceInputIndicator } from "./chat/GlobalVoiceInputIndicator";
 import { useThemeEditorStore } from "./settings/themeEditorStore";
 import { Button } from "./ui/button";
 import { Dialog, DialogClose, DialogPopup } from "./ui/dialog";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { SharedTooltipTrigger } from "./ui/shared-tooltip";
 
 /** Settings and Usage own their shortcuts inside `[data-app-modal]` and return to the opener. */
 export function AppRouteModal({
@@ -154,20 +154,18 @@ function blurFocusedWithin(container: HTMLElement | null) {
 export function AppRouteModalClose() {
   const gt = useGT();
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <DialogClose
-            aria-label={gt("Close")}
-            render={<Button size="icon-sm" variant="ghost" />}
-          />
-        }
-      >
-        <XIcon />
-      </TooltipTrigger>
-      <TooltipPopup side="bottom">
-        <T>Close (Esc)</T>
-      </TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={
+        <DialogClose aria-label={gt("Close")} render={<Button size="icon-sm" variant="ghost" />} />
+      }
+      label={
+        <>
+          <T>Close (Esc)</T>
+        </>
+      }
+      side="bottom"
+    >
+      <XIcon />
+    </SharedTooltipTrigger>
   );
 }

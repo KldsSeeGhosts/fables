@@ -50,6 +50,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "../ui/input-group"
 import { Switch } from "../ui/switch";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import {
   getThemeRoleLabel,
   ThemeColorField,
@@ -1011,12 +1012,7 @@ export function ThemeEditorPanel({
       </Toggle>
     );
     if (lockReason === null) return button;
-    return (
-      <Tooltip>
-        <TooltipTrigger render={button} />
-        <TooltipPopup>{lockReason}</TooltipPopup>
-      </Tooltip>
-    );
+    return <SharedTooltipTrigger render={button} label={lockReason} />;
   };
 
   const renderAppearanceButtons = () => (

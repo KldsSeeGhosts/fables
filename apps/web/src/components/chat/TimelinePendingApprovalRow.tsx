@@ -35,7 +35,8 @@ import { type PendingApproval } from "../../session-logic";
 import { useTurnItemDetail } from "../../state/queries";
 import { Button, InlineButton } from "../ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { ApprovalText } from "./ApprovalText";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { BackgroundThreadContext } from "./backgroundThread";
 import {
   ComposerPendingApprovalActions,
@@ -337,14 +338,12 @@ export function TimelineApprovalCard({
                       className="size-[13px] shrink-0 text-info-foreground"
                     />
                   )}
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={<span className="min-w-0 flex-1 truncate text-foreground" />}
-                    >
-                      {formatWorkspaceRelativePath(file.path, workspaceRoot)}
-                    </TooltipTrigger>
-                    <TooltipPopup>{file.path}</TooltipPopup>
-                  </Tooltip>
+                  <SharedTooltipTrigger
+                    render={<span className="min-w-0 flex-1 truncate text-foreground" />}
+                    label={file.path}
+                  >
+                    {formatWorkspaceRelativePath(file.path, workspaceRoot)}
+                  </SharedTooltipTrigger>
                   {file.additions !== undefined || file.deletions !== undefined ? (
                     <span className="shrink-0 text-meta tabular-nums">
                       <span className="text-success-foreground">+{file.additions ?? 0}</span>{" "}
@@ -367,19 +366,10 @@ export function TimelineApprovalCard({
             ) : null}
           </>
         ) : (
-          <div
-            aria-label={m(presentation.detailLabel)}
-            className={cn(
-              "max-h-40 min-w-0 overflow-auto whitespace-pre-wrap p-2.5 text-meta leading-5 select-text! wrap-anywhere [scrollbar-width:thin] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70",
-              approval.requestKind === "command"
-                ? "font-mono text-foreground"
-                : "text-muted-foreground",
-            )}
-            data-approval-detail="complete"
-            tabIndex={0}
-          >
-            {detail || m(presentation.label)}
-          </div>
+          <ApprovalText
+            text={detail || m(presentation.label)}
+            label={m(presentation.detailLabel)}
+          />
         )}
       </div>
 

@@ -68,7 +68,7 @@ import { isModalDialogOpen } from "~/lib/modalDialog";
 import { readLocalApi } from "~/localApi";
 import { useStableCallback } from "~/hooks/useStableCallback";
 import { Button } from "~/components/ui/button";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+import { SharedTooltipTrigger } from "~/components/ui/shared-tooltip";
 import { Menu, MenuPopup, MenuTrigger } from "~/components/ui/menu";
 import { useBrowserDefaults } from "~/browser/browserDefaults";
 import { ScrollArea } from "~/components/ui/scroll-area";
@@ -640,34 +640,32 @@ function RightPanelTab(
           ) : null}
         </PanelTabCloseButton>
         {audio === "none" || !audioRuntimeTabId ? null : (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <button
-                  type="button"
-                  className="cursor-pointer flex size-4 shrink-0 items-center justify-center rounded-kbd hover:surface-ghost-hover"
-                  aria-label={
-                    audio === "muted"
-                      ? gt("Unmute {title}", { title })
-                      : gt("Mute {title}", { title })
-                  }
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void previewBridge
-                      ?.setAudioMuted(audioRuntimeTabId, audio !== "muted")
-                      .catch(() => undefined);
-                  }}
-                >
-                  {audio === "muted" ? (
-                    <VolumeOffIcon className="size-3" />
-                  ) : (
-                    <Volume2Icon className="size-3" />
-                  )}
-                </button>
-              }
-            />
-            <TooltipPopup>{audio === "muted" ? gt("Unmute tab") : gt("Mute tab")}</TooltipPopup>
-          </Tooltip>
+          <SharedTooltipTrigger
+            render={
+              <button
+                type="button"
+                className="cursor-pointer flex size-4 shrink-0 items-center justify-center rounded-kbd hover:surface-ghost-hover"
+                aria-label={
+                  audio === "muted"
+                    ? gt("Unmute {title}", { title })
+                    : gt("Mute {title}", { title })
+                }
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void previewBridge
+                    ?.setAudioMuted(audioRuntimeTabId, audio !== "muted")
+                    .catch(() => undefined);
+                }}
+              >
+                {audio === "muted" ? (
+                  <VolumeOffIcon className="size-3" />
+                ) : (
+                  <Volume2Icon className="size-3" />
+                )}
+              </button>
+            }
+            label={audio === "muted" ? gt("Unmute tab") : gt("Mute tab")}
+          />
         )}
         {renaming ? (
           <input
@@ -690,46 +688,44 @@ function RightPanelTab(
             }}
           />
         ) : (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <button
-                  type="button"
-                  onDoubleClick={() => {
-                    if (surface.kind === "device" && canRename) onStartRename(surface.id);
-                  }}
-                  className={cn(
-                    "cursor-pointer flex min-w-0 items-center outline-none focus-visible:inset-ring-2 focus-visible:inset-ring-ring",
-                    active && surface.kind === "diff" && "shrink-0",
-                  )}
-                  aria-label={
-                    sideChatState !== null
-                      ? gt("{title}, {state}", {
-                          title,
-                          state: messages(SIDE_CHAT_STATE_LABELS[sideChatState]),
-                        })
-                      : surface.kind === "terminal" && threadTitle
-                        ? `${title}, ${threadTitle}`
-                        : undefined
+          <SharedTooltipTrigger
+            render={
+              <button
+                type="button"
+                onDoubleClick={() => {
+                  if (surface.kind === "device" && canRename) onStartRename(surface.id);
+                }}
+                className={cn(
+                  "cursor-pointer flex min-w-0 items-center outline-none focus-visible:inset-ring-2 focus-visible:inset-ring-ring",
+                  active && surface.kind === "diff" && "shrink-0",
+                )}
+                aria-label={
+                  sideChatState !== null
+                    ? gt("{title}, {state}", {
+                        title,
+                        state: messages(SIDE_CHAT_STATE_LABELS[sideChatState]),
+                      })
+                    : surface.kind === "terminal" && threadTitle
+                      ? `${title}, ${threadTitle}`
+                      : undefined
+                }
+                onClick={() => onActivate(surface)}
+              >
+                <span
+                  className={
+                    notched
+                      ? active
+                        ? PANE_TAB_TITLE_CLASS
+                        : PANE_INACTIVE_TAB_TITLE_CLASS
+                      : cn("truncate", active && "max-w-60")
                   }
-                  onClick={() => onActivate(surface)}
                 >
-                  <span
-                    className={
-                      notched
-                        ? active
-                          ? PANE_TAB_TITLE_CLASS
-                          : PANE_INACTIVE_TAB_TITLE_CLASS
-                        : cn("truncate", active && "max-w-60")
-                    }
-                  >
-                    {title}
-                  </span>
-                </button>
-              }
-            />
-            <TooltipPopup className="whitespace-pre-line">
-              {surface.kind === "device" ? (
+                  {title}
+                </span>
+              </button>
+            }
+            label={
+              surface.kind === "device" ? (
                 <>
                   {threadTitle ? (
                     <>
@@ -741,9 +737,10 @@ function RightPanelTab(
                 </>
               ) : (
                 tooltip
-              )}
-            </TooltipPopup>
-          </Tooltip>
+              )
+            }
+            className="whitespace-pre-line"
+          />
         )}
       </>
     </div>
@@ -1330,46 +1327,46 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
               role="group"
               aria-label={gt("Scroll panel tabs")}
             >
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <span className="inline-flex">
-                      <Button
-                        aria-label={gt("Scroll tabs left")}
-                        disabled={!tabScrollState.canScrollLeft}
-                        onClick={() => scrollTabs(-1)}
-                        size="icon-xs"
-                        variant="ghost"
-                      >
-                        <ChevronLeft />
-                      </Button>
-                    </span>
-                  }
-                />
-                <TooltipPopup>
-                  <T>Scroll tabs left</T>
-                </TooltipPopup>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <span className="inline-flex">
-                      <Button
-                        aria-label={gt("Scroll tabs right")}
-                        disabled={!tabScrollState.canScrollRight}
-                        onClick={() => scrollTabs(1)}
-                        size="icon-xs"
-                        variant="ghost"
-                      >
-                        <ChevronRight />
-                      </Button>
-                    </span>
-                  }
-                />
-                <TooltipPopup>
-                  <T>Scroll tabs right</T>
-                </TooltipPopup>
-              </Tooltip>
+              <SharedTooltipTrigger
+                render={
+                  <span className="inline-flex">
+                    <Button
+                      aria-label={gt("Scroll tabs left")}
+                      disabled={!tabScrollState.canScrollLeft}
+                      onClick={() => scrollTabs(-1)}
+                      size="icon-xs"
+                      variant="ghost"
+                    >
+                      <ChevronLeft />
+                    </Button>
+                  </span>
+                }
+                label={
+                  <>
+                    <T>Scroll tabs left</T>
+                  </>
+                }
+              />
+              <SharedTooltipTrigger
+                render={
+                  <span className="inline-flex">
+                    <Button
+                      aria-label={gt("Scroll tabs right")}
+                      disabled={!tabScrollState.canScrollRight}
+                      onClick={() => scrollTabs(1)}
+                      size="icon-xs"
+                      variant="ghost"
+                    >
+                      <ChevronRight />
+                    </Button>
+                  </span>
+                }
+                label={
+                  <>
+                    <T>Scroll tabs right</T>
+                  </>
+                }
+              />
             </div>
           ) : null}
           <PanelActionsNotch

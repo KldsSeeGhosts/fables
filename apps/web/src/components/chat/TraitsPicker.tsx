@@ -41,7 +41,7 @@ import { getProviderModelCapabilities, keepsUnavailableModelOptions } from "../.
 import { m, type MessageResolver } from "~/i18n/messages";
 import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { ComposerControl, ComposerControlIcon, type ComposerControlSize } from "./ComposerControl";
 import { useComposerMenuState } from "./useComposerMenuState";
 import { DESCRIPTOR_PRESETS_BY_KIND } from "../settings/customModelEditor.logic";
@@ -593,67 +593,63 @@ export function TraitsPicker({
         setIsMenuOpen(open && !disabled);
       }}
     >
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <MenuTrigger
-              render={
-                <ComposerControl
-                  disabled={disabled}
-                  aria-label={triggerLabel}
-                  size={size}
-                  variant={triggerVariant ?? "toolbar"}
-                  className={cn(
-                    isCodexStyle
-                      ? "min-w-0 max-w-40 shrink justify-start overflow-hidden whitespace-nowrap sm:max-w-48"
-                      : "shrink-0 whitespace-nowrap",
-                    props.triggerClassName,
-                  )}
-                />
-              }
-            />
-          }
-        >
-          {isCodexStyle ? (
-            <span
-              className={cn(
-                "flex min-w-0 w-full items-center",
-                size === "xs" ? "gap-1" : "gap-1.5",
-              )}
-            >
-              <span data-composer-control-compact-icon className="pointer-events-none">
-                <ComposerControlIcon
-                  icon={BrainIcon}
-                  size={size}
-                  className={triggerVariant === "settings" ? "size-3.5" : "size-3"}
-                />
-              </span>
-              <span data-composer-control-label className="min-w-0 truncate">
-                {triggerLabel}
-              </span>
+      <SharedTooltipTrigger
+        render={
+          <MenuTrigger
+            render={
+              <ComposerControl
+                disabled={disabled}
+                aria-label={triggerLabel}
+                size={size}
+                variant={triggerVariant ?? "toolbar"}
+                className={cn(
+                  isCodexStyle
+                    ? "min-w-0 max-w-40 shrink justify-start overflow-hidden whitespace-nowrap sm:max-w-48"
+                    : "shrink-0 whitespace-nowrap",
+                  props.triggerClassName,
+                )}
+              />
+            }
+          />
+        }
+        label={triggerLabel}
+        side="top"
+      >
+        {isCodexStyle ? (
+          <span
+            className={cn("flex min-w-0 w-full items-center", size === "xs" ? "gap-1" : "gap-1.5")}
+          >
+            <span data-composer-control-compact-icon className="pointer-events-none">
+              <ComposerControlIcon
+                icon={BrainIcon}
+                size={size}
+                className={triggerVariant === "settings" ? "size-3.5" : "size-3"}
+              />
             </span>
-          ) : (
-            <>
-              <span data-composer-control-compact-icon className="pointer-events-none">
-                <ComposerControlIcon
-                  icon={BrainIcon}
-                  size={size}
-                  className={triggerVariant === "settings" ? "size-3.5" : "size-3"}
-                />
-              </span>
-              <span data-composer-control-label>{triggerLabel}</span>
-            </>
-          )}
-          {triggerVariant === "settings" ? (
-            <ChevronDownIcon
-              aria-hidden="true"
-              className="size-3.5 shrink-0 text-muted-foreground"
-              data-composer-control-chevron
-            />
-          ) : null}
-        </TooltipTrigger>
-        <TooltipPopup side="top">{triggerLabel}</TooltipPopup>
-      </Tooltip>
+            <span data-composer-control-label className="min-w-0 truncate">
+              {triggerLabel}
+            </span>
+          </span>
+        ) : (
+          <>
+            <span data-composer-control-compact-icon className="pointer-events-none">
+              <ComposerControlIcon
+                icon={BrainIcon}
+                size={size}
+                className={triggerVariant === "settings" ? "size-3.5" : "size-3"}
+              />
+            </span>
+            <span data-composer-control-label>{triggerLabel}</span>
+          </>
+        )}
+        {triggerVariant === "settings" ? (
+          <ChevronDownIcon
+            aria-hidden="true"
+            className="size-3.5 shrink-0 text-muted-foreground"
+            data-composer-control-chevron
+          />
+        ) : null}
+      </SharedTooltipTrigger>
       <MenuPopup spacing="relaxed" align="start">
         <TraitsMenuContent {...props} />
       </MenuPopup>

@@ -24,6 +24,7 @@ import { Label } from "./ui/label";
 import { Menu, MenuItem, MenuItemLabel, MenuPopup, MenuSeparator, MenuTrigger } from "./ui/menu";
 import { toastManager } from "./ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { SharedTooltipTrigger } from "./ui/shared-tooltip";
 
 export interface SavedView<Preferences> {
   readonly id: string;
@@ -159,26 +160,26 @@ export function SavedViewsMenu<Preferences extends Stored, Stored, Encoded>({
         </Tooltip>
         <MenuPopup align="start">
           {views.map((view) => (
-            <Tooltip key={view.id}>
-              <TooltipTrigger
-                render={
-                  <MenuItem
-                    onClick={() => {
-                      setSelectedId(view.id);
-                      onApply(kind.normalize(view.preferences));
-                    }}
-                  />
-                }
-              >
-                {selectedView?.id === view.id && !modified ? (
-                  <CheckIcon aria-hidden />
-                ) : (
-                  <BookmarkIcon aria-hidden />
-                )}
-                <MenuItemLabel>{view.name}</MenuItemLabel>
-              </TooltipTrigger>
-              <TooltipPopup side="right">{view.name}</TooltipPopup>
-            </Tooltip>
+            <SharedTooltipTrigger
+              key={view.id}
+              render={
+                <MenuItem
+                  onClick={() => {
+                    setSelectedId(view.id);
+                    onApply(kind.normalize(view.preferences));
+                  }}
+                />
+              }
+              label={view.name}
+              side="right"
+            >
+              {selectedView?.id === view.id && !modified ? (
+                <CheckIcon aria-hidden />
+              ) : (
+                <BookmarkIcon aria-hidden />
+              )}
+              <MenuItemLabel>{view.name}</MenuItemLabel>
+            </SharedTooltipTrigger>
           ))}
           {views.length > 0 ? <MenuSeparator /> : null}
           <MenuItem onClick={() => setEditor({ name: messages(kind.suggestedName(preferences)) })}>

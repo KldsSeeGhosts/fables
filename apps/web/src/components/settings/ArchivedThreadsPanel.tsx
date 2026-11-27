@@ -18,7 +18,7 @@ import { readLocalApi } from "../../localApi";
 import { useArchivedThreadSnapshots } from "../../lib/archivedThreadsState";
 import { RelativeTime } from "../RelativeTime";
 import { Button } from "../ui/button";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import {
   SettingsPageContainer,
@@ -311,18 +311,21 @@ export function ArchivedThreadsPanel() {
             {hasMultipleEnvironments ? (
               <span className="w-full truncate">{thread.environmentLabel}</span>
             ) : null}
-            <Tooltip>
-              <TooltipTrigger render={<span tabIndex={0} />}>
-                <T>
-                  Archived <RelativeTime timestamp={thread.archivedAt ?? thread.createdAt} />
-                </T>
-              </TooltipTrigger>
-              <TooltipPopup side="top">
-                <T>
-                  Created <RelativeTime timestamp={thread.createdAt} />
-                </T>
-              </TooltipPopup>
-            </Tooltip>
+            <SharedTooltipTrigger
+              render={<span tabIndex={0} />}
+              label={
+                <>
+                  <T>
+                    Created <RelativeTime timestamp={thread.createdAt} />
+                  </T>
+                </>
+              }
+              side="top"
+            >
+              <T>
+                Archived <RelativeTime timestamp={thread.archivedAt ?? thread.createdAt} />
+              </T>
+            </SharedTooltipTrigger>
             {thread.messageCount === undefined ? null : (
               <span>
                 {gt("{count, plural, one {{count} message} other {{count} messages}}", {
@@ -335,23 +338,22 @@ export function ArchivedThreadsPanel() {
         control={
           <div className="flex shrink-0 items-center gap-2">
             {ARCHIVE_ACTIONS.map(({ action, label, threadLabel, Icon }) => (
-              <Tooltip key={action}>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant={action === "delete" ? "destructive-outline" : "secondary"}
-                      size="icon-sm"
-                      aria-label={m(threadLabel, { title: thread.title })}
-                      disabled={pendingKeys.has(threadKey)}
-                      onClick={() => void handleThreadAction(action, thread)}
-                    />
-                  }
-                >
-                  <Icon className="size-3.5" />
-                </TooltipTrigger>
-                <TooltipPopup>{m(label)}</TooltipPopup>
-              </Tooltip>
+              <SharedTooltipTrigger
+                key={action}
+                render={
+                  <Button
+                    type="button"
+                    variant={action === "delete" ? "destructive-outline" : "secondary"}
+                    size="icon-sm"
+                    aria-label={m(threadLabel, { title: thread.title })}
+                    disabled={pendingKeys.has(threadKey)}
+                    onClick={() => void handleThreadAction(action, thread)}
+                  />
+                }
+                label={m(label)}
+              >
+                <Icon className="size-3.5" />
+              </SharedTooltipTrigger>
             ))}
           </div>
         }

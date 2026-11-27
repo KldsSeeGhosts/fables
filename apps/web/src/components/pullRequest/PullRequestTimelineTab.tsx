@@ -28,7 +28,6 @@ import { useRelativeTimeState } from "~/hooks/useRelativeTimeState";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   buildPullRequestRail,
   isPullRequestVerdictStale,
@@ -38,7 +37,6 @@ import {
   type PullRequestChatSubject,
   type PullRequestRailEntry,
 } from "./pullRequestDetail.logic";
-import { PullRequestMarkdown } from "./PullRequestMarkdown";
 import {
   PullRequestActorAvatar,
   PullRequestReviewOutcomeIcon,
@@ -46,8 +44,11 @@ import {
   pullRequestReviewOutcomeVerb,
   pullRequestReviewOutcomeToneClassName,
 } from "./pullRequestPresentation";
+import { PullRequestMarkdown } from "./PullRequestMarkdown";
 import { PullRequestGlyph } from "./pullRequestIcons";
+
 import { changeRequestTermKind } from "./changeRequestTerm";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 function TimelineRelativeTime({ timestamp }: { timestamp: string }) {
   const relative = useRelativeTimeState(timestamp);
@@ -95,14 +96,12 @@ function RailRow({
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">
           {children}
         </div>
-        <Tooltip>
-          <TooltipTrigger
-            render={<time dateTime={at} className="shrink-0 text-meta text-muted-foreground" />}
-          >
-            <TimelineRelativeTime timestamp={at} />
-          </TooltipTrigger>
-          <TooltipPopup>{new Date(at).toLocaleString()}</TooltipPopup>
-        </Tooltip>
+        <SharedTooltipTrigger
+          render={<time dateTime={at} className="shrink-0 text-meta text-muted-foreground" />}
+          label={new Date(at).toLocaleString()}
+        >
+          <TimelineRelativeTime timestamp={at} />
+        </SharedTooltipTrigger>
       </div>
       {body}
     </li>
@@ -386,36 +385,35 @@ function RailEntry({
           <div className="flex min-h-6 min-w-0 items-center gap-2 text-body">
             <h2 className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">
               <Actor actor={entry.comment.author} />
-              <Tooltip disabled={!stale}>
-                <TooltipTrigger render={<span className="text-muted-foreground" />}>
-                  {verb}
-                  {stale ? (
-                    <span className="sr-only">{gt(", before the latest commits")}</span>
-                  ) : null}
-                </TooltipTrigger>
-                <TooltipPopup>
-                  {pullRequestReviewOutcomeStaleLabel(entry.outcome, resolve)}
-                </TooltipPopup>
-              </Tooltip>
+              <SharedTooltipTrigger
+                disabled={!stale}
+                render={<span className="text-muted-foreground" />}
+                label={pullRequestReviewOutcomeStaleLabel(entry.outcome, resolve)}
+              >
+                {verb}
+                {stale ? (
+                  <span className="sr-only">{gt(", before the latest commits")}</span>
+                ) : null}
+              </SharedTooltipTrigger>
             </h2>
             {body && onAddToChat ? (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      size="icon-xs"
-                      variant="ghost-muted"
-                      aria-label={gt("Add to chat")}
-                      onClick={() => onAddToChat({ kind: "comment", comment: entry.comment })}
-                    />
-                  }
-                >
-                  <MessageSquarePlusIcon className="size-3" />
-                </TooltipTrigger>
-                <TooltipPopup>
-                  <T>Add to chat</T>
-                </TooltipPopup>
-              </Tooltip>
+              <SharedTooltipTrigger
+                render={
+                  <Button
+                    size="icon-xs"
+                    variant="ghost-muted"
+                    aria-label={gt("Add to chat")}
+                    onClick={() => onAddToChat({ kind: "comment", comment: entry.comment })}
+                  />
+                }
+                label={
+                  <>
+                    <T>Add to chat</T>
+                  </>
+                }
+              >
+                <MessageSquarePlusIcon className="size-3" />
+              </SharedTooltipTrigger>
             ) : null}
             {reviewUrl ? (
               <Button

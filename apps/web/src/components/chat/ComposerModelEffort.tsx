@@ -22,7 +22,7 @@ import {
   MenuTrigger,
 } from "../ui/menu";
 import { Switch } from "../ui/switch";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { ComposerControl, type ComposerControlSize } from "./ComposerControl";
 import { composerFloatingLayerProps, takeOpenTarget } from "./composerEventScope";
 import { EffortGlyph, resolveEffortGlyph } from "./EffortGlyph";
@@ -205,29 +205,28 @@ export function ComposerReasoningPicker(props: {
         }
       }}
     >
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <MenuTrigger
-              render={
-                <ComposerControl
-                  ref={triggerRef}
-                  size={props.size}
-                  disabled={props.disabled}
-                  aria-label={gt("Reasoning: {detail}", {
-                    detail:
-                      display.detail ?? gt("Options", { $context: "heading for model options" }),
-                  })}
-                  data-composer-shortcut="composer.effort"
-                />
-              }
-            />
-          }
-        >
-          {display.suffix}
-        </TooltipTrigger>
-        <TooltipPopup side="top">{display.detail}</TooltipPopup>
-      </Tooltip>
+      <SharedTooltipTrigger
+        render={
+          <MenuTrigger
+            render={
+              <ComposerControl
+                ref={triggerRef}
+                size={props.size}
+                disabled={props.disabled}
+                aria-label={gt("Reasoning: {detail}", {
+                  detail:
+                    display.detail ?? gt("Options", { $context: "heading for model options" }),
+                })}
+                data-composer-shortcut="composer.effort"
+              />
+            }
+          />
+        }
+        label={display.detail}
+        side="top"
+      >
+        {display.suffix}
+      </SharedTooltipTrigger>
       <MenuPopup side="top" align="end" width="wide" {...composerFloatingLayerProps}>
         <TraitsMenuContent {...props.traits} reasoningOnly />
       </MenuPopup>
@@ -285,12 +284,14 @@ function ColumnRow(props: {
   );
   if (!props.description) return <button {...rowProps}>{content}</button>;
   return (
-    <Tooltip>
-      <TooltipTrigger render={<button {...rowProps} />}>{content}</TooltipTrigger>
-      <TooltipPopup side="right" className="max-w-56">
-        {props.description}
-      </TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={<button {...rowProps} />}
+      label={props.description}
+      side="right"
+      className="max-w-56"
+    >
+      {content}
+    </SharedTooltipTrigger>
   );
 }
 

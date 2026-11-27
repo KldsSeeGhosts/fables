@@ -1,3 +1,4 @@
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { pullRequestAnchorMatchesUrl } from "@t3tools/shared/pullRequestAnchor";
 import type {
   EnvironmentId,
@@ -27,7 +28,6 @@ import { cn } from "~/lib/utils";
 import { SpeechTextField, TextFieldSpeechControls } from "~/speech/useTextFieldSpeech";
 
 import { Button, InlineButton } from "../ui/button";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { PullRequestEditButton } from "./PullRequestEditButton";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
@@ -52,6 +52,7 @@ import {
   PullRequestMarkdownTextarea,
   type PullRequestCompletionScope,
 } from "./PullRequestMarkdownTextarea";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 /** Inset under the code like the thread diff's comments, on the same raised card. */
 const CARD_CLASS = `mx-2.5 mt-1.5 mb-2 p-2.5 text-sm ${COMMENT_CARD_CLASS}`;
@@ -71,6 +72,7 @@ function submitKeys(input: {
     }
     if (event.key === "Escape" && input.onCancel) {
       event.preventDefault();
+      event.stopPropagation();
       input.onCancel();
     }
     if (isCommentSubmitShortcut(event, input.value, input.pending, input.allowEmpty)) {
@@ -224,34 +226,29 @@ export function InlineReviewThreads({
   return (
     <>
       {resolved.length > 0 ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                data-resolved-threads
-                aria-label={label}
-                aria-expanded={expanded}
-                // Sits on the commented line, which is the row above this annotation.
-                className="absolute right-3 bottom-full flex h-[var(--diffs-line-height,20px)] cursor-pointer items-center -space-x-1 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                contentEditable={false}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={() =>
-                  setShown(new Set((expanded ? open : threads).map((thread) => thread.id)))
-                }
-              />
-            }
-          >
-            {[...authors].slice(0, 3).map(([login, author]) => (
-              <PullRequestActorAvatar
-                key={login}
-                actor={author}
-                className="ring-1 ring-background"
-              />
-            ))}
-          </TooltipTrigger>
-          <TooltipPopup side="left">{label}</TooltipPopup>
-        </Tooltip>
+        <SharedTooltipTrigger
+          render={
+            <button
+              type="button"
+              data-resolved-threads
+              aria-label={label}
+              aria-expanded={expanded}
+              // Sits on the commented line, which is the row above this annotation.
+              className="absolute right-3 bottom-full flex h-[var(--diffs-line-height,20px)] cursor-pointer items-center -space-x-1 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              contentEditable={false}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() =>
+                setShown(new Set((expanded ? open : threads).map((thread) => thread.id)))
+              }
+            />
+          }
+          label={label}
+          side="left"
+        >
+          {[...authors].slice(0, 3).map(([login, author]) => (
+            <PullRequestActorAvatar key={login} actor={author} className="ring-1 ring-background" />
+          ))}
+        </SharedTooltipTrigger>
       ) : null}
       {threads.map((thread) => renderThread(thread, thread.isResolved && !shown.has(thread.id)))}
     </>

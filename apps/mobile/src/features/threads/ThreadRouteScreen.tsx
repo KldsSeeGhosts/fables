@@ -111,6 +111,7 @@ import {
 import { useProjects } from "../../state/entities";
 import {
   projectThreadContentPresentation,
+  THREAD_CONTENT_READY,
   threadSyncStatusLabel,
 } from "./threadContentPresentation";
 import {
@@ -1054,7 +1055,7 @@ function ThreadRouteContent(
   // Queued creation displays its prompt before server creation; temporary not-found is expected.
   const contentPresentation =
     creationState !== null
-      ? { kind: "ready" as const }
+      ? THREAD_CONTENT_READY
       : projectThreadContentPresentation({
           hasDetail: selectedThreadDetail !== null,
           detailError: Option.getOrNull(selectedThreadDetailState.error),
@@ -1110,8 +1111,20 @@ function ThreadRouteContent(
   }
 
   const serverConfig = routeEnvironmentRuntime?.serverConfig ?? null;
-  const renderThreadRouteBody = () => (
+  return (
     <>
+      {inspectorHeader}
+      {!props.inspectorPresentation && inspectorContent ? (
+        <Inspector
+          // A route's own inspector (files) opens once per thread; going back keeps the user's choice.
+          revealKey={
+            props.renderInspector !== undefined && selectedThreadCwd !== null
+              ? (routeThreadIdentity ?? undefined)
+              : undefined
+          }
+          content={inspectorContent}
+        />
+      ) : null}
       <GitActionProgressOverlay
         progress={gitActionProgress}
         onDismiss={() => dismissGitActionResult(gitActionThreadRef)}
@@ -1239,25 +1252,6 @@ function ThreadRouteContent(
           />
         ) : null}
       </>
-    </>
-  );
-
-  return (
-    <>
-      {inspectorHeader}
-      {!props.inspectorPresentation && inspectorContent ? (
-        <Inspector
-          // A route's own inspector (files) opens once per thread; going back keeps the user's choice.
-          revealKey={
-            props.renderInspector !== undefined && selectedThreadCwd !== null
-              ? (routeThreadIdentity ?? undefined)
-              : undefined
-          }
-          content={inspectorContent}
-        />
-      ) : null}
-
-      {renderThreadRouteBody()}
     </>
   );
 }

@@ -54,7 +54,7 @@ import {
 } from "../ui/menu";
 import { toastManager } from "../ui/toast";
 import { ScrollArea } from "../ui/scroll-area";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import {
   AddToChatIconButton,
   PullRequestActorLabel,
@@ -114,11 +114,13 @@ import { changeRequestTermKind } from "./changeRequestTerm";
 
 /** Who wrote a comment and when, the time linking to it on the host. */
 export function WorkItemCommentIdentity({
+  threadRef,
   actor,
   profileUrl,
   createdAt,
   url,
 }: {
+  threadRef?: ScopedThreadRef | null | undefined;
   actor: PullRequestActor | null;
   profileUrl: string | null;
   createdAt: string;
@@ -126,16 +128,23 @@ export function WorkItemCommentIdentity({
 }) {
   return (
     <h2 className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-1 text-meta">
-      <PullRequestActorLabel actor={actor} profileUrl={profileUrl} className="max-w-full" />
-      <PullRequestCommentTime createdAt={createdAt} url={url} />
+      <PullRequestActorLabel
+        actor={actor}
+        profileUrl={profileUrl}
+        threadRef={threadRef ?? null}
+        className="max-w-full"
+      />
+      <PullRequestCommentTime createdAt={createdAt} url={url} threadRef={threadRef ?? null} />
     </h2>
   );
 }
 
 function CommentIdentity({
+  threadRef,
   comment,
   detail,
 }: {
+  threadRef: ScopedThreadRef | null;
   comment: PullRequestComment;
   detail: PullRequestDetailView;
 }) {
@@ -145,6 +154,7 @@ function CommentIdentity({
     : null;
   return (
     <WorkItemCommentIdentity
+      threadRef={threadRef}
       actor={actor}
       profileUrl={profileUrl}
       createdAt={comment.createdAt}
@@ -204,10 +214,9 @@ function CommentLocation({
   const label = `${path}${thread?.line ? `:${thread.line}` : ""}`;
   return (
     <div className="mt-2 flex min-w-0 items-center gap-2 text-meta text-muted-foreground">
-      <Tooltip>
-        <TooltipTrigger render={<span className="truncate font-mono" />}>{label}</TooltipTrigger>
-        <TooltipPopup>{label}</TooltipPopup>
-      </Tooltip>
+      <SharedTooltipTrigger render={<span className="truncate font-mono" />} label={label}>
+        {label}
+      </SharedTooltipTrigger>
       {thread?.isOutdated ? (
         <span className="shrink-0">
           <T context="review thread state">Outdated</T>
@@ -778,7 +787,7 @@ export function PullRequestSummaryTab({
         linkTarget={matchesLink(comment.url)}
         header={
           <>
-            <CommentIdentity comment={comment} detail={detail} />
+            <CommentIdentity threadRef={threadRef} comment={comment} detail={detail} />
             {outcome ? (
               <PullRequestReviewOutcomeBadge outcome={outcome} />
             ) : comment.reviewState ? (
@@ -871,26 +880,24 @@ export function PullRequestSummaryTab({
                 <AddToChatIconButton onClick={() => onAddToChat(chat)} />
               ) : null}
               {onFixFinding && finding ? (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        size="icon-xs"
-                        variant="ghost-muted"
-                        aria-label={fixFindingLabel}
-                        disabled={pendingFinding !== null && pendingFinding !== undefined}
-                        onClick={() => onFixFinding(finding)}
-                      />
-                    }
-                  >
-                    <HammerIcon className="size-3" />
-                  </TooltipTrigger>
-                  <TooltipPopup>
-                    {pendingFinding === pullRequestFindingKey(finding)
+                <SharedTooltipTrigger
+                  render={
+                    <Button
+                      size="icon-xs"
+                      variant="ghost-muted"
+                      aria-label={fixFindingLabel}
+                      disabled={pendingFinding !== null && pendingFinding !== undefined}
+                      onClick={() => onFixFinding(finding)}
+                    />
+                  }
+                  label={
+                    pendingFinding === pullRequestFindingKey(finding)
                       ? gt("Preparing...")
-                      : fixFindingLabel}
-                  </TooltipPopup>
-                </Tooltip>
+                      : fixFindingLabel
+                  }
+                >
+                  <HammerIcon className="size-3" />
+                </SharedTooltipTrigger>
               ) : null}
             </>
           }
@@ -1011,7 +1018,9 @@ export function PullRequestSummaryTab({
         </div>
       ) : null;
     const moreReplies =
-      item.kind === "thread" && item.hasMoreReplies ? <PullRequestMoreReplies {...item} /> : null;
+      item.kind === "thread" && item.hasMoreReplies ? (
+        <PullRequestMoreReplies {...item} threadRef={threadRef} />
+      ) : null;
     if (item.kind === "thread" && isPullRequestCommentFinished(comment, thread)) {
       const chat = chatSubject(comment, item.thread);
       return (

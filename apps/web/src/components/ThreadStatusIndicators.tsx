@@ -17,7 +17,7 @@ import {
   type ThreadPullRequestLink,
   type VcsStatusResult,
 } from "@t3tools/contracts";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { FolderGit2Icon, TerminalIcon } from "lucide-react";
 import { m, type MessageResolver } from "../i18n/messages";
 import { useEnvironment, usePrimaryEnvironmentId } from "../state/environments";
@@ -55,7 +55,7 @@ import {
 import type { SidebarThreadSummary } from "../types";
 import { formatWorktreePathForDisplay } from "../worktreeCleanup";
 import { Button } from "./ui/button";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { SharedTooltipTrigger } from "./ui/shared-tooltip";
 import {
   PULL_REQUEST_STATE_PRESENTATION,
   PullRequestGlyph,
@@ -402,6 +402,8 @@ function resolveThreadPullRequestBadgePresentation(
   };
 }
 
+type ThreadLinkBadgeSide = "top" | "right";
+
 export function ThreadPullRequestBadgeControl({
   render,
   badge,
@@ -410,6 +412,7 @@ export function ThreadPullRequestBadgeControl({
   url,
   status,
   onOpenList,
+  side = "top",
   onOpenPullRequest,
   onPress,
   onPressPullRequest,
@@ -422,6 +425,7 @@ export function ThreadPullRequestBadgeControl({
   url?: string | undefined;
   status: PrStatusIndicator | null;
   onOpenList: () => void;
+  side?: ThreadLinkBadgeSide;
   onOpenPullRequest: (event: MouseEvent<HTMLElement>, url?: string) => void;
   onPress: (event: PointerEvent<HTMLElement>, opensList: boolean) => void;
   onPressPullRequest: (event: PointerEvent<HTMLElement>, url: string) => void;
@@ -441,6 +445,7 @@ export function ThreadPullRequestBadgeControl({
       status={status}
       pullRequests={pullRequests}
       onOpenList={onOpenList}
+      side={side}
       onOpenPullRequest={onOpenPullRequest}
       onPress={onPress}
       onPressPullRequest={onPressPullRequest}
@@ -458,6 +463,7 @@ function PullRequestBadge({
   status,
   pullRequests,
   onOpenList,
+  side,
   onOpenPullRequest,
   onPress,
   onPressPullRequest,
@@ -471,6 +477,7 @@ function PullRequestBadge({
   status: PrStatusIndicator | null;
   pullRequests: ReadonlyArray<ThreadPullRequestLink>;
   onOpenList: () => void;
+  side: ThreadLinkBadgeSide;
   onOpenPullRequest: (event: MouseEvent<HTMLElement>, url?: string) => void;
   onPress: (event: PointerEvent<HTMLElement>, opensList: boolean) => void;
   onPressPullRequest: (event: PointerEvent<HTMLElement>, url: string) => void;
@@ -500,69 +507,111 @@ function PullRequestBadge({
     },
   });
   return (
-    <Tooltip key={opensList ? "list" : "link"}>
-      <TooltipTrigger render={control}>
-        <span
-          className={cn(
-            "contents tabular-nums",
-            appearance === "number" ? "text-meta" : "font-normal text-xs",
-            presentation.toneClassName,
-          )}
-        >
-          <presentation.Icon aria-hidden className="size-3 shrink-0" />
-          {/* The draft tone is dimmer here than main's draft gray, so a draft number keeps the label color. */}
-          <span
-            className={
-              appearance === "number" &&
-              presentation.toneClassName === PULL_REQUEST_STATE_PRESENTATION.draft.toneClassName
-                ? "text-secondary-label"
-                : undefined
-            }
-          >
-            {presentation.text}
-          </span>
-        </span>
-      </TooltipTrigger>
-      <TooltipPopup
-        side="top"
-        sideOffset={0}
-        variant="popover"
-        className="pointer-events-auto w-80 max-w-[calc(100vw-2rem)] text-left whitespace-normal"
-      >
-        <div className="-mx-1 max-h-[calc(var(--available-height)-0.5rem-2px)] overflow-y-auto overscroll-contain">
-          {visibleThreadPullRequests(pullRequests).length > 0 ? (
-            <ThreadPullRequestsMiniList
-              pullRequests={pullRequests}
-              onOpenPullRequest={onOpenPullRequest}
-              onPressPullRequest={onPressPullRequest}
-            />
-          ) : number !== undefined && url !== undefined ? (
-            <ul className="flex flex-col gap-1">
-              <ThreadPullRequestMiniListItem
-                number={number}
-                url={url}
-                title={status?.tooltipTitle ?? presentation.label}
-                presentation={presentation}
+    <SharedTooltipTrigger
+      key={opensList ? "list" : "link"}
+      render={control}
+      label={
+        <>
+          <div className="-mx-1 max-h-[calc(var(--available-height)-0.5rem-2px)] overflow-y-auto overscroll-contain">
+            {visibleThreadPullRequests(pullRequests).length > 0 ? (
+              <ThreadPullRequestsMiniList
+                pullRequests={pullRequests}
                 onOpenPullRequest={onOpenPullRequest}
                 onPressPullRequest={onPressPullRequest}
+                onShowAll={onOpenList}
               />
-            </ul>
-          ) : null}
-        </div>
-      </TooltipPopup>
-    </Tooltip>
+            ) : number !== undefined && url !== undefined ? (
+              <ul className="flex flex-col gap-1">
+                <ThreadPullRequestMiniListItem
+                  number={number}
+                  url={url}
+                  title={status?.tooltipTitle ?? presentation.label}
+                  presentation={presentation}
+                  onOpenPullRequest={onOpenPullRequest}
+                  onPressPullRequest={onPressPullRequest}
+                />
+              </ul>
+            ) : null}
+          </div>
+        </>
+      }
+      side={side}
+      align={side === "right" ? "start" : "center"}
+      sideOffset={0}
+      variant="popover"
+      className="pointer-events-auto w-80 max-w-[calc(100vw-2rem)] text-left whitespace-normal"
+    >
+      <span
+        className={cn(
+          "contents tabular-nums",
+          appearance === "number" ? "text-meta" : "font-normal text-xs",
+          presentation.toneClassName,
+        )}
+      >
+        <presentation.Icon aria-hidden className="size-3 shrink-0" />
+        {/* The draft tone is dimmer here than main's draft gray, so a draft number keeps the label color. */}
+        <span
+          className={
+            appearance === "number" &&
+            presentation.toneClassName === PULL_REQUEST_STATE_PRESENTATION.draft.toneClassName
+              ? "text-secondary-label"
+              : undefined
+          }
+        >
+          {presentation.text}
+        </span>
+      </span>
+    </SharedTooltipTrigger>
   );
 }
 
-const THREAD_PULL_REQUEST_PREVIEW_LIMIT = 5;
+export const LINKED_ITEMS_PREVIEW_LIMIT = 8;
+
+export function LinkedItemsOverflow({
+  hidden,
+  onShowAll,
+}: {
+  hidden: number;
+  onShowAll?: (() => void) | undefined;
+}) {
+  if (hidden <= 0) return null;
+  if (!onShowAll) {
+    return (
+      <div className="px-1 pt-1 text-muted-foreground">
+        <T>
+          +<Var>{hidden}</Var> more
+        </T>
+      </div>
+    );
+  }
+  return (
+    <Button
+      variant="ghost-muted"
+      size="xs"
+      className="mt-1 w-full justify-start"
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onShowAll();
+      }}
+    >
+      <T>
+        +<Var>{hidden}</Var> more in Linked items
+      </T>
+    </Button>
+  );
+}
 
 export function ThreadPullRequestsMiniList({
   pullRequests,
   onOpenPullRequest,
   onPressPullRequest,
+  onShowAll,
 }: {
   pullRequests: ReadonlyArray<ThreadPullRequestLink>;
   onOpenPullRequest?: (event: MouseEvent<HTMLAnchorElement>, url: string) => void;
+  onShowAll?: (() => void) | undefined;
   onPressPullRequest?: (event: PointerEvent<HTMLElement>, url: string) => void;
 }) {
   const gt = useGT();
@@ -630,11 +679,8 @@ export function ThreadPullRequestsMiniList({
         ),
       )}
       {hiddenCount > 0 ? (
-        <li className={cn("text-muted-foreground", inset)}>
-          {gt(
-            "{count, plural, one {{count} more {term, select, mr {merge request} cr {change request} other {pull request}}} other {{count} more {term, select, mr {merge requests} cr {change requests} other {pull requests}}}}",
-            { count: hiddenCount, term },
-          )}
+        <li>
+          <LinkedItemsOverflow hidden={hiddenCount} onShowAll={onShowAll} />
         </li>
       ) : null}
     </ul>
@@ -652,7 +698,7 @@ function previewChains(lines: ReadonlyArray<PullRequestListLine>) {
   const isOpen = (line: PullRequestListLine) =>
     line.link.snapshot === null || line.link.snapshot.state === "open";
   const shown: Array<{ group: Array<PullRequestListLine>; lines: Array<PullRequestListLine> }> = [];
-  let budget = THREAD_PULL_REQUEST_PREVIEW_LIMIT;
+  let budget = LINKED_ITEMS_PREVIEW_LIMIT;
   for (const group of groups.toSorted(
     (left, right) => Number(right.some(isOpen)) - Number(left.some(isOpen)),
   )) {
@@ -660,7 +706,7 @@ function previewChains(lines: ReadonlyArray<PullRequestListLine>) {
     shown.push({ group, lines: group.slice(0, budget) });
     budget -= group.length;
   }
-  return { shown, hiddenCount: lines.length - THREAD_PULL_REQUEST_PREVIEW_LIMIT };
+  return { shown, hiddenCount: lines.length - LINKED_ITEMS_PREVIEW_LIMIT };
 }
 
 /** One line of a thread's hover list: a pull request, or an issue with its own key. */
@@ -851,32 +897,31 @@ export function ThreadTerminalStatusButton({
     { count: terminalIds.length },
   );
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon-micro"
-            aria-label={label}
-            data-testid={`sidebar-terminal-status-${threadRef.threadId}`}
-            onPointerDown={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              revealThreadTerminal(threadRef, terminalId);
-              onThreadActivate(threadRef);
-            }}
-          />
-        }
-      >
-        <TerminalIcon
-          className={cn("size-3.5 motion-safe:animate-status-pulse", status?.colorClass)}
-          onAnimationStart={synchronizeTerminalPulse}
+    <SharedTooltipTrigger
+      render={
+        <Button
+          variant="ghost"
+          size="icon-micro"
+          aria-label={label}
+          data-testid={`sidebar-terminal-status-${threadRef.threadId}`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            revealThreadTerminal(threadRef, terminalId);
+            onThreadActivate(threadRef);
+          }}
         />
-      </TooltipTrigger>
-      <TooltipPopup side="top">{label}</TooltipPopup>
-    </Tooltip>
+      }
+      label={label}
+      side="top"
+    >
+      <TerminalIcon
+        className={cn("size-3.5 motion-safe:animate-status-pulse", status?.colorClass)}
+        onAnimationStart={synchronizeTerminalPulse}
+      />
+    </SharedTooltipTrigger>
   );
 }
 
@@ -897,21 +942,20 @@ export function ThreadWorktreeIndicator({
     : gt("Worktree: {path}", { path: displayPath });
 
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <span
-            role="img"
-            aria-label={tooltip}
-            data-testid={`thread-worktree-${thread.id}`}
-            className="inline-flex items-center justify-center"
-          />
-        }
-      >
-        <FolderGit2Icon className="size-3.5 shrink-0 text-icon-muted" />
-      </TooltipTrigger>
-      <TooltipPopup side="top">{tooltip}</TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={
+        <span
+          role="img"
+          aria-label={tooltip}
+          data-testid={`thread-worktree-${thread.id}`}
+          className="inline-flex items-center justify-center"
+        />
+      }
+      label={tooltip}
+      side="top"
+    >
+      <FolderGit2Icon className="size-3.5 shrink-0 text-icon-muted" />
+    </SharedTooltipTrigger>
   );
 }
 
@@ -926,47 +970,45 @@ function ThreadStatusLabel({
   const label = m(status.label);
   if (compact) {
     return (
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <span
-              role="img"
-              aria-label={label}
-              className={`inline-flex size-3.5 shrink-0 items-center justify-center ${status.colorClass}`}
-            />
-          }
-        >
-          <span
-            className={`size-[9px] rounded-full ${status.dotClass} ${
-              status.pulse ? "motion-safe:animate-status-pulse" : ""
-            }`}
-          />
-        </TooltipTrigger>
-        <TooltipPopup side="top">{label}</TooltipPopup>
-      </Tooltip>
-    );
-  }
-
-  return (
-    <Tooltip>
-      <TooltipTrigger
+      <SharedTooltipTrigger
         render={
           <span
             role="img"
             aria-label={label}
-            className={`inline-flex items-center gap-1 text-micro ${status.colorClass}`}
+            className={`inline-flex size-3.5 shrink-0 items-center justify-center ${status.colorClass}`}
           />
         }
+        label={label}
+        side="top"
       >
         <span
-          className={`h-1.5 w-1.5 rounded-full ${status.dotClass} ${
+          className={`size-[9px] rounded-full ${status.dotClass} ${
             status.pulse ? "motion-safe:animate-status-pulse" : ""
           }`}
         />
-        <span className="hidden md:inline">{label}</span>
-      </TooltipTrigger>
-      <TooltipPopup side="top">{label}</TooltipPopup>
-    </Tooltip>
+      </SharedTooltipTrigger>
+    );
+  }
+
+  return (
+    <SharedTooltipTrigger
+      render={
+        <span
+          role="img"
+          aria-label={label}
+          className={`inline-flex items-center gap-1 text-micro ${status.colorClass}`}
+        />
+      }
+      label={label}
+      side="top"
+    >
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${status.dotClass} ${
+          status.pulse ? "motion-safe:animate-status-pulse" : ""
+        }`}
+      />
+      <span className="hidden md:inline">{label}</span>
+    </SharedTooltipTrigger>
   );
 }
 
@@ -1041,21 +1083,22 @@ export function ThreadRowLeadingStatus({ thread }: { thread: SidebarThreadSummar
       }
     >
       {prStatus && pr ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <span
-                aria-label={prStatus.tooltip}
-                className={`inline-flex items-center justify-center ${prStatus.colorClass}`}
-              />
-            }
-          >
-            <ChangeRequestStatusIcon state={pr.state} isDraft={pr.isDraft} className="size-3" />
-          </TooltipTrigger>
-          <TooltipPopup side="top">
-            <PrStatusTooltipContent status={prStatus} />
-          </TooltipPopup>
-        </Tooltip>
+        <SharedTooltipTrigger
+          render={
+            <span
+              aria-label={prStatus.tooltip}
+              className={`inline-flex items-center justify-center ${prStatus.colorClass}`}
+            />
+          }
+          label={
+            <>
+              <PrStatusTooltipContent status={prStatus} />
+            </>
+          }
+          side="top"
+        >
+          <ChangeRequestStatusIcon state={pr.state} isDraft={pr.isDraft} className="size-3" />
+        </SharedTooltipTrigger>
       ) : null}
       {pendingLink ? (
         <PullRequestGlyph.pullRequest
@@ -1098,40 +1141,36 @@ export function ThreadRowTrailingStatus({ thread }: { thread: SidebarThreadSumma
   return (
     <span className="inline-flex shrink-0 items-center gap-1.5">
       {terminalStatus ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <span
-                role="img"
-                aria-label={terminalStatus.label}
-                className={`inline-flex items-center justify-center ${terminalStatus.colorClass}`}
-              />
-            }
-          >
-            <TerminalIcon
-              className={`size-3 ${terminalStatus.pulse ? "motion-safe:animate-status-pulse" : ""}`}
-              onAnimationStart={synchronizeTerminalPulse}
+        <SharedTooltipTrigger
+          render={
+            <span
+              role="img"
+              aria-label={terminalStatus.label}
+              className={`inline-flex items-center justify-center ${terminalStatus.colorClass}`}
             />
-          </TooltipTrigger>
-          <TooltipPopup side="top">{terminalStatus.label}</TooltipPopup>
-        </Tooltip>
+          }
+          label={terminalStatus.label}
+          side="top"
+        >
+          <TerminalIcon
+            className={`size-3 ${terminalStatus.pulse ? "motion-safe:animate-status-pulse" : ""}`}
+            onAnimationStart={synchronizeTerminalPulse}
+          />
+        </SharedTooltipTrigger>
       ) : null}
       {isRemoteThread ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <span
-                aria-label={
-                  threadEnvironmentLabel ?? gt("Remote", { $context: "machine location" })
-                }
-                className="inline-flex items-center justify-center"
-              />
-            }
-          >
-            <EnvironmentMachineIcon kind={remoteMachine} className="size-3 text-dim-foreground" />
-          </TooltipTrigger>
-          <TooltipPopup side="top">{threadEnvironmentLabel}</TooltipPopup>
-        </Tooltip>
+        <SharedTooltipTrigger
+          render={
+            <span
+              aria-label={threadEnvironmentLabel ?? gt("Remote", { $context: "machine location" })}
+              className="inline-flex items-center justify-center"
+            />
+          }
+          label={threadEnvironmentLabel}
+          side="top"
+        >
+          <EnvironmentMachineIcon kind={remoteMachine} className="size-3 text-dim-foreground" />
+        </SharedTooltipTrigger>
       ) : null}
     </span>
   );

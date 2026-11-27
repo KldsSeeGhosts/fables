@@ -1,8 +1,6 @@
 # Updating Fables
 
-The app you use and the server running your agents can be on different machines.
-When a server is behind your web or desktop app, the update button at the bottom
-of the sidebar and **Settings → Environments** offer to update it.
+T3 Code clients and servers can run on different machines and must share a compatible orchestration protocol. When a server or provider is behind, the sidebar update button and **Settings → Environments** handle updates.
 
 ## Update everything at once
 
@@ -155,78 +153,42 @@ update can roll back to the previous version. If the update still fails:
 2. Check that you updated the server's machine, not only the device you are using.
 3. For a command-line server, stop it and relaunch the exact version shown in the notice.
 
-Only one server can use a T3 home directory at a time. If startup reports that
-another server owns it, stop that server before retrying, or use a separate home
-directory and pair with the running server.
+In the desktop app, change **Settings → About → Update track** to switch connected machines together.
 
-### macOS app does not reopen after an Alpha update
+- Moving a background service to an older Stable release requires running `t3 update --channel stable --allow-downgrade` on that host.
+- A switch is blocked if the machine's database has schema changes the target track doesn't support yet. macOS desktop apps must switch on that Mac.
 
-Updating an older **T3 Code (Alpha)** installation can replace it with
-**T3 Code (Beta)** without reopening the app. Open **T3 Code (Beta)** from
-Applications, or run:
+## Continue threads after restarts
 
-```sh
-open "/Applications/T3 Code (Beta).app"
-```
+**Settings → Maintenance → Continue threads after restarts** is enabled by default. After an update, crash, or reboot (once T3 Code starts again), supported active threads automatically resume—and threads waiting on subagents or monitors are woken and notified that background work stopped.
 
-If an old Dock shortcut no longer opens the app, remove it and add the Beta app
-from Applications again.
+- Threads waiting for your approval/answer/secret—or archived, snoozed, or settled—are not auto-resumed.
+- After 3 consecutive crash recoveries of an unfinished turn, the thread waits for your next message.
+- Updating from V1? Read [Threads from older T3 Code versions](./thread-migration.md).
 
-## If the desktop app does not start
+## Update a connected server manually
 
-If the desktop app's server keeps failing at startup, Fables shows a "Fables
-could not start" window instead of the app. If a newer version is available,
-choose **Update** to install it. If not, the window links to the last version
-that started on your computer. Download and install it to go back. Use **Copy
-details** to include the error in a bug report.
+| Situation                           | Action                                                                                                |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Background service / desktop server | Click **Update server** in **Settings → Environments** (desktop hosts relaunch automatically).        |
+| Installed `t3` CLI                  | Run `t3 update <version>` on the host (then `t3 service restart` if you declined the restart prompt). |
+| `npx` server                        | Stop the server and relaunch with `npx t3@<version>` and your usual flags.                            |
+| Package manager (Nix, AUR)          | Update via your package manager.                                                                      |
 
-## Registries and proxies
-
-Each server checks Fables releases, and providers installed with npm, through
-its own npm, so the checks use npm's configured registry, authentication, and
-proxy settings. Providers installed with Homebrew or pnpm check through those
-tools.
-Configure npm on the server's machine. If that registry cannot be reached, the
-release shows as unavailable; Fables does not try the public registry instead.
-Machines without npm check the public npm registry directly.
+Each server checks npm/Homebrew/pnpm using its own local registry and proxy settings.
 
 ## Update providers
 
-**Settings → Providers** shows provider updates for the selected environment.
-**Update all** updates every outdated provider on every connected environment
-at once. Hover it to see which providers it will update. A provider is left out
-when any of its enabled, outdated instances offers only a manual update command,
-or when its instances use different update commands, such as two instances that
-run different CLI installs. Update those by hand, or point every instance of the
-provider at the same CLI.
-
-After a successful provider CLI update, Fables refreshes model discovery for
-every enabled instance of that provider using its own configuration. Connected
-clients receive the refreshed catalogs automatically. Provider update checks
-must be enabled to download the latest Fables model catalog.
-
-Provider updates do not restart running chats. An existing session can keep
-using the previous CLI until it ends. If discovery fails, check the provider
-status and refresh it again.
+Open **Settings → Providers** and click **Update now** on individual providers or **Update all** across connected environments. Running chats keep using their current CLI until they end; new sessions and model catalogs refresh automatically. (Provider update checks in **Settings → Maintenance** must be enabled to fetch model catalog updates.)
 
 ## Mobile updates
 
-To update an environment from your phone, open **Settings → Environments** and
-select it. **Check for updates** finds the latest release on that environment's
-current release channel. Keep the app open while the environment updates and
-reconnects. Hosts that cannot update remotely show instructions for updating on
-the machine instead.
+- Update connected environments and providers from **Settings → Environments** on mobile.
+- Update the mobile app via the App Store or Google Play (background over-the-air updates apply on next app switch and preserve drafts/queued messages).
 
-The same page lets you refresh provider status and update supported providers.
-These controls require a connected environment and permission to operate it.
-Provider update checks and restart continuation preferences are in
-**Settings → Maintenance**. If provider update checks are disabled, enable them
-there before refreshing to find newer versions. The same setting controls whether
-Fables downloads model catalog updates, so with it off new models may not appear
-until you enable it and refresh provider status.
+## Troubleshooting
 
-Install App Store or Google Play releases as usual. The mobile app can also
-download updates in the background and apply them when you next leave the app.
-It saves drafts and queued messages before restarting. If you keep the app open
-for a long time, it may ask to install immediately; choosing **Later** leaves the
-update queued for the next suitable moment.
+- **Version mismatch**: Update whichever side (app or server) the connection notice names.
+- **Failed update**: Retry once; confirm you updated the host machine (not just the client) and that only one server owns the T3 home directory.
+- **macOS Alpha → Beta**: Open `/Applications/Fables (Beta).app` manually and re-pin it to the Dock.
+- **Desktop won't start**: Use the recovery window's **Update** button, install the linked last-working version, or **Copy details** for a bug report.

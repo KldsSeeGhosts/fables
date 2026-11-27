@@ -22,7 +22,7 @@ import { Badge } from "../ui/badge";
 import { Button, ContentButton, InlineButton } from "../ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { useOptionalSettingsScope } from "./SettingsScopeContext";
 import type { ProjectOverrideEntry, ScopedSettingsTarget } from "./scopedSettings";
 import { isProjectScopedSettingKey } from "./scopedSettings";
@@ -342,42 +342,43 @@ export function SettingInheritance({
   }
   return (
     <Popover>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <PopoverTrigger
-              render={
-                <Button
-                  size="icon-micro"
-                  variant="ghost-muted"
-                  aria-label={
-                    overrideCount
-                      ? gt("{summary}. {overrideCount}. Show where this value comes from", {
-                          summary,
-                          overrideCount,
-                        })
-                      : gt("{overrideSummary}. Show where this value comes from", {
-                          overrideSummary: summary,
-                        })
-                  }
-                />
-              }
-            />
-          }
-        >
-          <LayersIcon
-            className={cn(
-              "size-3",
-              state === "overridden" && "text-primary",
-              state === "mixed" && "text-warning",
-            )}
+      <SharedTooltipTrigger
+        render={
+          <PopoverTrigger
+            render={
+              <Button
+                size="icon-micro"
+                variant="ghost-muted"
+                aria-label={
+                  overrideCount
+                    ? gt("{summary}. {overrideCount}. Show where this value comes from", {
+                        summary,
+                        overrideCount,
+                      })
+                    : gt("{overrideSummary}. Show where this value comes from", {
+                        overrideSummary: summary,
+                      })
+                }
+              />
+            }
           />
-        </TooltipTrigger>
-        <TooltipPopup side="top">
-          <span className="block">{summary}</span>
-          {overrideCount ? <span className="block">{overrideCount}</span> : null}
-        </TooltipPopup>
-      </Tooltip>
+        }
+        label={
+          <>
+            <span className="block">{summary}</span>
+            {overrideCount ? <span className="block">{overrideCount}</span> : null}
+          </>
+        }
+        side="top"
+      >
+        <LayersIcon
+          className={cn(
+            "size-3",
+            state === "overridden" && "text-primary",
+            state === "mixed" && "text-warning",
+          )}
+        />
+      </SharedTooltipTrigger>
       <PopoverPopup align="start" width="md" padding="none">
         <div className="divide-y divide-divider">
           {groups.map((members) => {

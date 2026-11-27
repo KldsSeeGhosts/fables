@@ -118,6 +118,8 @@ import {
 } from "../Sidebar.logic";
 import { resolveLocalCheckoutBranchMismatch } from "../BranchToolbar.logic";
 import {
+  LINKED_ITEMS_PREVIEW_LIMIT,
+  LinkedItemsOverflow,
   ThreadPullRequestBadgeControl,
   ThreadPullRequestMiniListItem,
   ThreadPullRequestsMiniList,
@@ -143,6 +145,7 @@ import { InlineButton } from "../ui/button";
 import { Kbd } from "../ui/kbd";
 import { Menu, MenuItem, MenuItemDetail, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { ActivityShimmerOverlay } from "../chat/TimelineRowParts";
 import { observeVisibleAnimation } from "~/lib/visibleAnimation";
@@ -175,14 +178,17 @@ function compactSidebarTimeLabel(timestamp: string, nowMs: number, resolve: Mess
 
 function PendingSyncLabel() {
   return (
-    <Tooltip>
-      <TooltipTrigger render={<span />}>
-        <T>Pending</T>
-      </TooltipTrigger>
-      <TooltipPopup side="top">
-        <T>Waiting to sync with its environment</T>
-      </TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={<span />}
+      label={
+        <>
+          <T>Waiting to sync with its environment</T>
+        </>
+      }
+      side="top"
+    >
+      <T>Pending</T>
+    </SharedTooltipTrigger>
   );
 }
 
@@ -296,21 +302,22 @@ const SIDEBAR_STATUSES: Record<
 function SidebarWokeLabel(props: { onDismiss: (event: ReactMouseEvent) => void }) {
   const gt = useGT();
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <InlineButton aria-label={gt("Dismiss Woke notification")} onClick={props.onDismiss} />
-        }
-      >
-        <AlarmClockIcon aria-hidden className="size-4 shrink-0 text-warning-foreground" />
-        <span role="status" className="text-warning-foreground">
-          <T context="thread status: woke from snooze">Woke</T>
-        </span>
-      </TooltipTrigger>
-      <TooltipPopup side="top">
-        <T>Dismiss Woke notification</T>
-      </TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={
+        <InlineButton aria-label={gt("Dismiss Woke notification")} onClick={props.onDismiss} />
+      }
+      label={
+        <>
+          <T>Dismiss Woke notification</T>
+        </>
+      }
+      side="top"
+    >
+      <AlarmClockIcon aria-hidden className="size-4 shrink-0 text-warning-foreground" />
+      <span role="status" className="text-warning-foreground">
+        <T context="thread status: woke from snooze">Woke</T>
+      </span>
+    </SharedTooltipTrigger>
   );
 }
 
@@ -604,30 +611,30 @@ function SnoozeMenuButton(props: {
     : [];
   return (
     <Menu open={open} onOpenChange={onOpenChange}>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <MenuTrigger
-              render={
-                <button
-                  type="button"
-                  aria-label={gt("Snooze thread")}
-                  onClick={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                  className={cn(
-                    "inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-badge bg-transparent text-muted-foreground outline-none transition-colors hover:surface-ghost-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-                  )}
-                />
-              }
-            />
-          }
-        >
-          <ClockIcon className="size-3" />
-        </TooltipTrigger>
-        <TooltipPopup>
-          <T>Snooze thread</T>
-        </TooltipPopup>
-      </Tooltip>
+      <SharedTooltipTrigger
+        render={
+          <MenuTrigger
+            render={
+              <button
+                type="button"
+                aria-label={gt("Snooze thread")}
+                onClick={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+                className={cn(
+                  "inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-badge bg-transparent text-muted-foreground outline-none transition-colors hover:surface-ghost-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                )}
+              />
+            }
+          />
+        }
+        label={
+          <>
+            <T>Snooze thread</T>
+          </>
+        }
+      >
+        <ClockIcon className="size-3" />
+      </SharedTooltipTrigger>
       <MenuPopup side="bottom" align="end">
         {presets.map((preset) => (
           <MenuItem
@@ -1308,6 +1315,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
           />
         }
         appearance="number"
+        side="right"
         badge={prBadgeShape}
         pullRequests={thread.pullRequests}
         number={pr?.number ?? currentLinkedPr?.number}
@@ -1359,7 +1367,8 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
         </span>
       </TooltipTrigger>
       <TooltipPopup
-        side="top"
+        side="right"
+        align="start"
         sideOffset={0}
         variant="popover"
         className="pointer-events-auto w-80 max-w-[calc(100vw-2rem)] text-left whitespace-normal"
@@ -1367,11 +1376,15 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
       >
         <div className="-mx-1 max-h-[calc(var(--available-height)-0.5rem-2px)] overflow-y-auto overscroll-contain">
           <ThreadDetailsIssueRows
-            links={thread.issues ?? []}
+            links={(thread.issues ?? []).slice(0, LINKED_ITEMS_PREVIEW_LIMIT)}
             threadRef={threadRef}
             variant="mini"
             mountScope="sidebar-tooltip"
             openWith={whenThreadShown}
+          />
+          <LinkedItemsOverflow
+            hidden={issueCount - LINKED_ITEMS_PREVIEW_LIMIT}
+            onShowAll={openLinkedItems}
           />
         </div>
       </TooltipPopup>
@@ -1385,52 +1398,53 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     />
   );
   const draftIndicator = hasUnsentDraft ? (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <span
-            role="img"
-            aria-label={gt("Unsent draft")}
-            data-testid={`sidebar-draft-indicator-${thread.id}`}
-            className="inline-flex shrink-0 items-center"
-          />
-        }
-      >
-        <SquarePenIcon aria-hidden className={draftPenClassName} />
-      </TooltipTrigger>
-      <TooltipPopup side="top">
-        <T>Unsent draft</T>
-      </TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={
+        <span
+          role="img"
+          aria-label={gt("Unsent draft")}
+          data-testid={`sidebar-draft-indicator-${thread.id}`}
+          className="inline-flex shrink-0 items-center"
+        />
+      }
+      label={
+        <>
+          <T>Unsent draft</T>
+        </>
+      }
+      side="top"
+    >
+      <SquarePenIcon aria-hidden className={draftPenClassName} />
+    </SharedTooltipTrigger>
   ) : null;
   const showPin =
     props.isPinned && (!sortable?.isDragging || (props.dragOverPinned && props.dropVerb === null));
   const pinIndicator = showPin ? (
     props.pinningSupported && canOperateThread && !sortable?.isDragging ? (
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <button
-              type="button"
-              aria-label={gt("Unpin thread")}
-              onClick={handleUnpinClick}
-              className="group/unpin inline-flex cursor-pointer items-center rounded-sm text-dim-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-            />
-          }
-        >
-          <PinIcon
-            aria-hidden
-            className="size-3 shrink-0 group-hover/unpin:hidden group-focus-visible/unpin:hidden"
+      <SharedTooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={gt("Unpin thread")}
+            onClick={handleUnpinClick}
+            className="group/unpin inline-flex cursor-pointer items-center rounded-sm text-dim-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           />
-          <PinOffIcon
-            aria-hidden
-            className="hidden size-3 shrink-0 group-hover/unpin:block group-focus-visible/unpin:block"
-          />
-        </TooltipTrigger>
-        <TooltipPopup>
-          <T>Unpin thread</T>
-        </TooltipPopup>
-      </Tooltip>
+        }
+        label={
+          <>
+            <T>Unpin thread</T>
+          </>
+        }
+      >
+        <PinIcon
+          aria-hidden
+          className="size-3 shrink-0 group-hover/unpin:hidden group-focus-visible/unpin:hidden"
+        />
+        <PinOffIcon
+          aria-hidden
+          className="hidden size-3 shrink-0 group-hover/unpin:block group-focus-visible/unpin:block"
+        />
+      </SharedTooltipTrigger>
     ) : (
       <PinIcon
         aria-label={gt("Pinned")}
@@ -1667,36 +1681,12 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                   </span>
                   {variantAction === "unsnooze" ? (
                     !props.snoozeSupported ? null : (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <button
-                              type="button"
-                              aria-label={gt("Wake thread now")}
-                              onClick={handleUnsnoozeClick}
-                              onPointerDown={handleActionPointerDown}
-                              className={cn(
-                                "pointer-events-none absolute inset-y-0 right-0 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-badge bg-transparent text-muted-foreground opacity-0 outline-none transition-[opacity,color] hover:surface-ghost-hover hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100",
-                                isWoke && "group-any-hover/sidebar-row:static",
-                              )}
-                            />
-                          }
-                        >
-                          <AlarmClockOffIcon className="size-3.5" />
-                        </TooltipTrigger>
-                        <TooltipPopup side="top">
-                          <T>Wake thread now</T>
-                        </TooltipPopup>
-                      </Tooltip>
-                    )
-                  ) : !props.settlementSupported ? null : variantAction === "unsettle" ? (
-                    <Tooltip>
-                      <TooltipTrigger
+                      <SharedTooltipTrigger
                         render={
                           <button
                             type="button"
-                            aria-label={gt("Un-settle thread")}
-                            onClick={handleUnsettleClick}
+                            aria-label={gt("Wake thread now")}
+                            onClick={handleUnsnoozeClick}
                             onPointerDown={handleActionPointerDown}
                             className={cn(
                               "pointer-events-none absolute inset-y-0 right-0 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-badge bg-transparent text-muted-foreground opacity-0 outline-none transition-[opacity,color] hover:surface-ghost-hover hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100",
@@ -1704,37 +1694,64 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                             )}
                           />
                         }
-                      >
-                        <Undo2Icon className="size-3.5" />
-                      </TooltipTrigger>
-                      <TooltipPopup side="top">
-                        <T>Un-settle thread</T>
-                      </TooltipPopup>
-                    </Tooltip>
-                  ) : (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <button
-                            type="button"
-                            aria-label={gt("Settle thread")}
-                            onClick={handleSettleClick}
-                            onPointerDown={handleActionPointerDown}
-                            className={cn(
-                              "pointer-events-none absolute inset-y-0 right-0 -mr-2 inline-flex cursor-pointer items-center gap-1 self-stretch rounded-md bg-transparent px-2 text-meta text-muted-foreground opacity-0 outline-none transition-opacity hover:surface-ghost-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:pointer-events-auto focus-visible:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100",
-                              !jumpHintLabel &&
-                                "focus-visible:static group-any-hover/sidebar-row:static",
-                            )}
-                          />
+                        label={
+                          <>
+                            <T>Wake thread now</T>
+                          </>
                         }
+                        side="top"
                       >
-                        <CheckIcon className="size-3" />
-                        <T>Settle</T>
-                      </TooltipTrigger>
-                      <TooltipPopup side="top">
-                        <T>Settle thread</T>
-                      </TooltipPopup>
-                    </Tooltip>
+                        <AlarmClockOffIcon className="size-3.5" />
+                      </SharedTooltipTrigger>
+                    )
+                  ) : !props.settlementSupported ? null : variantAction === "unsettle" ? (
+                    <SharedTooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label={gt("Un-settle thread")}
+                          onClick={handleUnsettleClick}
+                          onPointerDown={handleActionPointerDown}
+                          className={cn(
+                            "pointer-events-none absolute inset-y-0 right-0 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-badge bg-transparent text-muted-foreground opacity-0 outline-none transition-[opacity,color] hover:surface-ghost-hover hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100",
+                            isWoke && "group-any-hover/sidebar-row:static",
+                          )}
+                        />
+                      }
+                      label={
+                        <>
+                          <T>Un-settle thread</T>
+                        </>
+                      }
+                      side="top"
+                    >
+                      <Undo2Icon className="size-3.5" />
+                    </SharedTooltipTrigger>
+                  ) : (
+                    <SharedTooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label={gt("Settle thread")}
+                          onClick={handleSettleClick}
+                          onPointerDown={handleActionPointerDown}
+                          className={cn(
+                            "pointer-events-none absolute inset-y-0 right-0 -mr-2 inline-flex cursor-pointer items-center gap-1 self-stretch rounded-md bg-transparent px-2 text-meta text-muted-foreground opacity-0 outline-none transition-opacity hover:surface-ghost-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:pointer-events-auto focus-visible:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100",
+                            !jumpHintLabel &&
+                              "focus-visible:static group-any-hover/sidebar-row:static",
+                          )}
+                        />
+                      }
+                      label={
+                        <>
+                          <T>Settle thread</T>
+                        </>
+                      }
+                      side="top"
+                    >
+                      <CheckIcon className="size-3" />
+                      <T>Settle</T>
+                    </SharedTooltipTrigger>
                   )}
                   {jumpHintLabel ? <JumpHintBadge label={jumpHintLabel} /> : null}
                 </span>
@@ -1879,26 +1896,27 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                       )}
                     >
                       {hasUnsentDraft ? (
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <button
-                                type="button"
-                                aria-label={gt("Discard draft")}
-                                onClick={handleDiscardDraftClick}
-                                className={cn(
-                                  "inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-badge bg-transparent text-muted-foreground outline-none transition-colors hover:surface-ghost-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-                                  isDuet && "rounded-md",
-                                )}
-                              />
-                            }
-                          >
-                            <XIcon className="size-3.5" />
-                          </TooltipTrigger>
-                          <TooltipPopup side="top">
-                            <T>Discard draft</T>
-                          </TooltipPopup>
-                        </Tooltip>
+                        <SharedTooltipTrigger
+                          render={
+                            <button
+                              type="button"
+                              aria-label={gt("Discard draft")}
+                              onClick={handleDiscardDraftClick}
+                              className={cn(
+                                "inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-badge bg-transparent text-muted-foreground outline-none transition-colors hover:surface-ghost-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                                isDuet && "rounded-md",
+                              )}
+                            />
+                          }
+                          label={
+                            <>
+                              <T>Discard draft</T>
+                            </>
+                          }
+                          side="top"
+                        >
+                          <XIcon className="size-3.5" />
+                        </SharedTooltipTrigger>
                       ) : null}
                       {showSnoozeButton ? (
                         <SnoozeMenuButton
@@ -1910,25 +1928,25 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                         />
                       ) : null}
                       {props.settlementSupported ? (
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <button
-                                type="button"
-                                aria-label={gt("Settle thread")}
-                                onClick={handleSettleClick}
-                                onPointerDown={handleActionPointerDown}
-                                className="-me-1.5 inline-flex h-5 shrink-0 cursor-pointer items-center gap-1 rounded-badge bg-transparent px-1.5 text-muted-foreground outline-none transition-colors hover:surface-ghost-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                              />
-                            }
-                          >
-                            <CheckIcon className="size-3.5" />
-                            {isDuet ? null : <T>Settle</T>}
-                          </TooltipTrigger>
-                          <TooltipPopup>
-                            <T>Settle thread</T>
-                          </TooltipPopup>
-                        </Tooltip>
+                        <SharedTooltipTrigger
+                          render={
+                            <button
+                              type="button"
+                              aria-label={gt("Settle thread")}
+                              onClick={handleSettleClick}
+                              onPointerDown={handleActionPointerDown}
+                              className="-me-1.5 inline-flex h-5 shrink-0 cursor-pointer items-center gap-1 rounded-badge bg-transparent px-1.5 text-muted-foreground outline-none transition-colors hover:surface-ghost-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                            />
+                          }
+                          label={
+                            <>
+                              <T>Settle thread</T>
+                            </>
+                          }
+                        >
+                          <CheckIcon className="size-3.5" />
+                          {isDuet ? null : <T>Settle</T>}
+                        </SharedTooltipTrigger>
                       ) : null}
                     </span>
                   ) : null}

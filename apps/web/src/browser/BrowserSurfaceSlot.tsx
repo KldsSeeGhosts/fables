@@ -1,4 +1,4 @@
-import { type ReactNode, useLayoutEffect, useRef } from "react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { observeResize } from "../lib/observeResize";
@@ -182,6 +182,7 @@ export function BrowserSurfaceSlot(props: {
   readonly layoutVersion?: string | number;
   readonly className?: string;
   readonly fitSourceContent?: boolean;
+  readonly children?: ReactNode;
   readonly aboveWebview?: ReactNode;
   readonly aboveWebviewLabel?: string;
 }) {
@@ -193,6 +194,7 @@ export function BrowserSurfaceSlot(props: {
     layoutVersion,
     className,
     fitSourceContent = false,
+    children,
     aboveWebview,
     aboveWebviewLabel,
   } = props;
@@ -200,10 +202,21 @@ export function BrowserSurfaceSlot(props: {
   const updateRef = useRef<((phase: BrowserSurfaceSlotPhase) => boolean) | null>(null);
   const aboveWebviewRef = useRef<HTMLDivElement | null>(null);
   const slotRef = useRef<HTMLDivElement | null>(null);
+  const [sheetLayer, setSheetLayer] = useState<{ container: Element; zIndex: number } | null>(null);
 
   // The lease lives as long as this element for one tab, so the ref callback owns it.
   const attachSurface = (element: HTMLDivElement) => {
     slotRef.current = element;
+    const sheet = element.closest('[data-slot="sheet-viewport"]');
+    const sheetZIndex = sheet ? Number(getComputedStyle(sheet).zIndex) + 1 || 0 : 0;
+    const container = sheet?.parentElement;
+    setSheetLayer((current) =>
+      current?.container === container && current?.zIndex === sheetZIndex
+        ? current
+        : container && sheetZIndex > 0
+          ? { container, zIndex: sheetZIndex }
+          : null,
+    );
     let lease = acquireBrowserSurface(tabId, fitSourceContent);
     let ancestors = clipAncestorsOf(element);
     let presented = "";
@@ -222,8 +235,9 @@ export function BrowserSurfaceSlot(props: {
       const height = Math.max(1, element.offsetHeight);
       const presentation = presentationRef.current;
       const shown = presentation.visible && !hidden;
+      const surfaceZIndex = Math.max(presentation.zIndex, sheetZIndex);
       if (phase !== "frame") ancestors = clipAncestorsOf(element);
-      const key = `${width}:${height}:${shown}:${presentation.cornerRadius}:${presentation.zIndex}`;
+      const key = `${width}:${height}:${shown}:${presentation.cornerRadius}:${surfaceZIndex}`;
       const presentationChanged = key !== presented;
       // Position alone reaches the store once it settles; size and visibility at once.
       let ownsSurface = true;
@@ -234,7 +248,7 @@ export function BrowserSurfaceSlot(props: {
           width,
           height,
         };
-        if (!lease.present(box, shown, presentation.cornerRadius, presentation.zIndex)) {
+        if (!lease.present(box, shown, presentation.cornerRadius, surfaceZIndex)) {
           // Another slot took the tab (the mini player); a visible one takes it back,
           // but not every frame, so two never trade it back and forth.
           if (!shown || phase === "frame") {
@@ -242,7 +256,7 @@ export function BrowserSurfaceSlot(props: {
           } else {
             lease.release();
             lease = acquireBrowserSurface(tabId, fitSourceContent);
-            lease.present(box, shown, presentation.cornerRadius, presentation.zIndex);
+            lease.present(box, shown, presentation.cornerRadius, surfaceZIndex);
           }
         }
         if (ownsSurface) presented = key;
@@ -324,10 +338,12 @@ export function BrowserSurfaceSlot(props: {
     if (node) updateRef.current?.("start");
   };
 
+  const overlay = aboveWebview ?? (sheetLayer && visible ? children : undefined);
   return (
     <>
       <div ref={attachSurface} className={className} data-browser-surface-slot={tabId} />
-      {aboveWebview === undefined
+      {sheetLayer === null ? children : null}
+      {overlay === undefined
         ? null
         : createPortal(
             <div
@@ -344,11 +360,16 @@ export function BrowserSurfaceSlot(props: {
                 slotRef.current?.dispatchEvent(replay);
               }}
               className="pointer-events-none fixed top-0 left-0 origin-top-left"
-              style={{ zIndex: zIndex + 1, borderRadius: cornerRadius }}
+              data-browser-surface-overlay={tabId}
+              data-base-ui-portal={sheetLayer ? "" : undefined}
+              style={{
+                zIndex: Math.max(zIndex, sheetLayer?.zIndex ?? 0) + 1,
+                borderRadius: cornerRadius,
+              }}
             >
-              {aboveWebview}
+              {overlay}
             </div>,
-            document.body,
+            sheetLayer?.container ?? document.body,
           )}
     </>
   );

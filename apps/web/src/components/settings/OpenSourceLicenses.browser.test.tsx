@@ -40,5 +40,9 @@ it("Esc in the license search clears it before closing Settings", async () => {
 
   await userEvent.keyboard("{Escape}");
 
+  await expect.element(search).not.toHaveFocus();
+  await expect.element(settings).toHaveAttribute("data-open");
+
+  await userEvent.keyboard("{Escape}");
   await expect.element(settings).not.toBeInTheDocument();
 });

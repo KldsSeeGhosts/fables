@@ -22,7 +22,7 @@ import {
 import { PullRequestActorLabel } from "../pullRequest/pullRequestPresentation";
 import { ThreadPullRequestMiniListItem } from "../ThreadStatusIndicators";
 import { ThreadDetailsControl, ThreadDetailsMoreButton } from "./ThreadDetailsControl";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 /**
  * How a linked issue row is drawn: thread details' two-line row, the linked items panel's
@@ -130,21 +130,20 @@ function LinkedIssueRow({
     <div className="flex min-h-9 min-w-0 items-center gap-2.5 ps-2.5 pe-1">
       {glyph}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <Tooltip>
-          <TooltipTrigger
-            render={<ThreadDetailsControl part="heading" render={<a {...anchorProps} />} />}
-          >
-            <span className="truncate text-meta text-foreground">{title}</span>
-          </TooltipTrigger>
-          <TooltipPopup
-            side="top"
-            align="start"
-            variant="popover"
-            className="w-80 max-w-[calc(100vw-2rem)] text-left whitespace-normal"
-          >
-            <div className="flex min-w-0 items-center gap-2">{lines}</div>
-          </TooltipPopup>
-        </Tooltip>
+        <SharedTooltipTrigger
+          render={<ThreadDetailsControl part="heading" render={<a {...anchorProps} />} />}
+          label={
+            <>
+              <div className="flex min-w-0 items-center gap-2">{lines}</div>
+            </>
+          }
+          side="top"
+          align="start"
+          variant="popover"
+          className="w-80 max-w-[calc(100vw-2rem)] text-left whitespace-normal"
+        >
+          <span className="truncate text-meta text-foreground">{title}</span>
+        </SharedTooltipTrigger>
         <div className="flex min-w-0 items-center gap-1.5 text-caption text-muted-foreground">
           <span aria-hidden className="shrink-0 tabular-nums">
             {link.displayKey}

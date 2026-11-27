@@ -30,6 +30,7 @@ import type {
   PullRequestReviewPosition,
   PullRequestReviewThread,
   PullRequestThreadCommentsResult,
+  ScopedThreadRef,
 } from "@t3tools/contracts";
 import { SOURCE_CONTROL_MEDIA_ASSET } from "@t3tools/contracts";
 import {
@@ -131,7 +132,6 @@ import {
   DropdownMenuTrigger,
 } from "../ui/menu";
 import { toastManager } from "../ui/toast";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   getReviewPositionAnchor,
   InlineReviewThreads,
@@ -154,6 +154,7 @@ import {
 } from "./pullRequestReviewStore";
 
 import { changeRequestTermKind } from "./changeRequestTerm";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 interface ReviewAnnotationGroup {
   readonly threads: ReadonlyArray<PullRequestReviewThread>;
@@ -319,40 +320,39 @@ function FileViewedToggle({
   return (
     <span className="flex items-center gap-3">
       {stat}
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <label
-              data-viewed-toggle=""
-              className="flex h-8 w-4.5 shrink-0 cursor-pointer select-none items-center sm:w-4"
-              onClick={(event) => event.stopPropagation()}
-            />
-          }
-        >
-          <Checkbox
-            aria-label={
-              stale
-                ? gt("Changed since viewed", { $context: "file changed since viewed" })
-                : gt("Viewed", { $context: "file marked as viewed" })
-            }
-            checked={viewed}
-            onCheckedChange={(next, details) =>
-              viewedFiles.setFileViewed(
-                fileKey,
-                next === true,
-                "shiftKey" in details.event && details.event.shiftKey === true,
-              )
-            }
+      <SharedTooltipTrigger
+        render={
+          <label
+            data-viewed-toggle=""
+            className="flex h-8 w-4.5 shrink-0 cursor-pointer select-none items-center sm:w-4"
+            onClick={(event) => event.stopPropagation()}
           />
-        </TooltipTrigger>
-        <TooltipPopup side="bottom">
-          {stale
+        }
+        label={
+          stale
             ? gt("Changed since viewed", { $context: "file changed since viewed" })
             : viewed
               ? gt("Viewed", { $context: "file marked as viewed" })
-              : gt("Mark as viewed")}
-        </TooltipPopup>
-      </Tooltip>
+              : gt("Mark as viewed")
+        }
+        side="bottom"
+      >
+        <Checkbox
+          aria-label={
+            stale
+              ? gt("Changed since viewed", { $context: "file changed since viewed" })
+              : gt("Viewed", { $context: "file marked as viewed" })
+          }
+          checked={viewed}
+          onCheckedChange={(next, details) =>
+            viewedFiles.setFileViewed(
+              fileKey,
+              next === true,
+              "shiftKey" in details.event && details.event.shiftKey === true,
+            )
+          }
+        />
+      </SharedTooltipTrigger>
     </span>
   );
 }
@@ -385,14 +385,17 @@ function FileHeaderStatus({ item }: { readonly item: CodeViewItem<ReviewAnnotati
         </Badge>
       ) : null}
       {stale ? (
-        <Tooltip>
-          <TooltipTrigger render={<Badge variant="warning" />}>
-            <T context="file changed since viewed">Changed since viewed</T>
-          </TooltipTrigger>
-          <TooltipPopup side="bottom">
-            <T>This file has been pushed to since you marked it viewed.</T>
-          </TooltipPopup>
-        </Tooltip>
+        <SharedTooltipTrigger
+          render={<Badge variant="warning" />}
+          label={
+            <>
+              <T>This file has been pushed to since you marked it viewed.</T>
+            </>
+          }
+          side="bottom"
+        >
+          <T context="file changed since viewed">Changed since viewed</T>
+        </SharedTooltipTrigger>
       ) : null}
     </span>
   );
@@ -443,6 +446,7 @@ function PullRequestCodeTab({
   toolbarContainer = null,
   scrollerRef,
   environmentId,
+  threadRef = null,
   reference,
   detail,
   selectedCommitOid,
@@ -462,6 +466,7 @@ function PullRequestCodeTab({
   toolbarContainer?: HTMLElement | null;
   scrollerRef?: (node: HTMLDivElement | null) => void;
   environmentId: EnvironmentId;
+  threadRef?: ScopedThreadRef | null;
   reference: PullRequestRef;
   detail: PullRequestDetailView;
   selectedCommitOid: string | null;
@@ -1478,12 +1483,10 @@ function PullRequestCodeTab({
                 {orderedCommits.slice(0, visibleCommitCount).map((entry) => (
                   <DropdownMenuRadioItem key={entry.oid} value={entry.oid} closeOnClick>
                     <span className="flex items-center gap-2">
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={<span className="min-w-0 truncate">{entry.messageHeadline}</span>}
-                        />
-                        <TooltipPopup side="top">{entry.messageHeadline}</TooltipPopup>
-                      </Tooltip>
+                      <SharedTooltipTrigger
+                        render={<span className="min-w-0 truncate">{entry.messageHeadline}</span>}
+                        label={entry.messageHeadline}
+                      />
                       <span className="ml-auto shrink-0 font-mono text-meta text-muted-foreground">
                         {entry.oid.slice(0, 7)}
                       </span>
@@ -1544,86 +1547,102 @@ function PullRequestCodeTab({
                   : gt("viewed", { $context: "files marked as viewed" })}
               </span>
               {viewedFilesStore === "environment" ? (
-                <Tooltip>
-                  <TooltipTrigger render={<span className="flex shrink-0 items-center" />}>
-                    <InfoIcon
-                      aria-label={gt("These ticks are kept here, not on the host")}
-                      className="text-muted-foreground size-3.5"
-                    />
-                  </TooltipTrigger>
-                  <TooltipPopup side="bottom">
-                    <T>
-                      This host keeps no shared record of which files you have read, so these ticks
-                      are kept by this environment. They follow you between the apps connected to
-                      it, but the host's own web UI will not show them.
-                    </T>
-                  </TooltipPopup>
-                </Tooltip>
+                <SharedTooltipTrigger
+                  render={<span className="flex shrink-0 items-center" />}
+                  label={
+                    <>
+                      <T>
+                        This host keeps no shared record of which files you have read, so these
+                        ticks are kept by this environment. They follow you between the apps
+                        connected to it, but the host's own web UI will not show them.
+                      </T>
+                    </>
+                  }
+                  side="bottom"
+                >
+                  <InfoIcon
+                    aria-label={gt("These ticks are kept here, not on the host")}
+                    className="text-muted-foreground size-3.5"
+                  />
+                </SharedTooltipTrigger>
               ) : null}
               {filesViewed.error !== null ? (
-                <Tooltip>
-                  <TooltipTrigger render={<span className="flex shrink-0 items-center" />}>
-                    <TriangleAlertIcon
-                      aria-label={gt("Your ticks could not be read")}
-                      className="size-3.5 text-warning-foreground"
-                    />
-                  </TooltipTrigger>
-                  <TooltipPopup side="bottom">
-                    <T>
-                      The boxes below are whatever was last read, and empty if nothing has been read
-                      yet. <Var>{filesViewed.error}</Var>
-                    </T>
-                  </TooltipPopup>
-                </Tooltip>
+                <SharedTooltipTrigger
+                  render={<span className="flex shrink-0 items-center" />}
+                  label={
+                    <>
+                      <T>
+                        The boxes below are whatever was last read, and empty if nothing has been
+                        read yet. <Var>{filesViewed.error}</Var>
+                      </T>
+                    </>
+                  }
+                  side="bottom"
+                >
+                  <TriangleAlertIcon
+                    aria-label={gt("Your ticks could not be read")}
+                    className="size-3.5 text-warning-foreground"
+                  />
+                </SharedTooltipTrigger>
               ) : null}
               {filesViewed.truncated ? (
-                <Tooltip>
-                  <TooltipTrigger render={<span className="flex shrink-0 items-center" />}>
-                    <TriangleAlertIcon
-                      aria-label={gt("This count covers only part of the change")}
-                      className="size-3.5 text-warning-foreground"
-                    />
-                  </TooltipTrigger>
-                  <TooltipPopup side="bottom">
-                    <T>
-                      This change has more files than the host will report ticks for in one read, so
-                      the count is short and some boxes below start empty.
-                    </T>
-                  </TooltipPopup>
-                </Tooltip>
+                <SharedTooltipTrigger
+                  render={<span className="flex shrink-0 items-center" />}
+                  label={
+                    <>
+                      <T>
+                        This change has more files than the host will report ticks for in one read,
+                        so the count is short and some boxes below start empty.
+                      </T>
+                    </>
+                  }
+                  side="bottom"
+                >
+                  <TriangleAlertIcon
+                    aria-label={gt("This count covers only part of the change")}
+                    className="size-3.5 text-warning-foreground"
+                  />
+                </SharedTooltipTrigger>
               ) : null}
             </span>
           ) : null}
           {withheldContent ? (
-            <Tooltip>
-              <TooltipTrigger render={<span className="flex shrink-0 items-center" />}>
-                <TriangleAlertIcon
-                  aria-label={gt("Some of this diff was not shown")}
-                  className="size-3.5 text-warning-foreground"
-                />
-              </TooltipTrigger>
-              <TooltipPopup side="bottom">
-                <T>
-                  The host withheld part of this diff: a binary file, or a change too large to
-                  inline.
-                </T>
-              </TooltipPopup>
-            </Tooltip>
+            <SharedTooltipTrigger
+              render={<span className="flex shrink-0 items-center" />}
+              label={
+                <>
+                  <T>
+                    The host withheld part of this diff: a binary file, or a change too large to
+                    inline.
+                  </T>
+                </>
+              }
+              side="bottom"
+            >
+              <TriangleAlertIcon
+                aria-label={gt("Some of this diff was not shown")}
+                className="size-3.5 text-warning-foreground"
+              />
+            </SharedTooltipTrigger>
           ) : null}
           {commit !== null && review.inlineComment ? (
-            <Tooltip>
-              <TooltipTrigger render={<span className="flex shrink-0 items-center" />}>
-                <MessageSquareOffIcon
-                  aria-label={gt("Line comments are written from the whole change")}
-                  className="size-3.5"
-                />
-              </TooltipTrigger>
-              <TooltipPopup side="bottom">
-                <T>
-                  A comment is anchored to the whole change, so switch to All commits to write one.
-                </T>
-              </TooltipPopup>
-            </Tooltip>
+            <SharedTooltipTrigger
+              render={<span className="flex shrink-0 items-center" />}
+              label={
+                <>
+                  <T>
+                    A comment is anchored to the whole change, so switch to All commits to write
+                    one.
+                  </T>
+                </>
+              }
+              side="bottom"
+            >
+              <MessageSquareOffIcon
+                aria-label={gt("Line comments are written from the whole change")}
+                className="size-3.5"
+              />
+            </SharedTooltipTrigger>
           ) : null}
         </span>
       </div>
@@ -1756,6 +1775,7 @@ function PullRequestCodeTab({
         error={diffQuery.error}
         provider={detail.provider}
         url={detail.url}
+        threadRef={threadRef}
         onRetry={() => diffQuery.refresh()}
       />,
     );
@@ -1822,14 +1842,12 @@ function PullRequestCodeTab({
               <div className="max-h-64 space-y-1 overflow-auto px-1 pb-1">
                 {[...orphanFiles].map(([path, threads]) => (
                   <div key={path}>
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <p className="truncate px-3 text-meta text-muted-foreground">{path}</p>
-                        }
-                      />
-                      <TooltipPopup side="top">{path}</TooltipPopup>
-                    </Tooltip>
+                    <SharedTooltipTrigger
+                      render={
+                        <p className="truncate px-3 text-meta text-muted-foreground">{path}</p>
+                      }
+                      label={path}
+                    />
                     <div className="mt-1 space-y-2">
                       {threads.map((thread) => (
                         <div key={thread.id}>

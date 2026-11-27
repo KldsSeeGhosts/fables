@@ -57,7 +57,6 @@ import {
 } from "../ui/menu";
 import { RefreshIcon } from "../ui/refresh-icon";
 import { toastManager } from "../ui/toast";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ActOnEnvironmentPicker, type PerformPullRequestAction } from "./PullRequestDetailActions";
 import {
   PULL_REQUEST_MERGE_METHOD_LABELS,
@@ -71,6 +70,7 @@ import { useInlineActionConfirm } from "./useInlineActionConfirm";
 import { canEditPullRequestChangeRequest } from "@t3tools/client-runtime/pull-request-editing";
 
 import { changeRequestTermKind } from "./changeRequestTerm";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 /** Everything else the reader can do with the pull request, behind the header's overflow button. */
 export function PullRequestActionsMenu({
@@ -226,38 +226,36 @@ export function PullRequestActionsMenu({
   };
   return (
     <Menu>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <MenuTrigger
-              render={
-                <Button
-                  aria-label={
-                    refreshing
-                      ? gt(
-                          "Refreshing {term, select, mr {merge request} cr {change request} other {pull request}}",
-                          { term: changeRequestTermKind(terminology) },
-                        )
-                      : gt(
-                          "More {term, select, mr {merge request} cr {change request} other {pull request}} actions",
-                          { term: changeRequestTermKind(terminology) },
-                        )
-                  }
-                  size="icon-xs"
-                  variant="ghost-muted"
-                />
-              }
-            >
-              {refreshing ? (
-                <RefreshIcon refreshing size="md" />
-              ) : (
-                <MoreHorizontalIcon className="size-4" />
-              )}
-            </MenuTrigger>
-          }
-        />
-        <TooltipPopup>
-          {refreshing
+      <SharedTooltipTrigger
+        render={
+          <MenuTrigger
+            render={
+              <Button
+                aria-label={
+                  refreshing
+                    ? gt(
+                        "Refreshing {term, select, mr {merge request} cr {change request} other {pull request}}",
+                        { term: changeRequestTermKind(terminology) },
+                      )
+                    : gt(
+                        "More {term, select, mr {merge request} cr {change request} other {pull request}} actions",
+                        { term: changeRequestTermKind(terminology) },
+                      )
+                }
+                size="icon-xs"
+                variant="ghost-muted"
+              />
+            }
+          >
+            {refreshing ? (
+              <RefreshIcon refreshing size="md" />
+            ) : (
+              <MoreHorizontalIcon className="size-4" />
+            )}
+          </MenuTrigger>
+        }
+        label={
+          refreshing
             ? gt(
                 "Refreshing {term, select, mr {merge request} cr {change request} other {pull request}}",
                 { term: changeRequestTermKind(terminology) },
@@ -265,9 +263,9 @@ export function PullRequestActionsMenu({
             : gt(
                 "More {term, select, mr {merge request} cr {change request} other {pull request}} actions",
                 { term: changeRequestTermKind(terminology) },
-              )}
-        </TooltipPopup>
-      </Tooltip>
+              )
+        }
+      />
       <MenuPopup align="end" side="bottom">
         <PullRequestThreadLinks
           display="menu-item"

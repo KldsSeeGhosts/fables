@@ -52,7 +52,7 @@ import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Badge } from "../ui/badge";
 import { Button, InlineButton } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { cn } from "~/lib/utils";
 import { PULL_REQUEST_ROW_CLASS } from "../pullRequest/PullRequestListRow";
 import {
@@ -148,7 +148,7 @@ function IssueLabelPicker({
   );
   const update = useAtomCommand(issueEnvironment.update, { reportFailure: false });
   const applied = new Set(detail.labels.map((label) => label.name));
-  const needle = query.toLowerCase();
+  const needle = query.trim().toLowerCase();
   const candidates = (candidatesQuery.data?.labels ?? []).filter(
     (label) =>
       needle.length === 0 ||
@@ -270,7 +270,7 @@ function IssueAssigneePicker({
     open ? issueEnvironment.candidates({ environmentId, input: reference }) : null,
   );
   const update = useAtomCommand(issueEnvironment.update, { reportFailure: false });
-  const needle = query.toLowerCase();
+  const needle = query.trim().toLowerCase();
   const candidates = (candidatesQuery.data?.assignees ?? []).filter(
     (candidate) =>
       needle.length === 0 ||
@@ -616,22 +616,20 @@ export function IssueDetailPanel({
   // Moving the issue lives in the actions menu, where a pull request's close and reopen do.
   const actionsMenu = (
     <Menu>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <MenuTrigger
-              render={<Button aria-label={actionsLabel} size="icon-xs" variant="ghost-muted" />}
-            >
-              {detailQuery.isPending || changingState ? (
-                <RefreshIcon refreshing size="md" />
-              ) : (
-                <MoreHorizontalIcon className="size-4" />
-              )}
-            </MenuTrigger>
-          }
-        />
-        <TooltipPopup>{actionsLabel}</TooltipPopup>
-      </Tooltip>
+      <SharedTooltipTrigger
+        render={
+          <MenuTrigger
+            render={<Button aria-label={actionsLabel} size="icon-xs" variant="ghost-muted" />}
+          >
+            {detailQuery.isPending || changingState ? (
+              <RefreshIcon refreshing size="md" />
+            ) : (
+              <MoreHorizontalIcon className="size-4" />
+            )}
+          </MenuTrigger>
+        }
+        label={actionsLabel}
+      />
       <MenuPopup align="end" side="bottom">
         <MenuItem
           disabled={detailQuery.isPending}

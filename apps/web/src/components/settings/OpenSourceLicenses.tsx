@@ -1,5 +1,5 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { ChevronRightIcon, ExternalLinkIcon } from "lucide-react";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
@@ -100,16 +100,13 @@ function LicenseNoticeRow({
           <span className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 hover:surface-ghost-hover">
             <span className="min-w-0 flex-1">
               <span className="block truncate text-label text-foreground">{entry.name}</span>
-              <Tooltip>
-                <TooltipTrigger
-                  render={<span tabIndex={0} className="block text-meta text-muted-foreground" />}
-                >
-                  {entry.version}
-                </TooltipTrigger>
-                <TooltipPopup side="top">
-                  {formatLicenseBundles(entry.bundles, messages)}
-                </TooltipPopup>
-              </Tooltip>
+              <SharedTooltipTrigger
+                render={<span tabIndex={0} className="block text-meta text-muted-foreground" />}
+                label={formatLicenseBundles(entry.bundles, messages)}
+                side="top"
+              >
+                {entry.version}
+              </SharedTooltipTrigger>
             </span>
             <Badge
               variant="secondary"
