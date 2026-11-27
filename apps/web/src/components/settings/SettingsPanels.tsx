@@ -658,7 +658,7 @@ function useSettingsRestore(onRestored?: () => void) {
       : []),
     ...(settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit ? [gt("Quit shortcut")] : []),
     ...(isTextGenerationModelDirty ? [gt("Text generation model")] : []),
-    ...(isBriefModelDirty ? [gt("Brief model")] : []),
+    ...(isBriefModelDirty ? [gt("Recap model")] : []),
     ...(settings.threadTitleInstructions !== DEFAULT_UNIFIED_SETTINGS.threadTitleInstructions
       ? [gt("Thread title instructions")]
       : []),
@@ -2448,13 +2448,11 @@ export function ThreadsSettingsPanel() {
           serverScoped
           settingKeys={["briefModelSelection"]}
           {...setting("brief-model")}
-          description={gt(
-            "For Duet morning briefs. Follows the text generation model until you pick one.",
-          )}
+          description={gt("For Duet recaps. Follows the text generation model until you pick one.")}
           resetAction={
             hasServerTargets && isBriefModelDirty ? (
               <SettingResetButton
-                ariaLabel={gt("Reset brief model to default")}
+                ariaLabel={gt("Reset recap model to default")}
                 onClick={() => updateSettings({ briefModelSelection: null })}
               />
             ) : null
@@ -2462,7 +2460,7 @@ export function ThreadsSettingsPanel() {
           control={
             !hasServerTargets ? (
               <span className="text-sm text-muted-foreground">
-                <T>Connect an environment to choose its brief model.</T>
+                <T>Connect an environment to choose its recap model.</T>
               </span>
             ) : !hasTextGenerationProvider ? (
               <span className="text-body text-muted-foreground">
@@ -2492,7 +2490,7 @@ export function ThreadsSettingsPanel() {
                   if (reason) {
                     toastManager.add({
                       type: "error",
-                      title: gt("Brief model not saved"),
+                      title: gt("Recap model not saved"),
                       description: reason,
                     });
                     return;

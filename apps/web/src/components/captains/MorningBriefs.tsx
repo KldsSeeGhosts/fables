@@ -192,12 +192,12 @@ function MorningBrief({
         >
           {loading ? (
             <Text variant="body" tone="muted" render={<p />}>
-              <T>Loading the brief…</T>
+              <T>Loading the recap…</T>
             </Text>
           ) : details.error !== null ? (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <Text variant="body" tone="muted" render={<p />}>
-                <T>The brief could not be loaded.</T>
+                <T>The recap could not be loaded.</T>
               </Text>
               <Button type="button" variant="ghost-muted" size="xs" onClick={details.refresh}>
                 <T>Retry</T>
@@ -206,7 +206,7 @@ function MorningBrief({
           ) : newSection === "" ? (
             <>
               <Text variant="body" tone="muted" render={<p />}>
-                <T>Nothing new since the last brief.</T>
+                <T>Nothing new since the last recap.</T>
               </Text>
               {controls}
             </>
@@ -307,7 +307,7 @@ function MissingBriefPill({
       variant="quiet-pill"
       size="sm"
       data-duet-brief-missing-duet=""
-      aria-label={gt("Set up the morning brief for {name}", { name: captain.name })}
+      aria-label={gt("Set up the recap for {name}", { name: captain.name })}
       onClick={() => {
         openCaptainTasks(scopeThreadRef(environmentId, captain.primaryThreadId), "scheduled");
         onOpenCaptain(environmentId, captain);
@@ -346,7 +346,7 @@ export function MorningBriefs({
         className="flex flex-wrap items-center gap-2 border-t border-[var(--duet-hairline,var(--border))] pt-4 [ol:empty+&]:border-t-0 [ol:empty+&]:pt-0 [&:not(:has([data-duet-brief-missing-duet]))]:hidden"
       >
         <Text variant="meta" tone="muted">
-          <T>No brief yet</T>
+          <T>No recap yet</T>
         </Text>
         {duets.map(({ environmentId, captain }) => (
           <MissingBriefPill
@@ -357,7 +357,7 @@ export function MorningBriefs({
           />
         ))}
         <p className="basis-full text-meta text-muted-foreground">
-          <T>Turn on the morning brief in Tasks → Scheduled.</T>
+          <T>Turn on the recap in Tasks → Scheduled.</T>
         </p>
       </div>
     </>

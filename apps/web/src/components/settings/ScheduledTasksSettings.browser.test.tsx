@@ -410,7 +410,7 @@ describe("ScheduledTasksSettings", () => {
       .toBeDisabled();
   });
 
-  it("shows the current brief model for a migrated morning brief", async () => {
+  it("shows the current recap model for a migrated recap task", async () => {
     setupEffortTask();
     state.tasks = [{ ...task, kind: "captain_morning_brief" }];
     state.settings = {

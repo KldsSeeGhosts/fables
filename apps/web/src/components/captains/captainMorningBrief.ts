@@ -8,7 +8,7 @@ import { resolveBriefModelSelection } from "@t3tools/shared/serverSettings";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 
-const MORNING_BRIEF_PROMPT = "Generate the morning brief.";
+const MORNING_BRIEF_PROMPT = "Generate the recap.";
 const noEnvironmentSettingsAtom = Atom.make(null);
 
 export const captainMorningBriefTaskId = (captainId: Captain["id"]) =>
@@ -57,7 +57,7 @@ export function useCaptainMorningBrief(environmentId: EnvironmentId | null) {
         environmentId,
         input: {
           id: captainMorningBriefTaskId(captain.id),
-          title: gt("Morning brief for {name}", { name: captain.name }),
+          title: gt("Recap for {name}", { name: captain.name }),
           prompt: MORNING_BRIEF_PROMPT,
           enabled,
           schedule: {

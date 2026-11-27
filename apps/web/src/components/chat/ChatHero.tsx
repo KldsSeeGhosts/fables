@@ -50,7 +50,7 @@ function useChatHeroStarters(captain: boolean): ReadonlyArray<ChatHeroStarter> {
   const gt = useGT();
   return captain
     ? [
-        { label: gt("Prepare morning brief"), prompt: gt("Prepare my morning brief.") },
+        { label: gt("Prepare recap"), prompt: gt("Prepare my recap.") },
         {
           label: gt("Summarize in-flight tasks"),
           prompt: gt("Summarize the tasks you have in flight and what each one is waiting on."),

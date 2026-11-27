@@ -1088,10 +1088,10 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "brief-model",
-    title: msg("Brief model"),
+    title: msg("Recap model"),
     to: "/settings/threads",
     scope: "environment",
-    searchTerms: [msg("duet morning brief digest generated text cheap fast provider model")],
+    searchTerms: [msg("duet recap digest generated text cheap fast provider model")],
   },
   {
     id: "thread-title-instructions",

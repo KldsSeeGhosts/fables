@@ -293,7 +293,7 @@ export function CaptainsInbox({
         </ul>
       ) : (
         <Text variant="body" tone="muted" render={<p />}>
-          <T>No Duets yet. Create one to delegate work and get a daily brief.</T>
+          <T>No Duets yet. Create one to delegate work and get recaps.</T>
         </Text>
       )}
 
@@ -353,12 +353,12 @@ export function CaptainsInbox({
         </OverviewTaskList>
       </DuetSection>
 
-      <DuetSection title=<T>Morning briefs</T>>
+      <DuetSection title=<T>Recaps</T>>
         {active.length > 0 ? (
           <MorningBriefs duets={active} now={now} onOpenCaptain={onOpenCaptain} />
         ) : (
           <Text variant="body" tone="muted" render={<p />}>
-            <T>Create a Duet to delegate work and get a daily brief.</T>
+            <T>Create a Duet to delegate work and get recaps.</T>
           </Text>
         )}
       </DuetSection>

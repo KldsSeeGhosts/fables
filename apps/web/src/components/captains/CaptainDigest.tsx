@@ -24,7 +24,7 @@ export const captainMorningBriefTask = (
   captain: Pick<Captain, "id">,
 ) => tasks.find((task) => task.id === captainMorningBriefTaskId(captain.id));
 
-/** Schedules, reschedules or runs a Captain's morning brief. */
+/** Schedules, reschedules or runs a Captain's recap. */
 export function CaptainMorningBriefControl({
   captain,
   environmentId,
@@ -63,7 +63,7 @@ export function CaptainMorningBriefControl({
     });
     setPending(false);
     if (result?._tag === "Failure")
-      setError(captainCommandError(result, gt("Could not save the morning brief.")));
+      setError(captainCommandError(result, gt("Could not save the recap.")));
     else {
       setTime(null);
       setEnabled(null);
@@ -77,7 +77,7 @@ export function CaptainMorningBriefControl({
     const result = await runNow({ environmentId, input: { id: task.id } });
     setPending(false);
     if (result._tag === "Failure")
-      setError(captainCommandError(result, gt("Could not run the morning brief.")));
+      setError(captainCommandError(result, gt("Could not run the recap.")));
   };
 
   const dirty = time !== null || enabled !== null;
@@ -88,11 +88,11 @@ export function CaptainMorningBriefControl({
         <SunriseIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <Text variant="label" truncate render={<div />}>
-            <T>Morning brief</T>
+            <T>Recap</T>
           </Text>
         </div>
         <Switch
-          aria-label={gt("Enable morning brief")}
+          aria-label={gt("Enable recap")}
           checked={shownEnabled}
           disabled={!canSave || pending}
           onCheckedChange={(checked) => setEnabled(checked)}
@@ -101,7 +101,7 @@ export function CaptainMorningBriefControl({
       <div className="mt-2 flex min-w-0 items-center gap-2 ps-7">
         <Input
           id={timeId}
-          aria-label={gt("Morning brief time")}
+          aria-label={gt("Recap time")}
           type="time"
           nativeInput
           size="sm"

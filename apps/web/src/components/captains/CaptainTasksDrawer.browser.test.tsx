@@ -342,9 +342,9 @@ it("queues a quick task as a user turn on the Captain primary thread", async () 
   await expect.element(input).toHaveValue("");
 });
 
-it("runs an existing morning brief from the Scheduled tab", async () => {
+it("runs an existing recap from the Scheduled tab", async () => {
   resetState();
-  const brief = routine("captain-morning-brief:maria", "Morning brief for Maria", true, {
+  const brief = routine("captain-morning-brief:maria", "Recap for Maria", true, {
     type: "fixed_time",
     timeOfDay: "08:00",
   });

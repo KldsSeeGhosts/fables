@@ -45,7 +45,7 @@ function useDocumentCopy(name: CaptainDocumentName): string {
     case "CREW.md":
       return gt("Rules passed to every task this Duet delegates.");
     case "DIGEST.md":
-      return gt("A running summary written by the morning brief.");
+      return gt("A running summary written by the recap.");
   }
 }
 

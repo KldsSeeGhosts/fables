@@ -247,8 +247,8 @@ it("shows long briefs three items at a time and collects Duets without a brief",
   await expect.element(screen.getByText("Item 4")).not.toBeInTheDocument();
 
   await expect.element(screen.getByRole("article", { name: "Iris" })).not.toBeInTheDocument();
-  await expect.element(screen.getByText("No brief yet")).toBeVisible();
-  await activate(screen.getByRole("button", { name: "Set up the morning brief for Iris" }));
+  await expect.element(screen.getByText("No recap yet")).toBeVisible();
+  await activate(screen.getByRole("button", { name: "Set up the recap for Iris" }));
   expect(openThread).toHaveBeenLastCalledWith(irisRef);
   expect(appAtomRegistry.get(captainDrawerTabAtom(irisRef))).toBe("scheduled");
 });
