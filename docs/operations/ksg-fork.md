@@ -119,6 +119,19 @@ compares that tag with published upstream nightlies. Plain-version builds
 without the embedded tag show an unknown baseline. Older encoded builds can
 still derive their included upstream nightly from the version.
 
+GitHub publishes Fables as pre-releases. Plain versions use the desktop
+Stable track and CLI `stable` channel. The GitHub desktop provider finds them
+in the release feed and loads the existing `nightly.yml`, `nightly-mac.yml`,
+or `nightly-linux.yml` asset. A managed mirror uses the configured desktop
+track name, so it serves plain versions with `latest*.yml`.
+
+Installed encoded builds filter on `-nightly` before looking up the manifest
+and cannot move directly to a plain version through auto-update. If `0.2.0`
+ships first, install the matching desktop package once. In Settings → About,
+select Stable if the previous installation explicitly selected Nightly. For a
+standalone CLI or boot-service installation, run `t3 update 0.2.0` on the host.
+An automatic cutover needs a separate bridge release before `0.2.0`.
+
 CLI archives and the release-availability check use this fork's GitHub
 releases. For desktop release builds, GitHub Actions supplies
 `GITHUB_REPOSITORY=KldsSeeGhosts/fables`. Set

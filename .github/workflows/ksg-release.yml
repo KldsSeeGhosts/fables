@@ -238,23 +238,20 @@ jobs:
         working-directory: release-assets
         run: |
           set -euo pipefail
-          sha256sum t3-*.tar.gz > SHA256SUMS
+          sha256sum t3-*.tar.gz t3-*.zip > SHA256SUMS
           cat SHA256SUMS
       # The Windows build suffixes its per-arch manifest (nightly-win-x64.yml)
       # so x64 and arm64 jobs cannot collide. electron-updater requests
       # nightly.yml, and only x64 is built here, so there is nothing to merge.
-      - name: Name Windows updater manifest
+      - name: Verify nightly updater manifests
         working-directory: release-assets
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          manifests=(*-win-x64.yml)
-          if [[ ${#manifests[@]} -ne 1 ]]; then
-            echo "Expected one Windows manifest, found: ${manifests[*]:-none}" >&2
-            exit 1
-          fi
-          mv "${manifests[0]}" "${manifests[0]%-win-x64.yml}.yml"
-          ls -1 *.yml
+          mv nightly-win-x64.yml nightly.yml
+          for manifest in nightly.yml nightly-mac.yml nightly-linux.yml; do
+            test -s "$manifest"
+            echo "$manifest"
+          done
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

@@ -64,14 +64,14 @@ it.effect("authenticates each release page until the requested channel is found"
       assert.equal(request.headers.authorization, "Bearer gh-token");
       const page = url.searchParams.get("page") ?? "";
       pages.push(page);
-      const tag_name = page === "1" ? "v1.2.4-preview.20260101.1" : "v1.2.3";
+      const tag_name = page === "1" ? "v0.1.13-nightly.20261126.530501" : "v0.2.0";
       return Effect.succeed(HttpClientResponse.fromWeb(request, Response.json([{ tag_name }])));
     });
     const version = yield* resolveNewestVersion("stable").pipe(
       Effect.provideService(HostProcess.Environment, { GH_TOKEN: "gh-token" }),
       Effect.provideService(HttpClient.HttpClient, httpClient),
     );
-    assert.equal(version, "1.2.3");
+    assert.equal(version, "0.2.0");
     assert.deepStrictEqual(pages, ["1", "2"]);
   }),
 );
