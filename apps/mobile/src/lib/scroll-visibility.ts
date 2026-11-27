@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore } from "react";
-import type { LayoutChangeEvent, NativeScrollEvent } from "react-native";
+import type { LayoutChangeEvent } from "react-native";
 
 export function createScrollVisibility() {
   let scroll = 0;
@@ -7,17 +7,14 @@ export function createScrollVisibility() {
   let initialized = false;
   const listeners = new Set<() => void>();
   return {
-    update(event: NativeScrollEvent) {
+    update(nextScroll: number, nextHeight: number) {
       initialized = true;
-      const nextScroll = event.contentOffset.y;
-      const nextHeight = event.layoutMeasurement.height;
       if (nextScroll === scroll && nextHeight === height) return;
       scroll = nextScroll;
       height = nextHeight;
       for (const listener of listeners) listener();
     },
-    layout(event: LayoutChangeEvent, initialScroll: number) {
-      const nextHeight = event.nativeEvent.layout.height;
+    layout(nextHeight: number, initialScroll: number) {
       if (initialized && nextHeight === height) return;
       height = nextHeight;
       if (!initialized) scroll = initialScroll;
@@ -57,5 +54,13 @@ export function useScrollRowVisibility(
       const { y, height } = event.nativeEvent.layout;
       setLayout((old) => (old?.y === y && old.height === height ? old : { y, height }));
     },
+  };
+}
+
+export function useScrollSectionOffset(parentOffset = 0) {
+  const [y, setY] = useState(0);
+  return {
+    offset: parentOffset + y,
+    onLayout: (event: LayoutChangeEvent) => setY(event.nativeEvent.layout.y),
   };
 }

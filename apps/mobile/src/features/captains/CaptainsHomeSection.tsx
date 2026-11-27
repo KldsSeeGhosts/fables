@@ -276,7 +276,12 @@ function StandardCaptainRow(props: {
   const { captain, detail, working, attention, disabled } = props;
   const visibility = useScrollRowVisibility(props.viewport, props.sectionTop, props.visible);
   const [glance, setGlance] = useState(0);
-  const glanceOnce = () => setGlance((previous) => previous + 1);
+  const canGlance =
+    visibility.visible && !disabled && !working && attention === 0 && captain.archivedAt === null;
+  if (!canGlance && glance !== 0) setGlance(0);
+  const glanceOnce = () => {
+    if (canGlance) setGlance((previous) => previous + 1);
+  };
   return (
     <Pressable
       accessibilityRole="button"
@@ -297,7 +302,10 @@ function StandardCaptainRow(props: {
         captain={captain}
         working={working}
         attention={attention}
-        motion={{ visible: visibility.visible && !disabled, glance }}
+        motion={{
+          visible: visibility.visible && !disabled && captain.archivedAt === null,
+          glance,
+        }}
       />
       <View className="min-w-0 flex-1">
         <Text className="font-t3-medium text-base text-foreground" numberOfLines={1}>

@@ -15,6 +15,7 @@ import Reanimated, {
   cancelAnimation,
   Easing as WorkletEasing,
   interpolate,
+  ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -213,7 +214,9 @@ function CreatureEntrance(props: { readonly animate: boolean; readonly children:
       progress.set(1);
       return;
     }
-    progress.set(withTiming(1, { duration: 320, easing: statusMotionEase }));
+    progress.set(
+      withTiming(1, { duration: 320, easing: statusMotionEase, reduceMotion: ReduceMotion.Never }),
+    );
     return () => cancelAnimation(progress);
   }, [progress, props.animate]);
   const style = useAnimatedStyle(() => ({
@@ -255,6 +258,7 @@ function CreatureReaction(props: {
     progress.set(
       withTiming(1, {
         duration: { nudge: 1040, attention: 2400, celebrate: 620 }[next],
+        reduceMotion: ReduceMotion.Never,
         ...(next === "attention"
           ? { easing: WorkletEasing.inOut(WorkletEasing.ease) }
           : { easing: WorkletEasing.linear }),
@@ -314,7 +318,7 @@ function StatusCreatureLayers(props: {
   useEffect(() => {
     if (glance === 0) return;
     glanceProgress.set(0);
-    glanceProgress.set(withTiming(1, { duration: 520 }));
+    glanceProgress.set(withTiming(1, { duration: 520, reduceMotion: ReduceMotion.Never }));
     return () => cancelAnimation(glanceProgress);
   }, [glance, glanceProgress]);
 
@@ -327,13 +331,13 @@ function StatusCreatureLayers(props: {
         },
   );
   const bodyStyle = useAnimatedStyle(() => {
+    if (working) {
+      return { transform: [{ scale: 1 + 0.07 * breath.get() }] };
+    }
     const nudgePhase = Math.min(1, glanceProgress.get() * (520 / 420));
     const nudge = statusMotionEase.factory()(interpolate(nudgePhase, [0, 0.4, 1], [0, 1, 0]));
     return {
-      transform: [
-        { translateY: working ? 0 : -0.08 * size * nudge },
-        { scale: working ? interpolate(breath.get(), [0, 1], [1, 1.07]) : 1 + 0.06 * nudge },
-      ],
+      transform: [{ translateY: -0.08 * size * nudge }, { scale: 1 + 0.06 * nudge }],
     };
   });
   const lineWidth = ((line?.window.w ?? 0) * size) / 100;

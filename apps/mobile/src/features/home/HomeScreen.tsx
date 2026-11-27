@@ -304,7 +304,10 @@ export function HomeScreen(props: HomeScreenProps) {
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears the row activation timer on unmount
   useEffect(() => () => clearTimeout(activationTimerRef.current), []);
   const handleListScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    captainViewport.update(event.nativeEvent);
+    captainViewport.update(
+      event.nativeEvent.contentOffset.y,
+      event.nativeEvent.layoutMeasurement.height,
+    );
     onFabScroll?.(event);
     if (workspace)
       workspace.recordScrollOffset(
@@ -802,7 +805,7 @@ export function HomeScreen(props: HomeScreenProps) {
                 viewabilityConfig={STATUS_ROW_VIEWABILITY}
                 onLayout={(event) =>
                   captainViewport.layout(
-                    event,
+                    event.nativeEvent.layout.height,
                     Math.max(initialScrollOffset, 0) -
                       (Platform.OS === "ios" ? contentTopInset : 0),
                   )

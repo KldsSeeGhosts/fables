@@ -22,7 +22,7 @@ export function useStatusMotionAllowed(): boolean {
 }
 
 export const statusMotionEase = Easing.bezier(0.2, 0.8, 0.2, 1);
-const breatheEase = Easing.inOut(Easing.ease);
+const breatheEase = Easing.bezier(0.42, 0, 0.58, 1);
 
 export function useRepeatingStatusProgress(enabled: boolean, duration: number, alternate = false) {
   const progress = useSharedValue(0);
@@ -31,11 +31,15 @@ export function useRepeatingStatusProgress(enabled: boolean, duration: number, a
     if (!enabled) return;
     progress.set(
       withRepeat(
-        withTiming(1, { duration, easing: alternate ? breatheEase : Easing.linear }),
+        withTiming(1, {
+          duration,
+          easing: alternate ? breatheEase : Easing.linear,
+          reduceMotion: ReduceMotion.Never,
+        }),
         -1,
         alternate,
         undefined,
-        ReduceMotion.System,
+        ReduceMotion.Never,
       ),
     );
     return () => {

@@ -223,7 +223,11 @@ function DuetChannelRow(props: {
   const visibility = useScrollRowVisibility(props.viewport, props.sectionTop, props.visible);
   const visible = visibility.visible && !disabled && captain.archivedAt === null;
   const [glance, setGlance] = useState(0);
-  const glanceOnce = () => setGlance((previous) => previous + 1);
+  const canGlance = visible && trail.kind === "idle";
+  if (!canGlance && glance !== 0) setGlance(0);
+  const glanceOnce = () => {
+    if (canGlance) setGlance((previous) => previous + 1);
+  };
   return (
     <Pressable
       accessibilityRole="button"
