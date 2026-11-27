@@ -11,6 +11,7 @@ import * as SecureRandom from "effect/crypto/SecureRandom";
 import { captainDigestNewLines } from "../../../captains/captainDigest.ts";
 import * as CaptainHonchoMemory from "../../../captains/CaptainHonchoMemory.ts";
 import * as CaptainStore from "../../../captains/CaptainStore.ts";
+import * as ServerEnvironment from "../../../environment/ServerEnvironment.ts";
 import * as ProjectService from "../../../project/ProjectService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
@@ -42,7 +43,7 @@ const duetStateUnavailable = () =>
 
 const requireChorus = Effect.gen(function* () {
   const scope = yield* McpInvocationContext.McpInvocationContext;
-  if (scope.chorus !== true) return yield* chorusDenied();
+  if (!McpInvocationContext.chorusOnly(scope)) return yield* chorusDenied();
 });
 
 const DUET_READ_CONTENT_LIMIT = 16_000;
@@ -51,10 +52,11 @@ const DUET_READ_TRUNCATION_MARKER = "\n\n[truncated: content exceeds 16,000 char
 const capDuetReadContent = <Document extends { readonly content: string }>(document: Document) => {
   if (document.content.length <= DUET_READ_CONTENT_LIMIT) return { document, truncated: false };
   const bodyLength = DUET_READ_CONTENT_LIMIT - DUET_READ_TRUNCATION_MARKER.length;
+  const body = document.content.slice(0, bodyLength).replace(/[\uD800-\uDBFF]$/u, "");
   return {
     document: {
       ...document,
-      content: `${document.content.slice(0, bodyLength)}${DUET_READ_TRUNCATION_MARKER}`,
+      content: `${body}${DUET_READ_TRUNCATION_MARKER}`,
     },
     truncated: true,
   };
@@ -78,7 +80,11 @@ export const layer = McpToolAccess.toLayer(
     const honcho = yield* Effect.serviceOption(CaptainHonchoMemory.CaptainHonchoMemory);
     const random = yield* SecureRandom.SecureRandom;
     const projects = yield* ProjectService.ProjectService;
+    const environment = yield* ServerEnvironment.ServerEnvironment;
     const owner = callerCaptain(store);
+    const localEnvironment = environment.getDescriptor.pipe(
+      Effect.map(({ environmentId, label }) => ({ environmentId, environmentLabel: label })),
+    );
 
     const chorusStore = Effect.gen(function* () {
       yield* requireChorus;
@@ -101,89 +107,76 @@ export const layer = McpToolAccess.toLayer(
         { concurrency: 4 },
       );
     });
-    const captains = Effect.fnUntraced(function* (store: CaptainStore.CaptainStore["Service"]) {
-      const snapshot = yield* store.snapshot({}).pipe(Effect.mapError(failed));
-      return snapshot.captains;
-    });
     return {
-      duet_list: McpToolAccess.reads(() =>
-        chorusStore.pipe(
-          Effect.flatMap((store) =>
-            Effect.gen(function* () {
-              const all = yield* captains(store);
-              return {
-                duets: yield* Effect.forEach(
-                  all,
-                  (captain) =>
-                    Effect.gen(function* () {
-                      const digest = yield* store
-                        .document(captain, "DIGEST.md")
-                        .pipe(Effect.mapError(failed));
-                      return {
-                        id: captain.id,
-                        name: captain.name,
-                        role: captain.role,
-                        kind: captain.kind,
-                        scopedProjectTitles: yield* projectTitles(captain.scopedProjectIds),
-                        archived: captain.archivedAt !== null,
-                        primaryThreadId: captain.primaryThreadId,
-                        digestNew: captainDigestNewLines(digest.content),
-                      };
-                    }),
-                  { concurrency: 4 },
-                ),
-              };
-            }),
-          ),
-        ),
+      duet_list: McpToolAccess.reads(
+        Effect.fn("CaptainToolkit.duetList")(function* () {
+          const store = yield* chorusStore;
+          const { captains } = yield* store.snapshot({}).pipe(Effect.mapError(failed));
+          const machine = yield* localEnvironment;
+          const duets = yield* Effect.forEach(
+            captains,
+            (captain) =>
+              Effect.gen(function* () {
+                const digest = yield* store
+                  .document(captain, "DIGEST.md")
+                  .pipe(Effect.mapError(failed));
+                return {
+                  ...machine,
+                  id: captain.id,
+                  name: captain.name,
+                  role: captain.role,
+                  kind: captain.kind,
+                  scopedProjectTitles: yield* projectTitles(captain.scopedProjectIds),
+                  archived: captain.archivedAt !== null,
+                  primaryThreadId: captain.primaryThreadId,
+                  digestNew: captainDigestNewLines(digest.content),
+                };
+              }),
+            { concurrency: 4 },
+          );
+          return { duets };
+        }),
       ),
-      duet_read: McpToolAccess.reads(({ duetId, document: name }) =>
-        chorusStore.pipe(
-          Effect.flatMap((store) =>
-            Effect.gen(function* () {
-              const captain = yield* store.requireCaptain(duetId).pipe(Effect.mapError(failed));
-              if (name === undefined) return { profile: captain };
-              const document = yield* store.document(captain, name).pipe(Effect.mapError(failed));
-              return capDuetReadContent(document);
-            }),
-          ),
-        ),
+      duet_read: McpToolAccess.reads(
+        Effect.fn("CaptainToolkit.duetRead")(function* ({ duetId, document: name }) {
+          const store = yield* chorusStore;
+          const captain = yield* store.requireCaptain(duetId).pipe(Effect.mapError(failed));
+          if (name === undefined) return { profile: captain };
+          const document = yield* store.document(captain, name).pipe(Effect.mapError(failed));
+          return capDuetReadContent(document);
+        }),
       ),
-      duet_memory_search: McpToolAccess.reads(({ query, duetId }) =>
-        chorusStore.pipe(
-          Effect.flatMap((store) =>
-            Effect.gen(function* () {
-              const all = yield* captains(store);
-              const byId = new Map(all.map((captain) => [captain.id, captain]));
-              if (duetId !== undefined && !byId.has(duetId)) {
-                return yield* new OrchestratorMcpFailure({
-                  code: "invalid_request",
-                  message: "Duet not found.",
-                });
-              }
-              const memories = yield* store
-                .listMemories(duetId, {
-                  ...(query === undefined ? {} : { query }),
-                  limit: 20,
-                })
-                .pipe(Effect.mapError(failed));
-              return {
-                matches: memories.flatMap((memory) => {
-                  const captain = byId.get(memory.captainId);
-                  return captain === undefined
-                    ? []
-                    : [
-                        {
-                          source: "local" as const,
-                          duet: { id: captain.id, name: captain.name },
-                          memory,
-                        },
-                      ];
-                }),
-              };
+      duet_memory_search: McpToolAccess.reads(
+        Effect.fn("CaptainToolkit.duetMemorySearch")(function* ({ query, duetId }) {
+          const store = yield* chorusStore;
+          const captains =
+            duetId === undefined
+              ? (yield* store.snapshot({}).pipe(Effect.mapError(failed))).captains
+              : [yield* store.requireCaptain(duetId).pipe(Effect.mapError(failed))];
+          const byId = new Map(captains.map((captain) => [captain.id, captain.name]));
+          const machine = yield* localEnvironment;
+          const memories = yield* store
+            .listMemories(duetId, {
+              ...(query === undefined ? {} : { query }),
+              limit: 20,
+            })
+            .pipe(Effect.mapError(failed));
+          return {
+            matches: memories.flatMap((memory) => {
+              const name = byId.get(memory.captainId);
+              return name === undefined
+                ? []
+                : [
+                    {
+                      ...machine,
+                      source: "local" as const,
+                      duet: { id: memory.captainId, name },
+                      memory,
+                    },
+                  ];
             }),
-          ),
-        ),
+          };
+        }),
       ),
       captain_read: McpToolAccess.readsAsCaller(() =>
         owner.pipe(Effect.map(({ captain }) => captain)),

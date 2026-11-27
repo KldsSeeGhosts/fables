@@ -194,6 +194,12 @@ export class McpInvocationContext extends Context.Service<
   McpInvocationScope
 >()("t3/mcp/McpInvocationContext") {}
 
+/** Discovery only. The handler still authorizes explicit calls to a hidden tool. */
+export class ListedWhen extends Context.Service<
+  ListedWhen,
+  (scope: McpInvocationScope | undefined) => boolean
+>()("t3/mcp/McpInvocationContext/ListedWhen") {}
+
 /**
  * `McpSchema.EnabledWhen` for tools a delegated child must not see or call.
  * EnabledWhen only receives the MCP client profile, so read the T3 caller from the request fiber.
@@ -221,13 +227,8 @@ export const captainOnly = (): boolean => {
   return Boolean(scope?.captain);
 };
 
-export const chorusOnly = (): boolean => {
-  const fiber = Fiber.getCurrent();
-  return Boolean(fiber && Context.getOrUndefined(fiber.context, McpInvocationContext)?.chorus);
-};
-
-/** `hiddenFromSubagents`, and hidden from a Chorus, whose PRs belong to a Duet or the user. */
-export const hiddenFromSubagentsAndChorus = (): boolean => hiddenFromSubagents() && !chorusOnly();
+export const chorusOnly = (scope: McpInvocationScope | undefined): boolean =>
+  scope?.thread !== undefined && scope.chorus === true;
 
 /** `hiddenFromOutsideClients`, and hidden from a thread whose provider cannot hold for background work. */
 export const hiddenWithoutBackgroundWait = (): boolean => {

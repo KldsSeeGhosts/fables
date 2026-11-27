@@ -9,6 +9,7 @@ import {
   CaptainMemory,
   CaptainMemoryId,
   CaptainMemoryText,
+  EnvironmentId,
   OrchestratorMcpFailure,
   ThreadId,
 } from "@t3tools/contracts";
@@ -29,7 +30,13 @@ const writeOptions = {
   dependencies: [...options.dependencies, ThreadManagement.ThreadManagementService],
 };
 
+const DuetEnvironment = Schema.Struct({
+  environmentId: EnvironmentId,
+  environmentLabel: Schema.String,
+});
+
 const DuetListEntry = Schema.Struct({
+  ...DuetEnvironment.fields,
   id: CaptainId,
   name: Schema.String,
   role: Schema.String,
@@ -48,6 +55,7 @@ const DuetReadResult = Schema.Union([
 const DuetMemorySearchResult = Schema.Struct({
   matches: Schema.Array(
     Schema.Struct({
+      ...DuetEnvironment.fields,
       source: Schema.Literals(["local"]),
       duet: Schema.Struct({ id: CaptainId, name: Schema.String }),
       memory: CaptainMemory,
@@ -61,7 +69,9 @@ export const CaptainToolkit = Toolkit.make(
     description:
       "List every Duet on this machine, including archived ones, with role, kind, workspace scope titles, current primary thread, and the first lines of DIGEST.md's ## New section. Use this first for cross-Duet questions. Read-only: it changes nothing and sends nothing.",
     success: Schema.Struct({ duets: Schema.Array(DuetListEntry) }),
-  }).annotate(McpSchema.EnabledWhen, McpInvocationContext.captainOnly),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(McpInvocationContext.ListedWhen, McpInvocationContext.chorusOnly),
   Tool.make("duet_read", {
     ...options,
     description:
@@ -71,7 +81,9 @@ export const CaptainToolkit = Toolkit.make(
       document: Schema.optional(CaptainDocumentName),
     }),
     success: DuetReadResult,
-  }).annotate(McpSchema.EnabledWhen, McpInvocationContext.captainOnly),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(McpInvocationContext.ListedWhen, McpInvocationContext.chorusOnly),
   Tool.make("duet_memory_search", {
     ...options,
     description:
@@ -81,7 +93,9 @@ export const CaptainToolkit = Toolkit.make(
       duetId: Schema.optional(CaptainId),
     }),
     success: DuetMemorySearchResult,
-  }).annotate(McpSchema.EnabledWhen, McpInvocationContext.captainOnly),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(McpInvocationContext.ListedWhen, McpInvocationContext.chorusOnly),
   Tool.make("captain_read", {
     ...options,
     description: "Read your Duet profile, workspace scope and report policy.",

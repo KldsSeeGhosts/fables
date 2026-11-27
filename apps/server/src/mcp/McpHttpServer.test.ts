@@ -6,6 +6,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
+  CaptainId,
   DeviceId,
   DeviceOperationError,
   EnvironmentId,
@@ -17,6 +18,7 @@ import {
   ProviderInteractionMode,
   RuntimeMode,
   ThreadId,
+  type Captain,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
@@ -42,6 +44,7 @@ import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as McpOAuth from "../auth/McpOAuth.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
+import * as CaptainStore from "../captains/CaptainStore.ts";
 import * as Sqlite from "../persistence/Sqlite.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 import * as PreviewManager from "../preview/Manager.ts";
@@ -64,6 +67,8 @@ import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
 import { FEEDBACK_CLI_CLIENT_LABEL } from "../feedback/FeedbackReport.ts";
 import * as Feedback from "../feedback/FeedbackService.ts";
+import * as CaptainHandlers from "./toolkits/captain/handlers.ts";
+import { CaptainToolkit } from "./toolkits/captain/tools.ts";
 import * as FeedbackHandlers from "./toolkits/feedback/handlers.ts";
 import { FeedbackToolkit } from "./toolkits/feedback/tools.ts";
 import { OrchestratorToolkit } from "./toolkits/orchestrator/tools.ts";
@@ -1986,126 +1991,223 @@ it.effect("offers agent feedback tools only while the setting is on, to every cl
   ).pipe(Effect.provide(NodeHttpServer.layerTest)),
 );
 
-it.effect(
-  "lists watch tools only to threads that are not delegated children, and forge tools only where the project has a forge",
-  () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const scopeFor = (
-          token: string,
-          subagent: boolean,
-        ): McpInvocationContext.McpThreadInvocationScope => ({
-          environmentId,
-          requestNamespace: token,
-          thread: {
-            threadId: ThreadId.make(`thread-${token}`),
-            providerSessionId: token,
-            providerInstanceId: ProviderInstanceId.make("codex"),
-            subagent,
-          },
-          client: undefined,
-          capabilities: new Set(["pull-requests"]),
-          issuedAt: 1,
-        });
-        const scopes = new Map([
-          ["parentToken", scopeFor("parentToken", false)],
-          ["childToken", scopeFor("childToken", true)],
-          ["noForgeToken", scopeFor("noForgeToken", false)],
-        ]);
-        const serverLayer = McpHttpServer.layerMcpTransport(
+it.effect("uses the authenticated Duet profile to list Chorus read tools and hide PR watches", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const scopeFor = (
+        token: string,
+        subagent: boolean,
+        threadId = ThreadId.make(`thread-${token}`),
+      ): McpInvocationContext.McpThreadInvocationScope => ({
+        environmentId,
+        requestNamespace: token,
+        thread: {
+          threadId,
+          providerSessionId: token,
+          providerInstanceId: ProviderInstanceId.make("codex"),
+          subagent,
+        },
+        client: undefined,
+        capabilities: new Set(["pull-requests", "orchestration"]),
+        issuedAt: 1,
+      });
+      const profile = (id: string, kind: Captain["kind"]): Captain => ({
+        id: CaptainId.make(id),
+        primaryThreadId: ThreadId.make(`captain:${id}:0`),
+        name: id,
+        role: "",
+        instructions: "",
+        avatar: { preset: "compass", color: "violet" },
+        scopedProjectIds: [],
+        earlierThreadIds: [],
+        kind,
+        coordinatorOnly: kind === "chorus",
+        reportPolicy: kind === "chorus" ? "react" : "context",
+        createdAt: "2026-11-24T00:00:00.000Z",
+        updatedAt: "2026-11-24T00:00:00.000Z",
+        archivedAt: null,
+      });
+      const chorus = profile("chorus", "chorus");
+      const duet = profile("duet", "duet");
+      const captainLayer = yield* Layer.build(
+        CaptainStore.layer.pipe(Layer.provide(Sqlite.layerMemory)),
+      );
+      const store = Context.get(captainLayer, CaptainStore.CaptainStore);
+      yield* store.save(chorus);
+      yield* store.save(duet);
+      const scopes = new Map([
+        ["parentToken", scopeFor("parentToken", false)],
+        ["childToken", scopeFor("childToken", true)],
+        ["noForgeToken", scopeFor("noForgeToken", false)],
+        ["chorusToken", scopeFor("chorusToken", false, chorus.primaryThreadId)],
+        ["duetToken", scopeFor("duetToken", false, duet.primaryThreadId)],
+      ]);
+      const serverLayer = McpHttpServer.layerMcpTransport(
+        Layer.mergeAll(
           McpHttpServer.layerPullRequestsToolkit,
-        ).pipe(
-          Layer.provide(ServerSettings.layerTest()),
-          Layer.provide(
-            Layer.mock(McpSessionRegistry.McpSessionRegistry)({
-              resolve: (token) => Effect.succeed(scopes.get(token)),
+          McpHttpServer.toolkitRegistration(CaptainToolkit, CaptainHandlers.layer),
+          McpHttpServer.layerToolSearch,
+        ),
+      ).pipe(
+        Layer.provide(ServerSettings.layerTest()),
+        Layer.provide(Layer.succeedContext(captainLayer)),
+        Layer.provide(
+          Layer.mock(McpSessionRegistry.McpSessionRegistry)({
+            resolve: (token) => Effect.succeed(scopes.get(token)),
+          }),
+        ),
+        Layer.provide(
+          Layer.mergeAll(
+            McpToolAccessTestkit.liveThreadsLayer,
+            Layer.mock(ProjectService.ProjectService)({}),
+            Layer.mock(ServerEnvironment.ServerEnvironment)({
+              getDescriptor: Effect.succeed({
+                environmentId,
+                label: "Test Mac",
+                platform: { os: "darwin", arch: "arm64" },
+                serverVersion: "0.0.0",
+                capabilities: { repositoryIdentity: false },
+              }),
             }),
+            Layer.mock(PullRequestReviewGuideService.PullRequestReviewGuideService)({}),
+            Layer.mock(PullRequestService.PullRequestService)({
+              servesProject: (projectId) => Effect.succeed(projectId !== "project-noForgeToken"),
+            }),
+            Layer.mock(GitManager.GitManager)({}),
+            Layer.mock(Orchestrator.OrchestratorV2)({}),
+            Layer.mock(ProjectionStore.ProjectionStoreV2)({
+              getThreadShell: (threadId) =>
+                Effect.succeed({
+                  projectId: ProjectId.make(threadId.replace("thread-", "project-")),
+                } as never),
+            }),
+            NodeServices.layer,
+            NodeCrypto.layer,
           ),
-          Layer.provide(
-            Layer.mergeAll(
-              McpToolAccessTestkit.liveThreadsLayer,
-              Layer.mock(ProjectService.ProjectService)({}),
-              Layer.mock(PullRequestReviewGuideService.PullRequestReviewGuideService)({}),
-              Layer.mock(PullRequestService.PullRequestService)({
-                servesProject: (projectId) => Effect.succeed(projectId !== "project-noForgeToken"),
-              }),
-              Layer.mock(GitManager.GitManager)({}),
-              Layer.mock(Orchestrator.OrchestratorV2)({}),
-              Layer.mock(ProjectionStore.ProjectionStoreV2)({
-                getThreadShell: (threadId) =>
-                  Effect.succeed({
-                    projectId: ProjectId.make(threadId.replace("thread-", "project-")),
-                  } as never),
-              }),
-              NodeServices.layer,
-              NodeCrypto.layer,
+        ),
+      );
+      yield* HttpRouter.serve(serverLayer, { disableListenLog: true, disableLogger: true }).pipe(
+        Layer.build,
+      );
+      const httpClient = yield* HttpClient.HttpClient;
+      const session = (token: string) =>
+        Effect.gen(function* () {
+          const headers = {
+            accept: "application/json, text/event-stream",
+            authorization: `Bearer ${token}`,
+          };
+          const initialize = yield* httpClient.post("/mcp", {
+            headers,
+            body: HttpBody.text(
+              `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"1.0.0"}}}`,
+              "application/json",
             ),
-          ),
-        );
-        yield* HttpRouter.serve(serverLayer, { disableListenLog: true, disableLogger: true }).pipe(
-          Layer.build,
-        );
-        const httpClient = yield* HttpClient.HttpClient;
-        const listedTools = (token: string) =>
-          Effect.gen(function* () {
-            const headers = {
-              accept: "application/json, text/event-stream",
-              authorization: `Bearer ${token}`,
-            };
-            const initialize = yield* httpClient.post("/mcp", {
-              headers,
-              body: HttpBody.text(
-                `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"1.0.0"}}}`,
-                "application/json",
-              ),
-            });
-            const listed = yield* httpClient.post("/mcp", {
-              headers: {
-                ...headers,
-                "mcp-session-id": initialize.headers["mcp-session-id"]!,
-                "mcp-protocol-version": "2025-06-18",
-              },
-              body: HttpBody.text(
-                `{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`,
-                "application/json",
-              ),
-            });
-            const body = (yield* listed.json) as {
-              readonly result: { readonly tools: ReadonlyArray<{ readonly name: string }> };
-            };
-            return body.result.tools.map((tool) => tool.name);
           });
+          const rpc = (method: string, params: object) =>
+            httpClient
+              .post("/mcp", {
+                headers: {
+                  ...headers,
+                  "mcp-session-id": initialize.headers["mcp-session-id"]!,
+                  "mcp-protocol-version": "2025-06-18",
+                },
+                body: HttpBody.text(
+                  JSON.stringify({ jsonrpc: "2.0", id: 2, method, params }),
+                  "application/json",
+                ),
+              })
+              .pipe(
+                Effect.flatMap((response) => response.text),
+                Effect.map(
+                  (response) =>
+                    response
+                      .split("\n")
+                      .filter((line) => line.startsWith("data: ") || line.startsWith("{"))
+                      .map(
+                        (line) =>
+                          JSON.parse(line.replace(/^data: /u, "")) as {
+                            id?: number;
+                            result: unknown;
+                          },
+                      )
+                      .find((message) => message.id === 2)?.result,
+                ),
+              );
+          return {
+            listed: rpc("tools/list", {}).pipe(
+              Effect.map((result) =>
+                (result as { tools: ReadonlyArray<{ name: string }> }).tools.map(
+                  ({ name }) => name,
+                ),
+              ),
+            ),
+            call: (name: string, args: object = {}) => rpc("tools/call", { name, arguments: args }),
+          };
+        });
 
-        const parentTools = yield* listedTools("parentToken");
-        const childTools = yield* listedTools("childToken");
-        expect(parentTools).toEqual(
-          expect.arrayContaining([
-            "link_pull_request",
-            "watch_pull_request",
-            "unwatch_pull_request",
-          ]),
-        );
-        expect(childTools).toContain("link_pull_request");
-        expect(childTools).not.toContain("watch_pull_request");
-        expect(childTools).not.toContain("unwatch_pull_request");
-        expect(parentTools).toEqual(
-          expect.arrayContaining([
-            "pull_request_read",
-            "pull_request_review",
-            "pull_request_merge",
-            "ci_logs",
-            "ci_rerun",
-          ]),
-        );
-        const noForgeTools = yield* listedTools("noForgeToken");
-        expect(noForgeTools).toEqual(
-          expect.arrayContaining(["link_pull_request", "watch_pull_request"]),
-        );
-        expect(
-          noForgeTools.filter((name) => name.startsWith("pull_request_") || name.startsWith("ci_")),
-        ).toEqual([]);
-      }),
-    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+      const parentTools = yield* (yield* session("parentToken")).listed;
+      const childTools = yield* (yield* session("childToken")).listed;
+      expect(parentTools).toEqual(
+        expect.arrayContaining(["link_pull_request", "watch_pull_request", "unwatch_pull_request"]),
+      );
+      expect(childTools).toContain("link_pull_request");
+      expect(childTools).not.toContain("watch_pull_request");
+      expect(childTools).not.toContain("unwatch_pull_request");
+      expect(parentTools).toEqual(
+        expect.arrayContaining([
+          "pull_request_read",
+          "pull_request_review",
+          "pull_request_merge",
+          "ci_logs",
+          "ci_rerun",
+        ]),
+      );
+      const noForgeTools = yield* (yield* session("noForgeToken")).listed;
+      expect(noForgeTools).toEqual(
+        expect.arrayContaining(["link_pull_request", "watch_pull_request"]),
+      );
+      expect(
+        noForgeTools.filter((name) => name.startsWith("pull_request_") || name.startsWith("ci_")),
+      ).toEqual([]);
+
+      const chorusSession = yield* session("chorusToken");
+      const duetSession = yield* session("duetToken");
+      const readTools = ["duet_list", "duet_read", "duet_memory_search"];
+      const chorusTools = yield* chorusSession.listed;
+      const duetTools = yield* duetSession.listed;
+      expect(chorusTools).toEqual(expect.arrayContaining(readTools));
+      expect(chorusTools).not.toContain("watch_pull_request");
+      expect(duetTools).toContain("watch_pull_request");
+      expect(duetTools).toContain("captain_read");
+      for (const name of readTools) {
+        expect(duetTools).not.toContain(name);
+        expect(parentTools).not.toContain(name);
+      }
+
+      expect(yield* chorusSession.call("duet_list")).toMatchObject({ isError: false });
+      expect(yield* chorusSession.call("watch_pull_request", { number: 1 })).toMatchObject({
+        isError: true,
+        content: [{ text: expect.stringContaining("A Chorus cannot watch pull requests") }],
+      });
+      const findDuetRead = { query: "duet_read" };
+      expect(yield* chorusSession.call("tool_search", findDuetRead)).toMatchObject({
+        structuredContent: { tools: [expect.objectContaining({ name: "duet_read" })] },
+      });
+      expect(yield* duetSession.call("tool_search", findDuetRead)).toMatchObject({
+        structuredContent: { tools: [] },
+      });
+
+      yield* store.save({
+        ...chorus,
+        earlierThreadIds: [chorus.primaryThreadId],
+        primaryThreadId: ThreadId.make("captain:chorus:1"),
+      });
+      expect(yield* chorusSession.listed).not.toContain("duet_list");
+      const staleResult = yield* chorusSession.call("duet_list");
+      expect(staleResult).toMatchObject({ isError: true });
+      expect(JSON.stringify(staleResult)).toContain("capability_denied");
+    }),
+  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
 );
 
 it.effect(

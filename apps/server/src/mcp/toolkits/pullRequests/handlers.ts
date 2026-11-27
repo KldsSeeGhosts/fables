@@ -406,7 +406,7 @@ const make = Effect.gen(function* () {
     watching: boolean,
   ) {
     const scope = yield* McpInvocationContext.requireMcpCapability("pull-requests");
-    if (watching && scope.chorus === true) {
+    if (watching && McpInvocationContext.chorusOnly(scope)) {
       return yield* new OrchestratorMcpFailure({
         code: "capability_denied",
         message:
