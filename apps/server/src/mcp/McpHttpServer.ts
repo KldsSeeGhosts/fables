@@ -1487,6 +1487,11 @@ export const layerOrchestratorToolkit = toolkitRegistration(
   OrchestratorHandlers.layer,
 ).pipe(Layer.provide(OrchestratorMcpService.layer), Layer.provide(ThreadMetadataMcpService.layer));
 
+const layerCaptainToolkit = toolkitRegistration(CaptainToolkit, CaptainHandlers.layer).pipe(
+  Layer.provide(OrchestratorMcpService.layer),
+  Layer.provide(ThreadMetadataMcpService.layer),
+);
+
 export const layerThreadToolkit = toolkitRegistration(ThreadToolkit, ThreadHandlers.layer);
 const layerWorkflowToolkit = toolkitRegistration(WorkflowToolkit, WorkflowHandlers.layer);
 
@@ -1586,7 +1591,7 @@ export const layerTools = Layer.mergeAll(
   layerOrchestratorToolkit,
   layerThreadToolkit,
   layerWorkflowToolkit,
-  toolkitRegistration(CaptainToolkit, CaptainHandlers.layer),
+  layerCaptainToolkit,
   layerAttachmentToolkit,
   layerProjectRegistration,
   layerFeedbackToolkit,

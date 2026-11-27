@@ -991,7 +991,21 @@ const make = Effect.gen(function* () {
         input.threadId,
       ],
       (input) => setWatching(input, true),
-      (scope) => (McpInvocationContext.chorusOnly(scope) ? chorusWatchDenied() : Effect.void),
+      (scope, input) =>
+        McpInvocationContext.chorusOnly(scope)
+          ? chorusWatchDenied()
+          : input.threadId !== undefined &&
+              isCaptainThreadId(input.threadId) &&
+              Option.isSome(captainStore)
+            ? captainStore.value.findByConversation(input.threadId).pipe(
+                Effect.mapError(
+                  (cause) => new PullRequestWatchService.PullRequestWatchFailedError({ cause }),
+                ),
+                Effect.flatMap((target) =>
+                  target?.kind === "chorus" ? chorusWatchDenied() : Effect.void,
+                ),
+              )
+            : Effect.void,
     ),
     unwatch_pull_request: writesThread((input) => setWatching(input, false)),
     write_pull_request_guides: McpToolAccess.writesWithCapability((input) =>

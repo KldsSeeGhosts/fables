@@ -5,6 +5,7 @@ import {
   type OrchestrationV2AppThreadLineage,
   type ThreadId,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -185,6 +186,38 @@ export const formatCaptainReports = (
         })
         .join("\n")}`;
 
+const TERMINAL_ROUTE_STATUSES: ReadonlySet<string> = new Set([
+  "completed",
+  "failed",
+  "cancelled",
+  "interrupted",
+  "rolled_back",
+  "unknown",
+]);
+
+export interface ChorusRouteUpdate {
+  readonly route: CaptainStore.ChorusRoute;
+  readonly duetName: string;
+  readonly status: string;
+  readonly result: string | null;
+  readonly terminal: boolean;
+}
+
+const formatChorusRouteUpdates = (updates: ReadonlyArray<ChorusRouteUpdate>) =>
+  updates.length === 0
+    ? ""
+    : `Routed since your last turn:
+${updates
+  .slice(0, 6)
+  .map((update) => {
+    const summary =
+      update.result === null || update.result.trim() === ""
+        ? ""
+        : ` ${firstParagraph(update.result)}`;
+    return `- ${prefix(update.duetName, 80)} [${update.route.runId}]: ${update.status}.${summary} Read the Duet thread with t3_thread_read(threadId: "${update.route.threadId}").`;
+  })
+  .join("\n")}`;
+
 export const formatCaptainCrewRules = (captain: Captain, crew: string) =>
   [
     `Rules for Solos from Duet ${captain.name}:\n- Work only in your own working directory and the folders listed with it. If the brief gives a path in another checkout, use the matching folder in yours.\n- For multi-step work, keep a progress note in your worktree and commit after each step.\n- Run the focused tests or checks that prove the change, and report the evidence.\n- Do not report done until the done-check from your brief passes.\n- End your final message with a 2 to 4 sentence summary first, then details.\n- If you took a screenshot or made an image of the result, put the clearest one in that final message as a markdown image with its absolute path.`,
@@ -270,6 +303,95 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
       ),
     );
   });
+
+  const readChorusRouteUpdates = Effect.fnUntraced(function* (captain: Captain) {
+    if (Option.isNone(store) || Option.isNone(sql)) return [] as ReadonlyArray<ChorusRouteUpdate>;
+    const routes = yield* store.value.listChorusRoutes(captain.id);
+    const updates = yield* Effect.forEach(
+      routes,
+      (route) =>
+        Effect.gen(function* () {
+          const [row] = yield* sql.value<{
+            readonly status: string;
+            readonly resultText: string | null;
+          }>`
+            SELECT r.status,
+              (
+                SELECT json_extract(m.payload_json, '$.text')
+                FROM orchestration_v2_projection_messages AS m
+                WHERE m.run_id = r.run_id AND m.role = 'assistant'
+                ORDER BY m.created_at DESC, m.message_id DESC LIMIT 1
+              ) AS resultText
+            FROM orchestration_v2_projection_runs AS r
+            WHERE r.run_id = ${route.runId} AND r.thread_id = ${route.threadId}
+          `;
+          const status = row?.status ?? "unknown";
+          const terminal = TERMINAL_ROUTE_STATUSES.has(status);
+          const result =
+            terminal && row?.resultText !== undefined && row.resultText !== null
+              ? prefix(row.resultText, 1_000)
+              : null;
+          const changed =
+            status !== route.lastSeenStatus || (result !== null && result !== route.result);
+          if (!changed) return [];
+          const duet = yield* store.value.find(route.duetId);
+          return [
+            {
+              route,
+              duetName: duet?.name ?? "Unavailable Duet",
+              status,
+              result,
+              terminal,
+            } satisfies ChorusRouteUpdate,
+          ];
+        }),
+      { concurrency: 4 },
+    );
+    return updates.flat();
+  });
+
+  const markChorusRoutesDelivered = Effect.fn("markChorusRoutesDelivered")(
+    function* (updates: ReadonlyArray<ChorusRouteUpdate>) {
+      if (Option.isNone(store) || updates.length === 0) return;
+      const now = DateTime.formatIso(yield* DateTime.now);
+      yield* store.value.deleteChorusRoutes(
+        updates.filter((update) => update.terminal).map((update) => update.route.runId),
+      );
+      yield* Effect.forEach(
+        updates.filter((update) => !update.terminal),
+        (update) =>
+          store.value.updateChorusRoute({
+            runId: update.route.runId,
+            lastSeenStatus: update.status,
+            result: update.result,
+            updatedAt: now,
+          }),
+        { discard: true },
+      );
+    },
+    Effect.catchCause((cause) =>
+      Effect.logWarning("Could not record Chorus route delivery.", { cause }),
+    ),
+  );
+
+  const routedByChorusLine = Effect.fn("routedByChorusLine")(
+    function* (threadId: ThreadId) {
+      if (Option.isNone(store) || Option.isNone(sql)) return "";
+      const [row] = yield* sql.value<{ readonly senderThreadId: ThreadId | null }>`
+        SELECT json_extract(m.payload_json, '$.senderThreadId') AS senderThreadId
+        FROM orchestration_v2_projection_runs AS r
+        JOIN orchestration_v2_projection_messages AS m ON m.run_id = r.run_id AND m.role = 'user'
+        WHERE r.thread_id = ${threadId}
+        ORDER BY r.ordinal DESC, m.created_at DESC, m.message_id DESC LIMIT 1
+      `;
+      if (row?.senderThreadId == null) return "";
+      const sender = yield* store.value.findByConversation(row.senderThreadId);
+      return sender?.kind === "chorus"
+        ? `This turn was routed by Chorus ${sender.name}. It carries the user's ask; answer the user here, and ask any questions in this Duet thread rather than messaging the Chorus.`
+        : "";
+    },
+    Effect.orElseSucceed(() => ""),
+  );
 
   // A delegated child gets the Captain's crew rules only, never its private profile or memories.
   const readCrewContext = Effect.fn("CaptainService.crewContext")(function* (
@@ -372,6 +494,9 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
               });
             })
           : undefined;
+      const chorusRouteUpdates =
+        captain.kind === "chorus" ? yield* readChorusRouteUpdates(captain) : [];
+      const routedByChorus = captain.kind === "duet" ? yield* routedByChorusLine(threadId) : "";
       const briefing = formatCaptainBriefing({
         captain,
         projects: scopedProjects,
@@ -408,6 +533,8 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
             ? longTermMemoryBlock
             : "",
           formatCaptainReports(reports, threadId),
+          formatChorusRouteUpdates(chorusRouteUpdates),
+          routedByChorus,
           delivery === undefined
             ? ""
             : formatCaptainContextPressure(
@@ -424,9 +551,12 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
         delivered:
           plan === undefined
             ? Effect.void
-            : Effect.sync(() => {
-                plan.commit();
-                longTermMemoryPlan?.commit();
+            : Effect.gen(function* () {
+                yield* Effect.sync(() => {
+                  plan.commit();
+                  longTermMemoryPlan?.commit();
+                });
+                yield* markChorusRoutesDelivered(chorusRouteUpdates);
               }),
       };
     },

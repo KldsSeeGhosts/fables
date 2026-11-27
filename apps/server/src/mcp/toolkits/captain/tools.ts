@@ -10,13 +10,16 @@ import {
   CaptainMemoryId,
   CaptainMemoryText,
   EnvironmentId,
+  MessageId,
   OrchestratorMcpFailure,
+  RunId,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { McpSchema, Tool, Toolkit } from "effect/ai";
 
 import * as ThreadManagement from "../../../orchestration-v2/ThreadManagementService.ts";
+import * as OrchestratorMcpService from "../../OrchestratorMcpService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 const options = {
@@ -95,6 +98,35 @@ export const CaptainToolkit = Toolkit.make(
     success: DuetMemorySearchResult,
   })
     .annotate(Tool.Readonly, true)
+    .annotate(McpInvocationContext.ListedWhen, McpInvocationContext.chorusOnly),
+  Tool.make("duet_send", {
+    ...options,
+    description:
+      "Route requested project work from the Chorus to another Duet. Use it when the user asks that Duet to do work, not for read-only questions. It resolves the Duet's current primary conversation at dispatch, records the route, and the result returns as context on the Chorus's next user turn. Do not use t3_thread_send for cross-Duet routing.",
+    parameters: Schema.Struct({
+      duetId: CaptainId,
+      message: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100000)),
+      mode: Schema.optional(Schema.Literals(["auto", "queue", "steer", "restart"])),
+      clientRequestId: Schema.optional(Schema.String),
+    }),
+    success: Schema.Struct({
+      duetId: CaptainId,
+      environmentId: EnvironmentId,
+      threadId: ThreadId,
+      link: Schema.String,
+      messageId: MessageId,
+      runId: RunId,
+      taskId: Schema.optional(Schema.String),
+      status: Schema.String,
+      delivery: Schema.String,
+    }),
+    failure: OrchestratorMcpFailure,
+    failureMode: "return" as const,
+    dependencies: [...options.dependencies, OrchestratorMcpService.OrchestratorMcpService],
+  })
+    .annotate(Tool.Destructive, true)
+    .annotate(Tool.OpenWorld, true)
+    .annotate(McpSchema.EnabledWhen, McpInvocationContext.captainOnly)
     .annotate(McpInvocationContext.ListedWhen, McpInvocationContext.chorusOnly),
   Tool.make("captain_read", {
     ...options,

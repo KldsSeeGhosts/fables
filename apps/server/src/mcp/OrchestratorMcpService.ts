@@ -1,6 +1,8 @@
 import {
   isCaptainThreadId,
+  type CaptainId,
   CommandId,
+  type EnvironmentId,
   type RunId,
   idleCompactionOf,
   isProviderAvailable,
@@ -144,6 +146,7 @@ import {
   taskPrompt,
 } from "./delegatedTaskModes.ts";
 import {
+  assertDuetThreadSendAllowed,
   assertReadableConversation,
   assertTargetWithinLimits,
   isLiveCallerShell,
@@ -192,6 +195,19 @@ type TerminalTaskStatus = Extract<
   OrchestratorMcpDelegateTaskResult["status"],
   "completed" | "failed" | "cancelled" | "interrupted"
 >;
+
+export interface OrchestratorMcpDuetSendInput {
+  readonly duetId: CaptainId;
+  readonly environmentId?: EnvironmentId | undefined;
+  readonly message: string;
+  readonly mode?: OrchestratorMcpThreadSendInput["mode"];
+  readonly clientRequestId?: string | undefined;
+}
+
+export interface OrchestratorMcpDuetSendResult extends OrchestratorMcpThreadSendResult {
+  readonly duetId: CaptainId;
+  readonly environmentId: EnvironmentId;
+}
 
 export interface OrchestratorMcpServiceShape {
   readonly capabilities: (
@@ -247,6 +263,10 @@ export interface OrchestratorMcpServiceShape {
     scope: McpInvocationScope,
     input: OrchestratorMcpThreadSendInput,
   ) => Effect.Effect<OrchestratorMcpThreadSendResult, OrchestratorMcpFailure>;
+  readonly sendToDuet: (
+    scope: McpInvocationScope,
+    input: OrchestratorMcpDuetSendInput,
+  ) => Effect.Effect<OrchestratorMcpDuetSendResult, OrchestratorMcpFailure>;
   readonly waitForThread: (
     scope: McpInvocationScope,
     input: OrchestratorMcpThreadWaitInput,
@@ -2555,6 +2575,64 @@ const make = Effect.gen(function* () {
     return task;
   });
 
+  const sendToThreadCore = Effect.fn("OrchestratorMcpService.sendToThreadCore")(function* (
+    scope: McpInvocationScope,
+    input: OrchestratorMcpThreadSendInput,
+    parent: Pick<OrchestrationV2ThreadProjection, "thread" | "runs"> | undefined,
+    target: Pick<OrchestrationV2ThreadProjection, "thread">,
+    operation: string,
+  ) {
+    const mode = input.mode ?? "auto";
+    const key = yield* requestKey(input.clientRequestId);
+    const messageId = stableOperationMessageId({
+      scope,
+      requestKey: key,
+      operation,
+    });
+    const result = yield* threadManagement
+      .sendToThread({
+        projectId: target.thread.projectId,
+        commandId: stableCommandId({
+          scope,
+          requestKey: key,
+          operation,
+        }),
+        threadId: input.threadId,
+        ...(parent === undefined ? {} : { senderThreadId: parent.thread.id }),
+        // A linked environment's agent has no thread here; the link names it.
+        ...(parent === undefined && scope.client?.senderThread !== undefined
+          ? { linkedSender: scope.client.senderThread }
+          : {}),
+        messageId,
+        text: input.message,
+        attachments: [],
+        mode,
+        ...(input.freshContext ? { freshContext: true } : {}),
+        ...(input.outputSchema === undefined ? {} : { outputSchema: input.outputSchema }),
+        createdBy: "agent",
+        creationSource: "mcp",
+      })
+      .pipe(
+        Effect.mapError((error) =>
+          isThreadManagementError(error)
+            ? threadManagementFailure(error)
+            : failure(
+                "orchestration_error",
+                `Unable to send to thread ${input.threadId}: ${userFacingDispatchErrorMessage(error) ?? errorMessage(error)}`,
+              ),
+        ),
+      );
+    return {
+      threadId: input.threadId,
+      link: threadLinkFor(scope, input.threadId, target.thread.title),
+      messageId,
+      runId: result.run.id,
+      ...(result.run.delegatedTaskId === undefined ? {} : { taskId: result.run.delegatedTaskId }),
+      status: result.run.status,
+      delivery: result.delivery,
+    } satisfies OrchestratorMcpThreadSendResult;
+  });
+
   return OrchestratorMcpService.of({
     scheduleTask: Effect.fn("OrchestratorMcpService.scheduleTask")(function* (scope, input) {
       const { parent, limits } = yield* loadCaller(scope, ["runs"]);
@@ -3868,58 +3946,80 @@ const make = Effect.gen(function* () {
     }),
     sendToThread: Effect.fn("OrchestratorMcpService.sendToThread")(function* (scope, input) {
       const { parent, limits, target } = yield* loadScopedThread(scope, input.threadId, ["runs"]);
+      yield* assertDuetThreadSendAllowed({ scope, caller: parent?.thread, target: target.thread });
       yield* assertLiveCallerForOtherThread(scope, parent, target);
       yield* assertTargetWithinLimits(limits, target.thread);
-
-      const mode = input.mode ?? "auto";
-      const key = yield* requestKey(input.clientRequestId);
-      const messageId = stableOperationMessageId({
-        scope,
-        requestKey: key,
-        operation: "thread-send",
-      });
-      const result = yield* threadManagement
-        .sendToThread({
-          projectId: target.thread.projectId,
-          commandId: stableCommandId({
-            scope,
-            requestKey: key,
-            operation: "thread-send",
-          }),
-          threadId: input.threadId,
-          ...(parent === undefined ? {} : { senderThreadId: parent.thread.id }),
-          // A linked environment's agent has no thread here; the link names it.
-          ...(parent === undefined && scope.client?.senderThread !== undefined
-            ? { linkedSender: scope.client.senderThread }
-            : {}),
-          messageId,
-          text: input.message,
-          attachments: [],
-          mode,
-          ...(input.freshContext ? { freshContext: true } : {}),
-          ...(input.outputSchema === undefined ? {} : { outputSchema: input.outputSchema }),
-          createdBy: "agent",
-          creationSource: "mcp",
-        })
+      return yield* sendToThreadCore(scope, input, parent, target, "thread-send");
+    }),
+    sendToDuet: Effect.fn("OrchestratorMcpService.sendToDuet")(function* (scope, input) {
+      if (input.environmentId !== undefined && input.environmentId !== scope.environmentId) {
+        return yield* failure(
+          "invalid_request",
+          "Routing to a linked environment is not available yet. Omit environmentId for a local Duet.",
+        );
+      }
+      if (Option.isNone(captainStore)) {
+        return yield* failure("orchestration_error", "Duet state is unavailable.");
+      }
+      const threadScope = yield* requireThreadScope(scope, "duet_send");
+      const store = captainStore.value;
+      const chorus = yield* store
+        .byThread(threadScope.thread.threadId)
+        .pipe(Effect.mapError((error) => failure("orchestration_error", error.message)));
+      if (chorus?.kind !== "chorus" || threadScope.thread.subagent === true) {
+        return yield* failure(
+          "capability_denied",
+          "This tool belongs to the active primary thread of the Chorus.",
+        );
+      }
+      const duet = yield* store
+        .requireCaptain(input.duetId)
         .pipe(
           Effect.mapError((error) =>
-            isThreadManagementError(error)
-              ? threadManagementFailure(error)
-              : failure(
-                  "orchestration_error",
-                  `Unable to send to thread ${input.threadId}: ${userFacingDispatchErrorMessage(error) ?? errorMessage(error)}`,
-                ),
+            failure(
+              error.code === "not_found" ? "invalid_request" : "orchestration_error",
+              error.message,
+            ),
           ),
         );
-      return {
-        threadId: input.threadId,
-        link: threadLinkFor(scope, input.threadId, target.thread.title),
-        messageId,
-        runId: result.run.id,
-        ...(result.run.delegatedTaskId === undefined ? {} : { taskId: result.run.delegatedTaskId }),
-        status: result.run.status,
-        delivery: result.delivery,
-      } satisfies OrchestratorMcpThreadSendResult;
+      if (duet.archivedAt !== null) {
+        return yield* failure("invalid_request", `Duet ${duet.name} is archived.`);
+      }
+      if (duet.kind !== "duet" || duet.id === chorus.id) {
+        return yield* failure(
+          "invalid_request",
+          "duet_send routes to another Duet, not the Chorus.",
+        );
+      }
+      // Resolve the destination here, never from an id the Chorus read earlier: rollover can replace it.
+      const targetThreadId = duet.primaryThreadId;
+      const sendInput: OrchestratorMcpThreadSendInput = {
+        threadId: targetThreadId,
+        message: input.message,
+        ...(input.mode === undefined ? {} : { mode: input.mode }),
+        ...(input.clientRequestId === undefined ? {} : { clientRequestId: input.clientRequestId }),
+      };
+      const { parent, limits, target } = yield* loadScopedThread(scope, targetThreadId, ["runs"]);
+      yield* assertLiveCallerForOtherThread(scope, parent, target);
+      yield* assertTargetWithinLimits(limits, target.thread);
+      const sent = yield* sendToThreadCore(scope, sendInput, parent, target, "duet-send");
+      const now = DateTime.formatIso(yield* DateTime.now);
+      yield* store
+        .recordChorusRoute({
+          runId: sent.runId,
+          environmentId: scope.environmentId,
+          sourceCaptainId: chorus.id,
+          sourceThreadId: threadScope.thread.threadId,
+          duetId: duet.id,
+          threadId: targetThreadId,
+          message: input.message,
+          sentAt: now,
+          lastSeenStatus: sent.status,
+          result: null,
+          updatedAt: now,
+        })
+        .pipe(Effect.mapError((error) => failure("orchestration_error", error.message)));
+      return { ...sent, duetId: duet.id, environmentId: scope.environmentId };
     }),
     waitForThread: Effect.fn("OrchestratorMcpService.waitForThread")(function* (scope, input) {
       yield* assertReadableConversation(scope, input.threadId);

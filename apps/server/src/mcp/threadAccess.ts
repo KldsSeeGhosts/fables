@@ -267,6 +267,96 @@ export const privateChorusConversationIds = Effect.fn("mcp.privateChorusConversa
   },
 );
 
+type CaptainThreadShape = Pick<OrchestrationV2ThreadShell, "id" | "lineage">;
+
+const captainConversationKey = (thread: CaptainThreadShape): ThreadId | undefined => {
+  if (isCaptainThreadId(thread.id)) return thread.id;
+  const { parentThreadId, relationshipToParent } = thread.lineage;
+  return relationshipToParent === "subagent" &&
+    parentThreadId !== null &&
+    isCaptainThreadId(parentThreadId)
+    ? parentThreadId
+    : undefined;
+};
+
+const duetWriteDenied = (message: string) =>
+  Effect.fail(
+    new OrchestratorMcpFailure({
+      code: "capability_denied",
+      message,
+    }),
+  );
+
+const loadDuetThreadOwners = Effect.fn("mcp.loadDuetThreadOwners")(function* (
+  caller: CaptainThreadShape | undefined,
+  target: CaptainThreadShape,
+) {
+  const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
+  const callerKey = caller === undefined ? undefined : captainConversationKey(caller);
+  const targetKey = captainConversationKey(target);
+  const load = (threadId: ThreadId | undefined) =>
+    threadId === undefined || Option.isNone(store)
+      ? Effect.succeed(undefined)
+      : store.value.findByConversation(threadId).pipe(Effect.mapError(unavailable));
+  return {
+    callerKey,
+    targetKey,
+    callerCaptain: yield* load(callerKey),
+    targetCaptain: yield* load(targetKey),
+  };
+});
+
+/** Cross-Duet writes belong to explicit Duet coordination paths, not generic thread control. */
+export const assertDuetThreadWriteAllowed = Effect.fn("mcp.assertDuetThreadWriteAllowed")(
+  function* (input: {
+    readonly scope: McpInvocationContext.McpInvocationScope;
+    readonly caller: CaptainThreadShape | undefined;
+    readonly target: CaptainThreadShape;
+  }) {
+    const owners = yield* loadDuetThreadOwners(input.caller, input.target);
+    if (owners.targetKey === undefined) return;
+    const sameOwner =
+      owners.callerKey !== undefined &&
+      (owners.callerKey === owners.targetKey ||
+        (owners.callerCaptain !== undefined &&
+          owners.targetCaptain !== undefined &&
+          owners.callerCaptain.id === owners.targetCaptain.id));
+    if (sameOwner) return;
+    if (owners.targetCaptain?.kind === "chorus") {
+      return yield* duetWriteDenied(
+        "Agents cannot message or change the Chorus. The user can act in the Chorus thread directly.",
+      );
+    }
+    if (input.scope.chorus === true && input.scope.thread?.subagent !== true) {
+      return yield* duetWriteDenied(
+        "A Chorus cannot wake or change another Duet's thread. Use duet_send for a routed request.",
+      );
+    }
+    if (owners.callerKey !== undefined) {
+      return yield* duetWriteDenied(
+        "A Duet or its Solo cannot wake or change another Duet's thread. Route that request through the user or the Chorus.",
+      );
+    }
+  },
+);
+
+/** Sends into a Chorus conversation are denied for every agent caller, including stale owners. */
+export const assertDuetThreadSendAllowed = Effect.fn("mcp.assertDuetThreadSendAllowed")(
+  function* (input: {
+    readonly scope: McpInvocationContext.McpInvocationScope;
+    readonly caller: CaptainThreadShape | undefined;
+    readonly target: CaptainThreadShape;
+  }) {
+    const owners = yield* loadDuetThreadOwners(input.caller, input.target);
+    if (owners.targetCaptain?.kind === "chorus") {
+      return yield* duetWriteDenied(
+        "Agents cannot message the Chorus. Routed results arrive as context on its next user turn.",
+      );
+    }
+    yield* assertDuetThreadWriteAllowed(input);
+  },
+);
+
 export const assertReadableConversation = Effect.fn("mcp.assertReadableConversation")(function* (
   scope: McpInvocationContext.McpInvocationScope,
   threadId: ThreadId,

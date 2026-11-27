@@ -5,6 +5,7 @@ import {
   CaptainError,
   CaptainMemory,
   ChatAttachment,
+  type EnvironmentId,
   CommandId,
   MessageId,
   ModelSelection,
@@ -94,6 +95,20 @@ const isActiveChorusUniqueViolation = (cause: unknown) =>
   SqlError.isSqlError(cause) &&
   cause.reason._tag === "UniqueViolation" &&
   cause.reason.constraint === "captains.kind";
+
+export interface ChorusRoute {
+  readonly runId: RunId;
+  readonly environmentId: EnvironmentId;
+  readonly sourceCaptainId: CaptainId;
+  readonly sourceThreadId: ThreadId;
+  readonly duetId: CaptainId;
+  readonly threadId: ThreadId;
+  readonly message: string;
+  readonly sentAt: string;
+  readonly lastSeenStatus: string;
+  readonly result: string | null;
+  readonly updatedAt: string;
+}
 
 /** `profile` changes the Captain list; `content` only that Captain's documents or memories. */
 type CaptainChange = { readonly captainId: CaptainId; readonly kind: "profile" | "content" };
@@ -186,6 +201,66 @@ const make = Effect.gen(function* () {
     },
     Effect.catchTags({ SqlError: captainUnavailable, SchemaError: captainUnavailable }),
   );
+
+  const recordChorusRoute = Effect.fn("CaptainStore.recordChorusRoute")(function* (
+    route: ChorusRoute,
+  ) {
+    yield* sql`
+        INSERT INTO chorus_routes (
+          run_id, environment_id, source_captain_id, source_thread_id, duet_id, thread_id,
+          message, sent_at, last_seen_status, result, updated_at
+        ) VALUES (
+          ${route.runId}, ${route.environmentId}, ${route.sourceCaptainId}, ${route.sourceThreadId},
+          ${route.duetId}, ${route.threadId}, ${route.message}, ${route.sentAt},
+          ${route.lastSeenStatus}, ${route.result}, ${route.updatedAt}
+        ) ON CONFLICT(run_id) DO UPDATE SET
+          environment_id = excluded.environment_id,
+          source_captain_id = excluded.source_captain_id,
+          source_thread_id = excluded.source_thread_id,
+          duet_id = excluded.duet_id,
+          thread_id = excluded.thread_id,
+          message = excluded.message,
+          sent_at = excluded.sent_at,
+          last_seen_status = excluded.last_seen_status,
+          result = excluded.result,
+          updated_at = excluded.updated_at
+      `;
+  }, Effect.catch(captainUnavailable));
+
+  const listChorusRoutes = Effect.fn("CaptainStore.listChorusRoutes")(function* (
+    sourceCaptainId: CaptainId,
+  ) {
+    return yield* sql<ChorusRoute>`
+        SELECT run_id AS runId, environment_id AS environmentId,
+          source_captain_id AS sourceCaptainId, source_thread_id AS sourceThreadId,
+          duet_id AS duetId, thread_id AS threadId, message, sent_at AS sentAt,
+          last_seen_status AS lastSeenStatus, result, updated_at AS updatedAt
+        FROM chorus_routes
+        WHERE source_captain_id = ${sourceCaptainId}
+        ORDER BY sent_at, run_id
+      `;
+  }, Effect.catch(captainUnavailable));
+
+  const updateChorusRoute = Effect.fn("CaptainStore.updateChorusRoute")(function* (input: {
+    readonly runId: RunId;
+    readonly lastSeenStatus: string;
+    readonly result: string | null;
+    readonly updatedAt: string;
+  }) {
+    yield* sql`
+        UPDATE chorus_routes
+        SET last_seen_status = ${input.lastSeenStatus}, result = ${input.result},
+          updated_at = ${input.updatedAt}
+        WHERE run_id = ${input.runId}
+      `;
+  }, Effect.catch(captainUnavailable));
+
+  const deleteChorusRoutes = Effect.fn("CaptainStore.deleteChorusRoutes")(function* (
+    runIds: ReadonlyArray<RunId>,
+  ) {
+    if (runIds.length === 0) return;
+    yield* sql`DELETE FROM chorus_routes WHERE ${sql.in("run_id", runIds)}`;
+  }, Effect.catch(captainUnavailable));
 
   const requireOwner = Effect.fn("CaptainStore.requireOwner")(function* (
     id: CaptainId,
@@ -474,6 +549,10 @@ const make = Effect.gen(function* () {
     findActiveChorus,
     privateChorusConversationIds,
     activeDuetRoster,
+    recordChorusRoute,
+    listChorusRoutes,
+    updateChorusRoute,
+    deleteChorusRoutes,
     save,
     latestCompletedCompactionAt,
     saveRolloverResend,
