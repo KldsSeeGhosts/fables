@@ -7,6 +7,7 @@ import {
   type ExecutionEnvironmentCapabilities,
   MCP_PEER_LINK_SOFTWARE_ID,
   type PeerLink,
+  ThreadId,
   type PeerLinkCreateInput,
   PeerLinkError,
   type PeerLinkName,
@@ -25,10 +26,13 @@ import * as Hex from "effect/encoding/Hex";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
+import * as PubSub from "effect/PubSub";
 import * as Redacted from "effect/Redacted";
 import * as Result from "effect/Result";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpClient from "effect/http/HttpClient";
@@ -133,6 +137,19 @@ export class PeerLinks extends Context.Service<
     readonly recordExpiry: (
       environmentId: EnvironmentId,
       expiresAt: DateTime.Utc,
+    ) => Effect.Effect<void>;
+    readonly subscribeChanges: Effect.Effect<Stream.Stream<void>, never, Scope.Scope>;
+    /** Chorus home facts learned from this peer over the authenticated link. */
+    readonly chorusHomeRecords: Effect.Effect<
+      ReadonlyArray<{
+        readonly environmentId: EnvironmentId;
+        readonly threadId: ThreadId | null;
+      }>,
+      PeerLinkError
+    >;
+    readonly recordChorusHome: (
+      environmentId: EnvironmentId,
+      claim: { readonly threadId: ThreadId | null } | null,
     ) => Effect.Effect<void>;
   }
 >()("t3/peer/PeerLinks") {}
@@ -251,6 +268,7 @@ const make = Effect.gen(function* () {
   const environment = yield* ServerEnvironment.ServerEnvironment;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const isOwnLoopback = yield* LoopbackHost;
+  const changes = yield* PubSub.sliding<void>(1);
   const enabled = serverSettings.getSettings.pipe(
     Effect.map((settings) => settings.linkedEnvironmentsEnabled),
     Effect.orElseSucceed(() => false),
@@ -606,6 +624,7 @@ const make = Effect.gen(function* () {
     if (Option.isSome(previous) && previous.value.secret_name !== secretName) {
       yield* secrets.remove(previous.value.secret_name).pipe(Effect.ignore);
     }
+    yield* PubSub.publish(changes, undefined);
     return { link: linked, alreadyLinked: false };
   });
 
@@ -726,6 +745,7 @@ const make = Effect.gen(function* () {
           );
         }
       }
+      if (deleted.length > 0) yield* PubSub.publish(changes, undefined);
       return { removed: deleted.length > 0, endedThere };
     },
   );
@@ -816,6 +836,37 @@ const make = Effect.gen(function* () {
       WHERE environment_id = ${environmentId} AND expires_at < ${DateTime.formatIso(expiresAt)}
     `.pipe(Effect.asVoid, Effect.ignoreCause({ log: true }));
 
+  const chorusHomeRecords: PeerLinks["Service"]["chorusHomeRecords"] = sql<{
+    readonly environment_id: string;
+    readonly chorus_home_thread_id: string | null;
+  }>`
+    SELECT environment_id, chorus_home_thread_id
+    FROM peer_environment_links
+    WHERE chorus_home_claimed = 1
+  `.pipe(
+    NodeSqliteClient.readOnly,
+    Effect.map((rows) =>
+      rows.map((row) => ({
+        environmentId: EnvironmentId.make(row.environment_id),
+        threadId:
+          row.chorus_home_thread_id === null ? null : ThreadId.make(row.chorus_home_thread_id),
+      })),
+    ),
+    Effect.catch(failStorage),
+  );
+
+  const recordChorusHome = Effect.fn("PeerLinks.recordChorusHome")(
+    function* (environmentId: EnvironmentId, claim: { readonly threadId: ThreadId | null } | null) {
+      yield* sql`
+      UPDATE peer_environment_links
+      SET chorus_home_claimed = ${claim === null ? 0 : 1},
+          chorus_home_thread_id = ${claim?.threadId ?? null}
+      WHERE environment_id = ${environmentId}
+    `;
+    },
+    Effect.ignoreCause({ log: true }),
+  );
+
   return PeerLinks.of({
     enabled,
     link,
@@ -827,6 +878,9 @@ const make = Effect.gen(function* () {
     resolve,
     recordOutcome,
     recordExpiry,
+    subscribeChanges: PubSub.subscribe(changes).pipe(Effect.map(Stream.fromSubscription)),
+    chorusHomeRecords,
+    recordChorusHome,
   });
 });
 

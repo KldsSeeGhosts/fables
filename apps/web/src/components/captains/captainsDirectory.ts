@@ -1,6 +1,8 @@
-import { useAtomValue } from "@effect/atom-react";
+import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import { AuthOrchestrationReadScope, type Captain, type EnvironmentId } from "@t3tools/contracts";
+import { selectFleetChorus, type FleetChorusView } from "@t3tools/client-runtime/state/captains";
 import { AsyncResult } from "effect/reactivity";
+import { useContext } from "react";
 
 import { useThreadShells } from "../../state/entities";
 import { environmentAtomList, environmentIdsKey } from "../../state/environmentAtomList";
@@ -14,6 +16,9 @@ const captainResults = environmentAtomList("captain-shelf:environments", (enviro
 const createPermissions = environmentAtomList("captain-shelf:create", (environmentId) =>
   serverEnvironment.createCaptain.permissionAtom(environmentId),
 );
+const fleetChorusResults = environmentAtomList("captain-shelf:fleet-chorus", (environmentId) =>
+  serverEnvironment.fleetChorusLive({ environmentId, input: {} }),
+);
 
 /** Connected environments that can list Captains, with each one's live Captain list. */
 export function useCaptainEnvironments() {
@@ -26,6 +31,39 @@ export function useCaptainEnvironments() {
   const key = environmentIdsKey(supporting.map(({ environmentId }) => environmentId));
   const results = useAtomValue(captainResults(key));
   return { supporting, key, results };
+}
+
+/** The one fleet Chorus projection, chosen from the connected servers that understand it. */
+export function useFleetChorusStatus() {
+  const registry = useContext(RegistryContext);
+  const { environments } = useEnvironments();
+  const readable = useEnvironmentsWithScope(environments, AuthOrchestrationReadScope);
+  const fleetEnvironments = environments.filter(
+    ({ environmentId, serverConfig }) =>
+      readable.has(environmentId) && serverConfig?.environment.capabilities.fleetChorus === true,
+  );
+  const environmentIds = fleetEnvironments.map(({ environmentId }) => environmentId);
+  const key = environmentIdsKey(environmentIds);
+  const results = useAtomValue(fleetChorusResults(key));
+  const fleet = selectFleetChorus(
+    fleetEnvironments.map(({ environmentId, connection }, index) => ({
+      environmentId,
+      connected: connection.phase === "connected",
+      status: AsyncResult.getOrElse(results[index]!, () => null),
+    })),
+  );
+  return {
+    fleet,
+    refresh: () => {
+      for (const environmentId of environmentIds) {
+        registry.refresh(serverEnvironment.fleetChorusLive({ environmentId, input: {} }));
+      }
+    },
+  };
+}
+
+export function useFleetChorus(): FleetChorusView | null {
+  return useFleetChorusStatus().fleet;
 }
 
 /** Where a new Captain can be created, preferring the primary environment. */

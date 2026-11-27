@@ -1,7 +1,7 @@
+import { fleetChorusStateLabel } from "@t3tools/client-runtime/state/captains";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/models";
-import type { Captain, EnvironmentId } from "@t3tools/contracts";
+import type { Captain, EnvironmentId, FleetChorusState } from "@t3tools/contracts";
 import { useNavigation } from "@react-navigation/native";
-import type { ReactNode } from "react";
 import { useGT, useMessages } from "gt-react-native";
 import { Pressable, View } from "react-native";
 
@@ -20,6 +20,7 @@ export interface DuetHomeRow {
   readonly environment: { readonly environmentId: EnvironmentId; readonly label: string };
   readonly captain: Captain;
   readonly activity: Parameters<typeof duetRowTrail>[0]["activity"];
+  readonly fleetState?: FleetChorusState | undefined;
 }
 
 function Trail(props: { readonly trail: DuetRowTrail; readonly tokens: DuetTokens }) {
@@ -59,13 +60,13 @@ function Trail(props: { readonly trail: DuetRowTrail; readonly tokens: DuetToken
 export function DuetHomeSection(props: {
   readonly rows: ReadonlyArray<DuetHomeRow>;
   readonly waiting: number;
-  readonly chorusControls: ReactNode;
-  readonly fleetMachineCount: number;
   readonly showsEnvironment: boolean;
   readonly projects: ReadonlyArray<EnvironmentProject>;
   readonly selectedThreadKey: string | null;
+  readonly onOpenFleet: () => void;
 }) {
   const gt = useGT();
+  const message = useMessages();
   const tokens = useDuetTokens();
   const navigation = useNavigation();
   const selectDetail = useSelectWorkspaceDetail();
@@ -126,17 +127,14 @@ export function DuetHomeSection(props: {
           </View>
         </Pressable>
       </View>
-      {props.chorusControls}
-      {props.rows.map(({ environment, captain, activity }) => {
+      {props.rows.map(({ environment, captain, activity, fleetState }) => {
         const trail = duetRowTrail({ captain, activity });
         const scope = duetRowScope(environment.environmentId, captain, props.projects);
         const scopeText =
-          captain.archivedAt !== null
-            ? gt("Archived")
-            : captain.kind === "chorus"
-              ? gt("All Duets across {count, plural, =1 {1 machine} other {{count} machines}}", {
-                  count: props.fleetMachineCount,
-                })
+          fleetState !== undefined
+            ? fleetChorusStateLabel(fleetState, message)
+            : captain.archivedAt !== null
+              ? gt("Archived")
               : scope.kind === "project"
                 ? scope.title
                 : scope.kind === "projects"
@@ -146,18 +144,20 @@ export function DuetHomeSection(props: {
                   : gt("All projects");
         const threadKey = scopedThreadKey(environment.environmentId, captain.primaryThreadId);
         const selected = threadKey === props.selectedThreadKey;
+        const disabled = fleetState !== undefined && fleetState !== "ready";
         return (
           <Pressable
             key={`${environment.environmentId}:${captain.id}`}
             accessibilityRole="button"
-            accessibilityState={{ selected }}
+            accessibilityState={{
+              selected,
+              disabled,
+            }}
+            disabled={disabled}
             accessibilityLabel={[captain.name, scopeText].join(", ")}
             onPress={() => {
-              if (captain.kind === "chorus" && captain.archivedAt !== null) {
-                navigation.navigate("CaptainBrief", {
-                  environmentId: String(environment.environmentId),
-                  captainId: String(captain.id),
-                });
+              if (fleetState !== undefined) {
+                props.onOpenFleet();
                 return;
               }
               selectDetail({
@@ -173,6 +173,12 @@ export function DuetHomeSection(props: {
               backgroundColor: selected || pressed ? tokens.row : undefined,
             })}
           >
+            {fleetState === undefined ? null : (
+              <View
+                className="absolute bottom-3 left-1 top-3 w-0.5 rounded-full"
+                style={{ backgroundColor: tokens.needsInput }}
+              />
+            )}
             <DuetCreature captain={captain} size={32} />
             <View className="min-w-0 flex-1">
               <View className="flex-row items-center gap-2">
@@ -183,14 +189,6 @@ export function DuetHomeSection(props: {
                 >
                   {captain.name}
                 </Text>
-                {captain.kind === "chorus" ? (
-                  <View
-                    className="rounded-full border px-1.5 py-px"
-                    style={{ borderColor: tokens.hairline }}
-                  >
-                    <Text style={{ fontSize: 10, color: tokens.meta }}>{gt("Chorus")}</Text>
-                  </View>
-                ) : null}
                 <Trail trail={trail} tokens={tokens} />
               </View>
               <View className="mt-px flex-row items-center gap-1.5">
@@ -219,7 +217,9 @@ export function DuetHomeSection(props: {
                   style={{ fontSize: 13, lineHeight: 18, color: tokens.meta }}
                   numberOfLines={1}
                 >
-                  {props.showsEnvironment ? `${scopeText} · ${environment.label}` : scopeText}
+                  {props.showsEnvironment && fleetState === undefined
+                    ? `${scopeText} · ${environment.label}`
+                    : scopeText}
                 </Text>
               </View>
             </View>

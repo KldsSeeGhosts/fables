@@ -21,6 +21,8 @@ import { McpSchema, Tool, Toolkit } from "effect/ai";
 import {
   ActiveChorusResult,
   activeChorusTool,
+  ChorusHomeResult,
+  chorusHomeTool,
   ChorusMachineActivity,
   chorusActivityTool,
 } from "../../../captains/chorusFleet.ts";
@@ -170,6 +172,9 @@ export const CaptainToolkit = Toolkit.make(
     .annotate(Tool.OpenWorld, true)
     .annotate(McpInvocationContext.ListedWhen, McpInvocationContext.chorusOnly),
   Tool.make(activeChorusTool, { ...options, success: ActiveChorusResult })
+    .annotate(Tool.Readonly, true)
+    .annotate(McpInvocationContext.ListedWhen, () => false),
+  Tool.make(chorusHomeTool, { ...options, success: ChorusHomeResult })
     .annotate(Tool.Readonly, true)
     .annotate(McpInvocationContext.ListedWhen, () => false),
   Tool.make(chorusActivityTool, { ...options, success: ChorusMachineActivity })

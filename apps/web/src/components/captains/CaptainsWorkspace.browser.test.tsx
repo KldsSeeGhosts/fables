@@ -8,6 +8,7 @@ import {
   type Captain,
   type CaptainDocument,
   type CaptainSnapshot,
+  type FleetChorusStatus,
   type ScheduledTask,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -110,11 +111,16 @@ const scheduledTask = {
 const openThread = vi.hoisted(() => vi.fn());
 const fixture = vi.hoisted(() => ({
   captains: [] as Captain[],
+  fleetStatus: null as FleetChorusStatus | null,
   snapshots: new Map<string, CaptainSnapshot>(),
 }));
 vi.mock(import("./captainNavigation"), () => ({ useOpenCaptainThread: () => openThread }));
 vi.mock(import("./captainsDirectory"), () => ({
   useCaptainEnvironments: () => ({ supporting: [], key: "", results: [] }),
+  useFleetChorus: () =>
+    fixture.fleetStatus === null
+      ? null
+      : { viaEnvironmentId: environmentId, status: fixture.fleetStatus },
   useCaptainDestinations: () => ({ destinations: [], destination: undefined }),
   useCaptainsDirectory: () => ({
     environments: [{ environmentId, label: "Local", loading: false, captains: fixture.captains }],
@@ -164,6 +170,7 @@ function useFixture(captains: Captain[], snapshots: Map<string, CaptainSnapshot>
   return {
     [Symbol.dispose]() {
       fixture.captains = [];
+      fixture.fleetStatus = null;
       fixture.snapshots = new Map();
     },
   };
@@ -308,28 +315,17 @@ it("labels machine and Duet groups in a Chorus recap", async () => {
     ],
   } satisfies CaptainSnapshot;
   using _fixture = useFixture([chorus], new Map([[chorus.id, chorusSnapshot]]));
+  fixture.fleetStatus = {
+    state: "ready",
+    home: { environmentId, threadId: chorus.primaryThreadId, label: "Local" },
+    localHome: true,
+    conflictingHomes: [],
+    updatedAt: at,
+  };
   await using screen = await render(<CaptainsWorkspace />, { router: "/captains" });
 
   await expect.element(screen.getByText("Mac Studio")).toBeVisible();
   await expect.element(screen.getByText("Maria")).toBeVisible();
   await expect.element(screen.getByText(/Review the release/)).toBeVisible();
   await expect.element(screen.getByText(/Machine unreachable: offline/)).toBeVisible();
-});
-
-it("warns when two active Choruses are visible", async () => {
-  const chorus = {
-    ...captain,
-    id: CaptainId.make("chorus"),
-    primaryThreadId: ThreadId.make("captain:chorus:0"),
-    name: "Chorus",
-    kind: "chorus" as const,
-  } satisfies Captain;
-  const other = {
-    ...chorus,
-    id: CaptainId.make("other-chorus"),
-    primaryThreadId: ThreadId.make("captain:other-chorus:0"),
-  } satisfies Captain;
-  using _fixture = useFixture([chorus, other], new Map());
-  await using screen = await render(<CaptainsWorkspace />, { router: "/captains" });
-  await expect.element(screen.getByText(/More than one Chorus is active/)).toBeVisible();
 });

@@ -28,6 +28,7 @@ import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { planAutoSettleSettingsSync, type AutoSettleSettings } from "./autoSettleSettingsSync";
 import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
+import { useFleetChorusStatus } from "../captains/useCaptainsDirectory";
 import {
   managedSettingReason,
   resolveMobileSettingsTargets,
@@ -56,6 +57,7 @@ export function SettingsLabsRouteScreen() {
             "Let agents on a machine work on your other machines, and theirs on it. Turn it on for each machine. While off, nothing new starts over a link; running tasks finish.",
           )}
         />
+        <ChorusHomeBetaSection />
         <MachineBetaSection
           title={gt("Fast worktree checkout")}
           icon="bolt.circle"
@@ -264,7 +266,7 @@ export function NewThreadSettingsSection() {
   );
 }
 
-type MachineBetaSetting = "linkedEnvironmentsEnabled" | "fastWorktreeCheckout";
+type MachineBetaSetting = "linkedEnvironmentsEnabled" | "fastWorktreeCheckout" | "chorusHome";
 
 const AGENT_FEEDBACK_CHOICES: ReadonlyArray<{
   readonly mode: AgentFeedbackMode;
@@ -348,6 +350,36 @@ function AgentFeedbackSection() {
   );
 }
 
+/** The Chorus home switch for every machine new enough to host the fleet row. */
+function ChorusHomeBetaSection() {
+  const gt = useGT();
+  const { fleet, refresh } = useFleetChorusStatus();
+  return (
+    <>
+      <MachineBetaSection
+        title={gt("Chorus home")}
+        icon="link"
+        capability="fleetChorus"
+        setting="chorusHome"
+        description={gt(
+          "Keep the fleet's one Chorus on this machine. It appears in every connected app; turning this off archives the local row.",
+        )}
+      />
+      {fleet !== null ? <Button label={gt("Refresh")} size="compact" onPress={refresh} /> : null}
+      {fleet?.status.state === "conflict" ? (
+        <Text className="-mt-3 px-2 text-sm text-warning-foreground">
+          {fleet.status.conflictingHomes.length > 0
+            ? gt(
+                "More than one machine is set as the Chorus home: {labels}. Turn it off on all but one.",
+                { labels: fleet.status.conflictingHomes.join(", ") },
+              )
+            : gt("More than one machine is set as the Chorus home. Turn it off on all but one.")}
+        </Text>
+      ) : null}
+    </>
+  );
+}
+
 /** One switch per connected machine that offers the beta, since each machine's own setting decides. */
 function MachineBetaSection({
   title,
@@ -358,7 +390,7 @@ function MachineBetaSection({
 }: {
   readonly title: string;
   readonly icon: ComponentProps<typeof SettingsSwitchRow>["icon"];
-  readonly capability: "peerLinks" | "fastWorktreeCheckout";
+  readonly capability: "peerLinks" | "fastWorktreeCheckout" | "fleetChorus";
   readonly setting: MachineBetaSetting;
   readonly description: string;
 }) {
@@ -402,7 +434,9 @@ function MachineBetaSection({
                     patch:
                       setting === "linkedEnvironmentsEnabled"
                         ? { linkedEnvironmentsEnabled: value }
-                        : { fastWorktreeCheckout: value },
+                        : setting === "chorusHome"
+                          ? { chorusHome: value }
+                          : { fastWorktreeCheckout: value },
                   },
                 })
               }

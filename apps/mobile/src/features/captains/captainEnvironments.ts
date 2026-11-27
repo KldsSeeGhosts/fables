@@ -13,7 +13,6 @@ export interface CaptainEnvironment {
   readonly status: CaptainEnvironmentStatus;
   readonly snapshot: CaptainSnapshot | null;
   readonly captains: ReadonlyArray<Captain>;
-  readonly archivedChoruses: ReadonlyArray<Captain>;
 }
 
 export interface CaptainEnvironmentCandidate {
@@ -84,9 +83,6 @@ export function resolveCaptainEnvironments(input: {
         status,
         snapshot,
         captains: captains.filter((captain) => captain.archivedAt === null),
-        archivedChoruses: captains.filter(
-          (captain) => captain.archivedAt !== null && captain.kind === "chorus",
-        ),
       },
     ];
   });

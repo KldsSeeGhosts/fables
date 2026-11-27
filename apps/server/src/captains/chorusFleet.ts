@@ -1,4 +1,4 @@
-import type { OrchestrationV2LinkedSender } from "@t3tools/contracts";
+import { ThreadId, type OrchestrationV2LinkedSender } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -8,6 +8,12 @@ import * as PeerMcpClient from "../peer/PeerMcpClient.ts";
 
 export const activeChorusTool = "chorus_active";
 export const ActiveChorusResult = Schema.Struct({ active: Schema.Boolean });
+
+export const chorusHomeTool = "chorus_home";
+export const ChorusHomeResult = Schema.Struct({
+  home: Schema.Boolean,
+  threadId: Schema.NullOr(ThreadId),
+});
 
 export const chorusActivityTool = "chorus_machine_activity";
 export const CHORUS_DUET_LIMIT = 16;

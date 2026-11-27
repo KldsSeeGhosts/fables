@@ -658,6 +658,7 @@ export const WS_METHODS = {
   workflowsDeleteDefinition: "workflows.deleteDefinition",
 
   captainsSubscribe: "captains.subscribe",
+  captainsFleetChorus: "captains.fleetChorus",
   captainsCreate: "captains.create",
   captainsUpdate: "captains.update",
   captainsArchive: "captains.archive",
@@ -2437,6 +2438,13 @@ const WsCaptainsSubscribeRpc = Rpc.make(WS_METHODS.captainsSubscribe, {
   stream: true,
 });
 
+const WsCaptainsFleetChorusRpc = Rpc.make(WS_METHODS.captainsFleetChorus, {
+  payload: Schema.Struct({}),
+  success: Captains.FleetChorusStatus,
+  error: Schema.Union([Captains.CaptainError, EnvironmentAuthorizationError]),
+  stream: true,
+});
+
 const WsCaptainsCreateRpc = Rpc.make(WS_METHODS.captainsCreate, {
   payload: Captains.CaptainCreateInput,
   success: Captains.Captain,
@@ -2678,6 +2686,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsWorkflowsSaveDefinitionRpc,
   WsWorkflowsDeleteDefinitionRpc,
   WsCaptainsSubscribeRpc,
+  WsCaptainsFleetChorusRpc,
   WsCaptainsCreateRpc,
   WsCaptainsUpdateRpc,
   WsCaptainsArchiveRpc,

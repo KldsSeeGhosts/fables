@@ -138,6 +138,7 @@ import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts"
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as DocumentText from "./provider/DocumentText.ts";
 import * as Captains from "./captains/CaptainService.ts";
+import * as FleetChorus from "./captains/FleetChorusService.ts";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as Workflows from "./workflows/Workflows.ts";
 import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
@@ -1524,6 +1525,7 @@ export const layerWsRpc = (
       const threadViewers = yield* ThreadViewers.ThreadViewers;
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const captains = yield* Captains.CaptainService;
+      const fleetChorus = yield* FleetChorus.FleetChorusService;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const workflows = yield* Workflows.Workflows;
       const workflowDefinitions = yield* WorkflowRuntime.WorkflowDefinitions;
@@ -2462,6 +2464,7 @@ export const layerWsRpc = (
           workflowDefinitions.save(input.name, input.source),
         [WS_METHODS.workflowsDeleteDefinition]: (input) => workflowDefinitions.remove(input.name),
         [WS_METHODS.captainsSubscribe]: (input) => captains.subscribe(input),
+        [WS_METHODS.captainsFleetChorus]: (_input) => fleetChorus.subscribe,
         [WS_METHODS.captainsCreate]: (input) => captains.create(input),
         [WS_METHODS.captainsUpdate]: (input) => captains.update(input),
         [WS_METHODS.captainsArchive]: (input) => captains.archive(input),

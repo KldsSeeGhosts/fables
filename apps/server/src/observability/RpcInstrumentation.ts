@@ -275,6 +275,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.subscribeServerLifecycle]: "server",
   [WS_METHODS.subscribeAuthAccess]: "auth",
   [WS_METHODS.captainsSubscribe]: "captains",
+  [WS_METHODS.captainsFleetChorus]: "captains",
   [WS_METHODS.captainsCreate]: "captains",
   [WS_METHODS.captainsUpdate]: "captains",
   [WS_METHODS.captainsArchive]: "captains",

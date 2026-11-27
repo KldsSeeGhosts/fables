@@ -32,7 +32,6 @@ import * as ProjectService from "../project/ProjectService.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as CaptainHandoff from "./captainHandoff.ts";
 import * as CaptainStore from "./CaptainStore.ts";
-import { activeChorusTool, ActiveChorusResult, makeReadChorusFleet } from "./chorusFleet.ts";
 import {
   hasUnsettledCaptainCrew,
   isRolloverCompactionMessage,
@@ -60,28 +59,6 @@ const make = Effect.gen(function* () {
   const folders = yield* ManagedProjectFolders.ManagedProjectFolders;
   const projects = yield* ProjectService.ProjectService;
   const schedules = yield* ScheduledTaskService.ScheduledTaskService;
-  const readFleet = yield* makeReadChorusFleet;
-
-  const assertFleetChorusAvailable = Effect.fn("CaptainService.assertFleetChorusAvailable")(
-    function* () {
-      if ((yield* store.findActiveChorus()) !== undefined) {
-        return yield* CaptainStore.activeChorusConflict();
-      }
-      const { machines } = yield* readFleet({
-        tool: activeChorusTool,
-        success: ActiveChorusResult,
-      }).pipe(Effect.catch(CaptainStore.captainUnavailable));
-      const existing = machines.find(
-        ({ reply }) => reply._tag === "Success" && reply.success.active,
-      );
-      if (existing !== undefined) {
-        return yield* new CaptainError({
-          code: "conflict",
-          message: `An active Chorus already exists on ${existing.label}.`,
-        });
-      }
-    },
-  );
 
   const validateScope = Effect.fn("CaptainService.validateScope")(function* (
     ids: ReadonlyArray<ProjectId>,
@@ -122,11 +99,13 @@ const make = Effect.gen(function* () {
   });
 
   const create = Effect.fn("CaptainService.create")(
-    function* (input: CaptainCreateInput) {
+    function* (input: CaptainCreateInput, fleet = false) {
+      const kind = input.kind ?? "duet";
+      if (kind === "chorus" && !fleet) {
+        return yield* invalid("Chorus is created automatically on its home machine.");
+      }
       const existing = yield* store.find(input.captainId);
       if (existing !== undefined) return existing;
-      const kind = input.kind ?? "duet";
-      if (kind === "chorus") yield* assertFleetChorusAvailable();
       const scopedProjectIds =
         kind === "chorus" ? [] : yield* validateScope(input.scopedProjectIds);
       const projectId =
@@ -213,10 +192,12 @@ const make = Effect.gen(function* () {
   );
 
   const setArchived = Effect.fn("CaptainService.setArchived")(
-    function* ({ captainId }: { readonly captainId: CaptainId }, archived: boolean) {
+    function* ({ captainId }: { readonly captainId: CaptainId }, archived: boolean, fleet = false) {
       const current = yield* store.requireCaptain(captainId);
+      if (current.kind === "chorus" && !fleet) {
+        return yield* invalid("Change the Chorus home in Settings.");
+      }
       if ((current.archivedAt !== null) === archived) return current;
-      if (!archived && current.kind === "chorus") yield* assertFleetChorusAvailable();
       const now = yield* timestamp;
       const captain = yield* store.save({
         ...current,
@@ -412,6 +393,10 @@ const make = Effect.gen(function* () {
 
   const deleteCaptain = Effect.fn("CaptainService.delete")(
     function* ({ captainId }: { readonly captainId: CaptainId }) {
+      const current = yield* store.find(captainId);
+      if (current?.kind === "chorus") {
+        return yield* invalid("Change the Chorus home in Settings.");
+      }
       yield* store.remove(captainId);
     },
     Effect.uninterruptible,
@@ -421,8 +406,10 @@ const make = Effect.gen(function* () {
   return {
     create,
     update,
-    archive: (input: { readonly captainId: CaptainId }) => setArchived(input, true),
-    unarchive: (input: { readonly captainId: CaptainId }) => setArchived(input, false),
+    archive: (input: { readonly captainId: CaptainId }, fleet = false) =>
+      setArchived(input, true, fleet),
+    unarchive: (input: { readonly captainId: CaptainId }, fleet = false) =>
+      setArchived(input, false, fleet),
     delete: deleteCaptain,
     resetConversation,
     subscribe: store.subscribe,

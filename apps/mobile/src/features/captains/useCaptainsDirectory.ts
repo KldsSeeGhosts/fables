@@ -1,8 +1,10 @@
-import { useAtomValue } from "@effect/atom-react";
+import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import {
   captainConversationKeys,
   captainForEarlierConversation,
   captainForThread,
+  selectFleetChorus,
+  type FleetChorusView,
 } from "@t3tools/client-runtime/state/captains";
 import {
   AuthOrchestrationReadScope,
@@ -11,7 +13,8 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
-import { useEffect } from "react";
+import { AsyncResult } from "effect/reactivity";
+import { useContext, useEffect } from "react";
 
 import { useEnvironmentServerConfig } from "../../state/entities";
 import { useEnvironments } from "../../state/environments";
@@ -57,6 +60,43 @@ export function useCaptainEnvironments(environmentId?: EnvironmentId | null) {
   );
   const cached = useAtomValue(cachedCaptainsAtom, cachedCaptainsOf);
   return resolveCaptainEnvironments({ candidates, readable, denied, live, cached });
+}
+
+/** The one fleet Chorus projection, chosen from connected servers that understand it. */
+export function useFleetChorusStatus() {
+  const registry = useContext(RegistryContext);
+  const { environments } = useEnvironments();
+  const readable = useEnvironmentsWithScope(environments, AuthOrchestrationReadScope);
+  const supporting = environments.filter(
+    (environment) =>
+      readable.has(environment.environmentId) &&
+      environment.serverConfig?.environment.capabilities.fleetChorus === true,
+  );
+  const environmentIds = supporting.map(({ environmentId }) => environmentId);
+  const live = useAtomValue(
+    serverEnvironment.fleetChorusLiveAcross(JSON.stringify(environmentIds)),
+  );
+  const fleet = selectFleetChorus(
+    live.map(({ environmentId, result }) => ({
+      environmentId,
+      connected:
+        supporting.find((environment) => environment.environmentId === environmentId)?.connection
+          .phase === "connected",
+      status: AsyncResult.getOrElse(result, () => null),
+    })),
+  );
+  return {
+    fleet,
+    refresh: () => {
+      for (const environmentId of environmentIds) {
+        registry.refresh(serverEnvironment.fleetChorusLive({ environmentId, input: {} }));
+      }
+    },
+  };
+}
+
+export function useFleetChorus(): FleetChorusView | null {
+  return useFleetChorusStatus().fleet;
 }
 
 // Snapshots already handed to the cache; an unchanged live list keeps its snapshot object.

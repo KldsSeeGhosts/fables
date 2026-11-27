@@ -1,6 +1,4 @@
-import { useAtomValue } from "@effect/atom-react";
 import { captainDocument } from "@t3tools/client-runtime/state/captains";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   captainDigestMarkdownExcerpt,
   captainDigestNewSection,
@@ -8,12 +6,11 @@ import {
 import { AuthOrchestrationReadScope, CaptainId, EnvironmentId } from "@t3tools/contracts";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { T, useGT } from "gt-react-native";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/ui/AppText";
-import { Button } from "../../components/ui/Button";
 import { ScreenContent } from "../../components/ui/ScreenContent";
 import { SheetHeader } from "../../components/ui/SheetHeader";
 import { SelectableMarkdownText } from "../../native/SelectableMarkdownText";
@@ -21,7 +18,6 @@ import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentScope, useEnvironmentScopeDenied } from "../../state/session";
 import { useMarkdownPreviewStyles } from "../files/FileMarkdownPreview";
-import { useAtomCommand } from "../../state/use-atom-command";
 import { CaptainOrb } from "./CaptainOrb";
 import { DuetBriefBody } from "./DuetBriefBody";
 import { useDuetShell } from "./useDuetShell";
@@ -69,53 +65,6 @@ export function CaptainBriefSheet({ route }: StaticScreenProps<CaptainBriefParam
   const memories = (live.data?.memories ?? []).filter(
     (memory) => memory.captainId === captainId && memory.essential,
   );
-  const archive = useAtomCommand(serverEnvironment.archiveCaptain, { reportFailure: false });
-  const restore = useAtomCommand(serverEnvironment.unarchiveCaptain, { reportFailure: false });
-  const canArchive = useAtomValue(serverEnvironment.archiveCaptain.permissionAtom(environmentId));
-  const canRestore = useAtomValue(serverEnvironment.unarchiveCaptain.permissionAtom(environmentId));
-  const [archivePending, setArchivePending] = useState(false);
-  const [archiveError, setArchiveError] = useState<string | null>(null);
-  const archived = captain !== undefined && captain.archivedAt !== null;
-  const changeArchive = async () => {
-    if (captain === undefined || archivePending || !(archived ? canRestore : canArchive)) return;
-    setArchivePending(true);
-    setArchiveError(null);
-    const result = await (archived ? restore : archive)({
-      environmentId,
-      input: { captainId: captain.id },
-    });
-    setArchivePending(false);
-    if (result._tag === "Failure") {
-      const failure = squashAtomCommandFailure(result);
-      setArchiveError(
-        failure instanceof Error ? failure.message : gt("Could not update the Chorus."),
-      );
-    }
-  };
-  const archiveControl =
-    captain?.kind === "chorus" ? (
-      <View className="gap-2 border-t border-border-subtle px-4 py-4">
-        <Text className="text-xs text-foreground-muted">
-          {archived
-            ? gt(
-                "This Chorus is archived. Fables checks reachable linked machines for an active Chorus before restoring it.",
-              )
-            : gt("Archiving removes this Chorus from the fleet. You can restore it later.")}
-        </Text>
-        {archiveError !== null ? (
-          <Text accessibilityLiveRegion="polite" className="text-sm text-danger-foreground">
-            {archiveError}
-          </Text>
-        ) : null}
-        <Button
-          label={archived ? gt("Restore Chorus") : gt("Archive Chorus")}
-          tone={archived ? "primary" : "secondary"}
-          loading={archivePending}
-          disabled={archived ? !canRestore : !canArchive}
-          onPress={() => void changeArchive()}
-        />
-      </View>
-    ) : null;
   const markdown = (text: string) => (
     <SelectableMarkdownText markdown={text} textStyle={markdownStyle} />
   );
@@ -195,7 +144,7 @@ export function CaptainBriefSheet({ route }: StaticScreenProps<CaptainBriefParam
               </BriefSection>
             </>
           )}
-          {captain?.kind === "chorus" && !archived ? (
+          {captain?.kind === "chorus" && captain.archivedAt === null ? (
             <BriefSection title={gt("Linked machines")}>
               <Text className="text-xs text-foreground-muted">
                 <T>
@@ -212,7 +161,6 @@ export function CaptainBriefSheet({ route }: StaticScreenProps<CaptainBriefParam
               </Text>
             </BriefSection>
           ) : null}
-          {archiveControl}
         </ScrollView>
       </ScreenContent>
     </View>

@@ -336,7 +336,7 @@ export function useCaptainProfile({
   };
 
   const changeArchive = async () => {
-    if (pending || !(archived ? canRestore : canArchive)) return;
+    if (pending || current.kind === "chorus" || !(archived ? canRestore : canArchive)) return;
     setPending(true);
     setError(null);
     const result = await (archived ? restore : archive)({
@@ -350,7 +350,7 @@ export function useCaptainProfile({
   };
 
   const remove = async () => {
-    if (!canDelete || pending) return;
+    if (!canDelete || pending || current.kind === "chorus") return;
     setPending(true);
     setError(null);
     const result = await deleteCaptain({ environmentId, input: { captainId: captain.id } });
@@ -370,8 +370,8 @@ export function useCaptainProfile({
     editing,
     confirmDelete,
     canUpdate,
-    canArchive: archived ? canRestore : canArchive,
-    canDelete,
+    canArchive: current.kind !== "chorus" && (archived ? canRestore : canArchive),
+    canDelete: current.kind !== "chorus" && canDelete,
     save,
     changeArchive,
     remove,

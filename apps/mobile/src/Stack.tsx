@@ -144,7 +144,6 @@ import { WorkflowStepSheet } from "./features/workflows/WorkflowStepSheet";
 import { CaptainBriefSheet } from "./features/captains/CaptainBriefSheet";
 import { CaptainsInboxSheet } from "./features/captains/CaptainsInboxSheet";
 import { CaptainTasksSheet } from "./features/captains/CaptainTasksSheet";
-import { ChorusNewSheet } from "./features/captains/ChorusNewSheet";
 import { SettingsAboutRouteScreen } from "./features/settings/SettingsAboutRouteScreen";
 import { SettingsNotificationsRouteScreen } from "./features/settings/SettingsNotificationsRouteScreen";
 import { SettingsRouteScreen } from "./features/settings/SettingsRouteScreen";
@@ -810,10 +809,6 @@ const RootStackConfig = createWorkspaceStackNavigator({
     }),
     CaptainBrief: createNativeStackScreen({
       screen: CaptainBriefSheet,
-      options: sheetRoute({ detent: 0.75, androidMaxDetent: 0.95 }),
-    }),
-    ChorusNew: createNativeStackScreen({
-      screen: ChorusNewSheet,
       options: sheetRoute({ detent: 0.75, androidMaxDetent: 0.95 }),
     }),
     ThreadBackgroundWork: createNativeStackScreen({

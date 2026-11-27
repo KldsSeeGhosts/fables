@@ -222,19 +222,21 @@ export function CaptainHeaderActions({
             >
               <T>Reset conversation</T>
             </CaptainMenuRow>
-            <CaptainMenuRow
-              icon={
-                archived ? (
-                  <ArchiveRestoreIcon className="size-4" />
-                ) : (
-                  <ArchiveIcon className="size-4" />
-                )
-              }
-              disabled={pending || !profile.canArchive}
-              onClick={() => void profile.changeArchive()}
-            >
-              {archived ? <T>Restore Duet</T> : <T>Archive Duet</T>}
-            </CaptainMenuRow>
+            {current.kind !== "chorus" ? (
+              <CaptainMenuRow
+                icon={
+                  archived ? (
+                    <ArchiveRestoreIcon className="size-4" />
+                  ) : (
+                    <ArchiveIcon className="size-4" />
+                  )
+                }
+                disabled={pending || !profile.canArchive}
+                onClick={() => void profile.changeArchive()}
+              >
+                {archived ? <T>Restore Duet</T> : <T>Archive Duet</T>}
+              </CaptainMenuRow>
+            ) : null}
             {profile.canDelete ? (
               <CaptainMenuRow
                 destructive

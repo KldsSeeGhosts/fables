@@ -16,6 +16,7 @@ import { captainDigestNewLines } from "../../../captains/captainDigest.ts";
 import * as CaptainHonchoMemory from "../../../captains/CaptainHonchoMemory.ts";
 import * as CaptainStore from "../../../captains/CaptainStore.ts";
 import * as ServerEnvironment from "../../../environment/ServerEnvironment.ts";
+import * as ServerSettings from "../../../serverSettings.ts";
 import * as ProjectService from "../../../project/ProjectService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
@@ -108,6 +109,7 @@ export const layer = McpToolAccess.toLayer(
     const environment = yield* ServerEnvironment.ServerEnvironment;
     const forwarding = yield* Effect.serviceOption(PeerForwarding.PeerForwarding);
     const links = yield* Effect.serviceOption(PeerLinks.PeerLinks);
+    const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
     const owner = callerCaptain(store);
     const localEnvironment = environment.getDescriptor.pipe(
       Effect.map(({ environmentId, label }) => ({ environmentId, environmentLabel: label })),
@@ -598,6 +600,23 @@ export const layer = McpToolAccess.toLayer(
           if (Option.isNone(store)) return yield* duetStateUnavailable();
           const active = yield* store.value.findActiveChorus().pipe(Effect.mapError(failed));
           return { active: active !== undefined };
+        }),
+      ),
+      chorus_home: McpToolAccess.reads(() =>
+        Effect.gen(function* () {
+          const { client } = yield* McpInvocationContext.McpInvocationContext;
+          if (client?.linked !== true) return yield* chorusDenied();
+          if (Option.isNone(store) || Option.isNone(serverSettings)) {
+            return yield* duetStateUnavailable();
+          }
+          const settings = yield* serverSettings.value.getSettings.pipe(
+            Effect.mapError(duetStateUnavailable),
+          );
+          const home = settings.chorusHome;
+          const active = home
+            ? yield* store.value.findActiveChorus().pipe(Effect.mapError(failed))
+            : undefined;
+          return { home, threadId: active?.primaryThreadId ?? null };
         }),
       ),
       chorus_machine_activity: McpToolAccess.reads(() =>

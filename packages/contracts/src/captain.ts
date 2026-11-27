@@ -1,7 +1,13 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-import { IsoDateTime, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import {
+  EnvironmentId,
+  IsoDateTime,
+  ProjectId,
+  ThreadId,
+  TrimmedNonEmptyString,
+} from "./baseSchemas.ts";
 import { ModelSelection } from "./modelSelection.ts";
 import { OrchestrationV2CreationSource } from "./orchestrationV2.ts";
 import { ProviderInteractionMode, RuntimeMode } from "./providerPolicy.ts";
@@ -162,6 +168,35 @@ export const CaptainSnapshot = Schema.Struct({
   memories: Schema.Array(CaptainMemory),
 });
 export type CaptainSnapshot = typeof CaptainSnapshot.Type;
+
+export const FleetChorusHome = Schema.Struct({
+  environmentId: EnvironmentId,
+  label: Schema.String,
+  threadId: Schema.NullOr(ThreadId),
+});
+export type FleetChorusHome = typeof FleetChorusHome.Type;
+
+export const FleetChorusState = Schema.Literals([
+  "ready",
+  "offline",
+  "too_old",
+  "unconfigured",
+  "setting_up",
+  "conflict",
+]);
+export type FleetChorusState = typeof FleetChorusState.Type;
+
+/** The fleet's one Chorus as the environment the client connected to knows it. */
+export const FleetChorusStatus = Schema.Struct({
+  state: FleetChorusState,
+  home: Schema.NullOr(FleetChorusHome),
+  /** This environment's own Chorus home switch. */
+  localHome: Schema.Boolean,
+  /** Other machines currently claiming the home, when a conflict is visible. */
+  conflictingHomes: Schema.Array(Schema.String),
+  updatedAt: IsoDateTime,
+});
+export type FleetChorusStatus = typeof FleetChorusStatus.Type;
 
 export const CaptainSubscribeInput = Schema.Struct({
   captainId: Schema.optionalKey(CaptainId),

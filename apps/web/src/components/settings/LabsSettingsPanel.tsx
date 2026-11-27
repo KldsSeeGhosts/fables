@@ -32,6 +32,7 @@ import {
 } from "./useScopedSettings";
 import { useOptionalSettingsScope, useSettingsScope } from "./SettingsScopeContext";
 import { firstManagedDenial, usePrimaryManagedPolicy } from "~/state/managedPolicy";
+import { useFleetChorusStatus } from "../captains/captainsDirectory";
 
 /** Features still settling in. */
 export function LabsSettingsPanel() {
@@ -43,6 +44,7 @@ export function LabsSettingsPanel() {
         {/* Clerk is only mounted when this build has T3 Connect. */}
         {hasCloudPublicConfig() ? <GuestLinksRowWithSignIn /> : <GuestLinksRow />}
         <LinkedEnvironmentsRow />
+        <ChorusHomeRow />
         <WorkflowsRow />
         <WorkflowSkippedRunsRow />
         <PromptSuggestionsRow />
@@ -256,6 +258,51 @@ function LinkedEnvironmentsRow() {
         />
       }
     />
+  );
+}
+
+function ChorusHomeRow() {
+  const searchableSetting = useSearchableSetting();
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  const settingsScope = useOptionalSettingsScope();
+  const { fleet, refresh } = useFleetChorusStatus();
+  const gt = useGT();
+  const targets = settingsScope?.connectedEnvironments ?? [];
+  const canSelectHome =
+    targets.length === 1 && targets[0]?.serverConfig?.environment.capabilities.fleetChorus === true;
+  return (
+    <SettingsRow
+      serverScoped
+      {...searchableSetting("chorus-home")}
+      settingKeys={["chorusHome"]}
+      description={gt(
+        "Keep the fleet's one Chorus on this machine. It appears in every connected app; turning this off archives the local row.",
+      )}
+      status={targets.length > 1 ? gt("Select one machine to change the Chorus home.") : undefined}
+      control={
+        canSelectHome ? (
+          <ScopedSwitch
+            settingKeys={["chorusHome"]}
+            checked={settings.chorusHome}
+            onCheckedChange={(checked) => updateSettings({ chorusHome: Boolean(checked) })}
+            aria-label={gt("Chorus home")}
+          />
+        ) : undefined
+      }
+    >
+      {fleet !== null ? <InlineButton onClick={refresh}>{gt("Refresh")}</InlineButton> : null}
+      {fleet?.status.state === "conflict" ? (
+        <p role="alert" className="mt-2 text-body text-warning-foreground">
+          {fleet.status.conflictingHomes.length > 0
+            ? gt(
+                "More than one machine is set as the Chorus home: {labels}. Turn it off on all but one.",
+                { labels: fleet.status.conflictingHomes.join(", ") },
+              )
+            : gt("More than one machine is set as the Chorus home. Turn it off on all but one.")}
+        </p>
+      ) : null}
+    </SettingsRow>
   );
 }
 

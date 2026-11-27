@@ -66,6 +66,7 @@ import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
 import * as CaptainBriefService from "../captains/CaptainBriefService.ts";
 import * as CaptainHonchoMemory from "../captains/CaptainHonchoMemory.ts";
 import * as CaptainService from "../captains/CaptainService.ts";
+import * as FleetChorusService from "../captains/FleetChorusService.ts";
 import * as CaptainRolloverWorker from "./CaptainRolloverWorker.ts";
 import * as CaptainStore from "../captains/CaptainStore.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
@@ -383,6 +384,16 @@ const layerCaptainProvided = CaptainService.layer.pipe(
     ).pipe(Layer.provideMerge(layerProjectService)),
   ),
 );
+const layerFleetChorusService = FleetChorusService.layer.pipe(
+  Layer.provide(Layer.mergeAll(CaptainStore.layer, layerCaptainProvided, layerChorusPeers)),
+);
+const layerFleetChorusProvided = Layer.mergeAll(
+  layerFleetChorusService,
+  FleetChorusService.worker.pipe(
+    Layer.provide(Layer.mergeAll(layerFleetChorusService, CaptainStore.layer, layerChorusPeers)),
+  ),
+);
+
 const layerCaptainRolloverWorkerProvided = CaptainRolloverWorker.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
@@ -488,6 +499,7 @@ export const layerProduction = Layer.mergeAll(
   layerScheduledTaskProvided,
   layerWorkflowsProvided,
   layerCaptainProvided,
+  layerFleetChorusProvided,
   layerCaptainRolloverWorkerProvided,
   CaptainStore.layer,
   layerCaptainHonchoMemoryProvided,

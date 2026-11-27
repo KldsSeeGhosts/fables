@@ -19,10 +19,12 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
-  activeChoruses,
   captainAttentionTotal,
   captainConversationKeys,
   captainThreadActivity,
+  fleetChorusCaptain,
+  fleetChorusStateLabel,
+  withoutStoredChoruses,
 } from "@t3tools/client-runtime/state/captains";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
@@ -32,13 +34,15 @@ import {
   type ContextMenuSource,
   type EnvironmentId,
   type EnvironmentMachineKind,
+  type FleetChorusState,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
 import * as Schema from "effect/Schema";
-import { T, useGT, Var } from "gt-react";
+import { T, useGT, useMessages, Var } from "gt-react";
 import { ClockIcon, EllipsisIcon, FoldersIcon, ListTodoIcon, PlusIcon } from "lucide-react";
 import { useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { useNavigate } from "@tanstack/react-router";
 
 import { contextMenuSourceOf, openContextMenuFromKeyboard } from "../../contextMenuSource";
 import { useDuetShell } from "../../hooks/useDuetShell";
@@ -65,7 +69,12 @@ import { CaptainTaskRing } from "./CaptainTaskRing";
 import { captainBriefTabAtom, openCaptainTasks, type CaptainDrawerTab } from "./captainBriefTab";
 import { CaptainProfileDialogs, useCaptainProfile } from "./CaptainBriefPanel";
 import { CaptainEditorDialog } from "./CaptainEditorDialog";
-import { useCaptainDestinations, useCaptainEnvironments } from "./captainsDirectory";
+import {
+  useCaptainDestinations,
+  useCaptainEnvironments,
+  useFleetChorus,
+} from "./captainsDirectory";
+import { linkedThreadRouteParams } from "../../linkedThreadSurface";
 import {
   moveDuet,
   orderDuets,
@@ -143,7 +152,7 @@ function DuetChannelRow({
   status,
   selected,
   activity,
-  fleetMachineCount,
+  fleetState,
   onMenu,
   onOpen,
   children,
@@ -158,7 +167,7 @@ function DuetChannelRow({
   status: string;
   selected: boolean;
   activity: CaptainActivity;
-  fleetMachineCount: number;
+  fleetState?: FleetChorusState | undefined;
   onMenu: (position: { x: number; y: number }, source: ContextMenuSource) => void;
   onOpen: () => void;
   children: ReactNode;
@@ -184,15 +193,15 @@ function DuetChannelRow({
     (project) =>
       project.environmentId === environmentId && captain.scopedProjectIds.includes(project.id),
   );
-  const scope = isChorus
-    ? gt("All Duets across {count, plural, one {{count} machine} other {{count} machines}}", {
-        count: fleetMachineCount,
-      })
-    : captain.scopedProjectIds.length === 0
-      ? gt("All workspace")
-      : captain.scopedProjectIds.length === 1
-        ? (scoped[0]?.title ?? gt("1 project"))
-        : gt("{count} projects", { count: captain.scopedProjectIds.length });
+  const message = useMessages();
+  const scope =
+    fleetState !== undefined
+      ? fleetChorusStateLabel(fleetState, message)
+      : captain.scopedProjectIds.length === 0
+        ? gt("All workspace")
+        : captain.scopedProjectIds.length === 1
+          ? (scoped[0]?.title ?? gt("1 project"))
+          : gt("{count} projects", { count: captain.scopedProjectIds.length });
   const backgroundTasks = primary?.pendingBackgroundTasks.length ?? 0;
   const attentionThread = waiting
     ? [primary, ...running].find(
@@ -216,9 +225,11 @@ function DuetChannelRow({
         ]
   ).filter((part): part is string => !!part);
   const accessibleLabel =
-    details.length === 0
-      ? gt("{name}, {status}", { name, status })
-      : gt("{name}, {status}, {detail}", { name, status, detail: details.join(", ") });
+    fleetState !== undefined && fleetState !== "ready"
+      ? gt("{name}, {status}", { name, status: scope })
+      : details.length === 0
+        ? gt("{name}, {status}", { name, status })
+        : gt("{name}, {status}, {detail}", { name, status, detail: details.join(", ") });
   const detailText = archived ? null : scope;
   const trailing = busy ? (
     <SidebarStatusLabel
@@ -246,6 +257,7 @@ function DuetChannelRow({
     <li
       ref={setNodeRef}
       data-duet-channel-card=""
+      data-fleet-chorus={fleetState === undefined ? undefined : ""}
       data-duet-palette={captainPaletteOf(captain.avatar)}
       className={cn(
         "group/captain-row relative flex items-center",
@@ -253,6 +265,12 @@ function DuetChannelRow({
       )}
       style={{ transform: CSS.Translate.toString(transform), transition }}
     >
+      {fleetState === undefined ? null : (
+        <span
+          aria-hidden
+          className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-(--warning)/70"
+        />
+      )}
       <Tooltip>
         <TooltipTrigger
           render={
@@ -261,6 +279,7 @@ function DuetChannelRow({
               {...listeners}
               aria-current={selected ? "page" : undefined}
               aria-label={accessibleLabel}
+              aria-disabled={fleetState !== undefined && fleetState !== "ready" ? true : undefined}
               onClick={onOpen}
               onContextMenu={handleContextMenu}
               onKeyDown={openContextMenuFromKeyboard}
@@ -282,11 +301,6 @@ function DuetChannelRow({
               >
                 {name}
               </span>
-              {isChorus ? (
-                <span className="shrink-0 rounded-full border border-border px-1.5 py-px text-micro text-muted-foreground">
-                  <T>Chorus</T>
-                </span>
-              ) : null}
               {trailing ? <span className="flex shrink-0">{trailing}</span> : null}
             </span>
             <span className="flex h-4 min-w-0 items-center gap-1.5 text-meta leading-4 text-muted-foreground">
@@ -400,7 +414,7 @@ function CaptainShelfRow({
   working,
   activity,
   selected,
-  fleetMachineCount,
+  fleetState,
   canMoveUp = false,
   canMoveDown = false,
   onMove,
@@ -414,13 +428,14 @@ function CaptainShelfRow({
   working: boolean;
   activity: CaptainActivity;
   selected: boolean;
-  fleetMachineCount: number;
+  fleetState?: FleetChorusState | undefined;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
   onMove?: ((direction: DuetMoveDirection) => void) | undefined;
   onOpen: (threadRef: ScopedThreadRef) => void;
 }) {
   const gt = useGT();
+  const message = useMessages();
   const isDuet = useDuetShell();
   const threadRef = scopeThreadRef(environmentId, captain.primaryThreadId);
   const openView = (tab: CaptainDrawerTab) => {
@@ -504,6 +519,7 @@ function CaptainShelfRow({
       : working
         ? gt("Working", { $context: "Duet status" })
         : gt("Ready");
+  const rowStatus = fleetState === undefined ? status : fleetChorusStateLabel(fleetState, message);
   const avatarState = archived
     ? "archived"
     : attention > 0
@@ -589,8 +605,8 @@ function CaptainShelfRow({
         status={status}
         selected={selected}
         activity={activity}
-        fleetMachineCount={fleetMachineCount}
-        onMenu={openDuetMenu}
+        fleetState={fleetState}
+        onMenu={fleetState === undefined ? openDuetMenu : () => {}}
         onOpen={() => onOpen(threadRef)}
       >
         <CaptainProfileDialogs profile={profile} />
@@ -602,13 +618,15 @@ function CaptainShelfRow({
     <li
       className={cn(
         "group/captain-row relative flex items-center",
+        fleetState !== undefined && "border-s-2 border-(--warning)/70",
         selected && "surface-sidebar-row-selected rounded-row",
       )}
     >
       <ContentButton
         variant="inset-row-multiline"
         aria-current={selected ? "page" : undefined}
-        aria-label={gt("{name}, {status}", { name: current.name, status })}
+        aria-label={gt("{name}, {status}", { name: current.name, status: rowStatus })}
+        aria-disabled={fleetState !== undefined && fleetState !== "ready" ? true : undefined}
         onClick={() => onOpen(threadRef)}
       >
         <CaptainAvatar avatar={current.avatar} state={avatarState} />
@@ -624,7 +642,7 @@ function CaptainShelfRow({
                   : "text-muted-foreground",
             )}
           >
-            {status}
+            {rowStatus}
           </span>
         </span>
         {label ? (
@@ -632,7 +650,7 @@ function CaptainShelfRow({
         ) : null}
       </ContentButton>
       <div className="shrink-0 opacity-0 transition-opacity group-focus-within/captain-row:opacity-100 group-hover/captain-row:opacity-100">
-        {menu}
+        {fleetState === undefined ? menu : null}
       </div>
       <CaptainProfileDialogs profile={profile} />
     </li>
@@ -648,7 +666,6 @@ export function CaptainShelfList({
   activeThread,
   attention: attentionTotal,
   overviewActive = false,
-  fleetMachineCount,
   onOpen,
   onOpenOverview,
   onCreate,
@@ -661,13 +678,13 @@ export function CaptainShelfList({
       captain: Captain;
       attention: number;
       working: boolean;
+      fleetState?: FleetChorusState | undefined;
     } & CaptainActivity
   >;
   activeThread: ScopedThreadRef | null;
   /** Captains waiting on the user, counting their delegated threads; defaults to the rows'. */
   attention?: number | undefined;
   overviewActive?: boolean;
-  fleetMachineCount: number;
   onOpen: (threadRef: ScopedThreadRef) => void;
   onOpenOverview?: (() => void) | undefined;
   onCreate?: (() => void) | undefined;
@@ -755,7 +772,16 @@ export function CaptainShelfList({
     orderedRows.length > 0 ? (
       <ul className="space-y-px">
         {orderedRows.map(
-          ({ captain, environmentId, label, machineKind, attention, working, ...activity }) => {
+          ({
+            captain,
+            environmentId,
+            label,
+            machineKind,
+            attention,
+            working,
+            fleetState,
+            ...activity
+          }) => {
             const key = duetRowKey(environmentId, captain);
             const activeIndex = activeIndexByKey.get(key);
             return (
@@ -772,7 +798,7 @@ export function CaptainShelfList({
                   activeThread?.environmentId === environmentId &&
                   activeThread.threadId === captain.primaryThreadId
                 }
-                fleetMachineCount={fleetMachineCount}
+                fleetState={fleetState}
                 canMoveUp={activeIndex !== undefined && activeIndex > 0}
                 canMoveDown={activeIndex !== undefined && activeIndex < activeCount - 1}
                 {...(captain.kind === "chorus"
@@ -848,6 +874,8 @@ export function CaptainsShelf({
   onOpenOverview: () => void;
 }) {
   const { supporting, results } = useCaptainEnvironments();
+  const fleet = useFleetChorus();
+  const navigate = useNavigate();
   const { destinations, destination } = useCaptainDestinations(primaryEnvironmentId);
   const shells = useThreadShells(supporting.length > 0);
   const [creating, setCreating] = useState(false);
@@ -855,9 +883,11 @@ export function CaptainsShelf({
 
   const environments = supporting.map(({ environmentId }, index) => ({
     environmentId,
-    captains: AsyncResult.getOrElse(results[index]!, () => null)?.captains ?? [],
+    captains: withoutStoredChoruses(
+      AsyncResult.getOrElse(results[index]!, () => null)?.captains ?? [],
+    ),
   }));
-  const rows = supporting
+  const storedRows = supporting
     .flatMap(({ environmentId, label, serverConfig }, index) =>
       environments[index]!.captains.map((captain) => ({
         environmentId,
@@ -870,7 +900,50 @@ export function CaptainsShelf({
     .toSorted(
       (a, b) => Number(a.captain.archivedAt !== null) - Number(b.captain.archivedAt !== null),
     );
-  const fleetChoruses = activeChoruses(environments);
+  const homeCaptain =
+    fleet?.status.home === null || fleet?.status.home === undefined
+      ? undefined
+      : supporting
+          .flatMap(({ environmentId }, index) =>
+            (AsyncResult.getOrElse(results[index]!, () => null)?.captains ?? []).map((captain) => ({
+              environmentId,
+              captain,
+            })),
+          )
+          .find(
+            ({ environmentId, captain }) =>
+              environmentId === fleet.status.home?.environmentId &&
+              captain.primaryThreadId === fleet.status.home.threadId,
+          );
+  const fleetRow =
+    fleet === null
+      ? null
+      : {
+          environmentId: fleet.status.home?.environmentId ?? fleet.viaEnvironmentId,
+          captain: homeCaptain?.captain ?? fleetChorusCaptain(fleet.status),
+          attention: 0,
+          working: false,
+          primary: undefined,
+          children: undefined,
+          fleetState: fleet.status.state,
+        };
+  const rows = fleetRow === null ? storedRows : [fleetRow, ...storedRows];
+  const openFleet = () => {
+    const home = fleet?.status.home;
+    if (fleet === null || home?.threadId == null || fleet.status.state !== "ready") return;
+    if (fleet.viaEnvironmentId === home.environmentId) {
+      onOpen(scopeThreadRef(home.environmentId, home.threadId));
+      return;
+    }
+    void navigate({
+      to: "/linked/$viaEnvironmentId/$linkedEnvironmentId/$linkedThreadId",
+      params: linkedThreadRouteParams({
+        viaEnvironmentId: fleet.viaEnvironmentId,
+        environmentId: home.environmentId,
+        threadId: home.threadId,
+      }),
+    });
+  };
 
   return (
     <>
@@ -879,8 +952,17 @@ export function CaptainsShelf({
         activeThread={activeThread}
         attention={captainAttentionTotal(environments, shells)}
         overviewActive={overviewActive}
-        fleetMachineCount={supporting.length}
-        onOpen={onOpen}
+        onOpen={(threadRef) => {
+          if (
+            fleetRow !== null &&
+            threadRef.threadId === fleetRow.captain.primaryThreadId &&
+            threadRef.environmentId === fleetRow.environmentId
+          ) {
+            openFleet();
+            return;
+          }
+          onOpen(threadRef);
+        }}
         onOpenOverview={onOpenOverview}
         onCreate={destination ? () => setCreating(true) : undefined}
       />
@@ -888,7 +970,6 @@ export function CaptainsShelf({
         <CaptainEditorDialog
           destination={destination}
           destinations={destinations}
-          canCreateChorus={fleetChoruses.length === 0}
           onClose={() => setCreating(false)}
           onSave={(environmentId, captain) => {
             setCreating(false);

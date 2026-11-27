@@ -90,16 +90,16 @@ export const captainUnavailable = (cause: unknown) =>
 
 const missing = () => new CaptainError({ code: "not_found", message: "Duet not found." });
 
-export const activeChorusConflict = () =>
-  new CaptainError({
-    code: "conflict",
-    message: "An active Chorus already exists on this machine.",
-  });
-
 const isActiveChorusUniqueViolation = (cause: unknown) =>
   SqlError.isSqlError(cause) &&
   cause.reason._tag === "UniqueViolation" &&
   cause.reason.constraint === "captains.kind";
+
+const activeChorusConflict = () =>
+  new CaptainError({
+    code: "conflict",
+    message: "An active Chorus already exists on this machine.",
+  });
 
 export type ChorusRouteSource =
   | {
@@ -254,6 +254,14 @@ const make = Effect.gen(function* () {
   const findActiveChorus = Effect.fn("CaptainStore.findActiveChorus")(function* () {
     const [row] = yield* sql`
       ${profiles} WHERE kind = 'chorus' AND archived_at IS NULL LIMIT 1
+    `;
+    return row === undefined ? undefined : yield* decodeCaptain(row);
+  }, Effect.catch(captainUnavailable));
+
+  const findChorus = Effect.fn("CaptainStore.findChorus")(function* () {
+    const [row] = yield* sql`
+      ${profiles} WHERE kind = 'chorus'
+      ORDER BY archived_at IS NOT NULL, archived_at DESC, created_at, id LIMIT 1
     `;
     return row === undefined ? undefined : yield* decodeCaptain(row);
   }, Effect.catch(captainUnavailable));
@@ -842,6 +850,27 @@ const make = Effect.gen(function* () {
     Effect.catchTags({ SqlError: captainUnavailable, SchemaError: captainUnavailable }),
   );
 
+  const subscribeChorusThreadChanges = Effect.gen(function* () {
+    const subscription = yield* PubSub.subscribe(changes);
+    const chorusThread = findActiveChorus().pipe(
+      Effect.map((captain) => captain?.primaryThreadId ?? null),
+    );
+    return Stream.concat(
+      Stream.fromEffect(chorusThread),
+      Stream.fromSubscription(subscription).pipe(
+        Stream.filter(({ kind }) => kind === "profile"),
+        Stream.buffer({ capacity: 1, strategy: "sliding" }),
+        Stream.mapEffect(() => chorusThread),
+      ),
+    ).pipe(
+      Stream.changes,
+      Stream.drop(1),
+      Stream.catch((error) =>
+        Stream.fromEffect(Effect.logWarning("Could not read the Chorus thread.", { error })),
+      ),
+    );
+  });
+
   const subscribe = (input: CaptainSubscribeInput) =>
     Stream.unwrap(
       Effect.gen(function* () {
@@ -867,6 +896,7 @@ const make = Effect.gen(function* () {
     find,
     requireCaptain,
     findActiveChorus,
+    findChorus,
     privateChorusConversationIds,
     activeDuetRoster,
     coveringDuetNames,
@@ -895,6 +925,7 @@ const make = Effect.gen(function* () {
     deleteMemory,
     snapshot,
     subscribe,
+    subscribeChorusThreadChanges,
     notify,
   };
 });

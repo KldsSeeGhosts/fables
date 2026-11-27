@@ -4,6 +4,8 @@ import {
   type CaptainDocumentName,
   type CaptainId,
   type CaptainSnapshot,
+  type FleetChorusState,
+  type FleetChorusStatus,
   type EnvironmentId,
   type OrchestrationV2Subagent,
   type ScheduledTask,
@@ -11,6 +13,8 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
+import { mFallback, msg } from "gt-i18n";
+import type { MFunctionType } from "gt-i18n/types";
 
 import { scopeThreadRef } from "../environment/scoped.ts";
 import { parseThreadKey, threadKey } from "./entities.ts";
@@ -121,35 +125,113 @@ type CaptainEnvironment = {
   >;
 };
 
-export interface ActiveChorus {
-  readonly environmentId: EnvironmentId;
-  readonly environmentLabel?: string | undefined;
-  readonly captain: Pick<Captain, "id" | "name" | "primaryThreadId" | "archivedAt" | "kind">;
+export interface FleetChorusView {
+  readonly viaEnvironmentId: EnvironmentId;
+  readonly status: FleetChorusStatus;
 }
 
-/** Active Choruses visible across the fleet. More than one means offline machines or simultaneous creates conflicted. */
-export function activeChoruses(
-  environments: ReadonlyArray<{
+const fleetChorusStateRank: Record<FleetChorusStatus["state"], number> = {
+  conflict: 0,
+  ready: 1,
+  setting_up: 2,
+  offline: 3,
+  too_old: 4,
+  unconfigured: 5,
+};
+
+export function fleetChorusStateLabel(state: FleetChorusState, resolve: MFunctionType = mFallback) {
+  switch (state) {
+    case "ready":
+      return resolve(msg("Fleet coordinator"));
+    case "offline":
+      return resolve(msg("Home machine offline"));
+    case "too_old":
+      return resolve(msg("Home machine needs an update"));
+    case "unconfigured":
+      return resolve(msg("Choose a home in Settings"));
+    case "setting_up":
+      return resolve(msg("Waiting for the Chorus home to finish setup"));
+    case "conflict":
+      return resolve(msg("More than one Chorus home"));
+  }
+}
+
+/**
+ * The fleet status to show when a client is connected to several servers. A reachable or
+ * conflicting answer wins over a machine that simply has not learned the home yet.
+ */
+export function selectFleetChorus(
+  entries: ReadonlyArray<{
     readonly environmentId: EnvironmentId;
-    readonly label?: string;
-    readonly captains: ReadonlyArray<
-      Pick<Captain, "id" | "name" | "primaryThreadId" | "archivedAt" | "kind">
-    >;
+    readonly status: FleetChorusStatus | null | undefined;
+    readonly connected?: boolean;
   }>,
-): ActiveChorus[] {
-  return environments.flatMap(({ environmentId, label, captains }) =>
-    captains.flatMap((captain) =>
-      captain.kind === "chorus" && captain.archivedAt === null
-        ? [
-            {
-              environmentId,
-              ...(label === undefined ? {} : { environmentLabel: label }),
-              captain,
+): FleetChorusView | null {
+  const known = entries.flatMap(({ environmentId, status, connected = true }) => {
+    if (status == null) return [];
+    if (connected) return [{ viaEnvironmentId: environmentId, status }];
+    return status.home === null
+      ? []
+      : [
+          {
+            viaEnvironmentId: environmentId,
+            status: {
+              ...status,
+              state: "offline" as const,
+              localHome: false,
+              conflictingHomes: [],
             },
-          ]
-        : [],
-    ),
+          },
+        ];
+  });
+  if (known.length === 0) return null;
+  const localClaims = known.filter(({ status }) => status.localHome && status.home !== null);
+  if (localClaims.length > 1) {
+    const first = localClaims[0]!;
+    return {
+      ...first,
+      status: {
+        ...first.status,
+        state: "conflict",
+        conflictingHomes: localClaims.map(({ status }) => status.home!.label),
+      },
+    };
+  }
+  return known.reduce((best, candidate) =>
+    fleetChorusStateRank[candidate.status.state] < fleetChorusStateRank[best.status.state] ||
+    (candidate.status.state === "ready" &&
+      best.status.state === "ready" &&
+      candidate.status.localHome &&
+      !best.status.localHome)
+      ? candidate
+      : best,
   );
+}
+
+/** The one synthesized row clients render for the fleet-owned Chorus. */
+export function fleetChorusCaptain(status: FleetChorusStatus): Captain {
+  const now = status.updatedAt;
+  return {
+    id: "chorus" as Captain["id"],
+    name: "Chorus",
+    role: "",
+    instructions: "",
+    avatar: { preset: "circle", color: "orange" },
+    scopedProjectIds: [],
+    reportPolicy: "react",
+    coordinatorOnly: true,
+    kind: "chorus",
+    primaryThreadId: status.home?.threadId ?? (`captain:chorus:0` as Captain["primaryThreadId"]),
+    earlierThreadIds: [],
+    createdAt: now,
+    updatedAt: now,
+    archivedAt: null,
+  };
+}
+
+/** Local Chorus rows are storage details now; clients render the fleet projection instead. */
+export function withoutStoredChoruses<T extends Pick<Captain, "kind">>(captains: ReadonlyArray<T>) {
+  return captains.filter((captain) => captain.kind !== "chorus");
 }
 
 export interface CaptainInboxItem {
