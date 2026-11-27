@@ -7,7 +7,6 @@ import {
   type Captain,
   type CaptainDocument,
   type CaptainDocumentName,
-  type CaptainUpdateDocumentInput,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as DateTime from "effect/DateTime";
@@ -232,44 +231,19 @@ it.effect("builds a Chorus brief from every active Duet without writing their do
       coordinatorOnly: true,
       reportPolicy: "react",
     });
-    const alpha = makeCaptain(CaptainId.make("alpha"), "Alpha");
+    const alphaId = CaptainId.make("alpha");
+    const alphaEarlier = captainPrimaryThreadId(alphaId, 0);
+    const alpha = makeCaptain(alphaId, "Alpha", {
+      primaryThreadId: captainPrimaryThreadId(alphaId, 1),
+      earlierThreadIds: [alphaEarlier],
+    });
     const beta = makeCaptain(CaptainId.make("beta"), "Beta");
     const archived = makeCaptain(CaptainId.make("archived"), "Archived", {
       archivedAt: "2026-11-25T09:00:00.000Z",
     });
-    const captains = [chorus, alpha, beta, archived];
-    const documents = new Map<string, CaptainDocument>();
-    const putDocument = (owner: Captain, name: CaptainDocumentName, content: string) =>
-      documents.set(`${owner.id}:${name}`, documentFor(owner, name, content));
-    putDocument(chorus, "NOTES.md", "The user wants fleet risks first.");
-    putDocument(chorus, "DIGEST.md", "# Chorus digest\n\n## New\n\n- stale chorus item\n");
-    putDocument(
-      alpha,
-      "DIGEST.md",
-      "# Alpha digest\n\n## New\n\n- Alpha digest item due tomorrow\n\n## Projects\n\nAlpha project detail that stays out.\n",
-    );
-    putDocument(beta, "DIGEST.md", "# Beta digest\n\n## New\n\n- Beta digest item\n");
-    putDocument(archived, "DIGEST.md", "# Archived digest\n\n## New\n\n- Archived digest item\n");
-
+    const alphaDigest =
+      "# Alpha digest\n\n## New\n\n- Alpha digest item due tomorrow\n\n## Projects\n\nAlpha project detail that stays out.\n";
     const generationPrompts: string[] = [];
-    const writes: CaptainUpdateDocumentInput[] = [];
-    const storeLayer = Layer.mock(CaptainStore.CaptainStore)({
-      find: (id) => Effect.succeed(id === chorus.id ? chorus : undefined),
-      snapshot: () => Effect.succeed({ captains, documents: [], memories: [] }),
-      document: (owner, name) =>
-        Effect.succeed(documents.get(`${owner.id}:${name}`) ?? documentFor(owner, name, "")),
-      updateDocument: (input) => {
-        writes.push(input);
-        return Effect.sync(() => {
-          const current =
-            documents.get(`${input.captainId}:${input.name}`) ??
-            documentFor(chorus, input.name, "");
-          const updated = { ...current, content: input.content, revision: current.revision + 1 };
-          documents.set(`${input.captainId}:${input.name}`, updated);
-          return updated;
-        });
-      },
-    });
     const textGenerationLayer = Layer.mock(TextGeneration.TextGeneration)({
       generateBriefText: (input) =>
         Effect.sync(() => {
@@ -280,7 +254,7 @@ it.effect("builds a Chorus brief from every active Duet without writing their do
     const layer = CaptainBriefService.layer.pipe(
       Layer.provideMerge(
         Layer.mergeAll(
-          storeLayer,
+          CaptainStore.layer,
           textGenerationLayer,
           ServerSettings.layerTest({
             textGenerationModelSelection: createModelSelection(
@@ -298,14 +272,50 @@ it.effect("builds a Chorus brief from every active Duet without writing their do
     );
 
     yield* Effect.gen(function* () {
+      const store = yield* CaptainStore.CaptainStore;
+      yield* Effect.forEach([chorus, alpha, beta, archived], store.save);
+      const putDocument = (
+        owner: Captain,
+        name: CaptainDocumentName,
+        content: string,
+        expectedRevision = 0,
+      ) => store.updateDocument({ captainId: owner.id, name, content, expectedRevision });
+      const chorusNotes = yield* putDocument(
+        chorus,
+        "NOTES.md",
+        "The user wants fleet risks first.",
+      );
+      yield* putDocument(chorus, "DIGEST.md", "# Chorus digest\n\n## New\n\n- stale chorus item\n");
+      const savedAlpha = yield* putDocument(alpha, "DIGEST.md", alphaDigest);
+      const savedBeta = yield* putDocument(
+        beta,
+        "DIGEST.md",
+        "# Beta digest\n\n## New\n\n- Beta digest item\n",
+      );
+      const savedArchived = yield* putDocument(
+        archived,
+        "DIGEST.md",
+        "# Archived digest\n\n## New\n\n- Archived digest item\n",
+      );
       const sql = yield* SqlClient.SqlClient;
       const at = "2026-11-25T10:00:00.000Z";
       const alphaChild = "thread:alpha-child";
+      yield* Effect.forEach(
+        Array.from({ length: 8 }, (_, index) => `alpha-visible-task-${index + 1}`),
+        (id) =>
+          sql`
+          INSERT INTO orchestration_v2_projection_subagents (
+            subagent_id, thread_id, parent_node_id, provider, origin, status,
+            started_at, updated_at, payload_json
+          ) VALUES (${id}, ${alpha.primaryThreadId}, 'node', 'codex', 'app_owned', 'running',
+            '2026-11-25T09:00:00.000Z', ${at}, ${JSON.stringify({ title: id })})
+        `.pipe(Effect.orDie),
+      );
       yield* sql`
         INSERT INTO orchestration_v2_projection_subagents (
           subagent_id, thread_id, parent_node_id, provider, origin, status,
           child_thread_id, started_at, updated_at, payload_json
-        ) VALUES ('alpha-task', ${alpha.primaryThreadId}, 'node', 'codex', 'app_owned', 'running',
+        ) VALUES ('alpha-task', ${alphaEarlier}, 'node', 'codex', 'app_owned', 'running',
           ${alphaChild}, ${at}, ${at}, ${JSON.stringify({
             title: "Alpha active solo",
             progress: "Checking the release",
@@ -360,9 +370,13 @@ it.effect("builds a Chorus brief from every active Duet without writing their do
 
       const service = yield* CaptainBriefService.CaptainBriefService;
       const written = yield* service.generate({ captainId: chorus.id });
-      assert.lengthOf(writes, 1);
-      assert.equal(writes[0]?.captainId, chorus.id);
-      assert.equal(writes[0]?.name, "DIGEST.md");
+      assert.equal(written.captainId, chorus.id);
+      assert.equal(written.name, "DIGEST.md");
+      assert.equal(written.revision, 2);
+      assert.deepEqual(yield* store.document(chorus, "NOTES.md"), chorusNotes);
+      assert.deepEqual(yield* store.document(alpha, "DIGEST.md"), savedAlpha);
+      assert.deepEqual(yield* store.document(beta, "DIGEST.md"), savedBeta);
+      assert.deepEqual(yield* store.document(archived, "DIGEST.md"), savedArchived);
       assert.isTrue(written.content.includes("- **Alpha:** Alpha digest item due tomorrow"));
 
       const prompt = generationPrompts[0]!;
@@ -372,7 +386,8 @@ it.effect("builds a Chorus brief from every active Duet without writing their do
       assert.include(prompt, "### Duet: Beta");
       assert.include(prompt, "Alpha digest item due tomorrow");
       assert.include(prompt, "Beta digest item");
-      assert.include(prompt, "Alpha active solo");
+      assert.include(prompt, "alpha-visible-task-1");
+      assert.notInclude(prompt, "Alpha active solo");
       assert.include(prompt, "Beta active solo");
       assert.include(prompt, "Approve the alpha release");
       assert.include(prompt, "Answer the beta question");
@@ -381,20 +396,36 @@ it.effect("builds a Chorus brief from every active Duet without writing their do
       assert.notInclude(prompt, "Archived active solo");
       assert.notInclude(prompt, "Alpha project detail that stays out");
 
-      documents.set(
-        `${beta.id}:DIGEST.md`,
-        documentFor(
-          beta,
-          "DIGEST.md",
-          `# Beta digest\n\n## New\n\n- Beta digest item\n- ${"x".repeat(5_000)}\n`,
-        ),
+      yield* putDocument(
+        alpha,
+        "DIGEST.md",
+        alphaDigest.replace("## Projects", `- ${"x".repeat(5_000)}\n\n## Projects`),
+        savedAlpha.revision,
       );
       generationPrompts.length = 0;
       yield* service.generate({ captainId: chorus.id });
       const cappedPrompt = generationPrompts[0]!;
+      assert.include(cappedPrompt, "Alpha digest item due tomorrow");
+      assert.include(cappedPrompt, "Approve the alpha release");
       assert.include(cappedPrompt, "Beta digest item");
+      assert.include(cappedPrompt, "Answer the beta question");
       assert.notInclude(cappedPrompt, "x".repeat(5_000));
       assert.isBelow(cappedPrompt.length, 13_000);
+
+      yield* Effect.forEach(
+        Array.from({ length: 15 }, (_, index) => {
+          const number = String(index + 1).padStart(2, "0");
+          return makeCaptain(CaptainId.make(`extra-${number}`), `Extra Duet ${number}`);
+        }),
+        store.save,
+      );
+      yield* service.generate({ captainId: chorus.id });
+      const rosterCappedPrompt = generationPrompts[1]!;
+      assert.include(rosterCappedPrompt, "### Duet: Extra Duet 14");
+      assert.notInclude(rosterCappedPrompt, "### Duet: Extra Duet 15");
+      assert.include(rosterCappedPrompt, "Additional active Duets omitted.");
+      assert.include(rosterCappedPrompt, "Approve the alpha release");
+      assert.include(rosterCappedPrompt, "Answer the beta question");
     }).pipe(Effect.provide(layer));
   }),
 );

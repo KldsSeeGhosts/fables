@@ -25,6 +25,8 @@ const missing = () => new CaptainError({ code: "not_found", message: "Duet not f
 const isDocumentContent = Schema.is(CaptainDocumentContent);
 const BRIEF_DOCUMENT_CONTEXT_LIMIT = 4_000;
 const BRIEF_ACTIVITY_LIMIT = 4_000;
+const CHORUS_DUET_LIMIT = 16;
+const BRIEF_OPEN_ITEM_LIMIT = 8;
 
 /** Replaces only DIGEST.md's `## New` section, or adds it after the title when the digest has none. */
 export const replaceCaptainDigestNewSection = (content: string, section: string): string => {
@@ -75,7 +77,7 @@ interface BriefActivity {
 }
 
 interface ChorusDuetActivity {
-  readonly duet: Captain;
+  readonly name: string;
   readonly digestNew: string;
   readonly activeTasks: BriefActivity["activeTasks"];
   readonly pendingRequests: BriefActivity["pendingRequests"];
@@ -84,6 +86,7 @@ interface ChorusDuetActivity {
 interface ChorusMachineActivity {
   readonly label: string;
   readonly duets: ReadonlyArray<ChorusDuetActivity>;
+  readonly omittedDuets?: boolean;
   readonly unreachableReason?: string | undefined;
 }
 
@@ -98,10 +101,10 @@ const captainDigestNewSection = (content: string) => {
 
 const formatActivity = (activity: BriefActivity) => {
   const lines: string[] = [];
-  for (const request of activity.pendingRequests.slice(0, 8)) {
+  for (const request of activity.pendingRequests.slice(0, BRIEF_OPEN_ITEM_LIMIT)) {
     lines.push(`- pending ${request.kind}: ${compactLine(request.detail) ?? "Needs an answer"}`);
   }
-  for (const task of activity.activeTasks.slice(0, 8)) {
+  for (const task of activity.activeTasks.slice(0, BRIEF_OPEN_ITEM_LIMIT)) {
     lines.push(
       `- active ${task.status}: ${excerpt(compactLine(task.title) ?? "", 100)}${task.progress ? `, ${compactLine(task.progress)}` : ""}`,
     );
@@ -120,20 +123,26 @@ const formatChorusActivity = (machines: ReadonlyArray<ChorusMachineActivity>) =>
       const reason = compactLine(machine.unreachableReason) || "No response";
       return `## Machine: ${machine.label}\n\n- Machine unreachable: ${excerpt(reason, 200)}`;
     }
+    const heading = `## Machine: ${machine.label}`;
+    if (machine.duets.length === 0) return `${heading}\n\n- No active Duets.`;
+
+    const footer = machine.omittedDuets ? "- Additional active Duets omitted." : "";
+    const duetLimit = Math.floor(
+      (BRIEF_ACTIVITY_LIMIT - heading.length - footer.length - 2) / machine.duets.length,
+    );
     const duetSections = machine.duets.map((activity) => {
-      const digestNew = excerpt(activity.digestNew, BRIEF_DOCUMENT_CONTEXT_LIMIT);
-      return `### Duet: ${activity.duet.name}\n\nDIGEST.md New:\n${digestNew || "(empty)"}\n\nOpen activity:\n${formatActivity(
-        {
-          activeTasks: activity.activeTasks,
-          pendingRequests: activity.pendingRequests,
-          completedTasks: [],
-        },
-      )}`;
+      const name = `### Duet: ${compactLine(activity.name)}\n\nDIGEST.md New:\n`;
+      const openHeading = "\n\nOpen activity:\n";
+      const contentLimit = duetLimit - name.length - openHeading.length - 2;
+      const digest = activity.digestNew || "(empty)";
+      const open = formatActivity({ ...activity, completedTasks: [] });
+      const digestLimit = Math.max(Math.floor(contentLimit / 2), contentLimit - open.length);
+      const digestExcerpt = excerpt(digest, digestLimit);
+      return (
+        name + digestExcerpt + openHeading + excerpt(open, contentLimit - digestExcerpt.length)
+      );
     });
-    return [
-      `## Machine: ${machine.label}`,
-      ...(duetSections.length === 0 ? ["- No active Duets."] : duetSections),
-    ].join("\n\n");
+    return [heading, ...duetSections, ...(footer ? [footer] : [])].join("\n\n");
   });
   return machineSections.length === 0 ? "- No machine activity." : machineSections.join("\n\n");
 };
@@ -257,131 +266,103 @@ const make = Effect.gen(function* () {
     ),
   );
 
-  const readMachineOpenLoops = Effect.fn("CaptainBriefService.readMachineOpenLoops")(
-    function* (duets: ReadonlyArray<Captain>) {
-      const loopsByDuet = new Map<
-        CaptainId,
-        {
-          activeTasks: CaptainHandoff.CaptainHandoffTask[];
-          pendingRequests: CaptainHandoff.CaptainHandoffRequest[];
-        }
-      >();
-      const ownerByConversation = new Map<string, Captain>();
-      for (const duet of duets) {
-        loopsByDuet.set(duet.id, { activeTasks: [], pendingRequests: [] });
-        for (const threadId of [duet.primaryThreadId, ...duet.earlierThreadIds]) {
-          ownerByConversation.set(threadId, duet);
-        }
-      }
-      const conversationIds = [...ownerByConversation.keys()];
-      if (conversationIds.length === 0) return loopsByDuet;
-
-      const activeTaskRows = yield* sql<{
-        readonly id: string;
-        readonly threadId: string;
-        readonly status: string;
-        readonly childThreadId: string | null;
-        readonly remoteLabel: string | null;
-        readonly title: string | null;
-        readonly progress: string | null;
-      }>`
-        SELECT subagent_id AS id, thread_id AS threadId, status, child_thread_id AS childThreadId,
-          substr(json_extract(payload_json, '$.remoteChild.label'), 1, 121) AS remoteLabel,
-          substr(json_extract(payload_json, '$.title'), 1, 91) AS title,
-          substr(json_extract(payload_json, '$.progress'), 1, 121) AS progress
+  const readChorusDuetActivity = Effect.fn("CaptainBriefService.readChorusDuetActivity")(
+    function* (duet: { readonly id: string; readonly name: string }) {
+      const conversations = sql`
+        WITH conversations(thread_id) AS (
+          SELECT primary_thread_id FROM captains WHERE id = ${duet.id}
+          UNION
+          SELECT earlier.value FROM captains, json_each(earlier_thread_ids) AS earlier
+          WHERE captains.id = ${duet.id}
+        )
+      `;
+      const activeSolos = sql`
         FROM orchestration_v2_projection_subagents
-        WHERE thread_id IN ${sql.in(conversationIds)}
+        WHERE thread_id IN (SELECT thread_id FROM conversations)
           AND origin = 'app_owned'
           AND status IN ('idle', 'pending', 'running', 'waiting')
-        ORDER BY COALESCE(started_at, updated_at), subagent_id
       `;
-
-      const ownerByChildThread = new Map<string, Captain>();
-      for (const row of activeTaskRows) {
-        const owner = ownerByConversation.get(row.threadId);
-        if (owner === undefined) continue;
-        if (row.childThreadId !== null) ownerByChildThread.set(row.childThreadId, owner);
-        loopsByDuet.get(owner.id)?.activeTasks.push({
-          id: row.id,
-          title: row.title ?? row.id,
-          status: row.status,
-          progress: row.progress ?? undefined,
-          followId: row.childThreadId ?? row.remoteLabel ?? row.id,
-        });
-      }
-
-      const requestThreadIds = [...new Set([...conversationIds, ...ownerByChildThread.keys()])];
+      const activeTaskRows = yield* sql<{
+        readonly title: string;
+        readonly status: string;
+        readonly progress: string | null;
+      }>`
+        ${conversations}
+        SELECT COALESCE(substr(json_extract(payload_json, '$.title'), 1, 100), substr(subagent_id, 1, 100)) AS title,
+          status, substr(json_extract(payload_json, '$.progress'), 1, 120) AS progress
+        ${activeSolos}
+        ORDER BY COALESCE(started_at, updated_at), subagent_id
+        LIMIT ${BRIEF_OPEN_ITEM_LIMIT}
+      `;
+      // An approval can belong to a Solo outside the displayed task list.
       const pendingRequestRows = yield* sql<{
-        readonly id: string;
-        readonly threadId: string;
         readonly kind: string;
         readonly detail: string | null;
       }>`
-        SELECT DISTINCT requests.runtime_request_id AS id, requests.thread_id AS threadId,
-          requests.kind,
-          COALESCE(
-            substr(json_extract(item.payload_json, '$.prompt'), 1, 141),
-            substr(json_extract(item.payload_json, '$.questions[0].question'), 1, 141),
-            substr(json_extract(item.payload_json, '$.reason'), 1, 141)
-          ) AS detail
+        ${conversations},
+        request_threads(thread_id) AS (
+          SELECT thread_id FROM conversations
+          UNION
+          SELECT child_thread_id ${activeSolos} AND child_thread_id IS NOT NULL
+        )
+        SELECT requests.kind, (
+          SELECT COALESCE(
+            substr(json_extract(item.payload_json, '$.prompt'), 1, 140),
+            substr(json_extract(item.payload_json, '$.questions[0].question'), 1, 140),
+            substr(json_extract(item.payload_json, '$.reason'), 1, 140)
+          )
+          FROM orchestration_v2_projection_turn_items AS item
+          WHERE item.thread_id = requests.thread_id
+            AND item.type IN ('approval_request', 'user_input_request')
+            AND json_extract(item.payload_json, '$.requestId') = requests.runtime_request_id
+          ORDER BY item.ordinal DESC, item.turn_item_id
+          LIMIT 1
+        ) AS detail
         FROM orchestration_v2_projection_runtime_requests AS requests
-        LEFT JOIN orchestration_v2_projection_turn_items AS item
-          ON item.thread_id = requests.thread_id
-          AND item.type IN ('approval_request', 'user_input_request')
-          AND json_extract(item.payload_json, '$.requestId') = requests.runtime_request_id
-        WHERE requests.thread_id IN ${sql.in(requestThreadIds)}
+        WHERE requests.thread_id IN (SELECT thread_id FROM request_threads)
           AND requests.status = 'pending'
           AND requests.kind IN ('command', 'file-read', 'file-change', 'mcp-elicitation', 'permission', 'user_input')
         ORDER BY requests.created_at, requests.runtime_request_id
+        LIMIT ${BRIEF_OPEN_ITEM_LIMIT}
       `;
-      for (const row of pendingRequestRows) {
-        const owner = ownerByConversation.get(row.threadId) ?? ownerByChildThread.get(row.threadId);
-        if (owner === undefined) continue;
-        loopsByDuet.get(owner.id)?.pendingRequests.push({
-          kind: row.kind,
-          threadId: row.threadId,
-          requestId: row.id,
-          detail: row.detail ?? undefined,
-        });
-      }
-      return loopsByDuet;
+      const [digest] = yield* sql<{ readonly content: string }>`
+        SELECT content FROM captain_documents WHERE captain_id = ${duet.id} AND name = 'DIGEST.md'
+      `;
+      return {
+        name: duet.name,
+        digestNew: captainDigestNewSection(digest?.content ?? ""),
+        activeTasks: activeTaskRows.map(({ title, status, progress }) => ({
+          title,
+          status,
+          progress: progress ?? undefined,
+        })),
+        pendingRequests: pendingRequestRows.map(({ kind, detail }) => ({
+          kind,
+          detail: detail ?? undefined,
+        })),
+      } satisfies ChorusDuetActivity;
     },
-    Effect.mapError(
-      () =>
-        new CaptainError({
-          code: "unavailable",
-          message: "Could not read open Duet work.",
-        }),
-    ),
   );
 
   const readLocalChorusMachineActivity = Effect.fn(
     "CaptainBriefService.readLocalChorusMachineActivity",
-  )(function* () {
-    const snapshot = yield* store.snapshot({});
-    const duets = snapshot.captains.filter(
-      (captain) => captain.kind === "duet" && captain.archivedAt === null,
-    );
-    const openLoopsByDuet = yield* readMachineOpenLoops(duets);
-    return {
-      label: "This machine",
-      duets: yield* Effect.forEach(duets, (duet) =>
-        Effect.gen(function* () {
-          const digest = yield* store.document(duet, "DIGEST.md");
-          const openLoops = openLoopsByDuet.get(duet.id) ?? {
-            activeTasks: [],
-            pendingRequests: [],
-          };
-          return {
-            duet,
-            digestNew: captainDigestNewSection(digest.content),
-            activeTasks: openLoops.activeTasks,
-            pendingRequests: openLoops.pendingRequests,
-          };
-        }),
-      ),
-    } satisfies ChorusMachineActivity;
-  });
+  )(
+    function* () {
+      const duets = yield* sql<{ readonly id: string; readonly name: string }>`
+        SELECT id, name FROM captains
+        WHERE kind = 'duet' AND archived_at IS NULL
+        ORDER BY id
+        LIMIT ${CHORUS_DUET_LIMIT + 1}
+      `;
+      return {
+        label: "This machine",
+        duets: yield* Effect.forEach(duets.slice(0, CHORUS_DUET_LIMIT), readChorusDuetActivity),
+        omittedDuets: duets.length > CHORUS_DUET_LIMIT,
+      } satisfies ChorusMachineActivity;
+    },
+    sql.withTransaction,
+    Effect.catchTags({ SqlError: CaptainStore.captainUnavailable }),
+  );
 
   const generateForCaptain = Effect.fn("CaptainBriefService.generate")(function* (input: {
     readonly captain: Captain;
