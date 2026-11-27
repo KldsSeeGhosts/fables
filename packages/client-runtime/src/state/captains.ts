@@ -121,6 +121,37 @@ type CaptainEnvironment = {
   >;
 };
 
+export interface ActiveChorus {
+  readonly environmentId: EnvironmentId;
+  readonly environmentLabel?: string | undefined;
+  readonly captain: Pick<Captain, "id" | "name" | "primaryThreadId" | "archivedAt" | "kind">;
+}
+
+/** Active Choruses visible across the fleet. More than one means offline machines or simultaneous creates conflicted. */
+export function activeChoruses(
+  environments: ReadonlyArray<{
+    readonly environmentId: EnvironmentId;
+    readonly label?: string;
+    readonly captains: ReadonlyArray<
+      Pick<Captain, "id" | "name" | "primaryThreadId" | "archivedAt" | "kind">
+    >;
+  }>,
+): ActiveChorus[] {
+  return environments.flatMap(({ environmentId, label, captains }) =>
+    captains.flatMap((captain) =>
+      captain.kind === "chorus" && captain.archivedAt === null
+        ? [
+            {
+              environmentId,
+              ...(label === undefined ? {} : { environmentLabel: label }),
+              captain,
+            },
+          ]
+        : [],
+    ),
+  );
+}
+
 export interface CaptainInboxItem {
   readonly kind: "approval" | "input" | "subagent-request";
   readonly environmentId: EnvironmentId;

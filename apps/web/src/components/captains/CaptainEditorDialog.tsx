@@ -6,6 +6,7 @@ import {
   DEFAULT_SERVER_SETTINGS,
   type Captain,
   type CaptainAvatar as Avatar,
+  type CaptainKind,
   type CaptainReportPolicy,
   type EnvironmentId,
   type ProjectId,
@@ -59,6 +60,7 @@ export function CaptainEditorDialog({
   destinations,
   captain,
   initialSection = "profile",
+  canCreateChorus = false,
   onClose,
   onSave,
 }: {
@@ -67,6 +69,8 @@ export function CaptainEditorDialog({
   captain?: Captain;
   /** Which section an existing Duet's dialog opens on. */
   initialSection?: CaptainProfileSection;
+  /** No active Chorus is visible on any reachable machine. */
+  canCreateChorus?: boolean;
   onClose: () => void;
   onSave: (environmentId: EnvironmentId, captain: Captain) => void;
 }) {
@@ -75,6 +79,7 @@ export function CaptainEditorDialog({
   const fieldId = useId();
   const [environmentId, setEnvironmentId] = useState(destination.id);
   const [captainId] = useState(() => CaptainId.make(randomUUID()));
+  const [kind, setKind] = useState<CaptainKind>(captain?.kind ?? "duet");
   const [name, setName] = useState(captain?.name ?? "");
   const [role, setRole] = useState(captain?.role ?? "");
   const [instructions, setInstructions] = useState(captain?.instructions ?? "");
@@ -102,14 +107,15 @@ export function CaptainEditorDialog({
 
   const save = async () => {
     if (!canSave || saving || !name.trim()) return;
+    const chorus = kind === "chorus";
     const profile = {
       name: name.trim(),
       role: role.trim(),
       instructions,
       avatar,
-      scopedProjectIds,
-      coordinatorOnly,
-      reportPolicy,
+      scopedProjectIds: chorus ? [] : scopedProjectIds,
+      coordinatorOnly: chorus ? true : coordinatorOnly,
+      reportPolicy: chorus ? ("react" as const) : reportPolicy,
     };
     setError(null);
     setSaving(true);
@@ -132,6 +138,7 @@ export function CaptainEditorDialog({
         environmentId,
         input: {
           ...profile,
+          kind,
           captainId,
           modelSelection,
           runtimeMode:
@@ -144,9 +151,18 @@ export function CaptainEditorDialog({
     })();
     setSaving(false);
     if (result === null) {
-      setError(gt("Configure a model on this environment before creating a Duet."));
+      setError(
+        kind === "chorus"
+          ? gt("Configure a model on this environment before creating a Chorus.")
+          : gt("Configure a model on this environment before creating a Duet."),
+      );
     } else if (result._tag === "Failure") {
-      setError(captainCommandError(result, gt("Could not save Duet.")));
+      setError(
+        captainCommandError(
+          result,
+          kind === "chorus" ? gt("Could not save Chorus.") : gt("Could not save Duet."),
+        ),
+      );
     } else {
       onSave(environmentId, result.value);
     }
@@ -165,9 +181,28 @@ export function CaptainEditorDialog({
       <DialogPopup className="sm:max-w-lg">
         <div className="flex min-h-0 flex-col">
           <DialogHeader>
-            <DialogTitle>{captain === undefined ? <T>New Duet</T> : <T>Edit Duet</T>}</DialogTitle>
+            <DialogTitle>
+              {captain === undefined ? (
+                kind === "chorus" ? (
+                  <T>New Chorus</T>
+                ) : (
+                  <T>New Duet</T>
+                )
+              ) : captain.kind === "chorus" ? (
+                <T>Edit Chorus</T>
+              ) : (
+                <T>Edit Duet</T>
+              )}
+            </DialogTitle>
             <DialogDescription>
-              <T>A Duet keeps its own conversation, memories, and documents across sessions.</T>
+              {kind === "chorus" ? (
+                <T>
+                  A Chorus reads every Duet in the fleet, routes work to the Duet that owns it, and
+                  keeps no project state of its own.
+                </T>
+              ) : (
+                <T>A Duet keeps its own conversation, memories, and documents across sessions.</T>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
@@ -214,6 +249,46 @@ export function CaptainEditorDialog({
                       ))}
                     </SelectPopup>
                   </Select>
+                </div>
+              ) : null}
+              {captain === undefined && canCreateChorus ? (
+                <div className="grid gap-1.5">
+                  <span className="text-label">
+                    <T>Kind</T>
+                  </span>
+                  <ToggleGroup
+                    aria-label={gt("Captain kind")}
+                    value={[kind]}
+                    disabled={saving}
+                    onValueChange={(value) => {
+                      const next = value[0];
+                      if (next !== "duet" && next !== "chorus") return;
+                      setKind(next);
+                      if (next === "chorus") {
+                        if (!name.trim()) setName("Chorus");
+                        setAvatar({ preset: "circle", color: "orange" });
+                        setScope([]);
+                        setCoordinatorOnly(true);
+                        setReportPolicy("react");
+                      }
+                    }}
+                  >
+                    <Toggle value="duet">
+                      <T>Duet</T>
+                    </Toggle>
+                    <Toggle value="chorus">
+                      <T>Chorus</T>
+                    </Toggle>
+                  </ToggleGroup>
+                </div>
+              ) : null}
+              {kind === "chorus" ? (
+                <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-meta text-muted-foreground">
+                  <T>
+                    Chorus always has no workspace scope, delegates project work, and uses the react
+                    report policy. The server checks every linked machine that answers before
+                    creating or restoring it.
+                  </T>
                 </div>
               ) : null}
               <div className="flex items-start gap-3">
@@ -354,42 +429,46 @@ export function CaptainEditorDialog({
                   onChange={(event) => setInstructions(event.target.value)}
                 />
               </div>
-              <div className="flex items-start justify-between gap-4">
-                <div className="grid gap-1">
-                  <span className="text-label">
-                    <T>Delegate the work</T>
-                  </span>
-                  <p className="text-meta text-muted-foreground">
-                    <T>
-                      Answers quick questions itself and hands anything that edits code to Solos in
-                      their own worktrees.
-                    </T>
-                  </p>
-                </div>
-                <Switch
-                  aria-label={gt("Delegate the work")}
-                  checked={coordinatorOnly}
-                  disabled={saving}
-                  onCheckedChange={setCoordinatorOnly}
-                />
-              </div>
-              <CaptainScope
-                projects={projects}
-                selected={scopedProjectIds}
-                disabled={saving}
-                onChange={setScope}
-              />
-              <div className="grid gap-2">
-                <span id={`${fieldId}-report-policy`} className="text-label">
-                  <T>When a delegated task finishes</T>
-                </span>
-                <CaptainReportPolicyPicker
-                  labelledBy={`${fieldId}-report-policy`}
-                  value={reportPolicy}
-                  disabled={saving}
-                  onChange={setReportPolicy}
-                />
-              </div>
+              {kind === "chorus" ? null : (
+                <>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="grid gap-1">
+                      <span className="text-label">
+                        <T>Delegate the work</T>
+                      </span>
+                      <p className="text-meta text-muted-foreground">
+                        <T>
+                          Answers quick questions itself and hands anything that edits code to Solos
+                          in their own worktrees.
+                        </T>
+                      </p>
+                    </div>
+                    <Switch
+                      aria-label={gt("Delegate the work")}
+                      checked={coordinatorOnly}
+                      disabled={saving}
+                      onCheckedChange={setCoordinatorOnly}
+                    />
+                  </div>
+                  <CaptainScope
+                    projects={projects}
+                    selected={scopedProjectIds}
+                    disabled={saving}
+                    onChange={setScope}
+                  />
+                  <div className="grid gap-2">
+                    <span id={`${fieldId}-report-policy`} className="text-label">
+                      <T>When a delegated task finishes</T>
+                    </span>
+                    <CaptainReportPolicyPicker
+                      labelledBy={`${fieldId}-report-policy`}
+                      value={reportPolicy}
+                      disabled={saving}
+                      onChange={setReportPolicy}
+                    />
+                  </div>
+                </>
+              )}
               {error !== null ? (
                 <p role="alert" className="text-body text-destructive-foreground">
                   {error}
@@ -414,7 +493,15 @@ export function CaptainEditorDialog({
                 disabled={saving || !canSave || !name.trim()}
                 onClick={() => void save()}
               >
-                {captain === undefined ? <T>Create Duet</T> : <T>Save changes</T>}
+                {captain === undefined ? (
+                  kind === "chorus" ? (
+                    <T>Create Chorus</T>
+                  ) : (
+                    <T>Create Duet</T>
+                  )
+                ) : (
+                  <T>Save changes</T>
+                )}
               </Button>
             ) : null}
           </DialogFooter>

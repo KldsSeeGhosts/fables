@@ -20,7 +20,7 @@ Use the check commands from the repository root after resolving a merge. They ar
 
 Owners: `apps/server/src/captains/`, `apps/server/src/orchestration-v2/CaptainRolloverWorker.ts`, `apps/server/src/mcp/toolkits/captain/`, `packages/contracts/src/captain.ts`, `packages/client-runtime/src/state/captain*.ts`, `packages/client-runtime/src/state/duetOrder.ts`, Captain migrations `112` through `115`, and `evals/mcp-tool-use/cases/captain.ndjson`.
 
-Must survive: Captain profiles, scoped projects, documents, local and optional [Honcho memory](../user/captain-honcho-memory.md), archive and reset behavior, delegation to crew threads, earlier conversation identity, rollover end reasons, durable resends, coordinator-only Captains, Captain MCP tools, and the client projection that tracks attention across current and earlier conversations.
+Must survive: Captain profiles and kinds, including the one-active fleet Chorus, scoped projects, documents, local and optional [Honcho memory](../user/captain-honcho-memory.md), archive and reset behavior, fleet read and routing tools, coverage-limited Chorus Solos, route ledgers, delegation to crew threads, earlier conversation identity, rollover end reasons, durable resends, coordinator-only Captains, Captain MCP tools, and the client projection that tracks attention across current and earlier conversations.
 
 Checks:
 
@@ -36,7 +36,7 @@ git grep -n '\[112, "Captains"' -- apps/server/src/persistence/Migrations.ts
 
 Owners: `apps/web/src/components/captains/`, `apps/web/src/components/chat/Captain*`, `apps/web/src/components/chat/Duet*`, `apps/web/src/components/chat/duet*`, `apps/web/src/hooks/useDuetShell.ts`, `apps/web/src/routes/_chat.captains.tsx`, and the Captain entries in `apps/web/src/components/Sidebar.tsx` and the command palette.
 
-Must survive: the Captains shelf and inbox, Captain editor, tasks drawer, Recaps, details cards, Duet header chrome and status, earlier conversation stitching in the timeline, approval redirects from ended conversations, Duet-specific tool-call visibility, and the right-panel launcher in Captain tasks.
+Must survive: the pinned Chorus row and badge, Chorus creation and fixed-field editor, duplicate-Chorus warnings, the Captains shelf and inbox, Captain editor, tasks drawer, Recaps with machine and Duet grouping, details cards, Duet header chrome and status, earlier conversation stitching in the timeline, approval redirects from ended conversations, Duet-specific tool-call visibility, and the right-panel launcher in Captain tasks.
 
 Checks:
 
@@ -51,7 +51,7 @@ git grep -n 'resolveThreadToolCallVisibility' -- apps/web/src/components/chat/Me
 
 Owners: `apps/mobile/src/features/captains/`, `apps/mobile/src/features/home/DuetThreadsHeader.tsx`, Duet integration in `apps/mobile/src/features/home/HomeScreen.tsx` and `apps/mobile/src/features/threads/ThreadRouteScreen.tsx`, `apps/mobile/src/features/layout/`, `apps/mobile/src/lib/mobileTheme*.ts`, and `apps/mobile/src/persistence/mobile-preferences.ts`.
 
-Must survive: the mobile Duet home section, inbox and tasks sheets, conversation orb and creature, adaptive folded and unfolded layouts, one-surface pane treatment in `ksg-salon`, earlier conversation loading above the empty state, approval redirects in earlier conversations, mobile Duet tool-call visibility, and the orb staying clear of the composer.
+Must survive: the pinned mobile Chorus row, mobile Chorus creation and archive/restore controls, the mobile Duet home section, inbox and tasks sheets, conversation orb and creature, adaptive folded and unfolded layouts, one-surface pane treatment in `ksg-salon`, earlier conversation loading above the empty state, approval redirects in earlier conversations, mobile Duet tool-call visibility, and the orb staying clear of the composer.
 
 Checks:
 

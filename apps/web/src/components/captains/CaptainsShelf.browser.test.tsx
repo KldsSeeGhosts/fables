@@ -517,3 +517,22 @@ it("opens the Duet row menu from the keyboard without a three-dot button", async
   await vi.waitFor(() => expect(show).toHaveBeenCalledOnce());
   expect(show.mock.lastCall?.[2]).toBe("keyboard");
 });
+
+it("pins the Chorus first with its fleet line and keeps it out of Duet ordering", async () => {
+  const chorus = {
+    ...captainNamed("chorus", "Chorus"),
+    kind: "chorus" as const,
+    avatar: { preset: "circle" as const, color: "orange" as const },
+  };
+  const alpha = captainNamed("alpha", "Alpha");
+  const rows = [
+    { environmentId, captain: alpha, attention: 0, working: false, primary },
+    { environmentId, captain: chorus, attention: 0, working: false, primary },
+  ];
+  await using screen = await renderList({}, { rows });
+  const ordered = rowOrder(screen.container);
+  expect(ordered[0]).toContain("Chorus");
+  expect(ordered[0]).toContain("All Duets across 1 machine");
+  expect(ordered[1]).toContain("Alpha");
+  expect(screen.container.textContent).toContain("Chorus");
+});

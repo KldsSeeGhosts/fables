@@ -8,15 +8,20 @@ const homeRowKey = (environmentId: EnvironmentId, captain: Pick<Captain, "id">) 
 export function orderCaptainHomeRows<
   T extends {
     readonly environment: { readonly environmentId: EnvironmentId };
-    readonly captain: Pick<Captain, "id" | "archivedAt">;
+    readonly captain: Pick<Captain, "id" | "archivedAt" | "kind">;
   },
 >(rows: ReadonlyArray<T>): Array<T> {
-  return orderDuets(
-    rows.map((row) => ({
-      key: homeRowKey(row.environment.environmentId, row.captain),
-      archived: row.captain.archivedAt !== null,
-      row,
-    })),
-    [],
-  ).map(({ row }) => row);
+  const choruses = rows.filter((row) => row.captain.kind === "chorus");
+  const duets = rows.filter((row) => row.captain.kind !== "chorus");
+  return [
+    ...choruses,
+    ...orderDuets(
+      duets.map((row) => ({
+        key: homeRowKey(row.environment.environmentId, row.captain),
+        archived: row.captain.archivedAt !== null,
+        row,
+      })),
+      [],
+    ).map(({ row }) => row),
+  ];
 }

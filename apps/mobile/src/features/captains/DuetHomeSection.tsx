@@ -66,6 +66,10 @@ export function DuetHomeSection(props: {
   const tokens = useDuetTokens();
   const navigation = useNavigation();
   const selectDetail = useSelectWorkspaceDetail();
+  const machineCount = new Set(props.rows.map((row) => row.environment.environmentId)).size;
+  const hasActiveChorus = props.rows.some(
+    (row) => row.captain.kind === "chorus" && row.captain.archivedAt === null,
+  );
   return (
     <View className="pb-2">
       <View className="h-11 flex-row items-center gap-1.5 pl-4 pr-1.5">
@@ -123,17 +127,45 @@ export function DuetHomeSection(props: {
           </View>
         </Pressable>
       </View>
+      {hasActiveChorus ? null : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={gt("New Chorus")}
+          onPress={() => navigation.navigate("ChorusNew")}
+          className="mx-2 mb-1 min-h-[52px] flex-row items-center gap-3 rounded-[10px] pl-2 pr-2.5"
+          style={({ pressed }) => ({ backgroundColor: pressed ? tokens.row : undefined })}
+        >
+          <View
+            className="size-8 items-center justify-center rounded-full border border-dashed"
+            style={{ borderColor: tokens.hairline }}
+          >
+            <SymbolView name="plus" size={15} tintColor={tokens.icon} />
+          </View>
+          <View className="min-w-0 flex-1">
+            <Text className="font-t3-medium" style={{ fontSize: 15, color: tokens.foreground }}>
+              {gt("New Chorus")}
+            </Text>
+            <Text style={{ fontSize: 13, color: tokens.meta }} numberOfLines={1}>
+              {gt("One Duet for the whole fleet")}
+            </Text>
+          </View>
+        </Pressable>
+      )}
       {props.rows.map(({ environment, captain, activity }) => {
         const trail = duetRowTrail({ captain, activity });
         const scope = duetRowScope(environment.environmentId, captain, props.projects);
         const scopeText =
-          scope.kind === "project"
-            ? scope.title
-            : scope.kind === "projects"
-              ? gt("{count, plural, =1 {1 project} other {{count} projects}}", {
-                  count: scope.count,
-                })
-              : gt("All projects");
+          captain.kind === "chorus"
+            ? gt("All Duets across {count, plural, =1 {1 machine} other {{count} machines}}", {
+                count: machineCount,
+              })
+            : scope.kind === "project"
+              ? scope.title
+              : scope.kind === "projects"
+                ? gt("{count, plural, =1 {1 project} other {{count} projects}}", {
+                    count: scope.count,
+                  })
+                : gt("All projects");
         const threadKey = scopedThreadKey(environment.environmentId, captain.primaryThreadId);
         const selected = threadKey === props.selectedThreadKey;
         return (
@@ -142,15 +174,22 @@ export function DuetHomeSection(props: {
             accessibilityRole="button"
             accessibilityState={{ selected }}
             accessibilityLabel={[captain.name, scopeText].join(", ")}
-            onPress={() =>
+            onPress={() => {
+              if (captain.kind === "chorus" && captain.archivedAt !== null) {
+                navigation.navigate("CaptainBrief", {
+                  environmentId: String(environment.environmentId),
+                  captainId: String(captain.id),
+                });
+                return;
+              }
               selectDetail({
                 name: "Thread",
                 params: {
                   environmentId: String(environment.environmentId),
                   threadId: String(captain.primaryThreadId),
                 },
-              })
-            }
+              });
+            }}
             className="mx-2 min-h-[60px] flex-row items-center gap-3 rounded-[10px] pl-2 pr-2.5"
             style={({ pressed }) => ({
               backgroundColor: selected || pressed ? tokens.row : undefined,
@@ -166,6 +205,14 @@ export function DuetHomeSection(props: {
                 >
                   {captain.name}
                 </Text>
+                {captain.kind === "chorus" ? (
+                  <View
+                    className="rounded-full border px-1.5 py-px"
+                    style={{ borderColor: tokens.hairline }}
+                  >
+                    <Text style={{ fontSize: 10, color: tokens.meta }}>{gt("Chorus")}</Text>
+                  </View>
+                ) : null}
                 <Trail trail={trail} tokens={tokens} />
               </View>
               <View className="mt-px flex-row items-center gap-1.5">

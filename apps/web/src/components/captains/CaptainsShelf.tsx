@@ -19,6 +19,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
+  activeChoruses,
   captainAttentionTotal,
   captainConversationKeys,
   captainThreadActivity,
@@ -142,6 +143,7 @@ function DuetChannelRow({
   status,
   selected,
   activity,
+  fleetMachineCount,
   onMenu,
   onOpen,
   children,
@@ -156,6 +158,7 @@ function DuetChannelRow({
   status: string;
   selected: boolean;
   activity: CaptainActivity;
+  fleetMachineCount: number;
   onMenu: (position: { x: number; y: number }, source: ContextMenuSource) => void;
   onOpen: () => void;
   children: ReactNode;
@@ -167,9 +170,10 @@ function DuetChannelRow({
   const waiting = !archived && attention > 0;
   const busy = !archived && !waiting && working;
   const rowKey = duetRowKey(environmentId, captain);
+  const isChorus = captain.kind === "chorus";
   const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: rowKey,
-    disabled: archived,
+    disabled: archived || isChorus,
   });
   const handleContextMenu = (event: ReactMouseEvent) => {
     event.preventDefault();
@@ -180,8 +184,11 @@ function DuetChannelRow({
     (project) =>
       project.environmentId === environmentId && captain.scopedProjectIds.includes(project.id),
   );
-  const scope =
-    captain.scopedProjectIds.length === 0
+  const scope = isChorus
+    ? gt("All Duets across {count, plural, one {{count} machine} other {{count} machines}}", {
+        count: fleetMachineCount,
+      })
+    : captain.scopedProjectIds.length === 0
       ? gt("All workspace")
       : captain.scopedProjectIds.length === 1
         ? (scoped[0]?.title ?? gt("1 project"))
@@ -275,6 +282,11 @@ function DuetChannelRow({
               >
                 {name}
               </span>
+              {isChorus ? (
+                <span className="shrink-0 rounded-full border border-border px-1.5 py-px text-micro text-muted-foreground">
+                  <T>Chorus</T>
+                </span>
+              ) : null}
               {trailing ? <span className="flex shrink-0">{trailing}</span> : null}
             </span>
             <span className="flex h-4 min-w-0 items-center gap-1.5 text-meta leading-4 text-muted-foreground">
@@ -388,6 +400,7 @@ function CaptainShelfRow({
   working,
   activity,
   selected,
+  fleetMachineCount,
   canMoveUp = false,
   canMoveDown = false,
   onMove,
@@ -401,6 +414,7 @@ function CaptainShelfRow({
   working: boolean;
   activity: CaptainActivity;
   selected: boolean;
+  fleetMachineCount: number;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
   onMove?: ((direction: DuetMoveDirection) => void) | undefined;
@@ -431,12 +445,16 @@ function CaptainShelfRow({
             { id: "memory", label: gt("Memory") },
             {
               id: "customize",
-              label: gt("Customize Duet"),
+              label: current.kind === "chorus" ? gt("Customize Chorus") : gt("Customize Duet"),
               disabled: !canUpdate,
               separatorBefore: true,
             },
-            { id: "move-up", label: gt("Move up"), disabled: !canMoveUp },
-            { id: "move-down", label: gt("Move down"), disabled: !canMoveDown },
+            ...(current.kind === "chorus"
+              ? []
+              : [
+                  { id: "move-up" as const, label: gt("Move up"), disabled: !canMoveUp },
+                  { id: "move-down" as const, label: gt("Move down"), disabled: !canMoveDown },
+                ]),
             {
               id: "archive",
               label: archived ? gt("Restore") : gt("Archive"),
@@ -510,9 +528,17 @@ function CaptainShelfRow({
         </MenuItem>
         <MenuSeparator />
         <MenuItem disabled={!canUpdate} onClick={() => profile.edit()}>
-          {isDuet ? <T>Customize Duet</T> : <T>Edit Duet</T>}
+          {isDuet ? (
+            current.kind === "chorus" ? (
+              <T>Customize Chorus</T>
+            ) : (
+              <T>Customize Duet</T>
+            )
+          ) : (
+            <T>Edit Duet</T>
+          )}
         </MenuItem>
-        {isDuet && onMove ? (
+        {isDuet && onMove && current.kind !== "chorus" ? (
           <>
             <MenuItem disabled={!canMoveUp} onClick={() => onMove("up")}>
               <T>Move up</T>
@@ -563,6 +589,7 @@ function CaptainShelfRow({
         status={status}
         selected={selected}
         activity={activity}
+        fleetMachineCount={fleetMachineCount}
         onMenu={openDuetMenu}
         onOpen={() => onOpen(threadRef)}
       >
@@ -668,14 +695,18 @@ export function CaptainShelfList({
     archived: row.captain.archivedAt !== null,
     row,
   }));
-  const orderedRowEntries = isDuet ? orderDuets(rowEntries, savedDuetOrder) : rowEntries;
+  const chorusRowEntries = rowEntries.filter(({ row }) => row.captain.kind === "chorus");
+  const duetRowEntries = rowEntries.filter(({ row }) => row.captain.kind !== "chorus");
+  const orderedDuetEntries = isDuet ? orderDuets(duetRowEntries, savedDuetOrder) : duetRowEntries;
+  const orderedRowEntries = [...chorusRowEntries, ...orderedDuetEntries];
   const orderedRows = orderedRowEntries.map(({ row }) => row);
-  const orderedKeys = orderedRows.map((row) => duetRowKey(row.environmentId, row.captain));
-  const activeRowEntries = orderedRowEntries.filter((entry) => !entry.archived);
+  const orderedKeys = orderedDuetEntries.map(({ key }) => key);
+  const fleetMachineCount = new Set(rows.map((row) => row.environmentId)).size;
+  const activeRowEntries = orderedDuetEntries.filter((entry) => !entry.archived);
   const activeCount = activeRowEntries.length;
   const activeIndexByKey = new Map(activeRowEntries.map((entry, index) => [entry.key, index]));
   const handleMoveDuet = (key: string, direction: DuetMoveDirection) => {
-    const nextOrder = moveDuet(rowEntries, savedDuetOrder, key, direction);
+    const nextOrder = moveDuet(duetRowEntries, savedDuetOrder, key, direction);
     if (nextOrder !== null) setSavedDuetOrder(nextOrder);
   };
   const duetName = (id: UniqueIdentifier | undefined) =>
@@ -736,9 +767,12 @@ export function CaptainShelfList({
                   activeThread?.environmentId === environmentId &&
                   activeThread.threadId === captain.primaryThreadId
                 }
+                fleetMachineCount={fleetMachineCount}
                 canMoveUp={activeIndex !== undefined && activeIndex > 0}
                 canMoveDown={activeIndex !== undefined && activeIndex < activeCount - 1}
-                onMove={(direction) => handleMoveDuet(key, direction)}
+                {...(captain.kind === "chorus"
+                  ? {}
+                  : { onMove: (direction: DuetMoveDirection) => handleMoveDuet(key, direction) })}
                 onOpen={onOpen}
               />
             );
@@ -831,6 +865,13 @@ export function CaptainsShelf({
     .toSorted(
       (a, b) => Number(a.captain.archivedAt !== null) - Number(b.captain.archivedAt !== null),
     );
+  const fleetChoruses = activeChoruses(
+    supporting.map(({ environmentId, label }, index) => ({
+      environmentId,
+      label,
+      captains: environments[index]!.captains,
+    })),
+  );
 
   return (
     <>
@@ -847,6 +888,7 @@ export function CaptainsShelf({
         <CaptainEditorDialog
           destination={destination}
           destinations={destinations}
+          canCreateChorus={fleetChoruses.length === 0}
           onClose={() => setCreating(false)}
           onSave={(environmentId, captain) => {
             setCreating(false);
