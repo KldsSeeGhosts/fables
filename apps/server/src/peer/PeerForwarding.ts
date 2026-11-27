@@ -207,7 +207,7 @@ const make = Effect.gen(function* () {
       arguments: args,
       limits,
       ...(sender === undefined ? {} : { sender }),
-      ...(scope.chorus === true ? { senderCaptainKind: "chorus" as const } : {}),
+      ...(McpInvocationContext.chorusOnly(scope) ? { senderCaptainKind: "chorus" as const } : {}),
       success: success as Schema.Decoder<A>,
     });
   });
