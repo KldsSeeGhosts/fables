@@ -160,6 +160,7 @@ import { ThreadBrowserFloat } from "../browser/ThreadBrowserFloat";
 import { useThreadServerBrowserTabCount } from "../../state/preview";
 import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
 import { scopedThreadKey } from "../../lib/scopedEntities";
+import { useStableCallback } from "../../lib/useStableCallback";
 import {
   finishThreadMessageJump,
   pendingThreadMessageJump,
@@ -1474,7 +1475,7 @@ function ThreadDetailBody(
       voiceInputSession.ownerKey === props.composerDraftKey &&
       voiceInputBlocksSubmission(voiceInputSession.controller.currentState)
     );
-  const handleCiteAssistantText = (citation: AssistantCitation) => {
+  const handleCiteAssistantText = useStableCallback((citation: AssistantCitation) => {
     if (!canCiteAssistantText || props.composerDraftKey === null) return;
     const target = captureComposerDraftInsertion(props.composerDraftKey);
     const prefix = target.start > 0 && !/\s/.test(target.text[target.start - 1]!) ? " " : "";
@@ -1491,9 +1492,9 @@ function ThreadDetailBody(
     }
     insertComposerDraftText(props.composerDraftKey, value, target);
     composerEditorRef.current?.focus();
-  };
+  });
 
-  const handleUseArtifactTemplate = (template: CodexArtifactTemplate) => {
+  const handleUseArtifactTemplate = useStableCallback((template: CodexArtifactTemplate) => {
     const draftMessage =
       props.composerDraftKey === null ? "" : getComposerDraftSnapshot(props.composerDraftKey).text;
     const nextDraft = appendCodexArtifactTemplateUsePrompt(draftMessage, template);
@@ -1502,7 +1503,7 @@ function ThreadDetailBody(
       composerEditorRef.current?.focus();
       composerEditorRef.current?.setSelection({ start: nextDraft.length, end: nextDraft.length });
     });
-  };
+  });
 
   const handleScrollToEnd = () => {
     void Haptics.selectionAsync();
