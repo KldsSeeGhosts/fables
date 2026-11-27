@@ -118,6 +118,7 @@ import {
   runOutcome,
 } from "../orchestration-v2/RestartBackgroundNote.ts";
 import * as CaptainStore from "../captains/CaptainStore.ts";
+import { formatCaptainCrewRules } from "../captains/captainTurnContext.ts";
 import {
   assertChorusProjectUncovered,
   captainDelegationProject,
@@ -3187,12 +3188,6 @@ const make = Effect.gen(function* () {
       }
       const chorusStore = currentCaptain?.kind === "chorus" ? callerCaptainStore : undefined;
       if (input.target !== undefined && environmentId !== undefined) {
-        if (chorusStore !== undefined) {
-          return yield* failure(
-            "invalid_request",
-            "Chorus can delegate only to local projects until linked environments can check Duet coverage.",
-          );
-        }
         if (currentCaptain?.scopedProjectIds.length) {
           return yield* failure(
             "invalid_request",
@@ -3202,10 +3197,17 @@ const make = Effect.gen(function* () {
         yield* requireCapability(callerScope);
         const scope = yield* requireThreadScope(callerScope, "delegate_task");
         // The task's child runs as an ordinary thread there; this thread keeps the task.
-        const { taskId } = yield* remoteDelegation.delegate(scope, {
-          ...input,
-          target: { ...input.target, environmentId },
-        });
+        const isChorus = currentCaptain?.kind === "chorus";
+        const { taskId } = yield* remoteDelegation.delegate(
+          isChorus ? { ...scope, chorus: true } : scope,
+          {
+            ...input,
+            ...(isChorus
+              ? { task: `${formatCaptainCrewRules(currentCaptain, "")}\n\n${input.task}` }
+              : {}),
+            target: { ...input.target, environmentId },
+          },
+        );
         return yield* input.mode === "wait"
           ? awaitTask(scope, taskId, taskId, input.timeoutMs)
           : readTask(scope, taskId, false, true);

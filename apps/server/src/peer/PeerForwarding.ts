@@ -21,6 +21,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import type * as Tool from "effect/ai/Tool";
 
+import * as CaptainStore from "../captains/CaptainStore.ts";
 import { runtimeModeRank } from "../mcp/delegatedTaskModes.ts";
 import { assertNotLinked } from "../mcp/linkOrigin.ts";
 import * as McpInvocationContext from "../mcp/McpInvocationContext.ts";
@@ -114,6 +115,7 @@ export const readNewestOrRetry = Effect.fn("PeerForwarding.readNewestOrRetry")(f
 
 const make = Effect.gen(function* () {
   const peers = yield* PeerMcpClient.PeerMcpClient;
+  const captains = yield* Effect.serviceOption(CaptainStore.CaptainStore);
   const links = yield* PeerLinks.PeerLinks;
   const crypto = yield* Digest.Digest;
   const threads = yield* ThreadManagement.ThreadManagementService;
@@ -174,6 +176,19 @@ const make = Effect.gen(function* () {
     params: unknown,
   ) {
     const { caller, limits } = yield* forwardingCaller(scope);
+    const chorus = McpInvocationContext.chorusOnly(scope);
+    if (chorus) {
+      const captain =
+        caller === undefined || Option.isNone(captains)
+          ? undefined
+          : yield* captains.value.byThread(caller.id).pipe(Effect.mapError(unavailable));
+      if (captain?.kind !== "chorus") {
+        return yield* new OrchestratorMcpFailure({
+          code: "capability_denied",
+          message: "This thread is no longer the active Chorus.",
+        });
+      }
+    }
     const encoded = (yield* Schema.encodeUnknownEffect(parameters as Schema.Encoder<unknown>)(
       params,
     ).pipe(Effect.mapError(unavailable))) as Record<string, unknown>;
@@ -207,7 +222,7 @@ const make = Effect.gen(function* () {
       arguments: args,
       limits,
       ...(sender === undefined ? {} : { sender }),
-      ...(McpInvocationContext.chorusOnly(scope) ? { senderCaptainKind: "chorus" as const } : {}),
+      ...(chorus ? { senderCaptainKind: "chorus" as const } : {}),
       success: success as Schema.Decoder<A>,
     });
   });

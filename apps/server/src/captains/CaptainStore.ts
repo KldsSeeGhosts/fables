@@ -315,25 +315,30 @@ const make = Effect.gen(function* () {
         ...captain.earlierThreadIds,
       ]);
       return yield* sql<{
+        readonly environmentId: EnvironmentId | null;
+        readonly environmentLabel: string | null;
         readonly projectId: ProjectId;
         readonly count: number;
         readonly latestCompletedAt: string;
       }>`
         WITH recent AS (
-          SELECT child.project_id AS projectId, count(*) AS count,
-            max(COALESCE(task.completed_at, task.updated_at)) AS latestCompletedAt
+          SELECT json_extract(task.payload_json, '$.remoteChild.environmentId') AS environmentId,
+            max(json_extract(task.payload_json, '$.remoteChild.label')) AS environmentLabel,
+            COALESCE(child.project_id, json_extract(task.payload_json, '$.remoteChild.projectId')) AS projectId,
+            count(*) AS count, max(COALESCE(task.completed_at, task.updated_at)) AS latestCompletedAt
           FROM orchestration_v2_projection_subagents AS task
-          INNER JOIN orchestration_v2_projection_threads AS child
+          LEFT JOIN orchestration_v2_projection_threads AS child
             ON child.thread_id = task.child_thread_id
           WHERE task.thread_id IN (SELECT value FROM json_each(${conversationIds}))
             AND task.origin = 'app_owned'
             AND task.status IN ('completed', 'failed', 'cancelled', 'interrupted')
             AND COALESCE(task.completed_at, task.updated_at) >= ${cutoff}
-          GROUP BY child.project_id
+          GROUP BY environmentId, projectId
         )
-        SELECT projectId, count, latestCompletedAt FROM recent
-        WHERE NOT EXISTS (SELECT 1 ${activeDuetCoverage(sql`recent.projectId`)})
-        ORDER BY latestCompletedAt DESC, projectId LIMIT 5
+        SELECT environmentId, environmentLabel, projectId, count, latestCompletedAt FROM recent
+        WHERE projectId IS NOT NULL
+          AND (environmentId IS NOT NULL OR NOT EXISTS (SELECT 1 ${activeDuetCoverage(sql`recent.projectId`)}))
+        ORDER BY latestCompletedAt DESC, environmentId, projectId LIMIT 5
       `;
     },
     Effect.catchTags({ SqlError: captainUnavailable, SchemaError: captainUnavailable }),

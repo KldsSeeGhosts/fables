@@ -337,6 +337,9 @@ export const assertDuetThreadWriteAllowed = Effect.fn("mcp.assertDuetThreadWrite
 
 export const assertChorusUsesDelegateTask = Effect.fn("mcp.assertChorusUsesDelegateTask")(
   function* (scope: McpInvocationContext.McpInvocationScope) {
+    if (McpInvocationContext.forwardedChorus(scope) !== undefined) {
+      return yield* duetWriteDenied("A linked Chorus must start its Solos with delegate_task.");
+    }
     const threadId = scope.thread?.threadId;
     if (threadId === undefined || !isCaptainThreadId(threadId)) return;
     const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);

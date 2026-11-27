@@ -2,6 +2,7 @@ import {
   isCaptainThreadId,
   type Captain,
   type CaptainMemory,
+  type EnvironmentId,
   type OrchestrationV2AppThreadLineage,
   type OrchestrationV2ConversationMessage,
   type ProjectId,
@@ -58,7 +59,7 @@ const chorusBriefing = (captain: Captain) => `How you work:
 - You are the Chorus, the fleet-level Duet. Answer cross-project and cross-Duet questions yourself from \`duet_list\`, \`duet_read\`, \`duet_memory_search\`, \`t3_thread_list\` and \`t3_thread_read\`.
 - When \`duet_send\` is available, use it to route requested project work to a Duet that covers the project. Otherwise name the Duet to the user and leave the work there. Reading across Duets never requires sending a message.
 - After a successful send, confirm the route and say that updates will arrive on the next user turn. End your turn without polling. Route updates never wake you.
-- To start a Solo, use \`delegate_task\` with \`isolation: "worktree"\`; never use \`t3_thread_launch\` or \`create_threads\` for one. Start one only for a one-off in a project no Duet covers. For project work, pass the project's exact id as \`target.projectId\`; never rely on the task text alone.
+- To start a Solo, use \`delegate_task\` with \`isolation: "worktree"\`; never use \`t3_thread_launch\` or \`create_threads\` for one. Start one only for a one-off in a project no Duet covers. For project work, pass the project's exact id as \`target.projectId\` and, on another machine, its id as \`target.environmentId\`.
 - Before starting another Solo in a project where Chorus finished a Solo in the last 30 days, stop and offer the user the choice of widening an existing Duet's scope or creating a dedicated Duet. Do not inspect or edit the project first. Start the Solo only if the user says to go ahead anyway.
 - Relay each result to the user as one line plus the thread link. Do not paste Duet or Solo output.
 - Keep project plans, open loops, and project rules out of your documents and memory. Use NOTES.md only for requests to Chorus itself.
@@ -116,6 +117,8 @@ export const formatCaptainBriefing = (input: {
   readonly repeatSoloProjects?: ReadonlyArray<{
     readonly id: ProjectId;
     readonly title: string;
+    readonly environmentId?: EnvironmentId;
+    readonly environmentLabel?: string;
     readonly count: number;
     readonly latestCompletedAt: string;
   }>;
@@ -138,8 +141,8 @@ export const formatCaptainBriefing = (input: {
     repeatSoloProjects.length > 0 &&
       `Repeat Solo projects:\n${repeatSoloProjects
         .map(
-          ({ id, title, count, latestCompletedAt }) =>
-            `- ${prefix(title, 100)} [${prefix(id, 100)}]: ${count} finished ${count === 1 ? "Solo" : "Solos"} in the last 30 days, latest ${latestCompletedAt.slice(0, 10)}. Suggest widening an existing Duet's scope or creating a dedicated Duet before starting another Solo here. If the user approves, pass this exact project id as target.projectId.`,
+          ({ id, title, environmentId, environmentLabel, count, latestCompletedAt }) =>
+            `- ${prefix(title, 100)} [${prefix(id, 100)}]${environmentId === undefined ? "" : ` on ${prefix(environmentLabel ?? environmentId, 100)} (target.environmentId: "${prefix(environmentId, 100)}")`}: ${count} finished ${count === 1 ? "Solo" : "Solos"} in the last 30 days, latest ${latestCompletedAt.slice(0, 10)}. Suggest widening an existing Duet's scope or creating a dedicated Duet before starting another Solo here. If the user approves, pass this exact project id as target.projectId.`,
         )
         .join("\n")}`,
     memories.length > 0 &&
@@ -342,13 +345,20 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
   ) {
     if (Option.isNone(store)) return [];
     const uncovered = yield* store.value.repeatSoloProjects(captain);
-    const entries = yield* projectEntries(uncovered.map(({ projectId }) => projectId));
-    return uncovered.map((row, index) => ({
-      id: row.projectId,
-      count: row.count,
-      latestCompletedAt: row.latestCompletedAt,
-      title: entries[index]?.title ?? "Unavailable project",
-    }));
+    return yield* Effect.forEach(uncovered, (row) =>
+      Effect.gen(function* () {
+        const local = row.environmentId === null;
+        const [project] = local ? yield* projectEntries([row.projectId]) : [];
+        return {
+          id: row.projectId,
+          count: row.count,
+          latestCompletedAt: row.latestCompletedAt,
+          title: project?.title ?? (local ? "Unavailable project" : "Linked project"),
+          ...(row.environmentId === null ? {} : { environmentId: row.environmentId }),
+          ...(row.environmentLabel === null ? {} : { environmentLabel: row.environmentLabel }),
+        };
+      }),
+    );
   });
 
   const readChorusRouteUpdates = Effect.fn("CaptainService.chorusRouteUpdates")(
