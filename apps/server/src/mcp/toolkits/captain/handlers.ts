@@ -46,14 +46,12 @@ const duetStateUnavailable = () =>
     message: "Duet state is unavailable.",
   });
 
-const isForwardedChorus = (scope: McpInvocationContext.McpInvocationScope) =>
-  scope.client?.linked === true &&
-  scope.client.senderThread !== undefined &&
-  scope.client.senderCaptainKind === "chorus";
-
 const requireChorusReadAccess = Effect.gen(function* () {
   const scope = yield* McpInvocationContext.McpInvocationContext;
-  if (!McpInvocationContext.chorusOnly(scope) && !isForwardedChorus(scope)) {
+  if (
+    !McpInvocationContext.chorusOnly(scope) &&
+    McpInvocationContext.forwardedChorus(scope) === undefined
+  ) {
     return yield* chorusDenied();
   }
 });
@@ -140,7 +138,7 @@ export const layer = McpToolAccess.toLayer(
           const readLocal = Effect.gen(function* () {
             const { captains } = yield* store.snapshot({}).pipe(Effect.mapError(failed));
             const duets = yield* Effect.forEach(
-              captains,
+              captains.slice(0, FLEET_MACHINE_RESULT_LIMIT),
               (captain) =>
                 Effect.gen(function* () {
                   const digest = yield* store
@@ -160,9 +158,13 @@ export const layer = McpToolAccess.toLayer(
                 }),
               { concurrency: 4 },
             );
-            return duets.slice(0, FLEET_MACHINE_RESULT_LIMIT);
+            return duets;
           });
-          if (environmentId === scope.environmentId) return { duets: yield* readLocal };
+          if (
+            McpInvocationContext.forwardedChorus(scope) !== undefined ||
+            environmentId === scope.environmentId
+          )
+            return { duets: yield* readLocal };
           const names = Option.isSome(links)
             ? yield* links.value.names().pipe(Effect.orElseSucceed(() => []))
             : [];
@@ -181,37 +183,37 @@ export const layer = McpToolAccess.toLayer(
             environmentId: EnvironmentId;
             label: string;
           }) {
-              if (Option.isNone(forwarding)) {
-                return {
+            if (Option.isNone(forwarding)) {
+              return {
+                duets: [],
+                unreachable: {
+                  environmentId: target.environmentId,
+                  environmentLabel: target.label,
+                  reason: "Linked environments are unavailable on this machine.",
+                },
+              };
+            }
+            const result = yield* Effect.result(
+              forwarding.value
+                .call(scope, CaptainToolkit.tools.duet_list, target.environmentId, {
+                  environmentId: target.environmentId,
+                })
+                .pipe(Effect.timeout(FLEET_PEER_TIMEOUT)),
+            );
+            return result._tag === "Success"
+              ? {
+                  duets: result.success.duets.slice(0, FLEET_MACHINE_RESULT_LIMIT),
+                  unreachable: undefined,
+                }
+              : {
                   duets: [],
                   unreachable: {
                     environmentId: target.environmentId,
                     environmentLabel: target.label,
-                    reason: "Linked environments are unavailable on this machine.",
+                    reason: fleetReason(result.failure),
                   },
                 };
-              }
-              const result = yield* Effect.result(
-                forwarding.value
-                  .call(scope, CaptainToolkit.tools.duet_list, target.environmentId, {
-                    environmentId: target.environmentId,
-                  })
-                  .pipe(Effect.timeout(FLEET_PEER_TIMEOUT)),
-              );
-              return result._tag === "Success"
-                ? {
-                    duets: result.success.duets.slice(0, FLEET_MACHINE_RESULT_LIMIT),
-                    unreachable: undefined,
-                  }
-                : {
-                    duets: [],
-                    unreachable: {
-                      environmentId: target.environmentId,
-                      environmentLabel: target.label,
-                      reason: fleetReason(result.failure),
-                    },
-                  };
-            });
+          });
           if (environmentId !== undefined) {
             const remote = yield* readRemote(targets[0]!);
             return {
@@ -222,7 +224,10 @@ export const layer = McpToolAccess.toLayer(
             };
           }
           const [localDuets, remotes] = yield* Effect.all(
-            [readLocal, Effect.forEach(targets, readRemote, { concurrency: FLEET_PEER_CONCURRENCY })],
+            [
+              readLocal,
+              Effect.forEach(targets, readRemote, { concurrency: FLEET_PEER_CONCURRENCY }),
+            ],
             { concurrency: 2 },
           );
           const unreachableMachines = remotes.flatMap((remote) =>
@@ -245,7 +250,11 @@ export const layer = McpToolAccess.toLayer(
             const document = yield* store.document(captain, name).pipe(Effect.mapError(failed));
             return capDuetReadContent(document);
           });
-          if (environmentId === scope.environmentId) return yield* readLocal;
+          if (
+            McpInvocationContext.forwardedChorus(scope) !== undefined ||
+            environmentId === scope.environmentId
+          )
+            return yield* readLocal;
           const names = Option.isSome(links)
             ? yield* links.value.names().pipe(Effect.orElseSucceed(() => []))
             : [];
@@ -366,85 +375,89 @@ export const layer = McpToolAccess.toLayer(
           const store = yield* chorusStore;
           const scope = yield* McpInvocationContext.McpInvocationContext;
           const searchLocal = Effect.gen(function* () {
-          const captains =
-            duetId === undefined
-              ? (yield* store.snapshot({}).pipe(Effect.mapError(failed))).captains
-              : [yield* store.requireCaptain(duetId).pipe(Effect.mapError(failed))];
-          const byId = new Map(captains.map((captain) => [captain.id, captain]));
-          const machine = yield* localEnvironment;
-          const [memories, recall] = yield* Effect.all(
-            [
-              store
-                .listMemories(duetId, {
-                  ...(query === undefined ? {} : { query }),
-                  limit: 20,
-                })
-                .pipe(Effect.mapError(failed)),
-              Option.isSome(honcho) && honcho.value.enabled
-                ? honcho.value.searchAcrossDuets(captains, query)
-                : Effect.succeed({ status: "disabled" as const, results: [] }),
-            ],
-            { concurrency: 2 },
-          );
-          const seen = new Set<string>();
-          const remember = (text: string) => {
-            const key = normalizeMemoryText(text);
-            if (key === "" || seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          };
-          const localMatches = memories.flatMap((memory) => {
-            const captain = byId.get(memory.captainId);
-            return captain === undefined || !remember(memory.text)
-              ? []
-              : [
-                  {
-                    ...machine,
-                    source: "local" as const,
-                    duet: { id: captain.id, name: captain.name },
-                    memory,
-                  },
-                ];
-          });
-          const recalledMatches = recall.results.flatMap((hit) => {
-            const captain = byId.get(hit.captainId);
-            const text = hit.text.trim();
-            return captain === undefined || !remember(text)
-              ? []
-              : [
-                  {
-                    ...machine,
-                    source: "honcho" as const,
-                    duet: { id: captain.id, name: captain.name },
-                    memory: {
-                      id: CaptainMemoryId.make(`honcho-${hit.id}`),
-                      captainId: captain.id,
-                      text: `Recalled: ${text}`
-                        .slice(0, 4_000)
-                        .replace(/[\uD800-\uDBFF]$/u, "")
-                        .trimEnd(),
-                      essential: false,
-                      userControlled: false,
-                      createdAt: hit.createdAt,
-                      updatedAt: hit.createdAt,
+            const captains =
+              duetId === undefined
+                ? (yield* store.snapshot({}).pipe(Effect.mapError(failed))).captains
+                : [yield* store.requireCaptain(duetId).pipe(Effect.mapError(failed))];
+            const byId = new Map(captains.map((captain) => [captain.id, captain]));
+            const machine = yield* localEnvironment;
+            const [memories, recall] = yield* Effect.all(
+              [
+                store
+                  .listMemories(duetId, {
+                    ...(query === undefined ? {} : { query }),
+                    limit: 20,
+                  })
+                  .pipe(Effect.mapError(failed)),
+                Option.isSome(honcho) && honcho.value.enabled
+                  ? honcho.value.searchAcrossDuets(captains, query)
+                  : Effect.succeed({ status: "disabled" as const, results: [] }),
+              ],
+              { concurrency: 2 },
+            );
+            const seen = new Set<string>();
+            const remember = (text: string) => {
+              const key = normalizeMemoryText(text);
+              if (key === "" || seen.has(key)) return false;
+              seen.add(key);
+              return true;
+            };
+            const localMatches = memories.flatMap((memory) => {
+              const captain = byId.get(memory.captainId);
+              return captain === undefined || !remember(memory.text)
+                ? []
+                : [
+                    {
+                      ...machine,
+                      source: "local" as const,
+                      duet: { id: captain.id, name: captain.name },
+                      memory,
                     },
-                  },
-                ];
+                  ];
+            });
+            const recalledMatches = recall.results.flatMap((hit) => {
+              const captain = byId.get(hit.captainId);
+              const text = hit.text.trim();
+              return captain === undefined || !remember(text)
+                ? []
+                : [
+                    {
+                      ...machine,
+                      source: "honcho" as const,
+                      duet: { id: captain.id, name: captain.name },
+                      memory: {
+                        id: CaptainMemoryId.make(`honcho-${hit.id}`),
+                        captainId: captain.id,
+                        text: `Recalled: ${text}`
+                          .slice(0, 4_000)
+                          .replace(/[\uD800-\uDBFF]$/u, "")
+                          .trimEnd(),
+                        essential: false,
+                        userControlled: false,
+                        createdAt: hit.createdAt,
+                        updatedAt: hit.createdAt,
+                      },
+                    },
+                  ];
+            });
+            let remainingText = DUET_MEMORY_SEARCH_TEXT_LIMIT;
+            const matches = [];
+            for (const match of [...localMatches, ...recalledMatches]) {
+              if (matches.length === 20 || remainingText === 0) break;
+              if (match.memory.text.length > remainingText) continue;
+              remainingText -= match.memory.text.length;
+              matches.push(match);
+            }
+            return {
+              matches,
+              ...(recall.status === "failed" ? { note: HONCHO_RECALL_NOTE } : {}),
+            };
           });
-          let remainingText = DUET_MEMORY_SEARCH_TEXT_LIMIT;
-          const matches = [];
-          for (const match of [...localMatches, ...recalledMatches]) {
-            if (matches.length === 20 || remainingText === 0) break;
-            if (match.memory.text.length > remainingText) continue;
-            remainingText -= match.memory.text.length;
-            matches.push(match);
-          }
-          return {
-            matches,
-            ...(recall.status === "failed" ? { note: HONCHO_RECALL_NOTE } : {}),
-          };
-          });
-          if (environmentId === scope.environmentId) return yield* searchLocal;
+          if (
+            McpInvocationContext.forwardedChorus(scope) !== undefined ||
+            environmentId === scope.environmentId
+          )
+            return yield* searchLocal;
           const names = Option.isSome(links)
             ? yield* links.value.names().pipe(Effect.orElseSucceed(() => []))
             : [];
@@ -459,40 +472,39 @@ export const layer = McpToolAccess.toLayer(
                       String(environmentId),
                   },
                 ];
-          const searchRemote = Effect.fn("CaptainToolkit.duetMemorySearch.searchRemote")(function* (target: {
-            environmentId: EnvironmentId;
-            label: string;
-          }) {
-            if (Option.isNone(forwarding)) {
-              return {
-                result: undefined,
-                unreachable: {
-                  environmentId: target.environmentId,
-                  environmentLabel: target.label,
-                  reason: "Linked environments are unavailable on this machine.",
-                },
-              };
-            }
-            const remote = yield* Effect.result(
-              forwarding.value
-                .call(scope, CaptainToolkit.tools.duet_memory_search, target.environmentId, {
-                  ...(query === undefined ? {} : { query }),
-                  ...(duetId === undefined ? {} : { duetId }),
-                  environmentId: target.environmentId,
-                })
-                .pipe(Effect.timeout(FLEET_PEER_TIMEOUT)),
-            );
-            return remote._tag === "Success"
-              ? { result: remote.success, unreachable: undefined }
-              : {
+          const searchRemote = Effect.fn("CaptainToolkit.duetMemorySearch.searchRemote")(
+            function* (target: { environmentId: EnvironmentId; label: string }) {
+              if (Option.isNone(forwarding)) {
+                return {
                   result: undefined,
                   unreachable: {
                     environmentId: target.environmentId,
                     environmentLabel: target.label,
-                    reason: fleetReason(remote.failure),
+                    reason: "Linked environments are unavailable on this machine.",
                   },
                 };
-          });
+              }
+              const remote = yield* Effect.result(
+                forwarding.value
+                  .call(scope, CaptainToolkit.tools.duet_memory_search, target.environmentId, {
+                    ...(query === undefined ? {} : { query }),
+                    ...(duetId === undefined ? {} : { duetId }),
+                    environmentId: target.environmentId,
+                  })
+                  .pipe(Effect.timeout(FLEET_PEER_TIMEOUT)),
+              );
+              return remote._tag === "Success"
+                ? { result: remote.success, unreachable: undefined }
+                : {
+                    result: undefined,
+                    unreachable: {
+                      environmentId: target.environmentId,
+                      environmentLabel: target.label,
+                      reason: fleetReason(remote.failure),
+                    },
+                  };
+            },
+          );
           if (environmentId === undefined && targets.length === 0) return yield* searchLocal;
           const remotes = yield* Effect.forEach(targets, searchRemote, {
             concurrency: FLEET_PEER_CONCURRENCY,

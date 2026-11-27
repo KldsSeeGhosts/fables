@@ -284,6 +284,7 @@ const withSenderThread = (
   // forwarding server adds it after its own captain lookup; it never makes the
   // forwarded caller a local Chorus here.
   const senderCaptainKind =
+    isCaptainThreadId(decoded.value.threadId) &&
     request.headers[McpInvocationContext.SENDER_CAPTAIN_KIND_HEADER] === "chorus"
       ? ("chorus" as const)
       : undefined;

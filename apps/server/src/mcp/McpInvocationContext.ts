@@ -85,7 +85,7 @@ export const SENDER_THREAD_HEADER = "t3-sender-thread";
 /**
  * `T3-Sender-Captain-Kind: chorus` attests that the sender thread named by a
  * linked environment is its Chorus. Read only from a linked client; it grants
- * cross-Duet read authority there, never local Chorus ownership.
+ * scoped fleet operations there, never local Chorus ownership.
  */
 export const SENDER_CAPTAIN_KIND_HEADER = "t3-sender-captain-kind";
 
@@ -236,6 +236,11 @@ export const captainOnly = (): boolean => {
   const scope = fiber && Context.getOrUndefined(fiber.context, McpInvocationContext);
   return Boolean(scope?.captain);
 };
+
+export const forwardedChorus = (scope: McpInvocationScope | undefined) =>
+  scope?.client?.linked === true && scope.client.senderCaptainKind === "chorus"
+    ? scope.client.senderThread
+    : undefined;
 
 export const chorusOnly = (scope: McpInvocationScope | undefined): boolean =>
   scope?.thread !== undefined && scope.thread.subagent !== true && scope.chorus === true;
