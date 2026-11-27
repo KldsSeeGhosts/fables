@@ -1011,8 +1011,9 @@ it.effect(
           { run: failedRun, failedMessage },
         );
         const [moved] = yield* store.listChorusRoutes(source.id);
-        assert.equal(moved?.threadId, rolled.primaryThreadId);
-        assert.equal(moved?.messageId, `captain-rollover:${queued.runId}`);
+        assert.isDefined(moved);
+        assert.equal(moved.threadId, rolled.primaryThreadId);
+        assert.equal(moved.messageId, `captain-rollover:${queued.runId}`);
         assert.notInclude(
           (yield* readContext(senderThread, delivery, userTurn)).text,
           "Routed since your last turn",
