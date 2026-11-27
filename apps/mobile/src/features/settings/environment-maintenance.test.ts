@@ -125,7 +125,7 @@ describe("environment release checks", () => {
 
   it("offers the bridge to legacy hosts and plain updates to hosts past the bridge", async () => {
     const legacy = "0.1.13-nightly.20261126.530501";
-    const bridge = "0.1.13-nightly.20261126.530504";
+    const bridge = "0.1.13-nightly.20261126.530505";
     const fetchRelease = vi.fn(async () => feed(`v${bridge}`, `v${legacy}`, "v0.2.0"));
     vi.stubGlobal("fetch", fetchRelease);
     expect(await findEnvironmentUpdate(legacy, signal)).toBe(bridge);

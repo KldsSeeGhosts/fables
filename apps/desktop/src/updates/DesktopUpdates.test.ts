@@ -191,7 +191,7 @@ describe("DesktopUpdates", () => {
   });
 
   it.effect("offers 0.2.0 to the encoded bridge on its default track", () => {
-    const harness = makeHarness({ appVersion: "0.1.13-nightly.20261126.530504" });
+    const harness = makeHarness({ appVersion: "0.1.13-nightly.20261126.530505" });
     return Effect.scoped(
       Effect.gen(function* () {
         const updates = yield* DesktopUpdates.DesktopUpdates;

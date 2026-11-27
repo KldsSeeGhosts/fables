@@ -2,8 +2,8 @@ const { execFileSync } = require("node:child_process");
 const { readFileSync } = require("node:fs");
 const { join } = require("node:path");
 const {
-  fablesBridgeFirstCounter,
   fablesBridgeUpstreamTag,
+  fablesBridgeVersion,
 } = require("../../packages/shared/src/fablesReleaseBridge.ts");
 
 const RELEASE_SERIES = /^(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
@@ -16,14 +16,17 @@ function nextBridgeVersion(tags, upstreamTag) {
   if (tags.some((tag) => PLAIN_RELEASE_TAG.test(tag) && !/^v0\.[01]\./.test(tag))) {
     throw new Error("The Fables bridge must publish before the plain series.");
   }
-  let counter = fablesBridgeFirstCounter;
-  for (const tag of tags) {
-    if (!tag.startsWith(upstreamTag)) continue;
-    const suffix = tag.slice(upstreamTag.length);
-    if (/^\d{2}$/.test(suffix)) counter = Math.max(counter, Number(suffix) + 1);
+  const bridgeTag = `v${fablesBridgeVersion}`;
+  const occupied = tags.find(
+    (tag) =>
+      tag.startsWith(upstreamTag) &&
+      /^\d{2}$/.test(tag.slice(upstreamTag.length)) &&
+      tag >= bridgeTag,
+  );
+  if (occupied !== undefined) {
+    throw new Error(`The one-time Fables bridge tag ${bridgeTag} must sort after ${occupied}.`);
   }
-  if (counter > 99) throw new Error(`Fork counter exhausted for ${upstreamTag}.`);
-  return `${upstreamTag.slice(1)}${String(counter).padStart(2, "0")}`;
+  return fablesBridgeVersion;
 }
 
 function nextReleaseVersion(series, tags, upstreamTag) {
@@ -42,6 +45,9 @@ function nextReleaseVersion(series, tags, upstreamTag) {
     if (tagMajor === major && tagMinor === minor) {
       if (patch >= nextPatch) nextPatch = patch + 1n;
     }
+  }
+  if (series === "0.2" && nextPatch === 0n && !tags.includes(`v${fablesBridgeVersion}`)) {
+    throw new Error("Publish the Fables bridge before starting the 0.2 series.");
   }
   return `${series}.${nextPatch}`;
 }

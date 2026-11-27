@@ -6,15 +6,15 @@ const { isFablesBridgeVersion } = require("../../packages/shared/src/fablesRelea
 test("publishes an encoded bridge, then starts the plain series and advances it", () => {
   const upstream = "v0.1.13-nightly.20261126.5305";
   const installed = `${upstream}01`;
-  const tags = [installed, `${upstream}03`, `upstream/${upstream}`, "v0.1.12"];
+  const tags = [installed, `${upstream}04`, `upstream/${upstream}`, "v0.1.12"];
   const bridge = nextReleaseVersion("bridge", tags, upstream);
-  assert.equal(bridge, "0.1.13-nightly.20261126.530504");
+  assert.equal(bridge, "0.1.13-nightly.20261126.530505");
   assert.ok(`v${bridge}` > installed);
   assert.ok(!isFablesBridgeVersion(installed.slice(1)));
+  assert.ok(!isFablesBridgeVersion("0.1.13-nightly.20261126.530504"));
   assert.ok(isFablesBridgeVersion(bridge));
 
   tags.push(`v${bridge}`);
-  assert.equal(nextReleaseVersion("bridge", tags, upstream), "0.1.13-nightly.20261126.530505");
   assert.equal(nextReleaseVersion("0.2", tags), "0.2.0");
   tags.push("v0.2.0");
   assert.equal(nextReleaseVersion("0.2", tags), "0.2.1");
@@ -22,10 +22,12 @@ test("publishes an encoded bridge, then starts the plain series and advances it"
   assert.equal(nextReleaseVersion("0.3", tags), "0.3.0");
 });
 
-test("refuses to issue a bridge outside the reserved run or after the plain series", () => {
+test("requires the reserved bridge before starting the plain series and issues it only once", () => {
   const upstream = "v0.1.13-nightly.20261126.5305";
+  assert.throws(() => nextReleaseVersion("0.2", []), /Publish the Fables bridge/);
   assert.throws(() => nextReleaseVersion("bridge", [], `${upstream}1`), /must build on/);
-  assert.throws(() => nextReleaseVersion("bridge", [`${upstream}99`], upstream), /exhausted/);
+  assert.throws(() => nextReleaseVersion("bridge", [`${upstream}05`], upstream), /must sort after/);
+  assert.throws(() => nextReleaseVersion("bridge", [`${upstream}06`], upstream), /must sort after/);
   assert.throws(
     () => nextReleaseVersion("bridge", ["v0.2.0"], upstream),
     /before the plain series/,

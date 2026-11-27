@@ -703,11 +703,11 @@ it.layer(NodeServices.layer)("t3 update checks the database before switching", (
       {
         name: "discovers the bridge before moving a legacy CLI to plain semver",
         currentVersion: "0.1.13-nightly.20261126.530501",
-        targetVersion: "0.1.13-nightly.20261126.530504",
+        targetVersion: "0.1.13-nightly.20261126.530505",
       },
       {
         name: "discovers 0.2.0 from the bridge without a channel or version flag",
-        currentVersion: "0.1.13-nightly.20261126.530504",
+        currentVersion: "0.1.13-nightly.20261126.530505",
         targetVersion: "0.2.0",
       },
       {
@@ -789,7 +789,7 @@ it.layer(NodeServices.layer)("t3 update checks the database before switching", (
                   HttpClientResponse.fromWeb(
                     request,
                     Response.json([
-                      { tag_name: "v0.1.13-nightly.20261126.530504", prerelease: true },
+                      { tag_name: "v0.1.13-nightly.20261126.530505", prerelease: true },
                       { tag_name: "v0.2.0", prerelease: true },
                       ...(targetVersion === "0.2.1"
                         ? [{ tag_name: "v0.2.1", prerelease: true }]

@@ -110,7 +110,7 @@ describe("GitHubProvider nightly lookup", () => {
 describe("Fables plain releases on GitHub's prerelease feed", () => {
   const repo = "/KldsSeeGhosts/fables";
   const legacy = "v0.1.13-nightly.20261126.530501";
-  const bridge = "v0.1.13-nightly.20261126.530504";
+  const bridge = "v0.1.13-nightly.20261126.530505";
 
   const lookup = (
     platform: NodeJS.Platform,

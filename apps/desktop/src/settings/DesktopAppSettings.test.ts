@@ -442,7 +442,7 @@ describe("DesktopSettings", () => {
         assert.isUndefined(persisted.updateChannelConfiguredByUser);
         assert.equal(persisted.tailscaleServePort, 8443);
       }),
-      { appVersion: "0.1.13-nightly.20261126.530504" },
+      { appVersion: "0.1.13-nightly.20261126.530505" },
     ),
   );
 

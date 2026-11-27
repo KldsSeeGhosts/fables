@@ -186,7 +186,7 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
 
 it.layer(NodeServices.layer)("server self update", (it) => {
   it.effect.each([
-    { currentVersion: "0.1.13-nightly.20261126.530504", targetVersion: "0.2.0" },
+    { currentVersion: "0.1.13-nightly.20261126.530505", targetVersion: "0.2.0" },
     { currentVersion: "0.2.0", targetVersion: "0.2.1" },
   ])(
     "stages and hands off $currentVersion to $targetVersion",

@@ -130,7 +130,8 @@ track name, so it serves plain versions with `latest*.yml`.
 1. Push the bridge changes to `ksg/dev` with the release series set to
    `bridge`. Keep the included upstream nightly at
    `v0.1.13-nightly.20261126.5305` for this release. The workflow continues
-   the fork counter, starting at `0.1.13-nightly.20261126.530504`. Existing
+   the fork counter at the reserved version `0.1.13-nightly.20261126.530505`.
+   Let any earlier legacy release run finish before starting the bridge. Existing
    Nightly clients pick it up through their usual updater.
 2. Wait for the bridge release to publish with all three nightly manifests and
    the CLI archives. Check that a legacy desktop can install it and that
