@@ -198,6 +198,8 @@ it.effect("generates with the brief model and retries once after a revision conf
       assert.isTrue(written.content.includes("- migration finished"));
       assert.isTrue(generationPrompts[0]?.includes("Review the migration") === true);
       assert.isTrue(generationPrompts[0]?.includes("Migration review passed") === true);
+      assert.isTrue(generationPrompts[0]?.includes("Cover progress, open work, blockers") === true);
+      assert.isFalse(generationPrompts[0]?.includes("Group items by Duet"));
       assert.isBelow(generationPrompts[0]!.length, 16_000);
       assert.isTrue(written.content.endsWith("\nConcurrent edit.\n"));
       assert.isTrue(
