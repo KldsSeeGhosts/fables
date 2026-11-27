@@ -43,6 +43,10 @@ const tailnetNetworkInterfaces: DesktopNetworkInterfaces.NetworkInterfaces = {
   ],
 };
 
+type TestNetworkInterfaces =
+  | DesktopNetworkInterfaces.NetworkInterfaces
+  | (() => DesktopNetworkInterfaces.NetworkInterfaces);
+
 function layerMockSpawner(statusJson: string | (() => string) = "{}", onSpawn?: () => void) {
   return Layer.succeed(
     ChildProcessSpawner.ChildProcessSpawner,
@@ -93,7 +97,7 @@ function layerEnvironmentFor(baseDir: string, env: Record<string, string | undef
 
 function layer(input: {
   readonly baseDir: string;
-  readonly networkInterfaces?: DesktopNetworkInterfaces.NetworkInterfaces;
+  readonly networkInterfaces?: TestNetworkInterfaces;
   readonly env?: Record<string, string | undefined>;
   readonly spawnerLayer?: Layer.Layer<ChildProcessSpawner.ChildProcessSpawner>;
   readonly desktopSettingsLayer?: Layer.Layer<DesktopAppSettings.DesktopAppSettings>;
@@ -101,8 +105,9 @@ function layer(input: {
 }) {
   const env = { T3CODE_HOME: input.baseDir, ...input.env };
   const layerEnvironment = layerEnvironmentFor(input.baseDir, env);
+  const interfaces = input.networkInterfaces ?? emptyNetworkInterfaces;
   const layerNetwork = Layer.succeed(DesktopNetworkInterfaces.DesktopNetworkInterfaces, {
-    read: Effect.succeed(input.networkInterfaces ?? emptyNetworkInterfaces),
+    read: typeof interfaces === "function" ? Effect.sync(interfaces) : Effect.succeed(interfaces),
   });
 
   return DesktopServerExposure.layer.pipe(
@@ -118,7 +123,7 @@ function layer(input: {
 }
 
 const withHarness = <A, E, R>(
-  networkInterfaces: DesktopNetworkInterfaces.NetworkInterfaces,
+  networkInterfaces: TestNetworkInterfaces,
   effect: Effect.Effect<
     A,
     E,
@@ -153,6 +158,28 @@ const withHarness = <A, E, R>(
   }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)), Effect.scoped);
 
 describe("DesktopServerExposure", () => {
+  it.effect("does not enumerate interfaces for local-only endpoint queries with Serve off", () => {
+    let reads = 0;
+    return withHarness(
+      () => {
+        reads += 1;
+        return lanNetworkInterfaces;
+      },
+      Effect.gen(function* () {
+        const serverExposure = yield* DesktopServerExposure.DesktopServerExposure;
+        const configured = yield* serverExposure.configureFromSettings({ port: 4173 });
+        const startupReads = reads;
+        assert.deepEqual(yield* serverExposure.getState, configured);
+        const endpoints = yield* serverExposure.getAdvertisedEndpoints;
+        assert.deepEqual(
+          endpoints.map((endpoint) => endpoint.httpBaseUrl),
+          ["http://127.0.0.1:4173/"],
+        );
+        assert.equal(reads, startupReads);
+      }),
+    );
+  });
+
   it.effect("uses cached Tailscale identity to exclude another VPN's pairing address", () => {
     let statusReads = 0;
     return withHarness(

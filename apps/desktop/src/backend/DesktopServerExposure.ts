@@ -495,17 +495,15 @@ export const make = Effect.gen(function* () {
       ? settings
       : { ...settings, serverExposureMode: "local-only" as const, tailscaleServeEnabled: false };
 
-  const readCurrentState = (currentNetworkInterfaces: DesktopNetworkInterfaces.NetworkInterfaces) =>
-    Ref.get(stateRef).pipe(
-      Effect.map((state) =>
-        withCurrentAdvertisedHost(state, currentNetworkInterfaces, config.desktopLanHostOverride),
-      ),
+  const getState = Effect.gen(function* () {
+    const state = yield* Ref.get(stateRef);
+    if (state.mode !== "network-accessible") return toContractState(state);
+    const interfaces = yield* readNetworkInterfaces;
+    return toContractState(
+      withCurrentAdvertisedHost(state, interfaces, config.desktopLanHostOverride),
     );
+  });
 
-  const getState = readNetworkInterfaces.pipe(
-    Effect.flatMap(readCurrentState),
-    Effect.map(toContractState),
-  );
   const backendConfig = Ref.get(stateRef).pipe(Effect.map(toBackendConfig));
 
   const configureFromSettings = Effect.fn("desktop.serverExposure.configureFromSettings")(
@@ -602,18 +600,22 @@ export const make = Effect.gen(function* () {
   );
 
   const getAdvertisedEndpoints = Effect.gen(function* () {
-    const currentNetworkInterfaces = yield* readNetworkInterfaces;
-    const state = yield* readCurrentState(currentNetworkInterfaces);
+    const current = yield* Ref.get(stateRef);
+    // Spawning Mac App Store Tailscale can prompt for TCC access when exposure is disabled.
+    const discoverNetwork = current.mode === "network-accessible" || current.tailscaleServeEnabled;
+    const currentNetworkInterfaces = discoverNetwork ? yield* readNetworkInterfaces : {};
+    const state = withCurrentAdvertisedHost(
+      current,
+      currentNetworkInterfaces,
+      config.desktopLanHostOverride,
+    );
     const coreEndpoints = resolveDesktopCoreAdvertisedEndpoints({
       port: state.port,
       exposure: toResolvedExposure(state),
       customHttpsEndpointUrls: config.desktopHttpsEndpointUrls,
     });
 
-    // Spawning Mac App Store Tailscale can prompt for TCC access even when exposure is disabled.
-    if (state.mode !== "network-accessible" && !state.tailscaleServeEnabled) {
-      return coreEndpoints;
-    }
+    if (!discoverNetwork) return coreEndpoints;
 
     const tailscaleEndpoints = yield* resolveTailscaleAdvertisedEndpoints({
       port: state.port,
