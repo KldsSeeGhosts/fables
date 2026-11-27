@@ -4,15 +4,6 @@ import type {
   CaptainAvatarPickerShape,
 } from "@t3tools/contracts";
 
-export type DuetPalette =
-  | "terracotta"
-  | "rose"
-  | "cobalt"
-  | "sage"
-  | "ochre"
-  | "plum"
-  | "coral"
-  | "slate";
 export type DuetEmblem =
   | "orb"
   | "sunburst"
@@ -36,14 +27,19 @@ export const DUET_EMBLEM_ORDER = [
 
 export const DUET_PALETTE_ORDER = [
   "terracotta",
-  "rose",
-  "cobalt",
-  "sage",
-  "ochre",
-  "plum",
   "coral",
+  "ochre",
+  "moss",
+  "sage",
+  "teal",
+  "cobalt",
+  "indigo",
+  "plum",
+  "berry",
+  "rose",
   "slate",
-] as const satisfies ReadonlyArray<DuetPalette>;
+] as const;
+export type DuetPalette = (typeof DUET_PALETTE_ORDER)[number];
 
 export const DUET_PALETTE_SWATCH = {
   terracotta: { ink: "#c15f3c", tint: "#fbe4da", bubble: "#fdceba" },
@@ -54,6 +50,10 @@ export const DUET_PALETTE_SWATCH = {
   plum: { ink: "#7e4fae", tint: "#eee4f7", bubble: "#dccbf2" },
   coral: { ink: "#d2503f", tint: "#fde3df", bubble: "#f8c5bd" },
   slate: { ink: "#5b6472", tint: "#e8eaee", bubble: "#d8dde4" },
+  teal: { ink: "#1a7f86", tint: "#dcefef", bubble: "#b4dcdf" },
+  moss: { ink: "#6e7d22", tint: "#eef0d8", bubble: "#dde2b3" },
+  indigo: { ink: "#5b5bd6", tint: "#e7e7fb", bubble: "#cbcbf5" },
+  berry: { ink: "#a8479e", tint: "#f8e3f5", bubble: "#ecc4e6" },
 } as const satisfies Record<DuetPalette, { ink: string; tint: string; bubble: string }>;
 
 const paletteByStoredColor = {
@@ -97,6 +97,7 @@ const emblemByStoredPreset = {
 } as const satisfies Record<CaptainAvatar["preset"], DuetEmblem>;
 
 export function captainPaletteOf(avatar: CaptainAvatar): DuetPalette {
+  if (isPalette(avatar.palette)) return avatar.palette;
   return paletteByStoredColor[avatar.color] ?? "terracotta";
 }
 
@@ -127,5 +128,22 @@ export const DUET_PICKER: {
     plum: "purple",
     coral: "red",
     slate: "gray",
+    teal: "green",
+    moss: "green",
+    indigo: "blue",
+    berry: "purple",
   },
 };
+
+function isPalette(palette: string | undefined): palette is DuetPalette {
+  return palette !== undefined && Object.hasOwn(DUET_PALETTE_SWATCH, palette);
+}
+
+export function duetAvatar(emblem: DuetEmblem, palette: DuetPalette): CaptainAvatar {
+  return { preset: DUET_PICKER.emblems[emblem], color: DUET_PICKER.palettes[palette], palette };
+}
+
+export function normalizeCaptainAvatar(avatar: CaptainAvatar): CaptainAvatar {
+  const palette = captainPaletteOf(avatar);
+  return { ...duetAvatar(captainEmblemOf(avatar), palette), palette: avatar.palette ?? palette };
+}

@@ -28,6 +28,10 @@ export function useCaptainAvatarLabels(): {
       plum: gt("Plum", { $context: "color" }),
       coral: gt("Coral", { $context: "color" }),
       slate: gt("Slate", { $context: "color" }),
+      teal: gt("Teal", { $context: "color" }),
+      moss: gt("Moss", { $context: "color" }),
+      indigo: gt("Indigo", { $context: "color" }),
+      berry: gt("Berry", { $context: "color" }),
     },
   };
 }

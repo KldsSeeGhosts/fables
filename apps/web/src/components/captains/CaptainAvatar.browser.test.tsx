@@ -32,6 +32,10 @@ it("moves only by transform, and not at all under reduced motion", async () => {
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   expect(getComputedStyle(line).animationName).toBe(reduced ? "none" : "captain-creature-roll");
   expect(getComputedStyle(body).animationName).toBe(reduced ? "none" : "captain-creature-breathe");
+  if (!reduced) {
+    expect(getComputedStyle(line).animationDuration).toBe("1.8s");
+    expect(getComputedStyle(body).animationDuration).toBe("2.4s");
+  }
   const keyframes = [...document.styleSheets]
     .flatMap((sheet) => [...sheet.cssRules])
     .filter(
@@ -49,21 +53,15 @@ it("moves only by transform, and not at all under reduced motion", async () => {
 });
 
 it.each([
-  ["reading", "working", "[data-captain-creature-line]", "captain-creature-scan", "1.55s"],
-  ["editing", "working", "[data-captain-creature-line]", "captain-creature-scribble", "0.72s"],
-  ["writing", "working", "[data-captain-creature-line]", "captain-creature-scribble", "0.92s"],
-  [
-    "command",
-    "working",
-    "[data-captain-creature-body]",
-    "captain-creature-command-bounce",
-    "0.78s",
-  ],
-  ["searching", "working", "[data-captain-creature-body]", "captain-creature-look", "1.8s"],
-  ["browsing", "working", "[data-captain-creature-body]", "captain-creature-sway", "2.7s"],
-  ["thinking", "working", "[data-captain-creature-body]", "captain-creature-breathe", "2.4s"],
-  ["delegating", "working", "[data-captain-creature-body]", "captain-creature-handoff", "1.1s"],
-  ["waiting", "waiting", "[data-captain-creature]", "captain-creature-attention-bob", "2.4s"],
+  ["reading", "working", "[data-captain-creature-line]", "captain-creature-scan", "2.2s"],
+  ["editing", "working", "[data-captain-creature-line]", "captain-creature-scribble", "1.1s"],
+  ["writing", "working", "[data-captain-creature-line]", "captain-creature-scribble", "1.4s"],
+  ["command", "working", "[data-captain-creature-body]", "captain-creature-command-bounce", "1.1s"],
+  ["searching", "working", "[data-captain-creature-body]", "captain-creature-look", "2.4s"],
+  ["browsing", "working", "[data-captain-creature-body]", "captain-creature-sway", "3.2s"],
+  ["thinking", "working", "[data-captain-creature-body]", "captain-creature-breathe", "3.2s"],
+  ["delegating", "working", "[data-captain-creature-body]", "captain-creature-handoff", "1.8s"],
+  ["waiting", "waiting", "[data-captain-creature]", "captain-creature-attention", "1.6s"],
 ] as const)("gives %s its own motion", async (activity, state, selector, name, duration) => {
   await using screen = await render(
     <CaptainAvatar
@@ -77,6 +75,32 @@ it.each([
 
   expect(getComputedStyle(layer).animationName).toBe(reduced ? "none" : name);
   if (!reduced) expect(getComputedStyle(layer).animationDuration).toBe(duration);
+});
+
+it("asks for attention once instead of looping while waiting", async () => {
+  await using screen = await render(
+    <CaptainAvatar avatar={{ preset: "circle", color: "blue" }} state="waiting" />,
+  );
+  const creature = screen.container.querySelector<HTMLElement>("[data-captain-creature]")!;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  expect(getComputedStyle(creature).animationName).toBe("captain-creature-attention");
+  expect(getComputedStyle(creature).animationIterationCount).toBe("1");
+});
+
+it("draws the light line inside black chrome on a light page", async () => {
+  await using screen = await render(
+    <div className="black-chrome">
+      <CaptainAvatar avatar={{ preset: "circle", color: "blue" }} />
+      <div data-chrome-scope="">
+        <CaptainAvatar avatar={{ preset: "circle", color: "blue" }} />
+      </div>
+    </div>,
+  );
+  const [lightLine, darkLine] = screen.container.querySelectorAll<SVGPathElement>(
+    "[data-captain-creature-line] path",
+  );
+  expect(getComputedStyle(lightLine!).stroke).toBe("rgb(20, 20, 19)");
+  expect(getComputedStyle(darkLine!).stroke).toBe("rgb(236, 236, 236)");
 });
 
 it("plays one completion hop only while celebrate is set", async () => {

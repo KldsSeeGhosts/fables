@@ -80,6 +80,8 @@ export const CaptainAvatarColor = Schema.Literals([
 export const CaptainAvatar = Schema.Struct({
   preset: CaptainAvatarPreset,
   color: CaptainAvatarColor,
+  // Older clients decode color as a closed set and drop this optional palette id.
+  palette: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(32))),
 });
 export type CaptainAvatar = typeof CaptainAvatar.Type;
 

@@ -54,6 +54,8 @@ import {
   DUET_EMBLEM_ORDER,
   DUET_PALETTE_ORDER,
   DUET_PICKER,
+  duetAvatar,
+  normalizeCaptainAvatar,
 } from "@t3tools/client-runtime/state/captain-palette";
 import { CaptainResetDialog } from "../captains/CaptainResetButton";
 import {
@@ -285,22 +287,19 @@ export function CaptainHeaderTitleMenu({
                     value={emblem}
                     onValueChange={(value) => {
                       const next = DUET_EMBLEM_ORDER.find((entry) => entry === value);
-                      if (next && next !== emblem)
-                        void changeAvatar({
-                          preset: DUET_PICKER.emblems[next],
-                          color: DUET_PICKER.palettes[palette],
-                        });
+                      if (next && next !== emblem) {
+                        void changeAvatar(
+                          normalizeCaptainAvatar({
+                            ...current.avatar,
+                            preset: DUET_PICKER.emblems[next],
+                          }),
+                        );
+                      }
                     }}
                   >
                     {DUET_EMBLEM_ORDER.map((entry) => (
                       <MenuRadioItem key={entry} value={entry} closeOnClick>
-                        <CaptainAvatar
-                          avatar={{
-                            preset: DUET_PICKER.emblems[entry],
-                            color: DUET_PICKER.palettes[palette],
-                          }}
-                          size="row"
-                        />
+                        <CaptainAvatar avatar={duetAvatar(entry, palette)} size="row" />
                         <span className="min-w-0 truncate">{labels.emblems[entry]}</span>
                       </MenuRadioItem>
                     ))}
@@ -315,22 +314,12 @@ export function CaptainHeaderTitleMenu({
                     value={palette}
                     onValueChange={(value) => {
                       const next = DUET_PALETTE_ORDER.find((entry) => entry === value);
-                      if (next && next !== palette)
-                        void changeAvatar({
-                          preset: DUET_PICKER.emblems[emblem],
-                          color: DUET_PICKER.palettes[next],
-                        });
+                      if (next && next !== palette) void changeAvatar(duetAvatar(emblem, next));
                     }}
                   >
                     {DUET_PALETTE_ORDER.map((entry) => (
                       <MenuRadioItem key={entry} value={entry} closeOnClick>
-                        <CaptainAvatar
-                          avatar={{
-                            preset: DUET_PICKER.emblems[emblem],
-                            color: DUET_PICKER.palettes[entry],
-                          }}
-                          size="row"
-                        />
+                        <CaptainAvatar avatar={duetAvatar(emblem, entry)} size="row" />
                         <span className="min-w-0 truncate">{labels.palettes[entry]}</span>
                       </MenuRadioItem>
                     ))}
