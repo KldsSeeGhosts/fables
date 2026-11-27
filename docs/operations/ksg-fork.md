@@ -9,23 +9,25 @@ share state and must not run side by side.
 
 ## Desktop display name and update paths
 
-Fables is the display name. The existing artifact names, app ID, updater
-manifests, signing settings, and Electron profile paths are part of the
-distribution and stay stable across the rename.
+Fables is the display name. Keep the existing release filenames, app ID,
+update feed, signing settings, and Electron profile paths.
 
-- **macOS.** electron-builder's `out/appInfo.js` derives the package filename
-  from `mac.executableName`. `out/macPackager.js` and
-  `out/electron/electronMac.js` use it for the bundle and binaries, and use
-  `productName` for the display name in Info.plist. Keep
-  `/Applications/KSG Code.app` and its executable name. electron-updater's
-  `out/MacUpdater.js` gives the ZIP to Electron's native updater. Squirrel.Mac
-  matches the running bundle ID and verifies the signature. When the installed
-  bundle's basename matches its executable name, ShipIt can rename the
-  destination to match the new executable before replacing it. Keeping that
-  name preserves the installed path and any shortcuts to it. A custom bundle
-  name chosen by the user stays in place. See
-  [SQRLUpdater.m](https://github.com/Squirrel/Squirrel.Mac/blob/fffea30e4a339a7f7d69a3391314b72548d209bd/Squirrel/SQRLUpdater.m)
-  and [SQRLInstaller.m](https://github.com/Squirrel/Squirrel.Mac/blob/fffea30e4a339a7f7d69a3391314b72548d209bd/Squirrel/SQRLInstaller.m).
+- **macOS.** electron-builder uses `mac.executableName` for both the bundle
+  filename and the main executable, so the package contains
+  `Fables.app/Contents/MacOS/Fables`. The published DMG and ZIP filenames
+  still start with `KSG-Code-`. electron-updater hands the ZIP to Squirrel.Mac,
+  which finds the update by the running app's bundle ID and checks the update
+  against the installed app's code-signing requirement. On the first update
+  with the new name, ShipIt moves `/Applications/KSG Code.app` to
+  `/Applications/Fables.app` before replacing it. ShipIt renames only when the
+  installed bundle's basename matches its current `CFBundleExecutable` and
+  the destination is free. A custom bundle name or an occupied destination
+  leaves the existing bundle path in use, with the new executable inside.
+  Dock pins, login items, and shortcuts that refer to the old path may need
+  updating. Electron still reads its profile from
+  `~/Library/Application Support/t3code-v2`. See
+  [SQRLUpdater.m](https://github.com/Squirrel/Squirrel.Mac/blob/fffea30e4a339a7f7d69a3391314b72548d209bd/Squirrel/SQRLUpdater.m#L1073-L1083)
+  and [SQRLInstaller.m](https://github.com/Squirrel/Squirrel.Mac/blob/fffea30e4a339a7f7d69a3391314b72548d209bd/Squirrel/SQRLInstaller.m#L550-L569).
 - **Windows.** Keep `win.executableName` on the existing filename.
   electron-updater's `out/NsisUpdater.js` launches the NSIS installer.
   electron-builder's `out/targets/nsis/NsisTarget.js` derives the install
