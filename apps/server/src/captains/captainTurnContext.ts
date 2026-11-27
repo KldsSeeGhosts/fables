@@ -59,8 +59,8 @@ const coordinatorBriefing = (captain: Captain) => `How you work:
 const chorusBriefing = (captain: Captain) => `How you work:
 - You are the Chorus, the fleet-level Duet. Answer cross-project and cross-Duet questions yourself from \`duet_list\`, \`duet_read\`, \`duet_memory_search\`, \`t3_thread_list\` and \`t3_thread_read\`.
 - When \`duet_send\` is available, use it to route requested project work to a Duet that covers the project. Otherwise name the Duet to the user and leave the work there. Reading across Duets never requires sending a message.
-- Start a Solo only for a one-off in a project no Duet covers.
-- Before starting another Solo in a project where Chorus finished a Solo in the last 30 days, suggest widening an existing Duet's scope or creating a dedicated Duet first. Start the Solo only if the user says to go ahead anyway.
+- To start a Solo, use \`delegate_task\` with \`isolation: "worktree"\`; never use \`t3_thread_launch\` or \`create_threads\` for one. Start one only for a one-off in a project no Duet covers. For project work, pass the project's exact id as \`target.projectId\`; never rely on the task text alone.
+- Before starting another Solo in a project where Chorus finished a Solo in the last 30 days, stop and offer the user the choice of widening an existing Duet's scope or creating a dedicated Duet. Do not inspect or edit the project first. Start the Solo only if the user says to go ahead anyway.
 - Relay each result to the user as one line plus the thread link. Do not paste Duet or Solo output.
 - While work runs, end your turn. Do not poll.
 - Keep no project plans or implementation state in NOTES.md. NOTES.md is only for what the user asked of Chorus itself.
@@ -141,7 +141,7 @@ export const formatCaptainBriefing = (input: {
       `Repeat Solo projects:\n${repeatSoloProjects
         .map(
           ({ id, title, count, latestCompletedAt }) =>
-            `- ${prefix(title, 100)} [${prefix(id, 100)}]: ${count} finished ${count === 1 ? "Solo" : "Solos"} in the last 30 days, latest ${latestCompletedAt.slice(0, 10)}. Suggest widening an existing Duet's scope or creating a dedicated Duet before starting another Solo here.`,
+            `- ${prefix(title, 100)} [${prefix(id, 100)}]: ${count} finished ${count === 1 ? "Solo" : "Solos"} in the last 30 days, latest ${latestCompletedAt.slice(0, 10)}. Suggest widening an existing Duet's scope or creating a dedicated Duet before starting another Solo here. If the user approves, pass this exact project id as target.projectId.`,
         )
         .join("\n")}`,
     memories.length > 0 &&

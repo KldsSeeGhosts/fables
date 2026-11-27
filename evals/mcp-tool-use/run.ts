@@ -367,6 +367,17 @@ export const McpToolUseCase = Schema.Struct({
     captainBriefing: Schema.optional(Schema.Boolean),
     /** Expose the matching role's tools and include its briefing. */
     captainKind: Schema.optional(Contracts.CaptainKind),
+    /** Recent finished Solo projects shown in a Chorus briefing. */
+    repeatSoloProjects: Schema.optional(
+      Schema.Array(
+        Schema.Struct({
+          id: Contracts.ProjectId,
+          title: Schema.String,
+          count: Schema.Int,
+          latestCompletedAt: Schema.String,
+        }),
+      ),
+    ),
     priorTurns: Schema.optional(
       Schema.Array(
         Schema.Struct({
@@ -488,13 +499,22 @@ const coordinatorCaptainBriefing = formatCaptainBriefing({
   agents: "",
   notes: "",
 });
-const chorusCaptainBriefing = formatCaptainBriefing({
-  captain: { ...coordinatorCaptain, name: "Chorus", kind: "chorus", reportPolicy: "react" },
-  projects: [],
-  memories: [],
-  agents: "",
-  notes: "",
-});
+const chorusCaptainBriefing = (
+  repeatSoloProjects: ReadonlyArray<{
+    readonly id: Contracts.ProjectId;
+    readonly title: string;
+    readonly count: number;
+    readonly latestCompletedAt: string;
+  }> = [],
+) =>
+  formatCaptainBriefing({
+    captain: { ...coordinatorCaptain, name: "Chorus", kind: "chorus", reportPolicy: "react" },
+    projects: [],
+    memories: [],
+    agents: "",
+    notes: "",
+    repeatSoloProjects,
+  });
 const valueText = (value: unknown) =>
   typeof value === "string" ? value : (JSON.stringify(value) ?? "");
 const toolResult = (id: string, content: unknown): Block => ({
@@ -1338,7 +1358,7 @@ export const buildMessages = (sample: Sample) => {
   const inlineContext = [
     sideChatContext ?? "",
     testCase.setup.captainKind === "chorus"
-      ? chorusCaptainBriefing
+      ? chorusCaptainBriefing(testCase.setup.repeatSoloProjects)
       : testCase.setup.captainKind === "duet" || testCase.setup.captainBriefing === true
         ? coordinatorCaptainBriefing
         : "",

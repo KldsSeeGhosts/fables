@@ -114,11 +114,19 @@ describe("formatCaptainBriefing", () => {
       ],
     });
 
+    expect(text).toContain('use `delegate_task` with `isolation: "worktree"`');
+    expect(text).toContain("never use `t3_thread_launch` or `create_threads`");
+    expect(text).toContain("pass the project's exact id as `target.projectId`");
     expect(text).toContain("finished a Solo in the last 30 days");
+    expect(text).toContain(
+      "offer the user the choice of widening an existing Duet's scope or creating a dedicated Duet",
+    );
+    expect(text).toContain("Do not inspect or edit the project first");
     expect(text).toContain("Start the Solo only if the user says to go ahead anyway");
     expect(text).toContain("Repeat Solo projects:");
     expect(text).toContain("Workspace [project]: 2 finished Solos");
     expect(text).toContain("creating a dedicated Duet before starting another Solo");
+    expect(text).toContain("pass this exact project id as target.projectId");
   });
 });
 
