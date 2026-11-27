@@ -1,13 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
-import {
-  cancelAnimation,
-  Easing,
-  ReduceMotion,
-  useReducedMotion,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from "react-native-reanimated";
+import { Easing, makeMutable, useDerivedValue, useReducedMotion } from "react-native-reanimated";
+import { scheduleOnUI } from "react-native-worklets";
 
 import { readReduceMotionEnabled, subscribeReduceMotion, useAppActive } from "./appState";
 
@@ -24,28 +17,49 @@ export function useStatusMotionAllowed(): boolean {
 export const statusMotionEase = Easing.bezier(0.2, 0.8, 0.2, 1);
 const breatheEase = Easing.bezier(0.42, 0, 0.58, 1);
 
+const workingFrameMs = 1000 / 30;
+const workingTime = makeMutable(0);
+const workingGeneration = makeMutable(0);
+let workingConsumers = 0;
+
+function startWorkingClock() {
+  "worklet";
+  const generation = workingGeneration.get() + 1;
+  workingGeneration.set(generation);
+  let lastFrame: number | undefined;
+  const tick = (timestamp: number) => {
+    if (workingGeneration.get() !== generation) return;
+    const frame = Math.floor(timestamp / workingFrameMs);
+    if (lastFrame !== undefined && frame > lastFrame) {
+      workingTime.set(workingTime.get() + (frame - lastFrame) * workingFrameMs);
+    }
+    lastFrame = frame;
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+function stopWorkingClock() {
+  "worklet";
+  workingGeneration.set(workingGeneration.get() + 1);
+}
+
 export function useRepeatingStatusProgress(enabled: boolean, duration: number, alternate = false) {
-  const progress = useSharedValue(0);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- drives and cancels a UI-thread animation
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- starts the UI clock for visible working views and stops it after the last one leaves
   useEffect(() => {
     if (!enabled) return;
-    progress.set(
-      withRepeat(
-        withTiming(1, {
-          duration,
-          easing: alternate ? breatheEase : Easing.linear,
-          reduceMotion: ReduceMotion.Never,
-        }),
-        -1,
-        alternate,
-        undefined,
-        ReduceMotion.Never,
-      ),
-    );
+    if (workingConsumers++ === 0) scheduleOnUI(startWorkingClock);
     return () => {
-      cancelAnimation(progress);
-      progress.set(0);
+      if (--workingConsumers === 0) scheduleOnUI(stopWorkingClock);
     };
-  }, [alternate, duration, enabled, progress]);
-  return progress;
+  }, [enabled]);
+
+  // Batch updates across rows at 30 Hz to limit Fabric commits while the list scrolls.
+  return useDerivedValue(() => {
+    if (!enabled) return 0;
+    const phase = workingTime.get() / duration;
+    if (!alternate) return phase % 1;
+    const cycle = phase % 2;
+    return breatheEase.factory()(cycle <= 1 ? cycle : 2 - cycle);
+  });
 }

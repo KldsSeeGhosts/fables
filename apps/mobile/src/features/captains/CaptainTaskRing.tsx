@@ -82,5 +82,9 @@ function StatusRingSpin({ children }: { readonly children: ReactNode }) {
   const style = useAnimatedStyle(() => ({
     transform: [{ rotate: `${progress.get() * 360}deg` }],
   }));
-  return <Animated.View style={style}>{children}</Animated.View>;
+  return (
+    <Animated.View shouldRasterizeIOS style={style}>
+      {children}
+    </Animated.View>
+  );
 }

@@ -362,7 +362,10 @@ function StatusCreatureLayers(props: {
   return (
     <View style={{ width: size, height: size }}>
       {halo ? (
-        <Reanimated.View style={[layer(size), { transformOrigin: origin }, haloStyle]}>
+        <Reanimated.View
+          shouldRasterizeIOS
+          style={[layer(size), { transformOrigin: origin }, haloStyle]}
+        >
           <Svg width={size} height={size} viewBox="0 0 100 100">
             <Path
               d={halo.path}
@@ -373,7 +376,10 @@ function StatusCreatureLayers(props: {
           </Svg>
         </Reanimated.View>
       ) : null}
-      <Reanimated.View style={[layer(size), { transformOrigin: origin }, bodyStyle]}>
+      <Reanimated.View
+        shouldRasterizeIOS
+        style={[layer(size), { transformOrigin: origin }, bodyStyle]}
+      >
         <Svg width={size} height={size} viewBox="0 0 100 100">
           <Path d={design.body} fill={ink} />
         </Svg>
@@ -389,7 +395,7 @@ function StatusCreatureLayers(props: {
             top: (line.window.y * size) / 100,
           }}
         >
-          <Reanimated.View style={[{ width: lineWidth * 2 }, lineStyle]}>
+          <Reanimated.View shouldRasterizeIOS style={[{ width: lineWidth * 2 }, lineStyle]}>
             <Svg
               width={lineWidth * 2}
               height={(line.window.h * size) / 100}
