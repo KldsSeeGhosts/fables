@@ -1,12 +1,15 @@
 import type { CaptainTaskStatus } from "@t3tools/client-runtime/state/captain-tasks";
+import type { ReactNode } from "react";
+import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import Svg, { Circle, Path } from "react-native-svg";
 
+import { useRepeatingStatusProgress, useStatusMotionAllowed } from "../../lib/status-motion";
 import { useDuetTokens } from "./useDuetTokens";
 
-/** The Duet task state ring the desktop drawer uses, drawn static. */
 export function CaptainTaskRing(props: {
   readonly status: CaptainTaskStatus;
   readonly size?: number;
+  readonly visible?: boolean;
 }) {
   const tokens = useDuetTokens();
   const color = {
@@ -20,7 +23,7 @@ export function CaptainTaskRing(props: {
     unknown: tokens.meta,
   }[props.status];
   const size = props.size ?? 16;
-  return (
+  const ring = (
     <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
       <Circle
         cx="8"
@@ -55,4 +58,29 @@ export function CaptainTaskRing(props: {
       ) : null}
     </Svg>
   );
+  return props.status === "working" ? (
+    <SpinningStatusRing visible={props.visible ?? true}>{ring}</SpinningStatusRing>
+  ) : (
+    ring
+  );
+}
+
+export function SpinningStatusRing(props: {
+  readonly visible: boolean;
+  readonly children: ReactNode;
+}) {
+  const allowed = useStatusMotionAllowed();
+  return allowed && props.visible ? (
+    <StatusRingSpin>{props.children}</StatusRingSpin>
+  ) : (
+    props.children
+  );
+}
+
+function StatusRingSpin({ children }: { readonly children: ReactNode }) {
+  const progress = useRepeatingStatusProgress(true, 1000);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${progress.get() * 360}deg` }],
+  }));
+  return <Animated.View style={style}>{children}</Animated.View>;
 }

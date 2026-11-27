@@ -1,3 +1,4 @@
+import { useViewabilityAmount, type ViewabilityConfig } from "@legendapp/list/react-native";
 import { useAtomValue } from "@effect/atom-react";
 import * as Dialog from "../../components/ui/Dialog";
 import type { ThreadRowProviderInstance } from "./thread-provider-instance";
@@ -15,6 +16,8 @@ import { appAtomRegistry } from "../../state/atom-registry";
 import { threadArrangementOpenAtom } from "../../state/thread-order";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { WorkingStatusShine } from "../../components/WorkingStatusShine";
+import { useDuetShell } from "../captains/useDuetShell";
 import { useVisibleSecondClock } from "./use-visible-second-clock";
 import type { ThreadMoveDestination } from "./threadOrder";
 import type {
@@ -181,15 +184,20 @@ const STATUS_PILL_BY_KIND: Record<
   },
 };
 
+export const STATUS_ROW_VIEWABILITY = {
+  itemVisiblePercentThreshold: 1,
+} satisfies ViewabilityConfig;
+
 /** Only this text ticks, so a running thread re-renders one Text per second, not its row. */
 function WorkingPillTimer(props: {
   readonly environmentId: EnvironmentId;
   readonly startedAt: string;
+  readonly visible: boolean;
   readonly className: string;
 }) {
   const messages = useMessages();
   const startedMs = Date.parse(props.startedAt);
-  const nowMs = useVisibleSecondClock(Number.isFinite(startedMs));
+  const nowMs = useVisibleSecondClock(props.visible && Number.isFinite(startedMs));
   return (
     <Text
       className={cn("text-xs opacity-75 tabular-nums", props.className)}
@@ -207,8 +215,13 @@ function ThreadListV2StatusPill(props: {
   readonly kind: ThreadListV2PillKind;
   readonly label?: string | null;
   readonly workingStartedAt: string | null;
+  readonly listVisible: boolean;
 }) {
   const m = useMessages();
+  const isDuet = useDuetShell();
+  const [rowVisible, setRowVisible] = useState(false);
+  useViewabilityAmount((token) => setRowVisible(token.sizeVisible > 0));
+  const visible = rowVisible && props.listVisible;
   const pill = STATUS_PILL_BY_KIND[props.kind];
   return (
     <View
@@ -223,13 +236,23 @@ function ThreadListV2StatusPill(props: {
         tintColorClassName={pill.tintClassName}
         type="monochrome"
       />
-      <Text className={cn("text-xs font-t3-medium", pill.textClassName)}>
-        {props.label ?? m(pill.label)}
-      </Text>
+      {props.kind === "working" && isDuet ? (
+        <WorkingStatusShine
+          visible={visible}
+          className={cn("text-xs font-t3-medium", pill.textClassName)}
+        >
+          {props.label ?? m(pill.label)}
+        </WorkingStatusShine>
+      ) : (
+        <Text className={cn("text-xs font-t3-medium", pill.textClassName)}>
+          {props.label ?? m(pill.label)}
+        </Text>
+      )}
       {(props.kind === "working" || props.kind === "waiting") && props.workingStartedAt !== null ? (
         <WorkingPillTimer
           environmentId={props.environmentId}
           startedAt={props.workingStartedAt}
+          visible={visible}
           className={pill.textClassName}
         />
       ) : null}
@@ -804,6 +827,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
 });
 
 export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
+  readonly listVisible: boolean;
   readonly thread: EnvironmentThreadShell;
   readonly variant: "card" | "slim";
   readonly hasQueuedMessages?: boolean;
@@ -1519,6 +1543,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               kind={pillKind}
               label={pillLabel}
               workingStartedAt={workingStartedAt}
+              listVisible={props.listVisible}
             />
           ) : (
             <Text

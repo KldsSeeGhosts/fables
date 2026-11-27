@@ -80,7 +80,7 @@ export function CaptainsInboxSheet() {
                 <View key={group.key} className="-mx-2 pb-2">
                   {captain ? (
                     <View className="flex-row items-center gap-[7px] px-4 pb-1 pt-3.5">
-                      <DuetCreature captain={captain} size={18} />
+                      <DuetCreature captain={captain} size={18} state="waiting" />
                       <Text
                         className="font-t3-medium"
                         style={{ fontSize: 13, color: tokens.muted }}

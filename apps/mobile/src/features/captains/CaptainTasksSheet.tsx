@@ -1,9 +1,10 @@
-import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
+import { useIsFocused, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { msg, useGT, useMessages } from "gt-react-native";
 import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { WorkingStatusShine } from "../../components/WorkingStatusShine";
 import { RelativeTime } from "../../components/RelativeTime";
 import { AppText as Text } from "../../components/ui/AppText";
 import { ScreenContent } from "../../components/ui/ScreenContent";
@@ -42,7 +43,11 @@ const RANGES = [
   { value: "all", label: msg("All", { $context: "tab, every delegated task" }) },
 ] as const satisfies ReadonlyArray<{ readonly value: CaptainTaskRange; readonly label: string }>;
 
-function TaskRow(props: { readonly row: CaptainTaskRow; readonly onOpen: () => void }) {
+function TaskRow(props: {
+  readonly row: CaptainTaskRow;
+  readonly visible: boolean;
+  readonly onOpen: () => void;
+}) {
   const m = useMessages();
   const status = m(CAPTAIN_TASK_STATUS_LABELS[props.row.status]);
   return (
@@ -53,7 +58,7 @@ function TaskRow(props: { readonly row: CaptainTaskRow; readonly onOpen: () => v
       className="flex-row items-start gap-3 rounded-xl px-3 py-2.5 active:bg-subtle"
     >
       <View className="pt-0.5">
-        <CaptainTaskRing status={props.row.status} />
+        <CaptainTaskRing status={props.row.status} visible={props.visible} />
       </View>
       <View className="min-w-0 flex-1 gap-0.5">
         <View className="flex-row items-center gap-2">
@@ -92,6 +97,7 @@ function statusColor(status: CaptainTaskStatus, tokens: DuetTokens) {
 function DuetTaskRow(props: {
   readonly row: CaptainTaskRow;
   readonly first: boolean;
+  readonly visible: boolean;
   readonly onOpen: () => void;
 }) {
   const m = useMessages();
@@ -112,7 +118,7 @@ function DuetTaskRow(props: {
         />
       )}
       <View className="pt-0.5">
-        <CaptainTaskRing status={props.row.status} />
+        <CaptainTaskRing status={props.row.status} visible={props.visible} />
       </View>
       <View className="min-w-0 flex-1">
         <View className="flex-row items-baseline gap-2">
@@ -129,10 +135,31 @@ function DuetTaskRow(props: {
             </Text>
           ) : null}
         </View>
-        <Text style={{ fontSize: 13, lineHeight: 18, color: tokens.meta }} numberOfLines={1}>
-          <Text style={{ color: statusColor(props.row.status, tokens) }}>{status}</Text>
-          {props.row.detail ? ` · ${props.row.detail}` : null}
-        </Text>
+        {props.row.status === "working" ? (
+          <View className="flex-row items-center">
+            <WorkingStatusShine
+              visible={props.visible}
+              style={{ fontSize: 13, lineHeight: 18, color: tokens.workingText }}
+              numberOfLines={1}
+            >
+              {status}
+            </WorkingStatusShine>
+            {props.row.detail ? (
+              <Text
+                className="min-w-0 flex-1"
+                style={{ fontSize: 13, lineHeight: 18, color: tokens.meta }}
+                numberOfLines={1}
+              >
+                {` · ${props.row.detail}`}
+              </Text>
+            ) : null}
+          </View>
+        ) : (
+          <Text style={{ fontSize: 13, lineHeight: 18, color: tokens.meta }} numberOfLines={1}>
+            <Text style={{ color: statusColor(props.row.status, tokens) }}>{status}</Text>
+            {props.row.detail ? ` · ${props.row.detail}` : null}
+          </Text>
+        )}
       </View>
       <View className="self-center">
         <SymbolView name="chevron.right" size={14} tintColor={tokens.icon} />
@@ -153,6 +180,7 @@ function DuetSectionHeading(props: { readonly children: string }) {
 /** Delegated tasks, grouped by Captain, or one Captain's when opened from its conversation. */
 export function CaptainTasksSheet({ route }: StaticScreenProps<CaptainTasksParams>) {
   const navigation = useNavigation();
+  const visible = useIsFocused();
   const insets = useSafeAreaInsets();
   const gt = useGT();
   const isDuet = useDuetShell();
@@ -263,6 +291,7 @@ export function CaptainTasksSheet({ route }: StaticScreenProps<CaptainTasksParam
                         key={row.thread.id}
                         row={row}
                         first={index === 0}
+                        visible={visible}
                         onOpen={() => openTask(row)}
                       />
                     ))}
@@ -288,7 +317,12 @@ export function CaptainTasksSheet({ route }: StaticScreenProps<CaptainTasksParam
                   </View>
                 )}
                 {group.rows.map((row) => (
-                  <TaskRow key={row.thread.id} row={row} onOpen={() => openTask(row)} />
+                  <TaskRow
+                    key={row.thread.id}
+                    row={row}
+                    visible={visible}
+                    onOpen={() => openTask(row)}
+                  />
                 ))}
               </View>
             ))

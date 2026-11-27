@@ -3,14 +3,18 @@ import type { EnvironmentProject } from "@t3tools/client-runtime/state/models";
 import type { Captain, EnvironmentId, FleetChorusState } from "@t3tools/contracts";
 import { useNavigation } from "@react-navigation/native";
 import { useGT, useMessages } from "gt-react-native";
+import { useState } from "react";
 import { Pressable, View } from "react-native";
 
 import { RelativeTime } from "../../components/RelativeTime";
 import { SymbolView } from "../../components/ui/AppSymbol";
 import { AppText as Text } from "../../components/ui/AppText";
+import { WorkingStatusShine } from "../../components/WorkingStatusShine";
+import { useScrollRowVisibility, type ScrollVisibility } from "../../lib/scroll-visibility";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { DUET_WAITING_LABELS, DUET_WAITING_ICONS } from "./captainLabels";
+import { CaptainTaskRing } from "./CaptainTaskRing";
 import { DuetCreature } from "./DuetCreature";
 import { duetRowScope, duetRowTrail, type DuetRowTrail } from "./duetHomeRow";
 import type { DuetTokens } from "./duetTokens";
@@ -23,7 +27,11 @@ export interface DuetHomeRow {
   readonly fleetState?: FleetChorusState | undefined;
 }
 
-function Trail(props: { readonly trail: DuetRowTrail; readonly tokens: DuetTokens }) {
+function Trail(props: {
+  readonly trail: DuetRowTrail;
+  readonly tokens: DuetTokens;
+  readonly visible: boolean;
+}) {
   const gt = useGT();
   const m = useMessages();
   const { trail, tokens } = props;
@@ -34,23 +42,32 @@ function Trail(props: { readonly trail: DuetRowTrail; readonly tokens: DuetToken
       </Text>
     );
   }
-  const working = trail.kind === "working";
+  if (trail.kind === "working") {
+    return (
+      <View className="flex-row items-center gap-1">
+        <CaptainTaskRing status="working" size={13} visible={props.visible} />
+        <WorkingStatusShine
+          visible={props.visible}
+          className="font-t3-medium"
+          style={{ fontSize: 13, lineHeight: 18, color: tokens.workingText }}
+        >
+          {gt("Working", { $context: "Duet state" })}
+        </WorkingStatusShine>
+      </View>
+    );
+  }
   return (
     <View className="flex-row items-center gap-1">
-      <SymbolView
-        name={working ? "circle.dashed" : DUET_WAITING_ICONS[trail.on]}
-        size={13}
-        tintColor={working ? tokens.working : tokens.needsInput}
-      />
+      <SymbolView name={DUET_WAITING_ICONS[trail.on]} size={13} tintColor={tokens.needsInput} />
       <Text
         className="font-t3-medium"
         style={{
           fontSize: 13,
           lineHeight: 18,
-          color: working ? tokens.workingText : tokens.needsInputText,
+          color: tokens.needsInputText,
         }}
       >
-        {working ? gt("Working", { $context: "Duet state" }) : m(DUET_WAITING_LABELS[trail.on])}
+        {m(DUET_WAITING_LABELS[trail.on])}
       </Text>
     </View>
   );
@@ -59,6 +76,8 @@ function Trail(props: { readonly trail: DuetRowTrail; readonly tokens: DuetToken
 /** Duets above the threads, as desktop's sidebar draws them: creature, name, status or time. */
 export function DuetHomeSection(props: {
   readonly rows: ReadonlyArray<DuetHomeRow>;
+  readonly viewport: ScrollVisibility;
+  readonly visible: boolean;
   readonly waiting: number;
   readonly showsEnvironment: boolean;
   readonly projects: ReadonlyArray<EnvironmentProject>;
@@ -70,8 +89,9 @@ export function DuetHomeSection(props: {
   const tokens = useDuetTokens();
   const navigation = useNavigation();
   const selectDetail = useSelectWorkspaceDetail();
+  const [sectionTop, setSectionTop] = useState(0);
   return (
-    <View className="pb-2">
+    <View className="pb-2" onLayout={(event) => setSectionTop(event.nativeEvent.layout.y)}>
       <View className="h-11 flex-row items-center gap-1.5 pl-4 pr-1.5">
         <Text
           className="min-w-0 flex-1 font-t3-medium"
@@ -146,14 +166,23 @@ export function DuetHomeSection(props: {
         const selected = threadKey === props.selectedThreadKey;
         const disabled = fleetState !== undefined && fleetState !== "ready";
         return (
-          <Pressable
+          <DuetChannelRow
             key={`${environment.environmentId}:${captain.id}`}
-            accessibilityRole="button"
-            accessibilityState={{
-              selected,
-              disabled,
-            }}
+            viewport={props.viewport}
+            sectionTop={sectionTop}
+            visible={props.visible}
+            captain={captain}
+            selected={selected}
             disabled={disabled}
+            trail={trail}
+            tokens={tokens}
+            fleet={fleetState !== undefined}
+            scope={scope}
+            scopeText={
+              props.showsEnvironment && fleetState === undefined
+                ? `${scopeText} · ${environment.label}`
+                : scopeText
+            }
             accessibilityLabel={[captain.name, scopeText].join(", ")}
             onPress={() => {
               if (fleetState !== undefined) {
@@ -168,64 +197,104 @@ export function DuetHomeSection(props: {
                 },
               });
             }}
-            className="mx-2 min-h-[60px] flex-row items-center gap-3 rounded-[10px] pl-2 pr-2.5"
-            style={({ pressed }) => ({
-              backgroundColor: selected || pressed ? tokens.row : undefined,
-            })}
-          >
-            {fleetState === undefined ? null : (
-              <View
-                className="absolute bottom-3 left-1 top-3 w-0.5 rounded-full"
-                style={{ backgroundColor: tokens.needsInput }}
-              />
-            )}
-            <DuetCreature captain={captain} size={32} />
-            <View className="min-w-0 flex-1">
-              <View className="flex-row items-center gap-2">
-                <Text
-                  className="min-w-0 flex-1 font-t3-medium"
-                  style={{ fontSize: 16, lineHeight: 21, color: tokens.foreground }}
-                  numberOfLines={1}
-                >
-                  {captain.name}
-                </Text>
-                <Trail trail={trail} tokens={tokens} />
-              </View>
-              <View className="mt-px flex-row items-center gap-1.5">
-                {scope.kind === "project" ? (
-                  <View
-                    className="h-4 w-4 items-center justify-center rounded"
-                    style={{
-                      backgroundColor: tokens.bubble,
-                      borderWidth: 1,
-                      borderColor: tokens.hairline,
-                    }}
-                  >
-                    <Text
-                      allowFontScaling={false}
-                      className="font-t3-bold"
-                      style={{ fontSize: 7.5, color: tokens.pillForeground }}
-                    >
-                      {scope.badge}
-                    </Text>
-                  </View>
-                ) : captain.kind !== "chorus" ? (
-                  <SymbolView name="folder" size={13} tintColor={tokens.icon} />
-                ) : null}
-                <Text
-                  className="min-w-0 flex-1"
-                  style={{ fontSize: 13, lineHeight: 18, color: tokens.meta }}
-                  numberOfLines={1}
-                >
-                  {props.showsEnvironment && fleetState === undefined
-                    ? `${scopeText} · ${environment.label}`
-                    : scopeText}
-                </Text>
-              </View>
-            </View>
-          </Pressable>
+          />
         );
       })}
     </View>
+  );
+}
+
+function DuetChannelRow(props: {
+  readonly viewport: ScrollVisibility;
+  readonly sectionTop: number;
+  readonly visible: boolean;
+  readonly captain: Captain;
+  readonly selected: boolean;
+  readonly disabled: boolean;
+  readonly trail: DuetRowTrail;
+  readonly tokens: DuetTokens;
+  readonly fleet: boolean;
+  readonly scope: ReturnType<typeof duetRowScope>;
+  readonly scopeText: string;
+  readonly accessibilityLabel: string;
+  readonly onPress: () => void;
+}) {
+  const { captain, disabled, scope, selected, tokens, trail } = props;
+  const visibility = useScrollRowVisibility(props.viewport, props.sectionTop, props.visible);
+  const visible = visibility.visible && !disabled && captain.archivedAt === null;
+  const [glance, setGlance] = useState(0);
+  const glanceOnce = () => setGlance((previous) => previous + 1);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected, disabled }}
+      disabled={disabled}
+      accessibilityLabel={props.accessibilityLabel}
+      onLayout={visibility.onLayout}
+      onPress={props.onPress}
+      onPressIn={glanceOnce}
+      onHoverIn={glanceOnce}
+      onFocus={glanceOnce}
+      className="mx-2 min-h-[60px] flex-row items-center gap-3 rounded-[10px] pl-2 pr-2.5"
+      style={({ pressed }) => ({
+        backgroundColor: selected || pressed ? tokens.row : undefined,
+      })}
+    >
+      {!props.fleet ? null : (
+        <View
+          className="absolute bottom-3 left-1 top-3 w-0.5 rounded-full"
+          style={{ backgroundColor: tokens.needsInput }}
+        />
+      )}
+      <DuetCreature
+        captain={captain}
+        size={32}
+        state={trail.kind}
+        archived={captain.archivedAt !== null}
+        visible={visible}
+        glance={glance}
+      />
+      <View className="min-w-0 flex-1">
+        <View className="flex-row items-center gap-2">
+          <Text
+            className="min-w-0 flex-1 font-t3-medium"
+            style={{ fontSize: 16, lineHeight: 21, color: tokens.foreground }}
+            numberOfLines={1}
+          >
+            {captain.name}
+          </Text>
+          <Trail trail={trail} tokens={tokens} visible={visible} />
+        </View>
+        <View className="mt-px flex-row items-center gap-1.5">
+          {scope.kind === "project" ? (
+            <View
+              className="h-4 w-4 items-center justify-center rounded"
+              style={{
+                backgroundColor: tokens.bubble,
+                borderWidth: 1,
+                borderColor: tokens.hairline,
+              }}
+            >
+              <Text
+                allowFontScaling={false}
+                className="font-t3-bold"
+                style={{ fontSize: 7.5, color: tokens.pillForeground }}
+              >
+                {scope.badge}
+              </Text>
+            </View>
+          ) : captain.kind !== "chorus" ? (
+            <SymbolView name="folder" size={13} tintColor={tokens.icon} />
+          ) : null}
+          <Text
+            className="min-w-0 flex-1"
+            style={{ fontSize: 13, lineHeight: 18, color: tokens.meta }}
+            numberOfLines={1}
+          >
+            {props.scopeText}
+          </Text>
+        </View>
+      </View>
+    </Pressable>
   );
 }

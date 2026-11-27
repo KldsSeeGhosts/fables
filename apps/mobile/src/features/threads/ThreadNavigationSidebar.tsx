@@ -62,6 +62,7 @@ import { useFabScroll } from "../home/FabScrollContext";
 import { WorkspaceListHeader } from "../layout/workspace/WorkspaceListHeader";
 import { WorkspaceSidebarColumn } from "../layout/workspace/WorkspaceSidebarColumn";
 import {
+  STATUS_ROW_VIEWABILITY,
   ThreadListV2PendingRow,
   ThreadListV2Row,
   ThreadListV2SettledShelfHeader,
@@ -418,6 +419,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
         const scopeKey = scopedProjectKey(thread.environmentId, thread.projectId);
         return (
           <ThreadListV2Row
+            listVisible={props.visible}
             onNewThreadOnBranch={props.onNewThreadOnBranch}
             thread={thread}
             variant={item.item.variant}
@@ -615,6 +617,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
           <SwipeableScrollGateProvider enabled={swipeEnabled}>
             <GestureDetector gesture={sidebarScrollGesture}>
               <AnimatedLegendList
+                viewabilityConfig={STATUS_ROW_VIEWABILITY}
                 renderScrollComponent={NativeScrollView}
                 itemLayoutAnimation={THREAD_LIST_ROW_LAYOUT}
                 data={listItems}
@@ -673,6 +676,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
             <GestureDetector gesture={sidebarScrollGesture}>
               {/* oxlint-disable-next-line t3code/require-registered-list-scroll -- The Android sidebar has no native header to register with. */}
               <AnimatedLegendList
+                viewabilityConfig={STATUS_ROW_VIEWABILITY}
                 itemLayoutAnimation={THREAD_LIST_ROW_LAYOUT}
                 data={listItems}
                 drawDistance={500}
