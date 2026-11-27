@@ -14,6 +14,9 @@ const noEnvironmentSettingsAtom = Atom.make(null);
 export const captainMorningBriefTaskId = (captainId: Captain["id"]) =>
   ScheduledTaskId.make(`captain-morning-brief:${captainId}`);
 
+export const captainMorningBriefDefaultTime = (captain: Pick<Captain, "kind">) =>
+  captain.kind === "chorus" ? "08:15" : "08:00";
+
 export function useCaptainMorningBrief(environmentId: EnvironmentId | null) {
   const gt = useGT();
   const canSave = useAtomValue(serverEnvironment.upsertScheduledTask.permissionAtom(environmentId));

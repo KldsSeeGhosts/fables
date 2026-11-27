@@ -52,13 +52,29 @@ Keep this section exactly.\n\n\nThis blank spacing stays.
 Keep this too.
 `;
 
-const document = (name: CaptainDocumentName, content: string, revision = 0): CaptainDocument => ({
-  captainId: captain.id,
+const makeCaptain = (id: CaptainId, name: string, overrides: Partial<Captain> = {}): Captain => ({
+  ...captain,
+  id,
+  name,
+  primaryThreadId: captainPrimaryThreadId(id, 0),
+  ...overrides,
+});
+
+const documentFor = (
+  owner: Captain,
+  name: CaptainDocumentName,
+  content: string,
+  revision = 0,
+): CaptainDocument => ({
+  captainId: owner.id,
   name,
   content,
   revision,
   updatedAt: "2026-11-25T08:00:00.000Z",
 });
+
+const document = (name: CaptainDocumentName, content: string, revision = 0): CaptainDocument =>
+  documentFor(captain, name, content, revision);
 
 it("replaces only the digest New section", () => {
   const next = CaptainBriefService.replaceCaptainDigestNewSection(
@@ -181,6 +197,8 @@ it.effect("generates with the brief model and retries once after a revision conf
       assert.isTrue(written.content.includes("- migration finished"));
       assert.isTrue(generationPrompts[0]?.includes("Review the migration") === true);
       assert.isTrue(generationPrompts[0]?.includes("Migration review passed") === true);
+      assert.isTrue(generationPrompts[0]?.includes("Cover progress, open work, blockers") === true);
+      assert.isFalse(generationPrompts[0]?.includes("Group items by Duet"));
       assert.isBelow(generationPrompts[0]!.length, 16_000);
       assert.isTrue(written.content.endsWith("\nConcurrent edit.\n"));
       assert.isTrue(
@@ -202,6 +220,212 @@ it.effect("generates with the brief model and retries once after a revision conf
       const oversized = yield* Effect.result(service.generate({ captainId: captain.id }));
       assert.equal(oversized._tag, "Failure");
       assert.equal(writes, 2);
+    }).pipe(Effect.provide(layer));
+  }),
+);
+
+it.effect("builds a Chorus brief from every active Duet without writing their documents", () =>
+  Effect.gen(function* () {
+    const chorus = makeCaptain(CaptainId.make("chorus"), "Chorus", {
+      kind: "chorus",
+      coordinatorOnly: true,
+      reportPolicy: "react",
+    });
+    const alphaId = CaptainId.make("alpha");
+    const alphaEarlier = captainPrimaryThreadId(alphaId, 0);
+    const alpha = makeCaptain(alphaId, "Alpha", {
+      primaryThreadId: captainPrimaryThreadId(alphaId, 1),
+      earlierThreadIds: [alphaEarlier],
+    });
+    const beta = makeCaptain(CaptainId.make("beta"), "Beta");
+    const archived = makeCaptain(CaptainId.make("archived"), "Archived", {
+      archivedAt: "2026-11-25T09:00:00.000Z",
+    });
+    const alphaDigest =
+      "# Alpha digest\n\n## New\n\n- Alpha digest item due tomorrow\n\n## Projects\n\nAlpha project detail that stays out.\n";
+    const generationPrompts: string[] = [];
+    const textGenerationLayer = Layer.mock(TextGeneration.TextGeneration)({
+      generateBriefText: (input) =>
+        Effect.sync(() => {
+          generationPrompts.push(input.prompt);
+          return { text: "- **Alpha:** Alpha digest item due tomorrow" };
+        }),
+    });
+    const layer = CaptainBriefService.layer.pipe(
+      Layer.provideMerge(
+        Layer.mergeAll(
+          CaptainStore.layer,
+          textGenerationLayer,
+          ServerSettings.layerTest({
+            textGenerationModelSelection: createModelSelection(
+              ProviderInstanceId.make("codex"),
+              "gpt-6-luna",
+            ),
+            briefModelSelection: createModelSelection(
+              ProviderInstanceId.make("claudeAgent"),
+              "claude-haiku",
+            ),
+          }),
+        ),
+      ),
+      Layer.provideMerge(Sqlite.layerMemory),
+    );
+
+    yield* Effect.gen(function* () {
+      const store = yield* CaptainStore.CaptainStore;
+      yield* Effect.forEach([chorus, alpha, beta, archived], store.save);
+      const putDocument = (
+        owner: Captain,
+        name: CaptainDocumentName,
+        content: string,
+        expectedRevision = 0,
+      ) => store.updateDocument({ captainId: owner.id, name, content, expectedRevision });
+      const chorusNotes = yield* putDocument(
+        chorus,
+        "NOTES.md",
+        "The user wants fleet risks first.",
+      );
+      yield* putDocument(chorus, "DIGEST.md", "# Chorus digest\n\n## New\n\n- stale chorus item\n");
+      const savedAlpha = yield* putDocument(alpha, "DIGEST.md", alphaDigest);
+      const savedBeta = yield* putDocument(
+        beta,
+        "DIGEST.md",
+        "# Beta digest\n\n## New\n\n- Beta digest item\n",
+      );
+      const savedArchived = yield* putDocument(
+        archived,
+        "DIGEST.md",
+        "# Archived digest\n\n## New\n\n- Archived digest item\n",
+      );
+      const sql = yield* SqlClient.SqlClient;
+      const at = "2026-11-25T10:00:00.000Z";
+      const alphaChild = "thread:alpha-child";
+      yield* Effect.forEach(
+        Array.from({ length: 8 }, (_, index) => `alpha-visible-task-${index + 1}`),
+        (id) =>
+          sql`
+          INSERT INTO orchestration_v2_projection_subagents (
+            subagent_id, thread_id, parent_node_id, provider, origin, status,
+            started_at, updated_at, payload_json
+          ) VALUES (${id}, ${alpha.primaryThreadId}, 'node', 'codex', 'app_owned', 'running',
+            '2026-11-25T09:00:00.000Z', ${at}, ${JSON.stringify({ title: id })})
+        `.pipe(Effect.orDie),
+      );
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_subagents (
+          subagent_id, thread_id, parent_node_id, provider, origin, status,
+          child_thread_id, started_at, updated_at, payload_json
+        ) VALUES ('alpha-task', ${alphaEarlier}, 'node', 'codex', 'app_owned', 'running',
+          ${alphaChild}, ${at}, ${at}, ${JSON.stringify({
+            title: "Alpha active solo",
+            progress: "Checking the release",
+          })})
+      `.pipe(Effect.orDie);
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_runtime_requests (
+          runtime_request_id, thread_id, node_id, kind, status, created_at, payload_json
+        ) VALUES ('alpha-request', ${alphaChild}, 'node', 'command', 'pending', ${at}, '{}')
+      `.pipe(Effect.orDie);
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_turn_items (
+          turn_item_id, thread_id, ordinal, type, status, updated_at, payload_json
+        ) VALUES ('alpha-item', ${alphaChild}, 1, 'approval_request', 'pending', ${at},
+          ${JSON.stringify({ requestId: "alpha-request", prompt: "Approve the alpha release" })})
+      `.pipe(Effect.orDie);
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_subagents (
+          subagent_id, thread_id, parent_node_id, provider, origin, status,
+          started_at, updated_at, payload_json
+        ) VALUES ('beta-task', ${beta.primaryThreadId}, 'node', 'codex', 'app_owned', 'waiting',
+          ${at}, ${at}, ${JSON.stringify({ title: "Beta active solo" })})
+      `.pipe(Effect.orDie);
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_runtime_requests (
+          runtime_request_id, thread_id, node_id, kind, status, created_at, payload_json
+        ) VALUES ('beta-request', ${beta.primaryThreadId}, 'node', 'user_input', 'pending', ${at}, '{}')
+      `.pipe(Effect.orDie);
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_turn_items (
+          turn_item_id, thread_id, ordinal, type, status, updated_at, payload_json
+        ) VALUES ('beta-item', ${beta.primaryThreadId}, 2, 'user_input_request', 'pending', ${at},
+          ${JSON.stringify({
+            requestId: "beta-request",
+            questions: [{ question: "Answer the beta question" }],
+          })})
+      `.pipe(Effect.orDie);
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_subagents (
+          subagent_id, thread_id, parent_node_id, provider, origin, status,
+          started_at, updated_at, payload_json
+        ) VALUES ('chorus-task', ${chorus.primaryThreadId}, 'node', 'codex', 'app_owned', 'running',
+          ${at}, ${at}, ${JSON.stringify({ title: "Chorus own solo" })})
+      `.pipe(Effect.orDie);
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_subagents (
+          subagent_id, thread_id, parent_node_id, provider, origin, status,
+          started_at, updated_at, payload_json
+        ) VALUES ('archived-task', ${archived.primaryThreadId}, 'node', 'codex', 'app_owned', 'running',
+          ${at}, ${at}, ${JSON.stringify({ title: "Archived active solo" })})
+      `.pipe(Effect.orDie);
+
+      const service = yield* CaptainBriefService.CaptainBriefService;
+      const written = yield* service.generate({ captainId: chorus.id });
+      assert.equal(written.captainId, chorus.id);
+      assert.equal(written.name, "DIGEST.md");
+      assert.equal(written.revision, 2);
+      assert.deepEqual(yield* store.document(chorus, "NOTES.md"), chorusNotes);
+      assert.deepEqual(yield* store.document(alpha, "DIGEST.md"), savedAlpha);
+      assert.deepEqual(yield* store.document(beta, "DIGEST.md"), savedBeta);
+      assert.deepEqual(yield* store.document(archived, "DIGEST.md"), savedArchived);
+      assert.isTrue(written.content.includes("- **Alpha:** Alpha digest item due tomorrow"));
+
+      const prompt = generationPrompts[0]!;
+      assert.include(prompt, "Group items by Duet");
+      assert.include(prompt, "nearest deadline first");
+      assert.include(prompt, "### Duet: Alpha");
+      assert.include(prompt, "### Duet: Beta");
+      assert.include(prompt, "Alpha digest item due tomorrow");
+      assert.include(prompt, "Beta digest item");
+      assert.include(prompt, "alpha-visible-task-1");
+      assert.notInclude(prompt, "Alpha active solo");
+      assert.include(prompt, "Beta active solo");
+      assert.include(prompt, "Approve the alpha release");
+      assert.include(prompt, "Answer the beta question");
+      assert.notInclude(prompt, "Chorus own solo");
+      assert.notInclude(prompt, "Archived digest item");
+      assert.notInclude(prompt, "Archived active solo");
+      assert.notInclude(prompt, "Alpha project detail that stays out");
+
+      yield* putDocument(
+        alpha,
+        "DIGEST.md",
+        alphaDigest.replace("## Projects", `- ${"x".repeat(5_000)}\n\n## Projects`),
+        savedAlpha.revision,
+      );
+      generationPrompts.length = 0;
+      yield* service.generate({ captainId: chorus.id });
+      const cappedPrompt = generationPrompts[0]!;
+      assert.include(cappedPrompt, "Alpha digest item due tomorrow");
+      assert.include(cappedPrompt, "Approve the alpha release");
+      assert.include(cappedPrompt, "Beta digest item");
+      assert.include(cappedPrompt, "Answer the beta question");
+      assert.notInclude(cappedPrompt, "x".repeat(5_000));
+      assert.isBelow(cappedPrompt.length, 13_000);
+
+      yield* Effect.forEach(
+        Array.from({ length: 15 }, (_, index) => {
+          const number = String(index + 1).padStart(2, "0");
+          return makeCaptain(CaptainId.make(`extra-${number}`), `Extra Duet ${number}`);
+        }),
+        store.save,
+      );
+      yield* service.generate({ captainId: chorus.id });
+      const rosterCappedPrompt = generationPrompts[1]!;
+      assert.include(rosterCappedPrompt, "### Duet: Extra Duet 14");
+      assert.notInclude(rosterCappedPrompt, "### Duet: Extra Duet 15");
+      assert.include(rosterCappedPrompt, "Additional active Duets omitted.");
+      assert.include(rosterCappedPrompt, "Approve the alpha release");
+      assert.include(rosterCappedPrompt, "Answer the beta question");
     }).pipe(Effect.provide(layer));
   }),
 );
