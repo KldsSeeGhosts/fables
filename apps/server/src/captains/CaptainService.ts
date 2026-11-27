@@ -170,12 +170,21 @@ const make = Effect.gen(function* () {
           return yield* invalid("A Chorus must be coordinator-only.");
         }
       }
+      let avatar = input.avatar ?? current.avatar;
+      // Older clients omit palette. A different fallback color means they picked a new color.
+      if (
+        avatar.palette === undefined &&
+        avatar.color === current.avatar.color &&
+        current.avatar.palette !== undefined
+      ) {
+        avatar = { ...avatar, palette: current.avatar.palette };
+      }
       const captain = yield* store.save({
         ...current,
         name: input.name ?? current.name,
         role: input.role ?? current.role,
         instructions: input.instructions ?? current.instructions,
-        avatar: input.avatar ?? current.avatar,
+        avatar,
         reportPolicy: input.reportPolicy ?? current.reportPolicy,
         coordinatorOnly: input.coordinatorOnly ?? current.coordinatorOnly,
         scopedProjectIds:

@@ -3,8 +3,11 @@ import { expect, it } from "vite-plus/test";
 import {
   captainEmblemOf,
   captainPaletteOf,
+  DUET_PALETTE_ORDER,
   DUET_PALETTE_SWATCH,
   DUET_PICKER,
+  duetAvatar,
+  normalizeCaptainAvatar,
 } from "./captainPalette.ts";
 
 it("maps legacy presets and colors onto the Duet system", () => {
@@ -36,6 +39,35 @@ it("writes the canonical picker value for every Duet emblem and palette", () => 
     plum: "purple",
     coral: "red",
     slate: "gray",
+    teal: "green",
+    moss: "green",
+    indigo: "blue",
+    berry: "purple",
+  });
+  for (const palette of DUET_PALETTE_ORDER) {
+    const avatar = duetAvatar("orb", palette);
+    expect(avatar.palette).toBe(palette);
+    expect(captainPaletteOf(avatar)).toBe(palette);
+  }
+});
+
+it.each([
+  ["teal", "sage"],
+  ["moss", "sage"],
+  ["indigo", "cobalt"],
+  ["berry", "plum"],
+] as const)("draws %s as %s when an older client drops the palette", (palette, fallback) => {
+  const { preset, color } = duetAvatar("orb", palette);
+  expect(captainPaletteOf({ preset, color })).toBe(fallback);
+});
+
+it("draws the stored color for an unknown palette and preserves the id on save", () => {
+  const avatar = { preset: "compass", color: "violet", palette: "constructor" } as const;
+  expect(captainPaletteOf(avatar)).toBe("plum");
+  expect(normalizeCaptainAvatar(avatar)).toEqual({
+    preset: "circle",
+    color: "purple",
+    palette: "constructor",
   });
 });
 

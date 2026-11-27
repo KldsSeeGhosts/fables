@@ -37,12 +37,16 @@ import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { useCaptainAvatarLabels } from "./captainAvatarLabels";
-import { CaptainAvatar, normalizeCaptainAvatar, randomCaptainAvatar } from "./CaptainAvatar";
+import { CaptainAvatar, randomCaptainAvatar } from "./CaptainAvatar";
 import {
+  captainEmblemOf,
+  captainPaletteOf,
   DUET_EMBLEM_ORDER,
   DUET_PALETTE_ORDER,
   DUET_PALETTE_SWATCH,
   DUET_PICKER,
+  duetAvatar,
+  normalizeCaptainAvatar,
 } from "@t3tools/client-runtime/state/captain-palette";
 import { CaptainReportPolicyPicker } from "./CaptainReportPolicyPicker";
 import { CaptainScope } from "./CaptainScope";
@@ -82,12 +86,11 @@ export function CaptainEditorDialog({
   const name = nameDraft ?? (isChorus ? "Chorus" : "");
   const [role, setRole] = useState(captain?.role ?? "");
   const [instructions, setInstructions] = useState(captain?.instructions ?? "");
-  const [duetAvatar] = useState(() => normalizeCaptainAvatar(randomCaptainAvatar()));
+  const [initialDuetAvatar] = useState(randomCaptainAvatar);
   const [avatarDraft, setAvatar] = useState<Avatar | undefined>(() =>
     captain ? normalizeCaptainAvatar(captain.avatar) : undefined,
   );
-  const avatar: Avatar =
-    avatarDraft ?? (isChorus ? { preset: "circle", color: "orange" } : duetAvatar);
+  const avatar: Avatar = avatarDraft ?? (isChorus ? duetAvatar("orb", "ochre") : initialDuetAvatar);
   const [reportPolicy, setReportPolicy] = useState<CaptainReportPolicy>(
     captain?.reportPolicy ?? "react",
   );
@@ -106,6 +109,8 @@ export function CaptainEditorDialog({
   const projects = useProjects().filter((project) => project.environmentId === environmentId);
   const canSave = captain === undefined ? canCreate : canUpdate;
   const { emblems: emblemLabels, palettes: paletteLabels } = useCaptainAvatarLabels();
+  const avatarEmblem = captainEmblemOf(avatar);
+  const avatarPalette = captainPaletteOf(avatar);
 
   const save = async () => {
     if (!canSave || saving || !name.trim()) return;
@@ -253,7 +258,7 @@ export function CaptainEditorDialog({
               <div className="flex items-start gap-3">
                 <div className="flex size-16 shrink-0 items-center justify-center">
                   <CaptainAvatar
-                    key={`${avatar.preset}:${avatar.color}`}
+                    key={`${avatarEmblem}:${avatarPalette}`}
                     avatar={avatar}
                     size="profile"
                     animateOnMount
@@ -308,12 +313,7 @@ export function CaptainEditorDialog({
                       const emblem = DUET_EMBLEM_ORDER.find(
                         (entry) => DUET_PICKER.emblems[entry] === value[0],
                       );
-                      if (emblem) {
-                        setAvatar({
-                          ...avatar,
-                          preset: DUET_PICKER.emblems[emblem],
-                        });
-                      }
+                      if (emblem) setAvatar({ ...avatar, preset: DUET_PICKER.emblems[emblem] });
                     }}
                   >
                     {DUET_EMBLEM_ORDER.map((emblem) => (
@@ -324,7 +324,7 @@ export function CaptainEditorDialog({
                         title={emblemLabels[emblem]}
                       >
                         <CaptainAvatar
-                          avatar={{ preset: DUET_PICKER.emblems[emblem], color: avatar.color }}
+                          avatar={{ ...avatar, preset: DUET_PICKER.emblems[emblem] }}
                           size="picker"
                         />
                       </Toggle>
@@ -341,24 +341,17 @@ export function CaptainEditorDialog({
                     size="compact"
                     detached
                     className="flex w-full flex-wrap"
-                    value={[avatar.color]}
+                    value={[avatarPalette]}
                     disabled={saving}
                     onValueChange={(value) => {
-                      const palette = DUET_PALETTE_ORDER.find(
-                        (entry) => DUET_PICKER.palettes[entry] === value[0],
-                      );
-                      if (palette) {
-                        setAvatar({
-                          ...avatar,
-                          color: DUET_PICKER.palettes[palette],
-                        });
-                      }
+                      const palette = DUET_PALETTE_ORDER.find((entry) => entry === value[0]);
+                      if (palette) setAvatar(duetAvatar(avatarEmblem, palette));
                     }}
                   >
                     {DUET_PALETTE_ORDER.map((palette) => (
                       <Toggle
                         key={palette}
-                        value={DUET_PICKER.palettes[palette]}
+                        value={palette}
                         aria-label={paletteLabels[palette]}
                         title={paletteLabels[palette]}
                       >

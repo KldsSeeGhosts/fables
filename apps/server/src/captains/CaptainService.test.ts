@@ -212,6 +212,37 @@ it.effect("round-trips coordinatorOnly and decodes rows that omit it as false", 
   }),
 );
 
+it.effect("preserves a palette on legacy saves until the color changes or a palette is explicit", () =>
+  Effect.gen(function* () {
+    const { layer } = fixture();
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainService.CaptainService;
+      const captain = yield* service.create({
+        ...input,
+        avatar: { preset: "circle", color: "green", palette: "teal" },
+      });
+      const legacySave = yield* service.update({
+        captainId: captain.id,
+        name: "Renamed",
+        avatar: { preset: "flower", color: "green" },
+      });
+      assert.deepStrictEqual(legacySave.avatar, { preset: "flower", color: "green", palette: "teal" });
+
+      const explicit = yield* service.update({
+        captainId: captain.id,
+        avatar: { preset: "flower", color: "green", palette: "sage" },
+      });
+      assert.deepStrictEqual(explicit.avatar, { preset: "flower", color: "green", palette: "sage" });
+
+      const legacyRecolor = yield* service.update({
+        captainId: captain.id,
+        avatar: { preset: "flower", color: "blue" },
+      });
+      assert.deepStrictEqual(legacyRecolor.avatar, { preset: "flower", color: "blue" });
+    }).pipe(Effect.provide(layer));
+  }),
+);
+
 it.effect("forces Chorus fields for automatic creation and rejects client creation", () =>
   Effect.gen(function* () {
     const { layer, launches } = fixture();

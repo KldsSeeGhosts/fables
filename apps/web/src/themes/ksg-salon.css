@@ -275,6 +275,34 @@ html:root[data-theme-id="ksg-salon"] {
     --duet-bubble: #d8dde4;
   }
 
+  [data-duet-palette="teal"] {
+    --duet-ink-base: #1a7f86;
+    --duet-ink: #1a7f86;
+    --duet-tint: #dcefef;
+    --duet-bubble: #b4dcdf;
+  }
+
+  [data-duet-palette="moss"] {
+    --duet-ink-base: #6e7d22;
+    --duet-ink: #6e7d22;
+    --duet-tint: #eef0d8;
+    --duet-bubble: #dde2b3;
+  }
+
+  [data-duet-palette="indigo"] {
+    --duet-ink-base: #5b5bd6;
+    --duet-ink: #5b5bd6;
+    --duet-tint: #e7e7fb;
+    --duet-bubble: #cbcbf5;
+  }
+
+  [data-duet-palette="berry"] {
+    --duet-ink-base: #a8479e;
+    --duet-ink: #a8479e;
+    --duet-tint: #f8e3f5;
+    --duet-bubble: #ecc4e6;
+  }
+
   @variant dark {
     [data-duet-palette] {
       --duet-ink: color-mix(in srgb, var(--duet-ink-base) 70%, white);

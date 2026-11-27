@@ -10,7 +10,7 @@ import {
   DUET_EMBLEM_ORDER,
   DUET_PALETTE_ORDER,
   DUET_PALETTE_SWATCH,
-  DUET_PICKER,
+  duetAvatar,
   type DuetEmblem,
   type DuetPalette,
 } from "@t3tools/client-runtime/state/captain-palette";
@@ -18,19 +18,9 @@ import "./CaptainAvatar.css";
 
 export type CaptainAvatarState = "archived" | "idle" | "waiting" | "working";
 
-const canonicalShapes = DUET_EMBLEM_ORDER.map((emblem) => DUET_PICKER.emblems[emblem]);
-const canonicalColors = DUET_PALETTE_ORDER.map((palette) => DUET_PICKER.palettes[palette]);
-
-export function normalizeCaptainAvatar(avatar: Avatar): Avatar {
-  return {
-    preset: DUET_PICKER.emblems[captainEmblemOf(avatar)],
-    color: DUET_PICKER.palettes[captainPaletteOf(avatar)],
-  };
-}
-
 export function randomCaptainAvatar(): Avatar {
   const pick = <T,>(values: ReadonlyArray<T>) => values[Math.floor(Math.random() * values.length)]!;
-  return normalizeCaptainAvatar({ preset: pick(canonicalShapes), color: pick(canonicalColors) });
+  return duetAvatar(pick(DUET_EMBLEM_ORDER), pick(DUET_PALETTE_ORDER));
 }
 
 const percent = (value: number) => `${value}%`;
