@@ -9,3 +9,5 @@
 - Implemented local Chorus coverage: active Duets with an empty scope cover every local project, scoped Duets cover only listed projects, archived Duets and the Chorus itself do not count, and a covered delegation fails with a `duet_send` routing message.
 - Added the Chorus 30-day soft rule, repeat-project briefing hint, and default-only Solo rules for Chorus children. Kept the coverage reader injectable so step 5 can evaluate peer state.
 - `vp run typecheck` in `apps/server` passes after the implementation edit.
+- Added focused coverage tests for no Duets, empty-scope and scoped Duets, archived Duets, the Chorus itself, normal Duet behavior, the denial copy, cross-project local dispatch, repeat-project hints, and Chorus-only Solo rules.
+- Focused result: `vp test run apps/server/src/captains/captainDelegation.test.ts apps/server/src/captains/captainTurnContext.test.ts apps/server/src/captains/CaptainService.test.ts apps/server/src/mcp/OrchestratorMcpService.test.ts` passed 140 tests.

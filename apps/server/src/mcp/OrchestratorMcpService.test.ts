@@ -71,6 +71,7 @@ import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as TaskFolders from "../workspace/TaskFolders.ts";
 import { layerNoTaskFolders } from "../orchestration-v2/ProviderTurnStartService.testkit.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
+import * as CaptainStore from "../captains/CaptainStore.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import { buildUnavailableProviderSnapshot } from "../provider/unavailableProviderSnapshot.ts";
 import * as ProjectService from "../project/ProjectService.ts";
@@ -1684,6 +1685,112 @@ describe("OrchestratorMcpService provider resolution", () => {
     runtimeRequests: [],
     turnItems: [],
   } as unknown as OrchestrationV2ThreadProjection;
+
+  it.effect("lets Chorus choose only an uncovered local project", () =>
+    Effect.gen(function* () {
+      const chorusThreadId = ThreadId.make("captain:90d4dc16-f68d-4850-939c-a987a9256eee:0");
+      const scratchProjectId = ProjectId.make("project:chorus-scratch");
+      const uncoveredProjectId = ProjectId.make("project:uncovered");
+      const chorus = {
+        id: "90d4dc16-f68d-4850-939c-a987a9256eee",
+        kind: "chorus",
+        name: "Chorus",
+        scopedProjectIds: [],
+        archivedAt: null,
+      };
+      const covering = {
+        id: "maria",
+        kind: "duet",
+        name: "Maria",
+        scopedProjectIds: [uncoveredProjectId],
+        archivedAt: null,
+      };
+      let covered = false;
+      const commands: Array<unknown> = [];
+      const task = {
+        id: taskId,
+        threadId: chorusThreadId,
+        origin: "app_owned",
+        childThreadId,
+        providerInstanceId: codexInstanceId,
+        model: "gpt-5.4",
+        status: "running",
+        result: null,
+      };
+      const chorusScope: McpInvocationScope = {
+        ...scope,
+        thread: { ...scope.thread!, threadId: chorusThreadId },
+      };
+      const parent = () => {
+        const base = parentProjection(commands.length > 0 ? [task] : []);
+        return {
+          ...base,
+          thread: { ...base.thread, id: chorusThreadId, projectId: scratchProjectId },
+        } as OrchestrationV2ThreadProjection;
+      };
+      const dependencies = Layer.mergeAll(
+        NodeServices.layer,
+        NodeCrypto.layer,
+        Layer.mock(CaptainStore.CaptainStore)({
+          findPrimary: (threadId) =>
+            Effect.succeed(threadId === chorusThreadId ? (chorus as never) : undefined),
+          activeDuets: () => Effect.succeed(covered ? [covering as never] : []),
+        }),
+        Layer.mock(ThreadManagementService.ThreadManagementService)({
+          hasReceipt: () => Effect.succeed(false),
+          getThreadRecords: (threadId) =>
+            Effect.succeed(threadId === chorusThreadId ? parent() : childProjection),
+          dispatch: (command) =>
+            Effect.sync(() => {
+              commands.push(command);
+              return {
+                sequence: 1,
+                storedEvents: [{ event: { type: "subagent.updated", payload: task } }],
+              } as never;
+            }),
+        }),
+        ServerSettings.layerTest(),
+        providerRegistryLayer([
+          providerSnapshot({
+            instanceId: codexInstanceId,
+            driver: ProviderDriverKind.make("codex"),
+            model: "gpt-5.4",
+          }),
+        ]),
+        adapterRegistryLayer([codexInstanceId]),
+        Layer.mock(ProjectService.ProjectService)({
+          getById: (id) =>
+            Effect.succeedSome({ id, title: String(id), workspaceRoot: "/work/project" } as never),
+        }),
+        Layer.mock(SecretRequests.SecretRequests)({}),
+        Layer.mock(RemoteDelegation.RemoteDelegation)({}),
+        Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
+      );
+
+      yield* Effect.gen(function* () {
+        const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+        yield* service.delegateTask(chorusScope, {
+          task: "Fix the uncovered project.",
+          target: { projectId: uncoveredProjectId },
+          mode: "async",
+          clientRequestId: "chorus-uncovered-project",
+        });
+        assert.equal((commands[0] as { projectId?: unknown }).projectId, uncoveredProjectId);
+        covered = true;
+        const error = yield* service
+          .delegateTask(chorusScope, {
+            task: "Fix the covered project.",
+            target: { projectId: uncoveredProjectId },
+            mode: "async",
+            clientRequestId: "chorus-covered-project",
+          })
+          .pipe(Effect.flip);
+        assert.equal(error.code, "invalid_request");
+        assert.include(error.message, "Route this with duet_send to Maria.");
+        assert.lengthOf(commands, 1);
+      }).pipe(Effect.provide(layerOrchestratorService.pipe(Layer.provide(dependencies))));
+    }),
+  );
 
   it.effect.each([
     "parent completion",

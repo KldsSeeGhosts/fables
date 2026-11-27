@@ -15,9 +15,7 @@ export type CaptainDelegationCoveringDuet = Pick<
   "id" | "kind" | "name" | "scopedProjectIds" | "archivedAt"
 >;
 
-export type CaptainDelegationCoverage = (
-  projectId: ProjectId,
-) => Effect.Effect<ReadonlyArray<CaptainDelegationCoveringDuet>, OrchestratorMcpFailure>;
+export type CaptainDelegationCoverage = ReadonlyArray<CaptainDelegationCoveringDuet>;
 
 const coversProject = (duet: Pick<Captain, "scopedProjectIds">, projectId: ProjectId) =>
   duet.scopedProjectIds.length === 0 || duet.scopedProjectIds.includes(projectId);
@@ -35,21 +33,21 @@ const activeCoveringDuets = (
       coversProject(duet, projectId),
   );
 
-const localCaptainDelegationCoverage: CaptainDelegationCoverage = Effect.fn(
-  "CaptainService.localDelegationCoverage",
-)(function* (projectId) {
-  const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
-  if (Option.isNone(store)) return [];
-  const duets = yield* store.value
-    .activeDuets()
-    .pipe(
-      Effect.mapError(
-        (error) =>
-          new OrchestratorMcpFailure({ code: "orchestration_error", message: error.message }),
-      ),
-    );
-  return duets.filter((duet) => coversProject(duet, projectId));
-});
+const localCaptainDelegationCoverage = Effect.fn("CaptainService.localDelegationCoverage")(
+  function* (projectId: ProjectId) {
+    const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
+    if (Option.isNone(store)) return [];
+    const duets = yield* store.value
+      .activeDuets()
+      .pipe(
+        Effect.mapError(
+          (error) =>
+            new OrchestratorMcpFailure({ code: "orchestration_error", message: error.message }),
+        ),
+      );
+    return duets.filter((duet) => coversProject(duet, projectId));
+  },
+);
 
 const nameList = (names: ReadonlyArray<string>) =>
   names.length <= 2
@@ -76,8 +74,8 @@ export const captainDelegationProject = Effect.fn("CaptainService.delegationProj
       });
     }
     if (captain?.kind === "chorus") {
-      const coverage = input.coveringDuets ?? localCaptainDelegationCoverage;
-      const covering = activeCoveringDuets(yield* coverage(projectId), projectId, captain.id);
+      const duets = input.coveringDuets ?? (yield* localCaptainDelegationCoverage(projectId));
+      const covering = activeCoveringDuets(duets, projectId, captain.id);
       if (covering.length > 0) {
         return yield* new OrchestratorMcpFailure({
           code: "invalid_request",

@@ -3047,6 +3047,12 @@ const make = Effect.gen(function* () {
       if (captain?.archivedAt != null) {
         return yield* failure("invalid_request", "Restore this Duet before delegating work.");
       }
+      const localCoveringDuets =
+        captain?.kind === "chorus" && Option.isSome(captainStore)
+          ? yield* captainStore.value
+              .activeDuets()
+              .pipe(Effect.mapError((error) => failure("orchestration_error", error.message)))
+          : undefined;
       if (input.target !== undefined && environmentId !== undefined) {
         if (captain?.scopedProjectIds.length) {
           return yield* failure(
@@ -3082,6 +3088,7 @@ const make = Effect.gen(function* () {
         captain,
         currentProjectId: parent.thread.projectId,
         requestedProjectId: input.target?.projectId,
+        ...(localCoveringDuets === undefined ? {} : { coveringDuets: localCoveringDuets }),
       });
       const differentProject = delegatedProjectId !== parent.thread.projectId;
       const targetProject = differentProject

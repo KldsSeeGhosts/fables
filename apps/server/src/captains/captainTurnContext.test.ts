@@ -1,4 +1,4 @@
-import { CaptainId, ThreadId, type Captain } from "@t3tools/contracts";
+import { CaptainId, ProjectId, ThreadId, type Captain } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { CAPTAIN_HANDOFF_MAX_LENGTH } from "./captainHandoff.ts";
@@ -95,6 +95,30 @@ describe("formatCaptainBriefing", () => {
     expect(rule("context")).not.toContain("let completion wake you");
     expect(rule("ignore")).toContain("You are not told when a Solo finishes");
     expect(rule("ignore")).not.toContain("let completion wake you");
+  });
+
+  it("gives Chorus the repeat-project rule and formats recent Solo hints", () => {
+    const text = formatCaptainBriefing({
+      captain: { ...captain, kind: "chorus", reportPolicy: "react" },
+      projects: [],
+      memories: [],
+      agents: "",
+      notes: "",
+      repeatSoloProjects: [
+        {
+          id: ProjectId.make("project"),
+          title: "Workspace",
+          count: 2,
+          latestCompletedAt: "2026-11-24T12:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(text).toContain("finished a Solo in the last 30 days");
+    expect(text).toContain("Start the Solo only if the user says to go ahead anyway");
+    expect(text).toContain("Repeat Solo projects:");
+    expect(text).toContain("Workspace [project]: 2 finished Solos");
+    expect(text).toContain("creating a dedicated Duet before starting another Solo");
   });
 });
 
