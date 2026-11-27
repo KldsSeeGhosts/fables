@@ -950,11 +950,16 @@ it.effect(
         assert.notInclude(scheduled.text, "Routed since your last turn");
         yield* scheduled.delivered;
 
+        assert.notInclude(
+          (yield* readContext(senderThread, delivery, userTurn)).text,
+          "Routed since your last turn",
+        );
+        yield* store.settleChorusRouteRun(sent.threadId, sent.runId);
         const nextTurn = yield* readContext(senderThread, delivery, userTurn);
         assert.include(nextTurn.text, "Routed since your last turn");
         assert.include(nextTurn.text, "The checkout test now passes.");
         assert.notInclude(nextTurn.text, "Implementation details.");
-        assert.equal((yield* store.listChorusRoutes(source.id))[0]?.result, answer);
+        assert.equal((yield* store.listChorusRoutes(source.id))[0]?.result, null);
         assert.include(
           (yield* readContext(senderThread, delivery, userTurn)).text,
           "The checkout test now passes.",
@@ -1008,6 +1013,19 @@ it.effect(
         const [moved] = yield* store.listChorusRoutes(source.id);
         assert.equal(moved?.threadId, rolled.primaryThreadId);
         assert.equal(moved?.messageId, `captain-rollover:${queued.runId}`);
+        assert.notInclude(
+          (yield* readContext(senderThread, delivery, userTurn)).text,
+          "Routed since your last turn",
+        );
+        const replayed = yield* service.sendToDuet(scope, {
+          ...request,
+          mode: "queue",
+          clientRequestId: "pending-route",
+        });
+        assert.equal(replayed.messageId, queued.messageId);
+        assert.equal(replayed.runId, queued.runId);
+        assert.equal(replayed.threadId, queued.threadId);
+        assert.deepEqual(yield* store.listChorusRoutes(source.id), [moved]);
       }).pipe(Effect.provide(mcp));
     }),
 );

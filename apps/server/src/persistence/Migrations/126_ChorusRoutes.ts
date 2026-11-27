@@ -14,11 +14,13 @@ export default Effect.gen(function* () {
       thread_id TEXT NOT NULL,
       sent_at TEXT NOT NULL,
       last_seen_status TEXT NOT NULL,
-      result TEXT
+      result TEXT,
+      settled_run_id TEXT
     )
   `;
   yield* sql`
     CREATE INDEX chorus_routes_source_idx
     ON chorus_routes(source_captain_id, sent_at, message_id)
   `;
+  yield* sql`CREATE INDEX chorus_routes_thread_idx ON chorus_routes(thread_id)`;
 });

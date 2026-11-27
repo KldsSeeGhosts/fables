@@ -27,6 +27,7 @@ it.effect("adds the Chorus route ledger", () =>
         "sent_at",
         "last_seen_status",
         "result",
+        "settled_run_id",
       ],
     );
     const indexes = yield* sql<{ readonly name: string }>`
@@ -36,7 +37,7 @@ it.effect("adds the Chorus route ledger", () =>
     `;
     assert.deepStrictEqual(
       indexes.map(({ name }) => name),
-      ["chorus_routes_source_idx"],
+      ["chorus_routes_source_idx", "chorus_routes_thread_idx"],
     );
     assert.deepStrictEqual(yield* runMigrations({ toMigrationInclusive: 126 }), []);
   }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),

@@ -8,6 +8,7 @@ import {
   type EnvironmentId,
   type OrchestrationV2RunStatus,
   CommandId,
+  isCaptainThreadId,
   MessageId,
   ModelSelection,
   OrchestrationMessageContext,
@@ -20,7 +21,7 @@ import {
   type ProviderThreadId,
   type RunId,
   type CaptainDeleteMemoryInput,
-  type CaptainId,
+  CaptainId,
   type CaptainSnapshot,
   type CaptainSubscribeInput,
   type CaptainUpdateDocumentInput,
@@ -188,11 +189,14 @@ const make = Effect.gen(function* () {
   const findByConversation = Effect.fn("CaptainStore.findByConversation")(function* (
     threadId: ThreadId,
   ) {
-    const [row] = yield* sql`
-      ${profiles} WHERE primary_thread_id = ${threadId}
-        OR EXISTS (SELECT 1 FROM json_each(earlier_thread_ids) AS earlier WHERE earlier.value = ${threadId})
-    `;
-    return row === undefined ? undefined : yield* decodeCaptain(row);
+    if (!isCaptainThreadId(threadId)) return undefined;
+    const encodedId = threadId.slice("captain:".length, threadId.lastIndexOf(":"));
+    if (encodedId === "") return undefined;
+    const captain = yield* find(CaptainId.make(encodedId));
+    return captain !== undefined &&
+      (captain.primaryThreadId === threadId || captain.earlierThreadIds.includes(threadId))
+      ? captain
+      : undefined;
   }, Effect.catch(captainUnavailable));
 
   const byThread = Effect.fn("CaptainStore.byThread")(function* (threadId: ThreadId) {
@@ -261,11 +265,91 @@ const make = Effect.gen(function* () {
       `;
   }, Effect.catch(captainUnavailable));
 
-  const recordChorusRouteResult = Effect.fn("CaptainStore.recordChorusRouteResult")(function* (
-    messageId: MessageId,
-    result: string,
+  const terminalChorusRouteRun = sql`run.status IN ${sql.in([
+    "completed",
+    "failed",
+    "cancelled",
+    "interrupted",
+    "rolled_back",
+  ] satisfies ReadonlyArray<OrchestrationV2RunStatus>)}`;
+  const listChorusRouteUpdates = Effect.fn("CaptainStore.listChorusRouteUpdates")(function* (
+    sourceCaptainId: CaptainId,
+    limit: number,
   ) {
-    yield* sql`UPDATE chorus_routes SET result = ${result} WHERE message_id = ${messageId}`;
+    return yield* sql<{
+      readonly messageId: MessageId;
+      readonly threadId: ThreadId;
+      readonly duetName: string | null;
+      readonly runId: RunId;
+      readonly status: ChorusRoute["lastSeenStatus"];
+      readonly result: string | null;
+      readonly terminal: 0 | 1;
+    }>`
+      SELECT route.message_id AS messageId, route.thread_id AS threadId, duet.name AS duetName,
+        COALESCE(run.run_id, route.run_id) AS runId, COALESCE(run.status, 'unknown') AS status,
+        CASE WHEN ${terminalChorusRouteRun}
+          THEN COALESCE((
+            SELECT substr(json_extract(answer.payload_json, '$.text'), 1, 1000)
+            FROM orchestration_v2_projection_messages AS answer
+            WHERE answer.run_id = run.run_id AND answer.role = 'assistant' AND answer.streaming = 0
+            ORDER BY answer.created_at DESC, answer.message_id DESC LIMIT 1
+          ), route.result)
+        END AS result,
+        COALESCE(${terminalChorusRouteRun}, 0)
+          AS terminal
+      FROM chorus_routes AS route
+      LEFT JOIN orchestration_v2_projection_messages AS prompt ON prompt.message_id = route.message_id
+      LEFT JOIN orchestration_v2_projection_runs AS run
+        ON run.run_id = prompt.run_id AND run.thread_id = route.thread_id
+      LEFT JOIN captains AS duet ON duet.id = route.duet_id
+      WHERE route.source_captain_id = ${sourceCaptainId}
+        AND CASE WHEN ${terminalChorusRouteRun}
+          THEN route.settled_run_id = run.run_id
+          ELSE COALESCE(run.status, 'unknown') <> route.last_seen_status
+        END
+      ORDER BY route.sent_at, route.message_id
+      LIMIT ${limit}
+    `;
+  }, Effect.catch(captainUnavailable));
+
+  const settleChorusRouteRun = Effect.fn("CaptainStore.settleChorusRouteRun")(function* (
+    threadId: ThreadId,
+    runId: RunId,
+  ) {
+    yield* sql`
+      UPDATE chorus_routes SET settled_run_id = ${runId}, run_id = ${runId}
+      WHERE thread_id = ${threadId} AND settled_run_id IS NOT ${runId}
+        AND EXISTS (
+          SELECT 1 FROM orchestration_v2_projection_messages AS prompt
+          WHERE prompt.message_id = chorus_routes.message_id AND prompt.run_id = ${runId}
+        )
+    `;
+  }, Effect.catch(captainUnavailable));
+
+  const restoreChorusRouteSettlements = Effect.fn("CaptainStore.restoreChorusRouteSettlements")(
+    function* () {
+      yield* sql`
+        UPDATE chorus_routes AS route
+        SET settled_run_id = run.run_id, run_id = run.run_id
+        FROM orchestration_v2_projection_messages AS prompt
+        JOIN orchestration_v2_projection_runs AS run ON run.run_id = prompt.run_id
+        WHERE prompt.message_id = route.message_id AND run.thread_id = route.thread_id
+          AND route.settled_run_id IS NOT run.run_id
+          AND ${terminalChorusRouteRun}
+      `;
+    },
+    Effect.catch(captainUnavailable),
+  );
+
+  const acceptedChorusRouteThread = Effect.fn("CaptainStore.acceptedChorusRouteThread")(function* (
+    commandId: CommandId,
+  ) {
+    const [row] = yield* sql<{ readonly threadId: ThreadId }>`
+        SELECT aggregate_id AS threadId
+        FROM orchestration_command_receipts
+        WHERE command_id = ${commandId} AND aggregate_kind = 'thread' AND status = 'accepted'
+      `;
+    return row?.threadId;
   }, Effect.catch(captainUnavailable));
 
   const markChorusRoutesDelivered = Effect.fn("CaptainStore.markChorusRoutesDelivered")(
@@ -358,7 +442,8 @@ const make = Effect.gen(function* () {
       `;
     yield* sql`
         UPDATE chorus_routes
-        SET message_id = ${send.messageId}, thread_id = ${send.threadId}, result = NULL
+        SET message_id = ${send.messageId}, thread_id = ${send.threadId},
+            last_seen_status = 'unknown', result = NULL, settled_run_id = NULL
         WHERE message_id = ${sourceMessageId}
       `;
   }, Effect.catch(captainUnavailable));
@@ -582,7 +667,10 @@ const make = Effect.gen(function* () {
     privateChorusConversationIds,
     activeDuetRoster,
     listChorusRoutes,
-    recordChorusRouteResult,
+    listChorusRouteUpdates,
+    settleChorusRouteRun,
+    restoreChorusRouteSettlements,
+    acceptedChorusRouteThread,
     markChorusRoutesDelivered,
     save,
     latestCompletedCompactionAt,

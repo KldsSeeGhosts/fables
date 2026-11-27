@@ -2583,12 +2583,14 @@ const make = Effect.gen(function* () {
     input: OrchestratorMcpThreadSendInput,
     parent: Pick<OrchestrationV2ThreadProjection, "thread" | "runs"> | undefined,
     target: Pick<OrchestrationV2ThreadProjection, "thread">,
-    route?: Omit<CaptainStore.ChorusRouteDispatch["Service"], "commandId" | "messageId">,
+    route?: Omit<CaptainStore.ChorusRouteDispatch["Service"], "messageId"> & {
+      readonly requestKey: string;
+    },
   ) {
     const mode = input.mode ?? "auto";
-    const key = yield* requestKey(input.clientRequestId);
+    const key = route?.requestKey ?? (yield* requestKey(input.clientRequestId));
     const operation = route === undefined ? "thread-send" : "duet-send";
-    const commandId = stableCommandId({ scope, requestKey: key, operation });
+    const commandId = route?.commandId ?? stableCommandId({ scope, requestKey: key, operation });
     const messageId = stableOperationMessageId({
       scope,
       requestKey: key,
@@ -4035,23 +4037,51 @@ const make = Effect.gen(function* () {
           "duet_send routes to another Duet, not the Chorus.",
         );
       }
-      // Resolve the destination here, never from an id the Chorus read earlier: rollover can replace it.
-      const targetThreadId = duet.primaryThreadId;
-      const sendInput: OrchestratorMcpThreadSendInput = {
-        threadId: targetThreadId,
-        message: input.message,
-        ...(input.mode === undefined ? {} : { mode: input.mode }),
-        ...(input.clientRequestId === undefined ? {} : { clientRequestId: input.clientRequestId }),
-      };
-      const { parent, limits, target } = yield* loadScopedThread(scope, targetThreadId, ["runs"]);
-      yield* assertLiveCallerForOtherThread(scope, parent, target);
-      yield* assertTargetWithinLimits(limits, target.thread);
-      const sent = yield* sendToThreadCore(scope, sendInput, parent, target, {
-        environmentId: scope.environmentId,
-        sourceCaptainId: chorus.id,
-        sourceThreadId: threadScope.thread.threadId,
-        duetId: duet.id,
-      }).pipe(Effect.provideService(DispatchModeLimit, limits));
+      const key = yield* requestKey(input.clientRequestId);
+      const commandId = stableCommandId({ scope, requestKey: key, operation: "duet-send" });
+      const acceptedThread = store
+        .acceptedChorusRouteThread(commandId)
+        .pipe(Effect.mapError((error) => failure("orchestration_error", error.message)));
+      const send = Effect.fnUntraced(function* (threadId: ThreadId) {
+        const { parent, limits, target } = yield* loadScopedThread(scope, threadId, ["runs"]);
+        yield* assertLiveCallerForOtherThread(scope, parent, target);
+        yield* assertTargetWithinLimits(limits, target.thread);
+        return yield* sendToThreadCore(scope, { ...input, threadId }, parent, target, {
+          requestKey: key,
+          commandId,
+          environmentId: scope.environmentId,
+          sourceCaptainId: chorus.id,
+          sourceThreadId: threadScope.thread.threadId,
+          duetId: duet.id,
+        }).pipe(Effect.provideService(DispatchModeLimit, limits));
+      });
+      const replay = Effect.fnUntraced(function* (threadId: ThreadId) {
+        const original = yield* store
+          .findByConversation(threadId)
+          .pipe(Effect.mapError((error) => failure("orchestration_error", error.message)));
+        if (original?.id !== duet.id) {
+          return yield* failure(
+            "invalid_request",
+            "This request ID was used to route to a different Duet.",
+          );
+        }
+        return yield* send(threadId);
+      });
+      const originalThreadId = yield* acceptedThread;
+      const sent =
+        originalThreadId !== undefined
+          ? yield* replay(originalThreadId)
+          : yield* send(duet.primaryThreadId).pipe(
+              Effect.catch((error) =>
+                acceptedThread.pipe(
+                  Effect.flatMap((threadId) =>
+                    threadId !== undefined && threadId !== duet.primaryThreadId
+                      ? replay(threadId)
+                      : Effect.fail(error),
+                  ),
+                ),
+              ),
+            );
       return { ...sent, duetId: duet.id, environmentId: scope.environmentId };
     }),
     waitForThread: Effect.fn("OrchestratorMcpService.waitForThread")(function* (scope, input) {

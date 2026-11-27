@@ -4,14 +4,11 @@ import {
   type CaptainMemory,
   type OrchestrationV2AppThreadLineage,
   type OrchestrationV2ConversationMessage,
-  type OrchestrationV2RunStatus,
-  type RunId,
   type ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as SqlClient from "effect/sql/SqlClient";
-import { isTerminalRunStatus } from "../orchestration-v2/ThreadManagementService.ts";
 
 import * as PeerLinks from "../peer/PeerLinks.ts";
 import * as ProjectService from "../project/ProjectService.ts";
@@ -191,14 +188,9 @@ export const formatCaptainReports = (
 
 const CHORUS_ROUTE_UPDATE_LIMIT = 6;
 
-interface ChorusRouteUpdate {
-  readonly route: CaptainStore.ChorusRoute;
-  readonly duetName: string;
-  readonly runId: RunId;
-  readonly status: CaptainStore.ChorusRoute["lastSeenStatus"];
-  readonly result: string | null;
-  readonly terminal: boolean;
-}
+type ChorusRouteUpdate = Effect.Success<
+  ReturnType<CaptainStore.CaptainStore["Service"]["listChorusRouteUpdates"]>
+>[number];
 
 const formatChorusRouteUpdates = (updates: ReadonlyArray<ChorusRouteUpdate>) =>
   updates.length === 0
@@ -210,7 +202,7 @@ ${updates
       update.result === null || update.result.trim() === ""
         ? ""
         : ` ${firstParagraph(update.result)}`;
-    return `- ${prefix(update.duetName, 80)} [${update.runId}]: ${update.status}.${summary} Read the Duet thread with t3_thread_read(threadId: "${update.route.threadId}").`;
+    return `- ${prefix(update.duetName ?? "Unavailable Duet", 80)} [${update.runId}]: ${update.status}.${summary} Read the Duet thread with t3_thread_read(threadId: "${update.threadId}").`;
   })
   .join("\n")}`;
 
@@ -277,9 +269,30 @@ export const mayCarryCaptainContext = ({ id, lineage }: CaptainContextThread) =>
     lineage.parentThreadId !== null &&
     isCaptainThreadId(lineage.parentThreadId));
 
+export const makeReadRoutedByChorusLine = Effect.gen(function* () {
+  const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
+  return Effect.fn("CaptainService.routedByChorusLine")(
+    function* (threadId: ThreadId, senderThreadId: ThreadId | undefined) {
+      if (
+        !isCaptainThreadId(threadId) ||
+        senderThreadId === undefined ||
+        !isCaptainThreadId(senderThreadId) ||
+        Option.isNone(store)
+      )
+        return "";
+      const sender = yield* store.value.findByConversation(senderThreadId);
+      return sender?.kind === "chorus"
+        ? `This turn was routed by Chorus ${sender.name}. It carries the user's ask. Answer the user and ask any questions in this Duet thread.`
+        : "";
+    },
+    Effect.orElseSucceed(() => ""),
+  );
+});
+
 export const makeReadCaptainTurnContext = Effect.gen(function* () {
   const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
   const sql = yield* Effect.serviceOption(SqlClient.SqlClient);
+  const routedByChorusLine = yield* makeReadRoutedByChorusLine;
   const projects = yield* ProjectService.ProjectService;
   const peerLinks = yield* Effect.serviceOption(PeerLinks.PeerLinks);
   const briefings = makeCaptainBriefingLedger();
@@ -302,45 +315,9 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
 
   const readChorusRouteUpdates = Effect.fn("CaptainService.chorusRouteUpdates")(
     function* (captain: Captain) {
-      if (Option.isNone(store) || Option.isNone(sql)) return [];
-      const routes = yield* store.value.listChorusRoutes(captain.id);
-      const updates: Array<ChorusRouteUpdate> = [];
-      for (const route of routes) {
-        const [row] = yield* sql.value<{
-          readonly runId: RunId;
-          readonly status: OrchestrationV2RunStatus;
-          readonly resultText: string | null;
-        }>`
-          SELECT r.run_id AS runId, r.status,
-            (
-              SELECT substr(json_extract(answer.payload_json, '$.text'), 1, 1000)
-              FROM orchestration_v2_projection_messages AS answer
-              WHERE answer.run_id = r.run_id AND answer.role = 'assistant' AND answer.streaming = 0
-              ORDER BY answer.created_at DESC, answer.message_id DESC LIMIT 1
-            ) AS resultText
-          FROM orchestration_v2_projection_messages AS prompt
-          JOIN orchestration_v2_projection_runs AS r ON r.run_id = prompt.run_id
-          WHERE prompt.message_id = ${route.messageId} AND r.thread_id = ${route.threadId}
-        `;
-        const status = row?.status ?? "unknown";
-        const terminal = status !== "unknown" && isTerminalRunStatus(status);
-        if (!terminal && status === route.lastSeenStatus) continue;
-        const result = terminal ? (row?.resultText ?? route.result) : null;
-        if (result !== null && result !== route.result) {
-          yield* store.value.recordChorusRouteResult(route.messageId, result);
-        }
-        const duet = yield* store.value.find(route.duetId);
-        updates.push({
-          route,
-          duetName: duet?.name ?? "Unavailable Duet",
-          runId: row?.runId ?? route.runId,
-          status,
-          result,
-          terminal,
-        });
-        if (updates.length === CHORUS_ROUTE_UPDATE_LIMIT) break;
-      }
-      return updates;
+      return Option.isNone(store)
+        ? []
+        : yield* store.value.listChorusRouteUpdates(captain.id, CHORUS_ROUTE_UPDATE_LIMIT);
     },
     Effect.catch((cause) =>
       Effect.logWarning("Could not read Chorus route updates.", { cause }).pipe(Effect.as([])),
@@ -351,32 +328,16 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
     function* (updates: ReadonlyArray<ChorusRouteUpdate>) {
       if (Option.isNone(store) || updates.length === 0) return;
       yield* store.value.markChorusRoutesDelivered(
-        updates.map(({ route, status, terminal }) => ({
-          messageId: route.messageId,
+        updates.map(({ messageId, status, terminal }) => ({
+          messageId,
           status,
-          terminal,
+          terminal: terminal === 1,
         })),
       );
     },
     Effect.catch((cause) =>
       Effect.logWarning("Could not record Chorus route delivery.", { cause }),
     ),
-  );
-
-  const routedByChorusLine = Effect.fn("CaptainService.routedByChorusLine")(
-    function* (senderThreadId: ThreadId | undefined) {
-      if (
-        senderThreadId === undefined ||
-        !isCaptainThreadId(senderThreadId) ||
-        Option.isNone(store)
-      )
-        return "";
-      const sender = yield* store.value.findByConversation(senderThreadId);
-      return sender?.kind === "chorus"
-        ? `This turn was routed by Chorus ${sender.name}. It carries the user's ask. Answer the user and ask any questions in this Duet thread.`
-        : "";
-    },
-    Effect.orElseSucceed(() => ""),
   );
 
   // A delegated child gets the Captain's crew rules only, never its private profile or memories.
@@ -494,7 +455,7 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
           ? yield* readChorusRouteUpdates(captain)
           : [];
       const routedByChorus =
-        captain.kind === "duet" ? yield* routedByChorusLine(message?.senderThreadId) : "";
+        captain.kind === "duet" ? yield* routedByChorusLine(threadId, message?.senderThreadId) : "";
       const briefing = formatCaptainBriefing({
         captain,
         projects: scopedProjects,

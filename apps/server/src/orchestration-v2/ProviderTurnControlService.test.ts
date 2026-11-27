@@ -1,5 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import {
+  CaptainId,
   MessageId,
   type ModelSelection,
   NodeId,
@@ -25,6 +26,7 @@ import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
+import * as CaptainStore from "../captains/CaptainStore.ts";
 import * as McpAppModelContext from "../mcpApps/McpAppModelContext.ts";
 import * as EventSink from "./EventSink.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
@@ -386,7 +388,10 @@ it.effect(
 it.effect("steers a running turn with its sender and the thread's MCP app model context", () =>
   Effect.gen(function* () {
     const now = yield* DateTime.now;
-    const threadId = ThreadId.make("thread:steer-app-context");
+    const threadId = ThreadId.make("captain:receiver:0");
+    const chorusThreadId = ThreadId.make("captain:chorus:0");
+    const ordinaryMessageId = MessageId.make("message:steer-app-context");
+    const routedMessageId = MessageId.make("message:steer-from-chorus");
     const sessionId = ProviderSessionId.make("provider-session:steer-app-context");
     const providerTurnId = ProviderTurnId.make("provider-turn:steer-app-context");
     const attemptId = RunAttemptId.make("run-attempt:steer-app-context");
@@ -408,18 +413,44 @@ it.effect("steers a running turn with its sender and the thread's MCP app model 
     const layerControl = ProviderTurnControlService.layer.pipe(
       Layer.provide(
         Layer.mergeAll(
-          layerProjectionStore(() =>
+          Layer.mock(CaptainStore.CaptainStore)({
+            findByConversation: (id) =>
+              Effect.succeed(
+                id !== chorusThreadId
+                  ? undefined
+                  : {
+                      id: CaptainId.make("chorus"),
+                      primaryThreadId: chorusThreadId,
+                      earlierThreadIds: [],
+                      name: "Chorus",
+                      role: "Coordinator",
+                      instructions: "",
+                      avatar: { preset: "compass", color: "violet" },
+                      scopedProjectIds: [],
+                      kind: "chorus",
+                      reportPolicy: "react",
+                      coordinatorOnly: true,
+                      archivedAt: null,
+                      createdAt: DateTime.formatIso(now),
+                      updatedAt: DateTime.formatIso(now),
+                    },
+              ),
+          }),
+          layerProjectionStore((_threadId, { messageId }) =>
             Effect.succeed({
               providerThread,
               providerTurn: projection.providerTurns[0],
               attempt: projection.attempts[0],
               message: {
-                id: MessageId.make("message:steer-app-context"),
+                id: messageId,
                 text: "What did the app report?",
                 attachments: [],
                 createdBy: "agent",
                 creationSource: "mcp",
-                senderThreadId: ThreadId.make("thread:steer-sender"),
+                senderThreadId:
+                  messageId === routedMessageId
+                    ? chorusThreadId
+                    : ThreadId.make("thread:steer-sender"),
               } as unknown as NonNullable<
                 ProjectionStore.ProjectionProviderControlContext["message"]
               >,
@@ -450,20 +481,24 @@ it.effect("steers a running turn with its sender and the thread's MCP app model 
 
     yield* Effect.gen(function* () {
       const control = yield* ProviderTurnControlService.ProviderTurnControlServiceV2;
-      yield* control.steer({
-        threadId,
-        providerSessionId: sessionId,
-        providerThreadId: providerThread.id,
-        providerTurnId,
-        messageId: MessageId.make("message:steer-app-context"),
-      });
+      for (const messageId of [ordinaryMessageId, routedMessageId]) {
+        yield* control.steer({
+          threadId,
+          providerSessionId: sessionId,
+          providerThreadId: providerThread.id,
+          providerTurnId,
+          messageId,
+        });
+      }
     }).pipe(Effect.provide(layerControl));
 
-    assert.equal(steered.length, 1);
+    assert.equal(steered.length, 2);
     assert.equal(
       steered[0]!.message.text,
       '[T3 Code: the agent in T3 thread "thread:steer-sender" sent this message, not the user.]\n\nWhat did the app report?',
     );
+    assert.include(steered[1]!.message.text, "This turn was routed by Chorus Chorus.");
+    assert.include(steered[1]!.message.text, "What did the app report?");
     assert.deepEqual("appContext" in steered[0]! ? steered[0].appContext : undefined, [
       {
         key: "mcp_app_turn-item_call-1",

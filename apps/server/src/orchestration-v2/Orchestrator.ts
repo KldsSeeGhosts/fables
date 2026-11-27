@@ -17060,6 +17060,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               Effect.logWarning("Failed to start the next queued V2 run", { threadId, cause }),
             ),
           );
+        if (isCaptainThreadId(threadId) && Option.isSome(captainStore)) {
+          // A terminal run can still move its routed messages during rollover or steer recovery.
+          yield* captainStore.value.settleChorusRouteRun(threadId, run.id);
+        }
       }
       yield* updateDelegatedParentTask(threadId, run.id);
     },
@@ -17081,6 +17085,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
 
   // Projections already contain historical terminals; replaying them delays startup queue promotion with database size.
   const terminalEventsAfterSequence = yield* eventSink.latestSequence().pipe(Effect.orDie);
+  if (Option.isSome(captainStore)) {
+    yield* captainStore.value.restoreChorusRouteSettlements().pipe(Effect.orDie);
+  }
   // Filter run updates before buffering so blocked queue promotion does not retain unrelated tool bodies.
   yield* eventSink
     .stream({ afterSequence: terminalEventsAfterSequence, eventType: "run.updated" })
