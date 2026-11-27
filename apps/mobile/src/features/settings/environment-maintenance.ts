@@ -53,7 +53,6 @@ const Release = Schema.Struct({
   tag_name: Schema.String,
   draft: Schema.optionalKey(Schema.Boolean),
 });
-const decodeRelease = Schema.decodeUnknownSync(Release);
 const decodeReleases = Schema.decodeUnknownSync(Schema.Array(Release));
 
 async function fetchReleases(url: string, accept: string, signal: AbortSignal) {
@@ -70,22 +69,17 @@ export async function findEnvironmentUpdate(currentVersion: string, signal: Abor
   const channel = cliReleaseChannelOf(currentVersion);
   // Public release pages avoid the anonymous API quota shared by devices on the same network.
   const response = await fetchReleases(
-    channel === "stable" ? `${CLI_RELEASES_PAGE_URL}/latest` : `${CLI_RELEASES_PAGE_URL}.atom`,
-    channel === "stable" ? "application/json" : "application/atom+xml",
+    `${CLI_RELEASES_PAGE_URL}.atom`,
+    "application/atom+xml",
     signal,
   );
-  const releases =
-    channel === "stable"
-      ? [decodeRelease(await response.json())]
-      : Array.from(
-          (await response.text()).matchAll(
-            /<id>tag:github\.com,2008:Repository\/\d+\/([^<]+)<\/id>/g,
-          ),
-          ([, tag_name = ""]) => ({ tag_name }),
-        );
+  const releases = Array.from(
+    (await response.text()).matchAll(/<id>tag:github\.com,2008:Repository\/\d+\/([^<]+)<\/id>/g),
+    ([, tag_name = ""]) => ({ tag_name }),
+  );
   let version = newestCliReleaseVersion(releases, channel);
 
-  // The feed only includes ten releases, so later nightlies can displace a published preview.
+  // Other releases can displace the requested channel from the ten-entry feed.
   for (let page = 1; version === undefined; page++) {
     const response = await fetchReleases(
       cliReleaseIndexPageUrl(page),

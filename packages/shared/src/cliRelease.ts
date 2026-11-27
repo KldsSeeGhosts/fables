@@ -3,7 +3,7 @@ import * as Schema from "effect/Schema";
 
 import { compareSemverVersions } from "./semver.ts";
 
-const CLI_RELEASE_REPOSITORY = "KldsSeeGhosts/fables";
+export const CLI_RELEASE_REPOSITORY = "KldsSeeGhosts/fables";
 export const CLI_RELEASES_PAGE_URL = `https://github.com/${CLI_RELEASE_REPOSITORY}/releases`;
 export const CLI_RELEASE_CHECKSUMS_FILE = "SHA256SUMS";
 export const CLI_RELEASE_BASE_URL_ENV = "T3CODE_RELEASE_BASE_URL";
@@ -149,13 +149,19 @@ export function newestCliReleaseVersion(
   }>,
   channel: CliReleaseChannel,
 ): string | undefined {
+  let newest: string | undefined;
   for (const release of releases) {
     if (release.draft) continue;
     const version = /^v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(release.tag_name)?.[1];
     if (version === undefined) continue;
-    if (cliReleaseChannelOf(version) === channel) return version;
+    if (
+      cliReleaseChannelOf(version) === channel &&
+      (newest === undefined || compareSemverVersions(version, newest) > 0)
+    ) {
+      newest = version;
+    }
   }
-  return undefined;
+  return newest;
 }
 
 const NpmReleaseMigrationManifest = Schema.Struct({

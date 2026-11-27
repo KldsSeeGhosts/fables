@@ -1,5 +1,7 @@
 const { execFileSync, spawnSync } = require("node:child_process");
 const { writeFileSync } = require("node:fs");
+const { compareSemverVersions } = require("../../packages/shared/src/semver.ts");
+const { PLAIN_RELEASE_TAG } = require("./ksg-release-version.cjs");
 
 const UPSTREAM_REPOSITORY = "pingdotgg/t3code";
 const NIGHTLY_TAG = /^v(\d+)\.(\d+)\.(\d+)-nightly\.(\d{8})\.([1-9]\d*)$/;
@@ -19,13 +21,22 @@ function upstreamTagFromFork(tag) {
   return tag.slice(0, tag.lastIndexOf(".") + 1) + Math.floor(run / 100);
 }
 
-function compareTags(left, right) {
-  const a = parseTag(left);
-  const b = parseTag(right);
-  for (let index = 0; index < a.length; index += 1) {
-    if (a[index] !== b[index]) return a[index] - b[index];
+function isForkTag(tag) {
+  return PLAIN_RELEASE_TAG.test(tag) || NIGHTLY_TAG.test(tag);
+}
+
+function includedUpstreamLine(tag) {
+  return `- Includes upstream T3 Code [${tag}](https://github.com/${UPSTREAM_REPOSITORY}/releases/tag/${tag}).`;
+}
+
+function publishedUpstreamTag(release) {
+  if (NIGHTLY_TAG.test(release.tag_name)) return upstreamTagFromFork(release.tag_name);
+  const lines = (release.body ?? "").split(/\r?\n/);
+  for (const line of lines) {
+    const tag = /^- Includes upstream T3 Code \[([^\]]+)\]/.exec(line)?.[1];
+    if (tag && NIGHTLY_TAG.test(tag) && line === includedUpstreamLine(tag)) return tag;
   }
-  return 0;
+  throw new Error(`Missing included upstream nightly in release notes for ${release.tag_name}.`);
 }
 
 function git(args, cwd) {
@@ -50,10 +61,10 @@ function previousRelease(releases, tag, ref, cwd) {
         !release.draft &&
         release.published_at &&
         /^(?:Fables|KSG Code) /.test(release.name ?? "") &&
-        NIGHTLY_TAG.test(release.tag_name) &&
-        compareTags(release.tag_name, tag) < 0,
+        isForkTag(release.tag_name) &&
+        compareSemverVersions(release.tag_name, tag) < 0,
     )
-    .toSorted((left, right) => compareTags(right.tag_name, left.tag_name))
+    .toSorted((left, right) => compareSemverVersions(right.tag_name, left.tag_name))
     .find((release) => isAncestor(release.tag_name, ref, cwd));
 }
 
@@ -92,7 +103,9 @@ function changeBullet(commit, repository) {
 
 function generateReleaseNotes({ releases, repository, tag, upstreamTag, ref = "HEAD", cwd }) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) throw new Error("Invalid release repository.");
-  if (upstreamTagFromFork(tag) !== upstreamTag) {
+  if (!isForkTag(tag)) throw new Error(`Invalid Fables release tag: ${tag}`);
+  parseTag(upstreamTag);
+  if (NIGHTLY_TAG.test(tag) && upstreamTagFromFork(tag) !== upstreamTag) {
     throw new Error("KSG version does not match the included upstream nightly.");
   }
   const upstreamRef = `refs/tags/upstream/${upstreamTag}`;
@@ -100,35 +113,33 @@ function generateReleaseNotes({ releases, repository, tag, upstreamTag, ref = "H
     throw new Error("Included upstream nightly is not contained in the release commit.");
   }
   const previous = previousRelease(releases, tag, ref, cwd);
-  const previousUpstream = previous ? upstreamTagFromFork(previous.tag_name) : undefined;
+  const previousUpstream = previous ? publishedUpstreamTag(previous) : undefined;
   const forkCommits = commitsSince(
     ref,
     [upstreamRef, ...(previous ? [previous.tag_name] : [])],
     cwd,
   );
-  const notes = ["## What's changed"];
+  const notes = [
+    "## What's changed",
+    "",
+    "### Upstream T3 Code",
+    "",
+    includedUpstreamLine(upstreamTag),
+  ];
 
-  if (!previousUpstream || previousUpstream !== upstreamTag) {
-    notes.push(
-      "",
-      "### Upstream T3 Code",
-      "",
-      `- Includes upstream T3 Code [${upstreamTag}](https://github.com/${UPSTREAM_REPOSITORY}/releases/tag/${upstreamTag}).`,
-    );
-    if (previousUpstream) {
-      const previousUpstreamRef = `refs/tags/upstream/${previousUpstream}`;
-      if (!isAncestor(previousUpstreamRef, upstreamRef, cwd)) {
-        throw new Error("Upstream baseline moved backwards or diverged.");
-      }
-      const changes = commitsSince(upstreamRef, [previousUpstreamRef], cwd)
-        .map((commit) => changeBullet(commit, UPSTREAM_REPOSITORY))
-        .filter(Boolean);
-      notes.push(
-        ...changes,
-        "",
-        `[Compare: upstream changes](https://github.com/${UPSTREAM_REPOSITORY}/compare/${previousUpstream}...${upstreamTag})`,
-      );
+  if (previousUpstream && previousUpstream !== upstreamTag) {
+    const previousUpstreamRef = `refs/tags/upstream/${previousUpstream}`;
+    if (!isAncestor(previousUpstreamRef, upstreamRef, cwd)) {
+      throw new Error("Upstream baseline moved backwards or diverged.");
     }
+    const changes = commitsSince(upstreamRef, [previousUpstreamRef], cwd)
+      .map((commit) => changeBullet(commit, UPSTREAM_REPOSITORY))
+      .filter(Boolean);
+    notes.push(
+      ...changes,
+      "",
+      `[Compare: upstream changes](https://github.com/${UPSTREAM_REPOSITORY}/compare/${previousUpstream}...${upstreamTag})`,
+    );
   }
 
   // The desktop popover prioritizes the last bullets, so keep KSG's changes last.
