@@ -1153,6 +1153,7 @@ it.effect(
       yield* Effect.gen(function* () {
         const service = yield* CaptainService.CaptainService;
         const sql = yield* SqlClient.SqlClient;
+        const store = yield* CaptainStore.CaptainStore;
         const chorus = yield* service.create({ ...input, name: "Chorus", kind: "chorus" });
         const now = yield* DateTime.now;
         const recent = DateTime.formatIso(DateTime.toUtc(DateTime.subtract(now, { days: 2 })));
@@ -1194,12 +1195,30 @@ it.effect(
         assert.include(text, "Workspace [project]: 2 finished Solos");
         assert.notInclude(text, "[project-2]");
 
-        yield* service.create({
+        const covering = yield* service.create({
           ...input,
           captainId: CaptainId.make("covering"),
           scopedProjectIds: [project],
         });
         assert.notInclude(yield* read(), "Repeat Solo projects:");
+
+        const coveredProjects = [project];
+        for (let index = 0; index < 4; index++) {
+          const id = `covered-${index}`;
+          const projectId = ProjectId.make(id);
+          coveredProjects.push(projectId);
+          yield* childThread(id, projectId);
+          yield* solo(id, id, recent);
+        }
+        yield* store.save({ ...covering, scopedProjectIds: coveredProjects });
+        yield* solo(
+          "second-project",
+          "thread:old",
+          DateTime.formatIso(DateTime.toUtc(DateTime.subtract(now, { days: 3 }))),
+        );
+        const afterCoverage = yield* read();
+        assert.include(afterCoverage, "[project-2]: 1 finished Solo");
+        assert.notInclude(afterCoverage, "[covered-0]");
 
         yield* service.updateDocument({
           captainId: chorus.id,

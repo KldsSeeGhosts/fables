@@ -30,9 +30,11 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as SqlError from "effect/sql/SqlError";
+import type * as Statement from "effect/sql/Statement";
 
 const CaptainRow = Schema.Struct({
   ...Captain.fields,
@@ -70,6 +72,7 @@ const MemoryRow = Schema.Struct({
   essential: Schema.BooleanFromBit,
   userControlled: Schema.BooleanFromBit,
 });
+const encodeThreadIds = Schema.encodeEffect(Schema.fromJsonString(Schema.Array(Schema.String)));
 const decodeCaptain = Schema.decodeUnknownEffect(CaptainRow);
 const encodeCaptain = Schema.encodeEffect(CaptainRow);
 const decodeDocument = Schema.decodeUnknownEffect(CaptainDocument);
@@ -104,6 +107,8 @@ const make = Effect.gen(function* () {
   const notify = (captainId: CaptainId, kind: CaptainChange["kind"] = "profile") =>
     PubSub.publish(changes, { captainId, kind }).pipe(Effect.asVoid);
   const transact = sql.withTransaction;
+  const profileLock = yield* Semaphore.make(1);
+  const withProfileLock = profileLock.withPermits(1);
 
   const profiles = sql`SELECT id, name, role, instructions, avatar,
     primary_thread_id AS primaryThreadId, earlier_thread_ids AS earlierThreadIds,
@@ -187,10 +192,54 @@ const make = Effect.gen(function* () {
     Effect.catchTags({ SqlError: captainUnavailable, SchemaError: captainUnavailable }),
   );
 
-  const activeDuets = Effect.fn("CaptainStore.activeDuets")(
-    function* () {
-      const rows = yield* sql`${profiles} WHERE kind = 'duet' AND archived_at IS NULL`;
-      return yield* Effect.forEach(rows, (row) => decodeCaptain(row));
+  const activeDuetCoverage = (project: ProjectId | Statement.Fragment) => sql`
+    FROM captains
+    WHERE kind = 'duet' AND archived_at IS NULL
+      AND (json_array_length(scoped_project_ids) = 0 OR EXISTS (
+        SELECT 1 FROM json_each(scoped_project_ids) WHERE value = ${project}
+      ))
+  `;
+
+  const coveringDuetNames = Effect.fn("CaptainStore.coveringDuetNames")(
+    function* (projectId: ProjectId) {
+      const rows = yield* sql<{ readonly name: string }>`
+        SELECT name ${activeDuetCoverage(projectId)} ORDER BY name, id LIMIT 3
+      `;
+      return rows.map(({ name }) => name);
+    },
+    Effect.catchTags({ SqlError: captainUnavailable }),
+  );
+
+  const repeatSoloProjects = Effect.fn("CaptainStore.repeatSoloProjects")(
+    function* (captain: Captain) {
+      const cutoff = DateTime.formatIso(
+        DateTime.toUtc(DateTime.subtract(yield* DateTime.now, { days: 30 })),
+      );
+      const conversationIds = yield* encodeThreadIds([
+        captain.primaryThreadId,
+        ...captain.earlierThreadIds,
+      ]);
+      return yield* sql<{
+        readonly projectId: ProjectId;
+        readonly count: number;
+        readonly latestCompletedAt: string;
+      }>`
+        WITH recent AS (
+          SELECT child.project_id AS projectId, count(*) AS count,
+            max(COALESCE(task.completed_at, task.updated_at)) AS latestCompletedAt
+          FROM orchestration_v2_projection_subagents AS task
+          INNER JOIN orchestration_v2_projection_threads AS child
+            ON child.thread_id = task.child_thread_id
+          WHERE task.thread_id IN (SELECT value FROM json_each(${conversationIds}))
+            AND task.origin = 'app_owned'
+            AND task.status IN ('completed', 'failed', 'cancelled', 'interrupted')
+            AND COALESCE(task.completed_at, task.updated_at) >= ${cutoff}
+          GROUP BY child.project_id
+        )
+        SELECT projectId, count, latestCompletedAt FROM recent
+        WHERE NOT EXISTS (SELECT 1 ${activeDuetCoverage(sql`recent.projectId`)})
+        ORDER BY latestCompletedAt DESC, projectId LIMIT 5
+      `;
     },
     Effect.catchTags({ SqlError: captainUnavailable, SchemaError: captainUnavailable }),
   );
@@ -482,7 +531,9 @@ const make = Effect.gen(function* () {
     findActiveChorus,
     privateChorusConversationIds,
     activeDuetRoster,
-    activeDuets,
+    coveringDuetNames,
+    repeatSoloProjects,
+    withProfileLock,
     save,
     latestCompletedCompactionAt,
     saveRolloverResend,

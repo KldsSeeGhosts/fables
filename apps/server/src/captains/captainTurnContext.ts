@@ -6,10 +6,8 @@ import {
   type ProjectId,
   type ThreadId,
 } from "@t3tools/contracts";
-import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import * as PeerLinks from "../peer/PeerLinks.ts";
@@ -30,8 +28,6 @@ import {
 
 const prefix = (text: string, length: number) =>
   text.length <= length ? text : `${text.slice(0, length)}…`;
-
-const encodeThreadIds = Schema.encodeEffect(Schema.fromJsonString(Schema.Array(Schema.String)));
 
 // The report policy decides whether finished crew wakes the Captain, so the waiting rule follows it.
 const crewWaitRule: Record<Captain["reportPolicy"], string> = {
@@ -63,7 +59,7 @@ const chorusBriefing = (captain: Captain) => `How you work:
 - Before starting another Solo in a project where Chorus finished a Solo in the last 30 days, stop and offer the user the choice of widening an existing Duet's scope or creating a dedicated Duet. Do not inspect or edit the project first. Start the Solo only if the user says to go ahead anyway.
 - Relay each result to the user as one line plus the thread link. Do not paste Duet or Solo output.
 - While work runs, end your turn. Do not poll.
-- Keep no project plans or implementation state in NOTES.md. NOTES.md is only for what the user asked of Chorus itself.
+- Keep project plans, open loops, and project rules out of your documents and memory. Use NOTES.md only for requests to Chorus itself.
 - ${crewWaitRule[captain.reportPolicy]}`;
 
 const CHORUS_ROSTER_DUET_LIMIT = 12;
@@ -294,37 +290,8 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
   const readRepeatSoloProjects = Effect.fn("CaptainService.repeatSoloProjects")(function* (
     captain: Captain,
   ) {
-    if (Option.isNone(store) || Option.isNone(sql)) return [];
-    const cutoff = DateTime.formatIso(
-      DateTime.toUtc(DateTime.subtract(yield* DateTime.now, { days: 30 })),
-    );
-    const conversationIds = [captain.primaryThreadId, ...captain.earlierThreadIds];
-    const conversationIdsJson = yield* encodeThreadIds(conversationIds);
-    const rows = yield* sql.value<{
-      readonly projectId: ProjectId;
-      readonly count: number;
-      readonly latestCompletedAt: string;
-    }>`
-      SELECT child.project_id AS projectId, count(*) AS count,
-        max(COALESCE(task.completed_at, task.updated_at)) AS latestCompletedAt
-      FROM orchestration_v2_projection_subagents AS task
-      INNER JOIN orchestration_v2_projection_threads AS child
-        ON child.thread_id = task.child_thread_id
-      WHERE task.thread_id IN (SELECT value FROM json_each(${conversationIdsJson}))
-        AND task.origin = 'app_owned'
-        AND task.status IN ('completed', 'failed', 'cancelled', 'interrupted')
-        AND COALESCE(task.completed_at, task.updated_at) >= ${cutoff}
-      GROUP BY child.project_id
-      ORDER BY latestCompletedAt DESC, projectId LIMIT 5
-    `;
-    if (rows.length === 0) return [];
-    const duets = yield* store.value.activeDuets();
-    const uncovered = rows.filter(
-      ({ projectId }) =>
-        !duets.some(
-          (duet) => duet.scopedProjectIds.length === 0 || duet.scopedProjectIds.includes(projectId),
-        ),
-    );
+    if (Option.isNone(store)) return [];
+    const uncovered = yield* store.value.repeatSoloProjects(captain);
     const entries = yield* projectEntries(uncovered.map(({ projectId }) => projectId));
     return uncovered.map((row, index) => ({
       id: row.projectId,

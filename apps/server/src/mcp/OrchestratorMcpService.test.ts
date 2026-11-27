@@ -1689,23 +1689,20 @@ describe("OrchestratorMcpService provider resolution", () => {
   it.effect("lets Chorus choose only an uncovered local project", () =>
     Effect.gen(function* () {
       const chorusThreadId = ThreadId.make("captain:90d4dc16-f68d-4850-939c-a987a9256eee:0");
+      const earlierThreadId = ThreadId.make("captain:90d4dc16-f68d-4850-939c-a987a9256eee:1");
       const scratchProjectId = ProjectId.make("project:chorus-scratch");
       const uncoveredProjectId = ProjectId.make("project:uncovered");
       const chorus = {
         id: "90d4dc16-f68d-4850-939c-a987a9256eee",
+        primaryThreadId: chorusThreadId,
         kind: "chorus",
         name: "Chorus",
         scopedProjectIds: [],
         archivedAt: null,
       };
-      const covering = {
-        id: "maria",
-        kind: "duet",
-        name: "Maria",
-        scopedProjectIds: [uncoveredProjectId],
-        archivedAt: null,
-      };
       let covered = false;
+      let coverBeforeCommit = false;
+      let replayReceipt = false;
       const commands: Array<unknown> = [];
       const task = {
         id: taskId,
@@ -1734,10 +1731,20 @@ describe("OrchestratorMcpService provider resolution", () => {
         Layer.mock(CaptainStore.CaptainStore)({
           findPrimary: (threadId) =>
             Effect.succeed(threadId === chorusThreadId ? (chorus as never) : undefined),
-          activeDuets: () => Effect.succeed(covered ? [covering as never] : []),
+          findByConversation: (threadId) =>
+            Effect.succeed(
+              threadId === chorusThreadId || threadId === earlierThreadId
+                ? (chorus as never)
+                : undefined,
+            ),
+          coveringDuetNames: () => Effect.sync(() => (covered ? ["Maria"] : [])),
+          withProfileLock: (effect) =>
+            Effect.sync(() => {
+              covered ||= coverBeforeCommit;
+            }).pipe(Effect.andThen(effect)),
         }),
         Layer.mock(ThreadManagementService.ThreadManagementService)({
-          hasReceipt: () => Effect.succeed(false),
+          hasReceipt: () => Effect.sync(() => replayReceipt),
           getThreadRecords: (threadId) =>
             Effect.succeed(threadId === chorusThreadId ? parent() : childProjection),
           dispatch: (command) =>
@@ -1776,7 +1783,7 @@ describe("OrchestratorMcpService provider resolution", () => {
           clientRequestId: "chorus-uncovered-project",
         });
         assert.equal((commands[0] as { projectId?: unknown }).projectId, uncoveredProjectId);
-        covered = true;
+        coverBeforeCommit = true;
         const error = yield* service
           .delegateTask(chorusScope, {
             task: "Fix the covered project.",
@@ -1788,6 +1795,34 @@ describe("OrchestratorMcpService provider resolution", () => {
         assert.equal(error.code, "invalid_request");
         assert.include(error.message, "Route this with duet_send to Maria.");
         assert.lengthOf(commands, 1);
+
+        const remoteError = yield* service
+          .delegateTask(chorusScope, {
+            task: "Fix the remote project.",
+            target: { projectId: uncoveredProjectId, environmentId: EnvironmentId.make("remote") },
+            mode: "async",
+          })
+          .pipe(Effect.flip);
+        assert.equal(remoteError.code, "invalid_request");
+        assert.lengthOf(commands, 1);
+
+        const retiredError = yield* service
+          .delegateTask(
+            { ...chorusScope, thread: { ...chorusScope.thread!, threadId: earlierThreadId } },
+            { task: "Start work from the retired conversation.", mode: "async" },
+          )
+          .pipe(Effect.flip);
+        assert.equal(retiredError.code, "parent_not_active");
+        assert.lengthOf(commands, 1);
+
+        replayReceipt = true;
+        yield* service.delegateTask(chorusScope, {
+          task: "Fix the uncovered project.",
+          target: { projectId: uncoveredProjectId },
+          mode: "async",
+          clientRequestId: "chorus-uncovered-project",
+        });
+        assert.deepEqual(commands[1], commands[0]);
       }).pipe(Effect.provide(layerOrchestratorService.pipe(Layer.provide(dependencies))));
     }),
   );

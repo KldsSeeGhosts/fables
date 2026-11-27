@@ -5,7 +5,7 @@ import * as Layer from "effect/Layer";
 
 import * as Sqlite from "../persistence/Sqlite.ts";
 import * as CaptainStore from "./CaptainStore.ts";
-import { captainDelegationProject } from "./captainDelegation.ts";
+import { assertChorusProjectUncovered, captainDelegationProject } from "./captainDelegation.ts";
 
 const scratch = ProjectId.make("scratch");
 const project = ProjectId.make("project");
@@ -36,17 +36,12 @@ it.effect("lets a Chorus delegate only projects no active Duet covers", () =>
   Effect.gen(function* () {
     const store = yield* CaptainStore.CaptainStore;
     const chorus = captain("chorus", { kind: "chorus" });
-    const delegate = (projectId: ProjectId, caller: Captain = chorus) =>
-      captainDelegationProject({
-        captain: caller,
-        currentProjectId: scratch,
-        requestedProjectId: projectId,
-      });
+    const delegate = (projectId: ProjectId) => assertChorusProjectUncovered(store, projectId);
 
-    assert.equal(yield* delegate(project), project);
+    yield* delegate(project);
 
     yield* store.save(chorus);
-    assert.equal(yield* delegate(project), project);
+    yield* delegate(project);
 
     const allProjects = captain("all-projects");
     yield* store.save(allProjects);
@@ -56,7 +51,7 @@ it.effect("lets a Chorus delegate only projects no active Duet covers", () =>
     assert.include(emptyScopeDenial.message, "Do not start a Solo for this project yourself.");
 
     yield* store.save({ ...allProjects, archivedAt: "2026-11-24T11:00:00.000Z" });
-    assert.equal(yield* delegate(secondProject), secondProject);
+    yield* delegate(secondProject);
 
     const maria = captain("maria", { scopedProjectIds: [project] });
     const lee = captain("lee", { scopedProjectIds: [project, secondProject] });
@@ -68,19 +63,28 @@ it.effect("lets a Chorus delegate only projects no active Duet covers", () =>
     assert.include(scopedDenial.message, "maria");
     assert.include(scopedDenial.message, "lee");
 
-    assert.equal(
-      yield* delegate(ProjectId.make("project-uncovered")),
-      ProjectId.make("project-uncovered"),
-    );
+    yield* delegate(ProjectId.make("project-uncovered"));
 
     const archived = captain("archived", {
       scopedProjectIds: [archivedOnlyProject],
       archivedAt: "2026-11-24T11:00:00.000Z",
     });
     yield* store.save(archived);
-    assert.equal(yield* delegate(archivedOnlyProject), archivedOnlyProject);
+    yield* delegate(archivedOnlyProject);
+
+    yield* store.save(
+      captain("foreign-scope", { scopedProjectIds: [ProjectId.make("another-machine-project")] }),
+    );
+    yield* delegate(archivedOnlyProject);
 
     const ordinaryDuet = captain("ordinary");
-    assert.equal(yield* delegate(project, ordinaryDuet), project);
+    assert.equal(
+      yield* captainDelegationProject({
+        captain: ordinaryDuet,
+        currentProjectId: scratch,
+        requestedProjectId: project,
+      }),
+      project,
+    );
   }).pipe(Effect.provide(layer)),
 );
