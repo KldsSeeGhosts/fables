@@ -415,6 +415,7 @@ export interface ThreadFeedProps {
   readonly contentSideInsets?: { readonly left: number; readonly right: number };
   readonly layoutVariant?: LayoutVariant;
   readonly usesAutomaticContentInsets?: boolean;
+  readonly expandedHeaderOverlap?: number;
   readonly onHeaderMaterialVisibilityChange?: (visible: boolean) => void;
   readonly onIsAtEndChange?: (isAtEnd: boolean) => void;
   readonly skills?: ReadonlyArray<SelectableMarkdownSkill>;
@@ -1194,6 +1195,21 @@ const THREAD_MEDIA_VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 0 };
 function ThreadFeedScrollView(props: ComponentPropsWithRef<typeof Animated.ScrollView>) {
   return (
     <NativeScrollViewMarker style={{ flex: 1 }}>
+      <Animated.ScrollView {...props} />
+    </NativeScrollViewMarker>
+  );
+}
+
+const THREAD_SCROLL_EDGE_EFFECTS = {
+  top: "soft",
+  bottom: "hidden",
+  left: "hidden",
+  right: "hidden",
+} as const;
+
+function ThreadFeedGlassScrollView(props: ComponentPropsWithRef<typeof Animated.ScrollView>) {
+  return (
+    <NativeScrollViewMarker style={{ flex: 1 }} scrollEdgeEffects={THREAD_SCROLL_EDGE_EFFECTS}>
       <Animated.ScrollView {...props} />
     </NativeScrollViewMarker>
   );
@@ -3210,10 +3226,12 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const bottomContentInset = props.contentBottomInset ?? 18;
   const usesNativeAutomaticInsets =
     props.usesAutomaticContentInsets === true && Platform.OS === "ios";
-  // Without the native contentInset, a list-header spacer clears the bar the column lays content under.
   const topOverlayInset = props.topOverlayInset ?? 0;
-  const topContentInset = (usesNativeAutomaticInsets ? 0 : columnTopInset) + topOverlayInset;
-  const anchorTopInset = (usesNativeAutomaticInsets ? barInset : columnTopInset) + topOverlayInset;
+  // Only the spacer moves with the feed. UIKit can restore the bar without changing the scroll view.
+  const topContentInset =
+    (usesNativeAutomaticInsets ? 0 : (props.expandedHeaderOverlap ?? columnTopInset)) +
+    topOverlayInset;
+  const anchorTopInset = usesNativeAutomaticInsets ? barInset + topOverlayInset : topContentInset;
 
   const theme = useUniwindTheme();
   const iconSubtleColor = theme["--color-icon-subtle"];
@@ -4309,14 +4327,21 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
           {perfProbe && !settling && props.feed.length > 0 ? (
             <PerfContentMark key={feedThreadKey} probe={perfProbe} thread={feedThreadKey} />
           ) : null}
-          {/* oxlint-disable-next-line t3code/require-registered-list-scroll -- ThreadFeedScrollView is passed through the iOS-only spread below; the prop rejects undefined. */}
+          {/* oxlint-disable-next-line t3code/require-registered-list-scroll -- The iOS-only spread supplies the registered scroll view. */}
           <KeyboardAwareLegendList
             ref={attachList}
             dataKey={feedThreadKey}
             style={settling ? { flex: 1, opacity: 0 } : { flex: 1 }}
             // RN 0.81+ drops inset-area touches (facebook/react-native#54123), making blank post-send space unscrollable.
             applyWorkaroundForContentInsetHitTestBug
-            {...(Platform.OS === "ios" ? { ScrollViewComponent: ThreadFeedScrollView } : {})}
+            {...(Platform.OS === "ios"
+              ? {
+                  ScrollViewComponent:
+                    props.expandedHeaderOverlap === undefined
+                      ? ThreadFeedScrollView
+                      : ThreadFeedGlassScrollView,
+                }
+              : {})}
             contentInsetAdjustmentBehavior="never"
             automaticallyAdjustsScrollIndicatorInsets={usesNativeAutomaticInsets}
             scrollIndicatorInsets={{ top: anchorTopInset, bottom: 0 }}

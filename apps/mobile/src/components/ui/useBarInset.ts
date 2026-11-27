@@ -1,6 +1,6 @@
 import { HeaderHeightContext } from "@react-navigation/elements";
-import { use } from "react";
-import { Platform } from "react-native";
+import { use, useState } from "react";
+import { Platform, useWindowDimensions } from "react-native";
 
 import { useAdaptiveWorkspaceLayout } from "../../features/layout/adaptive-workspace-context";
 import { NATIVE_MAIL_SEARCH_TOOLBAR_CONTENT_INSET } from "../../features/layout/native-mail-search-toolbar";
@@ -35,6 +35,17 @@ export function useBarInset(): number {
 export function useBarOverlap(): number {
   const barInset = useBarInset();
   return Platform.OS === "android" ? 0 : barInset;
+}
+
+/** Reserve the expanded bar's space even while UIKit minimizes it during a scroll. */
+export function useExpandedBarOverlap(overlap: number): number {
+  const { width, height } = useWindowDimensions();
+  const [expanded, setExpanded] = useState({ width, height, overlap });
+  if (expanded.width !== width || expanded.height !== height || overlap > expanded.overlap) {
+    setExpanded({ width, height, overlap });
+    return overlap;
+  }
+  return expanded.overlap;
 }
 
 /**

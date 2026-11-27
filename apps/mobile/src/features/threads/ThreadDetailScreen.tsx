@@ -122,7 +122,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { useBarOverlap } from "../../components/ui/useBarInset";
+import { useBarOverlap, useExpandedBarOverlap } from "../../components/ui/useBarInset";
 import {
   useWorkspaceContentWidth,
   WorkspaceSettledContentWidthContext,
@@ -304,6 +304,7 @@ export interface ThreadDetailScreenProps {
   readonly serverConfig: T3ServerConfig | null;
   readonly layoutVariant?: LayoutVariant;
   readonly usesAutomaticContentInsets?: boolean;
+  readonly scrollUnderHeader?: boolean;
   readonly topOverlayInset?: number;
   readonly onHeaderMaterialVisibilityChange?: (visible: boolean) => void;
   readonly onOpenConnectionEditor: () => void;
@@ -512,6 +513,7 @@ function ThreadDetailBody(
   };
   const windowHeight = useWindowDimensions().height;
   const navigationHeaderHeight = useBarOverlap();
+  const expandedHeaderOverlap = useExpandedBarOverlap(navigationHeaderHeight);
   const [screenMetrics, setScreenMetrics] = useState<NativeLayoutMetrics | null>(null);
   const columnMetrics = useNativeColumnLayoutMetrics();
   const nativeMetrics = usesNativeWorkspaceColumns ? columnMetrics : screenMetrics;
@@ -1627,6 +1629,9 @@ function ThreadDetailBody(
                   contentSideInsets={deriveContentSideInsets(nativeMetrics)}
                   layoutVariant={layoutVariant}
                   usesAutomaticContentInsets={props.usesAutomaticContentInsets}
+                  expandedHeaderOverlap={
+                    props.scrollUnderHeader ? expandedHeaderOverlap : undefined
+                  }
                   onHeaderMaterialVisibilityChange={props.onHeaderMaterialVisibilityChange}
                   onIsAtEndChange={setIsAtEnd}
                   skills={selectedProviderSkills}
