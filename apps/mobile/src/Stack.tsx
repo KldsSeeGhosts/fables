@@ -142,6 +142,8 @@ import { UsageRouteScreen } from "./features/usage/UsageRouteScreen";
 import { WorkflowRunRouteScreen } from "./features/workflows/WorkflowRunRouteScreen";
 import { WorkflowStepSheet } from "./features/workflows/WorkflowStepSheet";
 import { CaptainBriefSheet } from "./features/captains/CaptainBriefSheet";
+import { CaptainCreateSheet } from "./features/captains/CaptainCreateSheet";
+import { CaptainsOverviewScreen } from "./features/captains/CaptainsOverviewScreen";
 import { CaptainsInboxSheet } from "./features/captains/CaptainsInboxSheet";
 import { CaptainTasksSheet } from "./features/captains/CaptainTasksSheet";
 import { SettingsAboutRouteScreen } from "./features/settings/SettingsAboutRouteScreen";
@@ -798,6 +800,14 @@ const RootStackConfig = createWorkspaceStackNavigator({
     WorkflowStep: createNativeStackScreen({
       screen: WorkflowStepSheet,
       options: sheetRoute({ detent: 0.6, androidMaxDetent: 0.95 }),
+    }),
+    CaptainsOverview: createNativeStackScreen({
+      screen: CaptainsOverviewScreen,
+      options: pageRoute({ duoMinimize: "never" }),
+    }),
+    CaptainCreate: createNativeStackScreen({
+      screen: CaptainCreateSheet,
+      options: sheetRoute({ detent: 0.75, android: "fullScreen" }),
     }),
     CaptainTasks: createNativeStackScreen({
       screen: CaptainTasksSheet,
