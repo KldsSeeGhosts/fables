@@ -62,6 +62,7 @@ const chorusBriefing = (captain: Captain) => `How you work:
 
 const CHORUS_ROSTER_DUET_LIMIT = 12;
 const CHORUS_ROSTER_LENGTH = 2_000;
+const CHORUS_ROSTER_LINK_LABEL_LENGTH = 500;
 
 const formatChorusRoster = (input: {
   readonly duets: ReadonlyArray<{
@@ -78,7 +79,7 @@ const formatChorusRoster = (input: {
   const linked =
     input.linkedMachineLabels.length === 0
       ? "Linked machines: none linked."
-      : `Linked machines: ${prefix(input.linkedMachineLabels.map((label) => oneLine(label, 80)).join(", "), 500)}. Use \`duet_list\` for their Duets when it supports linked machines.`;
+      : `Linked machines: ${prefix(input.linkedMachineLabels.map((label) => oneLine(label, 80)).join(", "), CHORUS_ROSTER_LINK_LABEL_LENGTH)}. Use \`duet_list\` for their Duets when it supports linked machines.`;
   let local = "Duets on this machine:";
   if (input.duets.length === 0) local += "\n- No active Duets on this machine.";
   const more = (count: number) =>
@@ -343,11 +344,8 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
       const fleetRoster =
         captain.kind === "chorus"
           ? yield* Effect.gen(function* () {
-              const snapshot = yield* store.value.snapshot({});
-              const active = snapshot.captains.filter(
-                (entry) => entry.kind === "duet" && entry.archivedAt === null,
-              );
-              const shown = active.slice(0, CHORUS_ROSTER_DUET_LIMIT);
+              const { duets: shown, total } =
+                yield* store.value.activeDuetRoster(CHORUS_ROSTER_DUET_LIMIT);
               const duets = yield* Effect.forEach(
                 shown,
                 (entry) =>
@@ -365,9 +363,11 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
               );
               return formatChorusRoster({
                 duets,
-                totalDuets: active.length,
+                totalDuets: total,
                 linkedMachineLabels: Option.isSome(peerLinks)
-                  ? (yield* peerLinks.value.names).map((machine) => machine.label)
+                  ? (yield* peerLinks.value.names(CHORUS_ROSTER_LINK_LABEL_LENGTH)).map(
+                      (machine) => machine.label,
+                    )
                   : [],
               });
             })

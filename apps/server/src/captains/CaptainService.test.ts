@@ -1076,9 +1076,10 @@ it.effect("builds a bounded Chorus roster from local state and sends it only whe
         Layer.merge(
           layer,
           Layer.mock(PeerLinks.PeerLinks)({
-            names: Effect.succeed([
-              { environmentId: EnvironmentId.make("build-mac"), label: "Build Mac" },
-            ]),
+            names: () =>
+              Effect.succeed([
+                { environmentId: EnvironmentId.make("build-mac"), label: "Build Mac" },
+              ]),
             list: Effect.die("The briefing must not probe linked machines."),
           }),
         ),
