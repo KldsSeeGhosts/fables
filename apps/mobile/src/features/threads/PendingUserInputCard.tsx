@@ -237,24 +237,19 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
       pointerEvents={props.collapsed ? "none" : "auto"}
       accessibilityElementsHidden={props.collapsed}
       importantForAccessibility={props.collapsed ? "no-hide-descendants" : "auto"}
-      className="overflow-hidden gap-2.5 rounded-[20px] border border-border bg-card-alt p-4"
+      className="overflow-hidden gap-1.5 rounded-[20px] border border-border bg-card-alt p-3"
       style={cardAnimatedStyle}
     >
-      <View className="flex-row items-start gap-2">
+      <View className="flex-row items-center gap-2">
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={gt("Collapse user input")}
           onPress={props.onToggleCollapsed}
-          className="flex-1 flex-row items-start gap-2"
+          className="min-h-10 flex-1 flex-row items-center gap-2 active:opacity-70"
         >
-          <View className="flex-1 gap-2.5">
-            <Text className="font-t3-bold text-2xs text-foreground-secondary">
-              <T>User input needed</T>
-            </Text>
-            <Text className="font-t3-bold text-lg text-foreground">
-              <T>Fill in the pending answers</T>
-            </Text>
-          </View>
+          <Text className="min-w-0 flex-1 font-t3-bold text-sm text-foreground">
+            <T>User input needed</T>
+          </Text>
           <View className="h-8 w-8 items-center justify-center rounded-full bg-subtle-strong">
             <SymbolView
               name="chevron.down"
@@ -269,7 +264,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
       <ScrollView
         bounces={false}
         className="min-h-0"
-        contentContainerClassName="gap-2.5 pb-1"
+        contentContainerClassName="gap-2.5"
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled
         showsVerticalScrollIndicator
@@ -301,7 +296,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
                 setDirection={setDirection}
                 preserveSoftBreaks
               />
-              <View className="gap-2">
+              <View className="gap-1.5">
                 {question.options.map((option) => {
                   const optionValue = option.value ?? option.label.trim();
                   const selected = isPendingUserInputOptionSelected(question, draft, optionValue);
@@ -314,9 +309,13 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
                         accessibilityState={{ checked: selected, disabled: responseDisabled }}
                         disabled={responseDisabled}
                         className={cn(
-                          "min-h-12 w-full rounded-2xl border px-3.5 py-3",
-                          selected ? "border-primary bg-primary/10" : "border-border bg-input",
+                          "min-h-11 w-full flex-row items-center gap-2.5 rounded-xl border px-3 py-2 active:bg-subtle-strong",
+                          selected
+                            ? "border-primary bg-primary/10"
+                            : "border-input-border bg-input",
+                          responseDisabled && "opacity-60",
                         )}
+                        style={{ direction: setDirection }}
                         onPress={() =>
                           props.onSelectOption(
                             props.pendingUserInput.requestId,
@@ -325,12 +324,27 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
                           )
                         }
                       >
+                        <View
+                          className={cn(
+                            "size-4 shrink-0 items-center justify-center border",
+                            question.multiSelect ? "rounded" : "rounded-full",
+                            selected ? "border-primary" : "border-icon-subtle",
+                          )}
+                        >
+                          {selected &&
+                            (question.multiSelect ? (
+                              <SymbolView
+                                name="checkmark"
+                                size={11}
+                                tintColorClassName="accent-primary"
+                              />
+                            ) : (
+                              <View className="size-2 rounded-full bg-primary" />
+                            ))}
+                        </View>
                         <View className="min-w-0 flex-1 gap-0.5">
                           <Text
-                            className={cn(
-                              "font-t3-bold text-sm",
-                              selected ? "text-foreground" : "text-foreground-secondary",
-                            )}
+                            className="font-t3-bold text-sm text-foreground"
                             style={proseDirectionStyle(option.label, setDirection)}
                           >
                             {option.label}
@@ -378,27 +392,30 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
             </View>
           );
         })}
+        <View className="flex-row flex-wrap justify-end gap-1">
+          {props.pendingUserInput.dismissible ? (
+            <Button
+              label={gt("Dismiss without answering")}
+              size="compact"
+              tone="text"
+              disabled={isResponding}
+              onPress={() => void props.onDismiss()}
+            />
+          ) : null}
+          <Button
+            label={gt("Submit answers")}
+            size="compact"
+            tone="primary"
+            disabled={!props.canOperateThread || responseDisabled || props.answers === null}
+            onPress={() => void props.onSubmit()}
+          />
+        </View>
+        {!props.canOperateThread ? (
+          <Text className="font-sans text-xs text-foreground-tertiary">
+            <T>This connection cannot submit answers.</T>
+          </Text>
+        ) : null}
       </ScrollView>
-      <Button
-        label={gt("Submit answers")}
-        fullWidth
-        tone={props.answers ? "primary" : "secondary"}
-        disabled={!props.canOperateThread || responseDisabled || props.answers === null}
-        onPress={() => void props.onSubmit()}
-      />
-      {props.pendingUserInput.dismissible ? (
-        <Button
-          label={gt("Dismiss without answering")}
-          tone="text"
-          disabled={isResponding}
-          onPress={() => void props.onDismiss()}
-        />
-      ) : null}
-      {!props.canOperateThread ? (
-        <Text className="font-sans text-xs text-foreground-tertiary">
-          <T>This connection cannot submit answers.</T>
-        </Text>
-      ) : null}
     </Animated.View>
   );
   return (

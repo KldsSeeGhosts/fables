@@ -514,6 +514,9 @@ function ThreadDetailBody(
   const windowHeight = useWindowDimensions().height;
   const navigationHeaderHeight = useBarOverlap();
   const expandedHeaderOverlap = useExpandedBarOverlap(navigationHeaderHeight);
+  const promptTopInset =
+    (props.scrollUnderHeader ? expandedHeaderOverlap : navigationHeaderHeight) +
+    (props.topOverlayInset ?? 0);
   const [screenMetrics, setScreenMetrics] = useState<NativeLayoutMetrics | null>(null);
   const columnMetrics = useNativeColumnLayoutMetrics();
   const nativeMetrics = usesNativeWorkspaceColumns ? columnMetrics : screenMetrics;
@@ -1126,7 +1129,7 @@ function ThreadDetailBody(
     derivePendingUserInputMaxHeight({
       windowHeight: screenAreaHeight,
       keyboardHeight: keyboardStickyEnabled ? -keyboardTranslation.value : 0,
-      navigationHeaderHeight,
+      topInset: promptTopInset,
       // An in-flow question shares the room above it with the floating control.
       composerOverlapHeight:
         composerBottomInset +
@@ -1144,7 +1147,7 @@ function ThreadDetailBody(
     maxHeight: derivePendingUserInputMaxHeight({
       windowHeight: screenAreaHeight,
       keyboardHeight: keyboardStickyEnabled ? -keyboardTranslation.value : 0,
-      navigationHeaderHeight,
+      topInset: navigationHeaderHeight,
       composerOverlapHeight,
     }),
     flexGrow: 0,
