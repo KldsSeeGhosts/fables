@@ -35,6 +35,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
       upstream_tag: ${{ steps.version.outputs.upstream_tag }}
+      bridge_tag: ${{ steps.version.outputs.bridge_tag }}
       ref: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v6
@@ -56,6 +57,8 @@ jobs:
 
       - id: version
         name: Resolve fork version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           upstream="$(git describe --tags --abbrev=0 --match 'upstream/v*-nightly.*' HEAD)"
@@ -65,11 +68,26 @@ jobs:
             exit 1
           fi
           version="$(node .github/scripts/ksg-release-version.cjs "$upstream")"
+          bridge_tag="$(node -p '"v" + require("./.github/scripts/ksg-release-version.cjs").fablesBridgeVersion')"
+          if [[ "v$version" != "$bridge_tag" ]]; then
+            gh release view "$bridge_tag" --repo "$GITHUB_REPOSITORY" \
+              --json isDraft,assets --jq 'select(.isDraft == false) | .assets[].name' > "$RUNNER_TEMP/bridge-assets"
+            bridge_version="${bridge_tag#v}"
+            for asset in nightly.yml nightly-mac.yml nightly-linux.yml SHA256SUMS \
+              "t3-$bridge_version-darwin-arm64.tar.gz" "t3-$bridge_version-linux-x64.tar.gz" \
+              "t3-$bridge_version-win32-x64.zip"; do
+              grep -Fxq "$asset" "$RUNNER_TEMP/bridge-assets"
+            done
+            gh release view update-feed --repo "$GITHUB_REPOSITORY" --json isDraft | jq -e '.isDraft == false'
+            gh release download update-feed --repo "$GITHUB_REPOSITORY" --pattern nightly.json --output - \
+              | jq -e --arg tag "$bridge_tag" '.tag_name == $tag'
+          fi
           echo "Upstream $upstream -> Fables $version"
           {
             echo "version=$version"
             echo "tag=v$version"
             echo "upstream_tag=$upstream"
+            echo "bridge_tag=$bridge_tag"
           } >> "$GITHUB_OUTPUT"
 
   build_bundle:
@@ -258,6 +276,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.preflight.outputs.tag }}
           VERSION: ${{ needs.preflight.outputs.version }}
+          BRIDGE_TAG: ${{ needs.preflight.outputs.bridge_tag }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -266,9 +285,34 @@ jobs:
           for manifest in release-assets/*.yml; do
             [[ "$manifest" == */builder-debug.yml ]] || files+=("$manifest")
           done
-          gh release create "$TAG" "${files[@]}" \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --prerelease \
-            --title "Fables $VERSION" \
-            --notes-file "$RUNNER_TEMP/ksg-release-notes.md"
+          export GH_REPO="$GITHUB_REPOSITORY"
+          remote_tag="$(git ls-remote --refs origin "refs/tags/$TAG")"
+          if [[ -n "$remote_tag" ]]; then
+            git fetch --no-tags origin "refs/tags/$TAG"
+            test "$(git rev-parse 'FETCH_HEAD^{commit}')" = "$GITHUB_SHA"
+          fi
+          if ! gh release view "$TAG" --json isDraft,targetCommitish > "$RUNNER_TEMP/fables-release.json"; then
+            gh release create "$TAG" --target "$GITHUB_SHA" --draft --prerelease --latest=false \
+              --title "Fables $VERSION" --notes-file "$RUNNER_TEMP/ksg-release-notes.md"
+            gh release view "$TAG" --json isDraft,targetCommitish > "$RUNNER_TEMP/fables-release.json"
+          fi
+          if jq -e '.isDraft' "$RUNNER_TEMP/fables-release.json" >/dev/null; then
+            jq -e --arg sha "$GITHUB_SHA" '.targetCommitish == $sha' "$RUNNER_TEMP/fables-release.json"
+            gh release upload "$TAG" "${files[@]}" --clobber
+            gh release edit "$TAG" --draft=false --prerelease --latest=false
+          else
+            test -n "$remote_tag"
+          fi
+          if [[ "$TAG" == "$BRIDGE_TAG" ]]; then
+            if gh release view update-feed --json isDraft | jq -e '.isDraft == false' &&
+              gh release download update-feed --pattern nightly.json --output - |
+                jq -e --arg tag "$TAG" '.tag_name == $tag'; then
+              exit 0
+            fi
+            gh api "repos/$GH_REPO/releases/tags/$TAG" --jq '{tag_name, name, body}' > "$RUNNER_TEMP/nightly.json"
+            gh release view update-feed > /dev/null ||
+              gh release create update-feed --draft --prerelease --latest=false \
+                --title "Update feed" --notes "The fixed nightly feed for legacy Fables installs."
+            gh release upload update-feed "$RUNNER_TEMP/nightly.json" --clobber
+            gh release edit update-feed --draft=false --prerelease --latest=false
+          fi

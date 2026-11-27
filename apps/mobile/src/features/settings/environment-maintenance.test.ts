@@ -139,6 +139,15 @@ describe("environment release checks", () => {
         headers: { Accept: "application/atom+xml" },
       },
     );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url.endsWith("/download/update-feed/nightly.json")
+          ? Response.json({ tag_name: `v${bridge}` })
+          : feed(`v${legacy}`, "v0.2.0"),
+      ),
+    );
+    expect(await findEnvironmentUpdate(legacy, signal)).toBe(bridge);
   });
 
   it("finds a published preview beyond the ten-entry feed and first API page", async () => {

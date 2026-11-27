@@ -116,7 +116,13 @@ describe("Fables plain releases on GitHub's prerelease feed", () => {
     platform: NodeJS.Platform,
     arch: string,
     tags: ReadonlyArray<string>,
-    options: { current?: string; legacy?: boolean; listed?: string } = {},
+    options: {
+      current?: string;
+      legacy?: boolean;
+      listed?: string;
+      pointer?: string;
+      manifestVersion?: string;
+    } = {},
   ) => {
     const requested: string[] = [];
     const manifest =
@@ -128,9 +134,12 @@ describe("Fables plain releases on GitHub's prerelease feed", () => {
     const request = async ({ path = "" }: { readonly path?: string | null }) => {
       requested.push(path ?? "");
       if (path === `${repo}/releases.atom`) return atomFeed(tags, repo);
+      if (path === `${repo}/releases/download/update-feed/nightly.json` && options.pointer) {
+        return JSON.stringify({ tag_name: options.pointer });
+      }
       for (const tag of [bridge, "v0.2.0", "v0.2.1"]) {
         if (path === `${repo}/releases/download/${tag}/${manifest}`) {
-          return `version: ${tag.slice(1)}\npath: KSG-Code.exe\nsha512: abc\n`;
+          return `version: ${options.manifestVersion ?? tag.slice(1)}\npath: KSG-Code.exe\nsha512: abc\n`;
         }
       }
       if (path?.startsWith(`/repos${repo}/releases?`)) {
@@ -185,13 +194,31 @@ describe("Fables plain releases on GitHub's prerelease feed", () => {
   );
 
   it("returns the installed bridge while the first plain release is pending", async () => {
-    const { result } = lookup("win32", "x64", [bridge, legacy], { current: bridge });
+    const { result } = lookup("win32", "x64", ["v0.1.12", bridge, legacy], {
+      current: bridge,
+      listed: "v0.1.12",
+    });
+    expect(await result).toMatchObject({ tag: bridge, version: bridge.slice(1) });
+  });
+
+  it("finds the bridge from the legacy pointer when Atom still shows an older nightly", async () => {
+    const { result } = lookup("win32", "x64", ["v0.2.0", legacy], {
+      legacy: true,
+      pointer: bridge,
+    });
     expect(await result).toMatchObject({ tag: bridge, version: bridge.slice(1) });
   });
 
   it("finds a plain prerelease after other tags displace it from Atom", async () => {
     const { result } = lookup("win32", "x64", [legacy], { listed: "v0.2.1" });
     expect(await result).toMatchObject({ tag: "v0.2.1", version: "0.2.1" });
+  });
+
+  it("rejects a plain release whose metadata advertises a prerelease version", async () => {
+    const { result } = lookup("win32", "x64", ["v0.2.1"], {
+      manifestVersion: "0.2.2-beta.1",
+    });
+    await expect(result).rejects.toMatchObject({ code: "ERR_UPDATER_INVALID_VERSION" });
   });
 
   it("reproduces the installed nightly rejecting a plain tag before requesting a manifest", async () => {

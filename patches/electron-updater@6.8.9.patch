@@ -227,7 +227,7 @@ diff --git a/out/providers/GitHubProvider.js b/out/providers/GitHubProvider.js
 index e768d24e7a..bc20fb0717 100644
 --- a/out/providers/GitHubProvider.js
 +++ b/out/providers/GitHubProvider.js
-@@ -33,8 +33,12 @@ class GitHubProvider extends BaseGitHubProvider {
+@@ -33,8 +33,15 @@ class GitHubProvider extends BaseGitHubProvider {
          this.options = options;
          this.updater = updater;
      }
@@ -235,13 +235,16 @@ index e768d24e7a..bc20fb0717 100644
 +        return this.updater.channel === "latest" && this.options.channel === "nightly" &&
 +            this.options.owner.toLowerCase() === "kldsseeghosts" && this.options.repo.toLowerCase() === "fables";
 +    }
++    isFablesPlainRelease(tag) {
++        return semver.valid(tag) !== null && semver.prerelease(tag) === null && semver.gte(tag, "0.2.0");
++    }
      get channel() {
 -        const result = this.updater.channel || this.options.channel;
 +        const result = this.usesFablesPlainReleaseFeed ? this.options.channel : this.updater.channel || this.options.channel;
          return result == null ? this.getDefaultChannelName() : this.getCustomChannelName(result);
      }
      async getLatestVersion() {
-@@ -48,7 +52,18 @@ class GitHubProvider extends BaseGitHubProvider {
+@@ -48,7 +55,18 @@ class GitHubProvider extends BaseGitHubProvider {
          let latestRelease = feed.element("entry", false, `No published versions on GitHub`);
          let tag = null;
          try {
@@ -250,7 +253,7 @@ index e768d24e7a..bc20fb0717 100644
 +                // Fables plain tags use nightly metadata. The installed tag answers while plain releases are pending.
 +                for (const element of feed.getElements("entry")) {
 +                    const candidate = hrefRegExp.exec(element.element("link").attribute("href"))?.[1];
-+                    if (candidate != null && semver.valid(candidate) && (semver.prerelease(candidate) === null
++                    if (candidate != null && semver.valid(candidate) && (this.isFablesPlainRelease(candidate)
 +                        ? tag === null || semver.prerelease(tag) !== null || semver.gt(candidate, tag) : tag === null && semver.eq(candidate, this.updater.currentVersion))) {
 +                        tag = candidate;
 +                        latestRelease = element;
@@ -261,7 +264,7 @@ index e768d24e7a..bc20fb0717 100644
                  const currentChannel = ((_a = this.updater) === null || _a === void 0 ? void 0 : _a.channel) || ((_b = semver.prerelease(this.updater.currentVersion)) === null || _b === void 0 ? void 0 : _b[0]) || null;
                  if (currentChannel === null) {
                      // allowPrerelease=true with no explicit channel and stable current version:
-@@ -107,6 +122,44 @@ class GitHubProvider extends BaseGitHubProvider {
+@@ -107,6 +125,44 @@ class GitHubProvider extends BaseGitHubProvider {
          catch (e) {
              throw (0, builder_util_runtime_1.newError)(`Cannot parse releases feed: ${e.stack || e.message},\nXML:\n${feedXml}`, "ERR_UPDATER_INVALID_RELEASE_FEED");
          }
@@ -306,10 +309,13 @@ index e768d24e7a..bc20fb0717 100644
          if (tag == null) {
              throw (0, builder_util_runtime_1.newError)(`No published versions on GitHub`, "ERR_UPDATER_NO_PUBLISHED_VERSIONS");
          }
-@@ -144,6 +197,14 @@ class GitHubProvider extends BaseGitHubProvider {
+@@ -144,6 +200,17 @@ class GitHubProvider extends BaseGitHubProvider {
              }
          }
          const result = (0, Provider_1.parseUpdateInfo)(rawData, channelFile, channelFileUrl);
++        if (this.usesFablesPlainReleaseFeed && (!semver.valid(result.version) || !semver.eq(result.version, tag))) {
++            throw (0, builder_util_runtime_1.newError)(`Update manifest version ${result.version} does not match release ${tag}`, "ERR_UPDATER_INVALID_VERSION");
++        }
 +        if (apiRelease !== null) {
 +            if (result.releaseName == null) {
 +                result.releaseName = apiRelease.name || apiRelease.tag_name;
@@ -321,7 +327,7 @@ index e768d24e7a..bc20fb0717 100644
          if (result.releaseName == null) {
              result.releaseName = latestRelease.elementValueOrEmpty("title");
          }
-@@ -155,6 +216,42 @@ class GitHubProvider extends BaseGitHubProvider {
+@@ -155,6 +222,42 @@ class GitHubProvider extends BaseGitHubProvider {
              ...result,
          };
      }
@@ -351,7 +357,7 @@ index e768d24e7a..bc20fb0717 100644
 +                    continue;
 +                }
 +                const releaseChannel = semver.prerelease(release.tag_name);
-+                if (channel === "latest" ? releaseChannel === null : releaseChannel?.[0] === channel) {
++                if (this.usesFablesPlainReleaseFeed ? this.isFablesPlainRelease(release.tag_name) : releaseChannel?.[0] === channel) {
 +                    return release;
 +                }
 +            }

@@ -93,8 +93,13 @@ describe("collectServerUpdateTargets", () => {
       collectServerUpdateTargets(machines, bridge).targets.map((target) => target.serverLabel),
     ).toEqual(["legacy"]);
     expect(
-      collectServerUpdateTargets(machines, "0.2.0").targets.map((target) => target.serverLabel),
-    ).toEqual(["bridged"]);
+      collectServerUpdateTargets(machines, "0.2.0").targets.map(
+        ({ serverLabel, targetVersion }) => [serverLabel, targetVersion],
+      ),
+    ).toEqual([
+      ["legacy", bridge],
+      ["bridged", "0.2.0"],
+    ]);
   });
 
   it("updates remote servers that can move to the target and names every skipped one", () => {

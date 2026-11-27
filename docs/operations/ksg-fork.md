@@ -131,17 +131,23 @@ track name, so it serves plain versions with `latest*.yml`.
    `bridge`. Keep the included upstream nightly at
    `v0.1.13-nightly.20261126.5305` for this release. The workflow continues
    the fork counter at the reserved version `0.1.13-nightly.20261126.530505`.
-   Let any earlier legacy release run finish before starting the bridge. Existing
-   Nightly clients pick it up through their usual updater.
+   Let any earlier legacy release run finish before starting the bridge.
+   Cancel queued legacy runs before publishing it and avoid rerunning those
+   workflows. A later encoded nightly can outrank the bridge on old clients.
+   Existing Nightly clients pick up the bridge through their usual updater.
 2. Wait for the bridge release to publish with all three nightly manifests and
-   the CLI archives. Check that a legacy desktop can install it and that
+   the CLI archives. The workflow also publishes `update-feed/nightly.json`
+   pointing to the bridge for late desktops whose Atom feed has lost it.
+   Check that a legacy desktop can install it and that
    enrolled servers can stage it. The bridge desktop moves a saved Nightly
    choice to Stable. The bridge CLI and server also follow Stable.
 3. Change the series line from `bridge` to `0.2` and push to `ksg/dev`
    again. The workflow publishes `0.2.0` on the same GitHub feed with the same
    nightly manifest names. The bridge can now offer it through the normal
-   update flow. Keep the bridge published so legacy clients that come back
-   online later can take both updates.
+   update flow. Keep both the bridge and the fixed nightly pointer published
+   so legacy clients that come back online later can take both updates.
+   If a run stops after creating its release draft, rerun that run to finish
+   the upload and publication. Other commits can't claim the draft's version.
 
 CLI archives and the release-availability check use this fork's GitHub
 releases. For desktop release builds, GitHub Actions supplies

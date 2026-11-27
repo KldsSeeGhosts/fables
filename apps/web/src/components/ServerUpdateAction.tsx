@@ -39,7 +39,7 @@ import { useManagedPolicy } from "~/state/managedPolicy";
 import { environmentPresentations } from "~/state/presentation";
 import { ManagedControl } from "./ManagedPolicy";
 import { manualServerUpdateCommand } from "~/versionSkew";
-import { crossesReleaseTrack } from "@t3tools/shared/cliRelease";
+import { crossesReleaseTrack, nextFablesUpdateTarget } from "@t3tools/shared/cliRelease";
 import { Button } from "./ui/button";
 import { toastManager } from "./ui/toast";
 import { StatusDot } from "./ui/status-dot";
@@ -289,7 +289,7 @@ export function ServerUpdateAction({
   selfUpdate,
   installation,
   desktopAppUpdate = false,
-  targetVersion,
+  targetVersion: requestedVersion,
   channel,
   label,
   variant = "secondary",
@@ -301,6 +301,7 @@ export function ServerUpdateAction({
   const messages = useMessages();
   const isDesktopAppUpdate = selfUpdate === "desktop-managed";
   const serverVersion = useServerConfigs().get(environmentId)?.environment.serverVersion;
+  const targetVersion = nextFablesUpdateTarget(serverVersion ?? "", requestedVersion);
   const sessionStateAtom = environmentSession.sessionStateAtom(environmentId);
   const canUpdate = useAtomValue(sessionStateAtom, canUpdateServer);
   const updatesDenial = managedUpdatesDenial(useManagedPolicy(environmentId), messages);
@@ -448,7 +449,7 @@ export function OutdatedServerUpdateAction({
   environmentId,
   serverLabel,
   fromVersion,
-  targetVersion,
+  targetVersion: requestedVersion,
   label,
 }: {
   readonly environmentId: EnvironmentId;
@@ -459,6 +460,7 @@ export function OutdatedServerUpdateAction({
 }) {
   const gt = useGT();
   const update = useAtomCommand(updateOutdatedServer, { reportFailure: false });
+  const targetVersion = nextFablesUpdateTarget(fromVersion ?? "", requestedVersion);
   const handleUpdate = async () => {
     if (pendingUpdateEnvironmentIds.has(environmentId)) return;
     pendingUpdateEnvironmentIds.add(environmentId);

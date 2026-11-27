@@ -69,6 +69,7 @@ describe("cliRelease", () => {
           { tag_name: `v${current}` },
           { tag_name: "v0.2.0" },
           { tag_name: "v0.2.1" },
+          { tag_name: "v0.2.2-beta.1" },
           { tag_name: "v0.2.3", draft: true },
         ],
         "stable",

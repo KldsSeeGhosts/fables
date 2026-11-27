@@ -12,7 +12,9 @@ import {
 import {
   cliReleaseChannelOf,
   desktopUpdateChannelOf,
+  fablesBridgeVersion,
   isFablesLegacyToBridge,
+  nextFablesUpdateTarget,
 } from "@t3tools/shared/cliRelease";
 import { compareSemverVersions } from "@t3tools/shared/semver";
 import { msg } from "gt-react";
@@ -111,10 +113,11 @@ export function collectServerUpdateTargets(
       skip(unavailable ?? resolve(msg("not connected")));
       continue;
     }
+    const nextVersion = nextFablesUpdateTarget(config.environment.serverVersion, targetVersion);
     const selfUpdate = resolveServerSelfUpdateCapability(config);
     const managedDenial = managedMachineUpdateDenial(
       config,
-      selfUpdate === "desktop-managed" ? undefined : targetVersion,
+      selfUpdate === "desktop-managed" ? undefined : nextVersion,
       resolve,
     );
     if (managedDenial !== undefined) {
@@ -134,8 +137,8 @@ export function collectServerUpdateTargets(
     // A desktop app installs its own track's newest release. Nightly builds run ahead of Stable, so a
     // Nightly host behind a Stable target has something newer; a Stable host may not.
     if (
-      serverChannel !== cliReleaseChannelOf(targetVersion) &&
-      !isFablesLegacyToBridge(config.environment.serverVersion, targetVersion) &&
+      serverChannel !== cliReleaseChannelOf(nextVersion) &&
+      !isFablesLegacyToBridge(config.environment.serverVersion, nextVersion) &&
       (selfUpdate !== "desktop-managed" || serverChannel === "stable")
     ) {
       skip(resolve(msg("on the {channel} channel", { channel: serverChannel })));
@@ -147,7 +150,7 @@ export function collectServerUpdateTargets(
       selfUpdate,
       installation: config.environment.capabilities.serverInstallation,
       desktopAppUpdate,
-      targetVersion,
+      targetVersion: nextVersion,
     };
     targets.push(target);
   }
@@ -792,6 +795,7 @@ export interface UpdateEverythingRow {
   readonly environmentId: EnvironmentId | null;
   readonly label: string;
   readonly app: "this-app" | "server" | "desktop-app" | null;
+  readonly version?: string;
   readonly skipped: string | null;
   readonly providers: ReadonlyArray<string>;
 }
@@ -932,6 +936,10 @@ export function describeUpdateEverything(
     ) ?? resolve(msg("Update {items}", { items: "" }));
 
   const rows = new Map<EnvironmentId | null, UpdateEverythingRow>();
+  const version =
+    plan.localVersion ??
+    plan.servers.find((server) => server.selfUpdate !== "desktop-managed")?.targetVersion ??
+    null;
   const update = (
     environmentId: EnvironmentId | null,
     label: string,
@@ -957,6 +965,10 @@ export function describeUpdateEverything(
   for (const server of plan.servers) {
     update(server.environmentId, server.serverLabel, {
       app: server.selfUpdate === "desktop-managed" ? "desktop-app" : "server",
+      ...(server.targetVersion !== version &&
+      (server.selfUpdate !== "desktop-managed" || server.targetVersion === fablesBridgeVersion)
+        ? { version: server.targetVersion }
+        : {}),
     });
   }
   for (const machine of plan.providerMachines) {
@@ -968,10 +980,7 @@ export function describeUpdateEverything(
 
   return {
     summary,
-    version:
-      plan.localVersion ??
-      plan.servers.find((server) => server.selfUpdate !== "desktop-managed")?.targetVersion ??
-      null,
+    version,
     providerCount,
     rows: Array.from(rows.values()),
   };
