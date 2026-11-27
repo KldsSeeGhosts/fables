@@ -44,6 +44,7 @@ jobs:
             .github/fables-release-series
             .github/scripts/ksg-release-version.cjs
             package.json
+            packages/shared/src/fablesReleaseBridge.ts
           sparse-checkout-cone-mode: false
       - uses: actions/setup-node@v6
         with:
@@ -63,7 +64,7 @@ jobs:
             echo "Unexpected upstream tag: $upstream" >&2
             exit 1
           fi
-          version="$(node .github/scripts/ksg-release-version.cjs)"
+          version="$(node .github/scripts/ksg-release-version.cjs "$upstream")"
           echo "Upstream $upstream -> Fables $version"
           {
             echo "version=$version"
