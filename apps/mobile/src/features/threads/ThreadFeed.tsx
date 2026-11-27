@@ -1310,7 +1310,8 @@ function ArtifactTemplateCard(props: {
 const AssistantMarkdownContent = memo(function AssistantMarkdownContent(props: {
   readonly markdown: string;
   readonly environmentId: EnvironmentId;
-  readonly citationSource?: Pick<AssistantCitation, "threadId" | "messageId">;
+  readonly citationThreadId?: AssistantCitation["threadId"];
+  readonly citationMessageId?: AssistantCitation["messageId"];
   readonly onCiteAssistantText?: (citation: AssistantCitation) => void;
   readonly markdownStyles: MarkdownStyleSet;
   readonly linkHandlers: MarkdownLinkHandlers;
@@ -1320,6 +1321,7 @@ const AssistantMarkdownContent = memo(function AssistantMarkdownContent(props: {
   readonly skills?: ReadonlyArray<SelectableMarkdownSkill> | undefined;
 }) {
   const gt = useGT();
+  const { citationThreadId, citationMessageId } = props;
   const liveMarkdown = useLiveThreadLinkLabels(
     props.markdown,
     props.environmentId,
@@ -1335,12 +1337,18 @@ const AssistantMarkdownContent = memo(function AssistantMarkdownContent(props: {
   if (quoteSelection !== null && quoteSelection.markdown !== liveMarkdown) setQuoteSelection(null);
   const quoteChoices = quoteSelection?.selectors ?? [];
   const cite = ({ selector }: (typeof quoteChoices)[number]) => {
-    if (!props.citationSource || !props.onCiteAssistantText) return;
+    if (
+      citationThreadId === undefined ||
+      citationMessageId === undefined ||
+      !props.onCiteAssistantText
+    )
+      return;
     setQuoteSelection(null);
     props.onCiteAssistantText({
       version: 1,
       environmentId: props.environmentId,
-      ...props.citationSource,
+      threadId: citationThreadId,
+      messageId: citationMessageId,
       ...selector,
     });
   };
@@ -1363,7 +1371,9 @@ const AssistantMarkdownContent = memo(function AssistantMarkdownContent(props: {
       <AssistantMarkdownBlocks
         markdown={liveMarkdown}
         onCiteText={
-          props.onCiteAssistantText && props.citationSource
+          props.onCiteAssistantText &&
+          citationThreadId !== undefined &&
+          citationMessageId !== undefined
             ? (text, path) => {
                 if (!text.trim()) return;
                 if (text.length > ASSISTANT_CITATION_MAX_TEXT_LENGTH) {
@@ -2694,7 +2704,8 @@ function renderFeedEntry(
             <AssistantMarkdownContent
               markdown={renderedText}
               environmentId={props.environmentId}
-              citationSource={{ threadId: props.threadId, messageId: message.id }}
+              citationThreadId={props.threadId}
+              citationMessageId={message.id}
               onCiteAssistantText={props.onCiteAssistantText}
               markdownStyles={styles}
               linkHandlers={props.markdownLinkHandlers}
@@ -3591,6 +3602,11 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       }
     },
   };
+  const markdownStyles = useMarkdownStyles();
+  const onPressPreview = (source: FilePreviewSource) => {
+    markdownLinkRequest.current?.abort();
+    openPreview(markdownLinkScope, { file: source });
+  };
   const renderMarkdownImage: MarkdownImageRenderer = (image) => {
     const media = resolveMarkdownMediaPreview(image.href, {
       environmentId: props.environmentId,
@@ -3705,7 +3721,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       />
     ) : null;
   };
-  const markdownStyles = useMarkdownStyles();
   const renderReasoning = (text: string) => (
     <AssistantMarkdownContent
       markdown={text}
@@ -4105,11 +4120,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       }
       return { ...current, expandedTurnIds: next };
     });
-  };
-
-  const onPressPreview = (source: FilePreviewSource) => {
-    markdownLinkRequest.current?.abort();
-    openPreview(markdownLinkScope, { file: source });
   };
 
   // Without this, every row above the viewport is assumed to be
