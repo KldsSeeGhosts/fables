@@ -3,10 +3,13 @@ import {
   type Captain,
   type CaptainMemory,
   type OrchestrationV2AppThreadLineage,
+  type ProjectId,
   type ThreadId,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import * as PeerLinks from "../peer/PeerLinks.ts";
@@ -27,6 +30,8 @@ import {
 
 const prefix = (text: string, length: number) =>
   text.length <= length ? text : `${text.slice(0, length)}…`;
+
+const encodeThreadIds = Schema.encodeEffect(Schema.fromJsonString(Schema.Array(Schema.String)));
 
 // The report policy decides whether finished crew wakes the Captain, so the waiting rule follows it.
 const crewWaitRule: Record<Captain["reportPolicy"], string> = {
@@ -55,6 +60,7 @@ const chorusBriefing = (captain: Captain) => `How you work:
 - You are the Chorus, the fleet-level Duet. Answer cross-project and cross-Duet questions yourself from \`duet_list\`, \`duet_read\`, \`duet_memory_search\`, \`t3_thread_list\` and \`t3_thread_read\`.
 - When \`duet_send\` is available, use it to route requested project work to a Duet that covers the project. Otherwise name the Duet to the user and leave the work there. Reading across Duets never requires sending a message.
 - Start a Solo only for a one-off in a project no Duet covers.
+- Before starting another Solo in a project where Chorus finished a Solo in the last 30 days, suggest widening an existing Duet's scope or creating a dedicated Duet first. Start the Solo only if the user says to go ahead anyway.
 - Relay each result to the user as one line plus the thread link. Do not paste Duet or Solo output.
 - While work runs, end your turn. Do not poll.
 - Keep no project plans or implementation state in NOTES.md. NOTES.md is only for what the user asked of Chorus itself.
@@ -109,10 +115,17 @@ export const formatCaptainBriefing = (input: {
   readonly agents: string;
   readonly notes: string;
   readonly fleetRoster?: string;
+  readonly repeatSoloProjects?: ReadonlyArray<{
+    readonly id: ProjectId;
+    readonly title: string;
+    readonly count: number;
+    readonly latestCompletedAt: string;
+  }>;
 }) => {
   const { captain, projects, memories, agents, notes } = input;
   const handoffSplit = splitCaptainHandoffSection(notes);
   const notesBody = handoffSplit.rest.trim();
+  const repeatSoloProjects = input.repeatSoloProjects ?? [];
   return [
     `Duet profile: ${captain.name}${captain.role ? ` (${captain.role})` : ""}`,
     captain.instructions && `Instructions:\n${prefix(captain.instructions, 4_000)}`,
@@ -124,6 +137,13 @@ export const formatCaptainBriefing = (input: {
       : projects.length > 0
         ? `Scoped local projects:\n${projects.map(({ id, title }) => `- ${prefix(title, 100)} [${prefix(id, 100)}]`).join("\n")}${captain.scopedProjectIds.length > projects.length ? "\n- Additional projects are listed in captain_read." : ""}`
         : "Workspace scope: No projects selected.",
+    repeatSoloProjects.length > 0 &&
+      `Repeat Solo projects:\n${repeatSoloProjects
+        .map(
+          ({ id, title, count, latestCompletedAt }) =>
+            `- ${prefix(title, 100)} [${prefix(id, 100)}]: ${count} finished ${count === 1 ? "Solo" : "Solos"} in the last 30 days, latest ${latestCompletedAt.slice(0, 10)}. Suggest widening an existing Duet's scope or creating a dedicated Duet before starting another Solo here.`,
+        )
+        .join("\n")}`,
     memories.length > 0 &&
       `Essential memories:\n${memories.map(({ text }) => `- ${prefix(text, 500)}`).join("\n")}`,
     agents && `AGENTS.md:\n${prefix(agents, 2_000)}`,
@@ -271,6 +291,49 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
     );
   });
 
+  const readRepeatSoloProjects = Effect.fn("CaptainService.repeatSoloProjects")(function* (
+    captain: Captain,
+  ) {
+    if (Option.isNone(store) || Option.isNone(sql)) return [];
+    const cutoff = DateTime.formatIso(
+      DateTime.toUtc(DateTime.subtract(yield* DateTime.now, { days: 30 })),
+    );
+    const conversationIds = [captain.primaryThreadId, ...captain.earlierThreadIds];
+    const conversationIdsJson = yield* encodeThreadIds(conversationIds);
+    const rows = yield* sql.value<{
+      readonly projectId: ProjectId;
+      readonly count: number;
+      readonly latestCompletedAt: string;
+    }>`
+      SELECT child.project_id AS projectId, count(*) AS count,
+        max(COALESCE(task.completed_at, task.updated_at)) AS latestCompletedAt
+      FROM orchestration_v2_projection_subagents AS task
+      INNER JOIN orchestration_v2_projection_threads AS child
+        ON child.thread_id = task.child_thread_id
+      WHERE task.thread_id IN (SELECT value FROM json_each(${conversationIdsJson}))
+        AND task.origin = 'app_owned'
+        AND task.status IN ('completed', 'failed', 'cancelled', 'interrupted')
+        AND COALESCE(task.completed_at, task.updated_at) >= ${cutoff}
+      GROUP BY child.project_id
+      ORDER BY latestCompletedAt DESC, projectId LIMIT 5
+    `;
+    if (rows.length === 0) return [];
+    const duets = yield* store.value.activeDuets();
+    const uncovered = rows.filter(
+      ({ projectId }) =>
+        !duets.some(
+          (duet) => duet.scopedProjectIds.length === 0 || duet.scopedProjectIds.includes(projectId),
+        ),
+    );
+    const entries = yield* projectEntries(uncovered.map(({ projectId }) => projectId));
+    return uncovered.map((row, index) => ({
+      id: row.projectId,
+      count: row.count,
+      latestCompletedAt: row.latestCompletedAt,
+      title: entries[index]?.title ?? "Unavailable project",
+    }));
+  });
+
   // A delegated child gets the Captain's crew rules only, never its private profile or memories.
   const readCrewContext = Effect.fn("CaptainService.crewContext")(function* (
     parentThreadId: ThreadId,
@@ -279,8 +342,9 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
     if (Option.isNone(store)) return NO_CONTEXT;
     const captain = yield* store.value.findByConversation(parentThreadId);
     if (captain === undefined || captain.archivedAt !== null) return NO_CONTEXT;
-    const crew = yield* store.value.document(captain, "CREW.md");
-    const rules = formatCaptainCrewRules(captain, crew.content);
+    const crew =
+      captain.kind === "chorus" ? "" : (yield* store.value.document(captain, "CREW.md")).content;
+    const rules = formatCaptainCrewRules(captain, crew);
     const plan = delivery === undefined ? undefined : crewBriefings.plan(delivery, rules);
     return {
       text: plan?.full === false ? unchangedCrewRules(captain) : rules,
@@ -372,6 +436,8 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
               });
             })
           : undefined;
+      const repeatSoloProjects =
+        captain.kind === "chorus" ? yield* readRepeatSoloProjects(captain) : [];
       const briefing = formatCaptainBriefing({
         captain,
         projects: scopedProjects,
@@ -379,6 +445,7 @@ export const makeReadCaptainTurnContext = Effect.gen(function* () {
         agents: agents.content,
         notes: notes.content,
         ...(fleetRoster === undefined ? {} : { fleetRoster }),
+        ...(repeatSoloProjects.length === 0 ? {} : { repeatSoloProjects }),
       });
       const longTermMemory =
         Option.isSome(honcho) && honcho.value.enabled

@@ -187,6 +187,14 @@ const make = Effect.gen(function* () {
     Effect.catchTags({ SqlError: captainUnavailable, SchemaError: captainUnavailable }),
   );
 
+  const activeDuets = Effect.fn("CaptainStore.activeDuets")(
+    function* () {
+      const rows = yield* sql`${profiles} WHERE kind = 'duet' AND archived_at IS NULL`;
+      return yield* Effect.forEach(rows, (row) => decodeCaptain(row));
+    },
+    Effect.catchTags({ SqlError: captainUnavailable, SchemaError: captainUnavailable }),
+  );
+
   const requireOwner = Effect.fn("CaptainStore.requireOwner")(function* (
     id: CaptainId,
     threadId: ThreadId | undefined,
@@ -474,6 +482,7 @@ const make = Effect.gen(function* () {
     findActiveChorus,
     privateChorusConversationIds,
     activeDuetRoster,
+    activeDuets,
     save,
     latestCompletedCompactionAt,
     saveRolloverResend,

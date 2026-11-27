@@ -3066,8 +3066,10 @@ const make = Effect.gen(function* () {
           : readTask(scope, taskId, false, true);
       }
       const { scope, parent } = yield* loadThreadCaller(callerScope, "delegate_task");
+      const canChooseLocalProject =
+        captain?.kind === "chorus" || (captain?.scopedProjectIds.length ?? 0) > 0;
       if (
-        !captain?.scopedProjectIds.length &&
+        !canChooseLocalProject &&
         input.target?.projectId !== undefined &&
         input.target.projectId !== parent.thread.projectId
       ) {
