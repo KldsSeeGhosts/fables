@@ -94,6 +94,14 @@ type MirrorJob =
       readonly deferred: Deferred.Deferred<void>;
     };
 
+type CrossDuetMemorySearch = {
+  readonly status: "ok" | "disabled" | "failed";
+  readonly results: ReadonlyArray<{
+    readonly captainId: CaptainId;
+    readonly text: string;
+  }>;
+};
+
 const escapeHonchoPart = (value: string) => {
   let escaped = "";
   for (const byte of Buffer.from(value, "utf8")) {
@@ -207,6 +215,10 @@ export class CaptainHonchoMemory extends Context.Service<
       captain: Captain,
       query: string | undefined,
     ) => Effect.Effect<ReadonlyArray<string>>;
+    readonly searchAcrossDuets: (
+      captains: ReadonlyArray<Captain>,
+      query: string | undefined,
+    ) => Effect.Effect<CrossDuetMemorySearch>;
     readonly drain: Effect.Effect<void>;
   }
 >()("t3/captains/CaptainHonchoMemory") {}
@@ -625,6 +637,59 @@ const make = Effect.gen(function* () {
     );
   });
 
+  const searchAcrossDuets = Effect.fn("CaptainHonchoMemory.searchAcrossDuets")(function* (
+    captains: ReadonlyArray<Captain>,
+    query: string | undefined,
+  ): Effect.fn.Return<CrossDuetMemorySearch> {
+    if (!enabled()) {
+      return { status: "disabled", results: [] } satisfies CrossDuetMemorySearch;
+    }
+    const duetBySession = new Map<string, Captain>();
+    for (const duet of captains) {
+      for (const threadId of [duet.primaryThreadId, ...duet.earlierThreadIds]) {
+        const sessionId = captainHonchoSessionId(threadId);
+        if (!duetBySession.has(sessionId)) duetBySession.set(sessionId, duet);
+      }
+    }
+    if (duetBySession.size === 0) {
+      return { status: "ok", results: [] } satisfies CrossDuetMemorySearch;
+    }
+
+    const failed = Effect.logWarning("Duet Honcho memory request failed.", {
+      operation: "search cross-Duet long-term memory",
+    }).pipe(Effect.as({ status: "failed", results: [] } satisfies CrossDuetMemorySearch));
+    return yield* requestJson(
+      "search cross-Duet long-term memory",
+      HttpClientRequest.post(endpoint("/search")).pipe(
+        HttpClientRequest.bodyJsonUnsafe({
+          query: query ?? "important durable facts, preferences, decisions, and open loops",
+          limit: 10,
+        }),
+      ),
+      MessageSearchResponse,
+    ).pipe(
+      Effect.map((messages): CrossDuetMemorySearch => ({
+        status: "ok",
+        results: messages
+          .flatMap(({ content, session_id }) => {
+            const duet = session_id === undefined ? undefined : duetBySession.get(session_id);
+            const text = content.trim();
+            return duet === undefined || text === "" ? [] : [{ captainId: duet.id, text }];
+          })
+          .slice(0, 10),
+      })),
+      Effect.catch((error): Effect.Effect<CrossDuetMemorySearch> => {
+        if (error.reason === "unavailable") {
+          return Effect.succeed({ status: "disabled", results: [] });
+        }
+        if (error.status === 404) {
+          return Effect.succeed({ status: "ok", results: [] });
+        }
+        return failed;
+      }),
+    );
+  });
+
   const drain = Effect.gen(function* () {
     const barrier = yield* Deferred.make<void>();
     yield* Queue.offer(jobs, { type: "barrier", deferred: barrier });
@@ -637,6 +702,7 @@ const make = Effect.gen(function* () {
     },
     longTermMemory,
     search,
+    searchAcrossDuets,
     drain,
   });
 });

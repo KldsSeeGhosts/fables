@@ -99,6 +99,7 @@ const honchoRecall = Layer.mock(CaptainHonchoMemory.CaptainHonchoMemory)({
   enabled: true,
   longTermMemory: () => Effect.succeedNone,
   search: () => Effect.succeed(["Uses pnpm"]),
+  searchAcrossDuets: () => Effect.succeed({ status: "ok" as const, results: [] }),
   drain: Effect.void,
 });
 
@@ -453,6 +454,7 @@ it.effect(
       enabled: false,
       longTermMemory: () => Effect.die("Honcho is disabled"),
       search: () => Effect.die("Honcho is disabled"),
+      searchAcrossDuets: () => Effect.die("Honcho is disabled"),
       drain: Effect.void,
     });
 
