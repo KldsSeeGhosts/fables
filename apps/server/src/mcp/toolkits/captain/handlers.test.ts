@@ -26,6 +26,7 @@ import * as ThreadManagement from "../../../orchestration-v2/ThreadManagementSer
 import * as Sqlite from "../../../persistence/Sqlite.ts";
 import * as McpHttpServer from "../../McpHttpServer.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
+import * as OrchestratorMcp from "../../OrchestratorMcpService.ts";
 import { liveThreadShell } from "../../McpToolAccess.testkit.ts";
 import * as CaptainHandlers from "./handlers.ts";
 import { CaptainToolkit } from "./tools.ts";
@@ -105,6 +106,7 @@ const honchoRecall = Layer.mock(CaptainHonchoMemory.CaptainHonchoMemory)({
 const layers = (honcho: Layer.Layer<CaptainHonchoMemory.CaptainHonchoMemory> = honchoRecall) =>
   McpHttpServer.toolkitRegistration(CaptainToolkit, CaptainHandlers.layer).pipe(
     Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+    Layer.provide(Layer.mock(OrchestratorMcp.OrchestratorMcpService)({})),
     Layer.provideMerge(
       Layer.mock(ThreadManagement.ThreadManagementService)({
         getThreadShell: (threadId) => Effect.succeed(liveThreadShell(threadId)),

@@ -1,6 +1,5 @@
 import {
   CommandId,
-  isCaptainThreadId,
   NonNegativeInt,
   OrchestratorMcpFailure,
   type ProviderApprovalPushHooks,
@@ -26,7 +25,6 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import * as GitManager from "../../../git/GitManager.ts";
-import * as CaptainStore from "../../../captains/CaptainStore.ts";
 import * as Orchestrator from "../../../orchestration-v2/Orchestrator.ts";
 import * as ProjectService from "../../../project/ProjectService.ts";
 import * as PullRequestWatchService from "../../../pullRequest/PullRequestWatchService.ts";
@@ -348,7 +346,6 @@ const pushHooksQuestion = (
 };
 
 const make = Effect.gen(function* () {
-  const captainStore = yield* Effect.serviceOption(CaptainStore.CaptainStore);
   const engine = yield* Orchestrator.OrchestratorV2;
   const reviewGuides = yield* PullRequestReviewGuideService.PullRequestReviewGuideService;
   const watches = yield* PullRequestWatchService.PullRequestWatchService;
@@ -418,16 +415,6 @@ const make = Effect.gen(function* () {
     const scope = yield* McpInvocationContext.requireMcpCapability("pull-requests");
     const threadId = input.threadId ?? scope.thread?.threadId;
     if (threadId === undefined) return yield* new PullRequestThreadRequiredError();
-    if (watching && isCaptainThreadId(threadId) && Option.isSome(captainStore)) {
-      const target = yield* captainStore.value
-        .findByConversation(threadId)
-        .pipe(
-          Effect.mapError(
-            (cause) => new PullRequestWatchService.PullRequestWatchFailedError({ cause }),
-          ),
-        );
-      if (target?.kind === "chorus") return yield* chorusWatchDenied();
-    }
     return yield* watches
       .setWatching({ threadId, target: input, watching, until: input.until })
       .pipe(
@@ -991,7 +978,11 @@ const make = Effect.gen(function* () {
         input.threadId,
       ],
       (input) => setWatching(input, true),
-      (scope) => (McpInvocationContext.chorusOnly(scope) ? chorusWatchDenied() : Effect.void),
+      {
+        wake: true,
+        checkCaller: (scope) =>
+          McpInvocationContext.chorusOnly(scope) ? chorusWatchDenied() : Effect.void,
+      },
     ),
     unwatch_pull_request: writesThread((input) => setWatching(input, false)),
     write_pull_request_guides: McpToolAccess.writesWithCapability((input) =>

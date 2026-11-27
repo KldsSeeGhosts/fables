@@ -10,13 +10,16 @@ import {
   CaptainMemoryId,
   CaptainMemoryText,
   EnvironmentId,
+  MessageId,
   OrchestratorMcpFailure,
+  RunId,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { McpSchema, Tool, Toolkit } from "effect/ai";
 
 import * as ThreadManagement from "../../../orchestration-v2/ThreadManagementService.ts";
+import * as OrchestratorMcpService from "../../OrchestratorMcpService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 const options = {
@@ -95,6 +98,35 @@ export const CaptainToolkit = Toolkit.make(
     success: DuetMemorySearchResult,
   })
     .annotate(Tool.Readonly, true)
+    .annotate(McpInvocationContext.ListedWhen, McpInvocationContext.chorusOnly),
+  Tool.make("duet_send", {
+    ...options,
+    description:
+      "Route the user's work request to a Duet's current conversation. For questions, use duet_list or duet_read. Confirm the route with the returned thread link. The result appears the next time the user messages Chorus.",
+    parameters: Schema.Struct({
+      duetId: CaptainId,
+      message: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100000)),
+      mode: Schema.optional(Schema.Literals(["auto", "queue", "steer", "restart"])),
+      clientRequestId: Schema.optional(Schema.String),
+    }),
+    success: Schema.Struct({
+      duetId: CaptainId,
+      environmentId: EnvironmentId,
+      threadId: ThreadId,
+      link: Schema.String,
+      messageId: MessageId,
+      runId: RunId,
+      taskId: Schema.optional(Schema.String),
+      status: Schema.String,
+      delivery: Schema.String,
+    }),
+    failure: OrchestratorMcpFailure,
+    failureMode: "return" as const,
+    dependencies: [...writeOptions.dependencies, OrchestratorMcpService.OrchestratorMcpService],
+  })
+    .annotate(Tool.Destructive, true)
+    .annotate(Tool.OpenWorld, true)
+    .annotate(McpSchema.EnabledWhen, McpInvocationContext.captainOnly)
     .annotate(McpInvocationContext.ListedWhen, McpInvocationContext.chorusOnly),
   Tool.make("captain_read", {
     ...options,

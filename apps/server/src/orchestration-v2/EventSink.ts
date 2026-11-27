@@ -33,6 +33,7 @@ import type { UnsequencedProjectEvent } from "../persistence/OrchestrationEventS
 import { projectStoredEventForWire } from "@t3tools/shared/wireProjection";
 import { makeRunOutcomeRecorder, type RunOutcome } from "./RunMetrics.ts";
 
+import { ChorusRouteDispatch, commitChorusRoute } from "../captains/CaptainStore.ts";
 import * as CommandReceiptStore from "./CommandReceiptStore.ts";
 import * as EffectOutbox from "./EffectOutbox.ts";
 import * as EventStore from "./EventStore.ts";
@@ -863,6 +864,14 @@ const layerBase: Layer.Layer<
             );
           }
           const outcomes = yield* applyStoredEvents(storedEvents);
+          const route = yield* Effect.serviceOption(ChorusRouteDispatch);
+          if (Option.isSome(route) && route.value.commandId === input.commandId) {
+            yield* commitChorusRoute(
+              route.value,
+              input.threadId,
+              DateTime.formatIso(input.acceptedAt),
+            ).pipe(Effect.provideService(SqlClient.SqlClient, sql));
+          }
           yield* effectOutbox.enqueue(input.effects);
           const receipt: CommandReceiptStore.CommandReceiptV2 = {
             commandId: input.commandId,

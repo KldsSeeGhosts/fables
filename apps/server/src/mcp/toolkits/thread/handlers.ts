@@ -14,6 +14,8 @@ import { topOfPinnedRunOrderKey } from "@t3tools/shared/pinOrderKey";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import {
+  assertChorusUsesDelegateTask,
+  assertScheduledThreadWriteAllowed,
   dispatchFailure,
   newCommandId,
   privateChorusConversationIds,
@@ -112,15 +114,18 @@ const writesThread = <P extends { readonly threadId?: ThreadId | undefined }, A,
 ) => McpToolAccess.writesThreads((params: P) => [params.threadId], handle);
 
 export const layer = McpToolAccess.toLayer(ThreadToolkit, {
-  run_scheduled_task_now: McpToolAccess.writesEnvironment((input) =>
+  run_scheduled_task_now: McpToolAccess.writesEnvironment((input, check) =>
     Effect.gen(function* () {
       const scheduler = yield* ScheduledTasks.ScheduledTaskService;
       const { tasks } = yield* scheduler.list().pipe(Effect.mapError(unavailable));
-      if (!tasks.some((task) => task.id === input.taskId))
+      const scheduled = tasks.find((task) => task.id === input.taskId);
+      if (scheduled === undefined)
         return yield* new OrchestratorMcpFailure({
           code: "invalid_request",
           message: "The scheduled task was not found.",
         });
+      const caller = yield* check;
+      yield* assertScheduledThreadWriteAllowed(caller, scheduled.threadId, true);
       const { task, threadId } = yield* scheduler
         .runNow({ id: input.taskId })
         .pipe(
@@ -222,6 +227,10 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
             .pipe(Effect.mapError(dispatchFailure));
           return { sequence: result.sequence, targetThreadId };
         }),
+      {
+        checkCaller: (scope, input) =>
+          input.action === "fork" ? assertChorusUsesDelegateTask(scope) : Effect.void,
+      },
     ),
   ),
   t3_thread_configure: McpToolAccess.either(

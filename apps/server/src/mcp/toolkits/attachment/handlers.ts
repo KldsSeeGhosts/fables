@@ -131,6 +131,7 @@ export const layer = McpToolAccess.toLayer(
               status: result.run.status,
             };
           }),
+        { wake: true },
       ),
     };
   }),
