@@ -52,16 +52,20 @@ const DEVELOPMENT_ASSETS = {
 } as const;
 
 const PREVIEW_ASSETS = {
-  appIcon: fromRepoRoot(BRAND_ASSET_PATHS.nightlyIosIconPng),
-  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.nightlyIconComposerProject),
-  splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.nightlyIosIconPng),
-  androidAdaptiveForeground,
-  androidAdaptiveBackgroundColor: "#111533",
-  androidAdaptiveBackgroundImage: "./assets/android-icon-background-nightly.png",
-  androidSplashIcon: "./assets/android-splash-icon-nightly.png",
-  androidMonochromeIcon: "./assets/android-icon-mark.png",
-  androidNotificationIcon: "./assets/android-notification-icon.png",
-  androidNotificationColor: "#7565C7",
+  appIcon: "./assets/fables/icon.png",
+  iosIcon: {
+    light: "./assets/fables/icon.png",
+    dark: "./assets/fables/ios-dark.png",
+    tinted: "./assets/fables/ios-tinted.png",
+  },
+  splashIcon: "./assets/fables/icon.png",
+  androidAdaptiveForeground: "./assets/fables/android-foreground.png",
+  androidAdaptiveBackgroundColor: "#191919",
+  androidAdaptiveBackgroundImage: "./assets/fables/android-background.png",
+  androidSplashIcon: "./assets/fables/android-splash.png",
+  androidMonochromeIcon: "./assets/fables/android-monochrome.png",
+  androidNotificationIcon: "./assets/fables/android-notification.png",
+  androidNotificationColor: "#F0C66E",
 } as const;
 
 const RELEASE_ASSETS = {
@@ -118,6 +122,10 @@ function resolveAppVariant(value: string | undefined): AppVariant {
 }
 
 const variant = VARIANT_CONFIG[APP_VARIANT];
+const widgetLogoPlugin: NonNullable<ExpoConfig["plugins"]>[number] =
+  APP_VARIANT === "preview"
+    ? ["./plugins/withWidgetLogoAsset.cjs", { source: "assets/fables/widget-mark.svg" }]
+    : "./plugins/withWidgetLogoAsset.cjs";
 // Copied thread links open the app. app.t3.codes/.well-known lists every variant's identifiers.
 const HOSTED_APP_HOST = "app.t3.codes";
 const iosBundleIdentifier = isIosPersonalTeamBuild
@@ -378,6 +386,7 @@ const config: ExpoConfig = {
         mode: APP_VARIANT === "development" ? "development" : "production",
       },
     ],
+    ...(APP_VARIANT === "preview" ? ["./plugins/withFablesNotificationIcon.cjs"] : []),
     // Gate Clerk here: withoutIosPersonalTeamCapabilities runs too early to strip its entitlement.
     ["@clerk/expo", { theme: "./clerk-theme.json", appleSignIn: !isIosPersonalTeamBuild }],
     "expo-web-browser",
@@ -465,7 +474,7 @@ const config: ExpoConfig = {
     // Compile out the unused pedometer to avoid an iOS motion purpose string.
     ["expo-sensors", { motionPermission: false }],
     // Mods run in reverse order; expo-widgets must create and wipe the target before assets are added.
-    ...(!isIosPersonalTeamBuild ? ["./plugins/withWidgetLogoAsset.cjs", widgetsPlugin] : []),
+    ...(!isIosPersonalTeamBuild ? [widgetLogoPlugin, widgetsPlugin] : []),
     "./plugins/withAndroidNetworkSecurityConfig.cjs",
     "./plugins/withAndroidGradleHeap.cjs",
     "./plugins/withAndroidInputBackground.cjs",
