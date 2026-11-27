@@ -73,6 +73,15 @@ const secondCaptain = {
   primaryThreadId: ThreadId.make("captain:jordan:0"),
   earlierThreadIds: [],
 };
+const chorusCaptain = {
+  ...captain,
+  id: CaptainId.make("chorus"),
+  name: "Chorus",
+  primaryThreadId: ThreadId.make("captain:chorus:0"),
+  kind: "chorus",
+  coordinatorOnly: true,
+  earlierThreadIds: [],
+} satisfies Captain;
 const primaryThread = {
   id: captain.primaryThreadId,
   lineage: { parentThreadId: null, relationshipToParent: null },
@@ -237,6 +246,7 @@ const fixture = <R = never, E = never>(
     readonly token?: string | null;
     readonly readToken?: Effect.Effect<string, PlatformError.PlatformError>;
     readonly response?: BuildResponse;
+    readonly captains?: ReadonlyArray<Captain>;
   } = {},
 ) => {
   const requests: Array<{
@@ -285,9 +295,11 @@ const fixture = <R = never, E = never>(
         )
       : Effect.succeed(value);
   };
+  const captains = input.captains ?? [captain, secondCaptain];
   const store = Layer.mock(CaptainStore.CaptainStore)({
     byThread: (threadId) =>
-      Effect.succeed([captain, secondCaptain].find((duet) => duet.primaryThreadId === threadId)),
+      Effect.succeed(captains.find((duet) => duet.primaryThreadId === threadId)),
+    snapshot: () => Effect.succeed({ captains: [...captains], documents: [], memories: [] }),
     findByConversation: () => Effect.succeed(captain),
     document: (captain, name) =>
       Effect.succeed({
@@ -405,6 +417,10 @@ it.effect("uses a quiet config opt-out and logs missing or invalid config by sev
         const service = yield* CaptainHonchoMemory.CaptainHonchoMemory;
         assert.isFalse(service.enabled);
         assert.deepStrictEqual(yield* service.search(captain, "pnpm"), []);
+        assert.deepStrictEqual(yield* service.searchAcrossDuets([captain], "pnpm"), {
+          status: "disabled",
+          results: [],
+        });
         assert.isTrue(Option.isNone(yield* service.longTermMemory(captain)));
       }).pipe(
         Effect.provide(layer),
@@ -708,32 +724,128 @@ it.effect(
   },
 );
 
+it.effect(
+  "searches across Duets without a peer scope and labels hits through their sessions",
+  () => {
+    const firstSession = "conversation_captain_3amaria_3a0";
+    const earlierSession = "conversation_captain_3amaria_3aold";
+    const secondSession = "conversation_captain_3ajordan_3a0";
+    const foreignSession = "conversation_captain_3aforeign_3a0";
+    const hit = (content: string, session_id?: string) => ({
+      id: content.trim() || "blank",
+      created_at: "2026-11-24T12:00:00Z",
+      content,
+      ...(session_id === undefined ? {} : { session_id }),
+    });
+    const { layer, requests } = fixture({
+      response: () =>
+        Effect.succeed(
+          Response.json([
+            hit("Maria's current fact", firstSession),
+            hit("Jordan's fact", secondSession),
+            hit("Maria's earlier fact", earlierSession),
+            hit("Another Duet's fact", foreignSession),
+            hit("No session"),
+            hit("   ", firstSession),
+          ]),
+        ),
+    });
+    return Effect.gen(function* () {
+      const service = yield* CaptainHonchoMemory.CaptainHonchoMemory;
+      assert.deepStrictEqual(yield* service.searchAcrossDuets([captain, secondCaptain], "facts"), {
+        status: "ok",
+        results: [
+          {
+            captainId: captain.id,
+            text: "Maria's current fact",
+            id: "Maria's current fact",
+            createdAt: "2026-11-24T12:00:00Z",
+          },
+          {
+            captainId: secondCaptain.id,
+            text: "Jordan's fact",
+            id: "Jordan's fact",
+            createdAt: "2026-11-24T12:00:00Z",
+          },
+          {
+            captainId: captain.id,
+            text: "Maria's earlier fact",
+            id: "Maria's earlier fact",
+            createdAt: "2026-11-24T12:00:00Z",
+          },
+        ],
+      });
+      assert.deepStrictEqual(yield* service.searchAcrossDuets([], "facts"), {
+        status: "ok",
+        results: [],
+      });
+      assert.deepStrictEqual(
+        requests.map(({ body }) => JSON.parse(body)),
+        [
+          {
+            query: "facts",
+            limit: 10,
+            filters: { session_id: { in: [firstSession, secondSession, earlierSession] } },
+          },
+        ],
+      );
+    }).pipe(Effect.provide(layer));
+  },
+);
+
+it.effect("reports a cross-Duet search failure without failing the caller", () => {
+  const { layer } = fixture({
+    response: () => Effect.succeed(Response.json([], { status: 500 })),
+  });
+  return Effect.gen(function* () {
+    const service = yield* CaptainHonchoMemory.CaptainHonchoMemory;
+    assert.deepStrictEqual(yield* service.searchAcrossDuets([captain], "facts"), {
+      status: "failed",
+      results: [],
+    });
+  }).pipe(Effect.provide(layer));
+});
+
 it.effect("aborts a stalled body within the deadline for turn context and search", () =>
   Effect.gen(function* () {
     const started = yield* Deferred.make<void>();
     const ended = yield* Deferred.make<void>();
     const searchStarted = yield* Deferred.make<void>();
     const searchEnded = yield* Deferred.make<void>();
+    const crossStarted = yield* Deferred.make<void>();
+    const crossEnded = yield* Deferred.make<void>();
     const { layer } = fixture({
       readToken: Effect.sleep("750 millis").pipe(Effect.as(token)),
-      response: (request, signal) =>
-        request.url.endsWith("/search")
-          ? stalledResponse(searchStarted, searchEnded)(request, signal)
-          : stalledResponse(started, ended)(request, signal),
+      response: (request, signal) => {
+        if (request.url.endsWith("/search")) {
+          const body =
+            request.body._tag === "Uint8Array" ? new TextDecoder().decode(request.body.body) : "";
+          return body.includes('"limit":10')
+            ? stalledResponse(crossStarted, crossEnded)(request, signal)
+            : stalledResponse(searchStarted, searchEnded)(request, signal);
+        }
+        return stalledResponse(started, ended)(request, signal);
+      },
     });
     yield* Effect.gen(function* () {
       const service = yield* CaptainHonchoMemory.CaptainHonchoMemory;
       const read = yield* makeReadCaptainTurnContext;
       const context = yield* read(primaryThread).pipe(Effect.forkChild);
       const search = yield* service.search(captain, "facts").pipe(Effect.forkChild);
+      const crossSearch = yield* service
+        .searchAcrossDuets([captain], "facts")
+        .pipe(Effect.forkChild);
       yield* TestClock.adjust("750 millis");
       yield* Deferred.await(started);
       yield* Deferred.await(searchStarted);
+      yield* Deferred.await(crossStarted);
       yield* TestClock.adjust("1250 millis");
       assert.notInclude((yield* Fiber.join(context)).text, "Long-term memory");
       assert.deepStrictEqual(yield* Fiber.join(search), []);
+      assert.deepStrictEqual(yield* Fiber.join(crossSearch), { status: "failed", results: [] });
       yield* Deferred.await(ended);
       yield* Deferred.await(searchEnded);
+      yield* Deferred.await(crossEnded);
     }).pipe(Effect.provide(layer));
   }),
 );
@@ -765,6 +877,38 @@ it.effect("propagates interruption from long-term memory and search", () =>
     }
   }),
 );
+
+it.effect("reads the user representation for only local Captain sessions", () => {
+  const { layer, requests } = fixture({
+    captains: [chorusCaptain, captain, secondCaptain],
+    response: (request) =>
+      Effect.succeed(
+        request.url.endsWith("/peers/user/representation")
+          ? Response.json({ representation: "Cross-Duet user conclusions" })
+          : Response.json({}, { status: 404 }),
+      ),
+  });
+  return Effect.gen(function* () {
+    const service = yield* CaptainHonchoMemory.CaptainHonchoMemory;
+    assert.deepStrictEqual(
+      yield* service.longTermMemory(chorusCaptain),
+      Option.some("Cross-Duet user conclusions"),
+    );
+    assert.lengthOf(requests, 1);
+    assert.deepStrictEqual(JSON.parse(requests[0]!.body), {
+      filters: {
+        session_id: {
+          in: [
+            "conversation_captain_3achorus_3a0",
+            "conversation_captain_3amaria_3a0",
+            "conversation_captain_3ajordan_3a0",
+            "conversation_captain_3amaria_3aold",
+          ],
+        },
+      },
+    });
+  }).pipe(Effect.provide(layer));
+});
 
 it.effect(
   "caps briefing recall, refreshes after compaction and keeps it out of crew context",
@@ -824,6 +968,10 @@ it.effect("treats missing representation and search scopes as empty, without a w
     assert.isTrue(Option.isNone(yield* service.longTermMemory(captain)));
     assert.deepStrictEqual(yield* service.search(captain, "pnpm"), []);
     assert.deepStrictEqual(warnings, []);
+    assert.deepStrictEqual(yield* service.searchAcrossDuets([captain], "pnpm"), {
+      status: "failed",
+      results: [],
+    });
   }).pipe(
     Effect.provide(layer),
     Effect.withLogger(Logger.make(({ message }) => warnings.push(message))),

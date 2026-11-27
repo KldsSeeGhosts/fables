@@ -44,6 +44,7 @@ const PREPARED_SESSION_LIMIT = 512;
 const MIRRORED_ITEM_LIMIT = 4096;
 const MIRROR_TIMEOUT = "1500 millis";
 const MEMORY_TIMEOUT = "2 seconds";
+const HONCHO_REPRESENTATION_SESSION_LIMIT = 1_000;
 const USER_PEER_ID = "user";
 
 const HonchoConfig = Schema.Struct({
@@ -64,6 +65,14 @@ const MessageSearchResponse = Schema.Array(
   Schema.Struct({
     content: Schema.String,
     session_id: Schema.optional(Schema.String),
+  }),
+);
+
+const CrossDuetMessageSearchResponse = Schema.Array(
+  Schema.Struct({
+    ...MessageSearchResponse.value.fields,
+    id: Schema.String,
+    created_at: Schema.String,
   }),
 );
 
@@ -94,6 +103,16 @@ type MirrorJob =
       readonly deferred: Deferred.Deferred<void>;
     };
 
+type CrossDuetMemorySearch = {
+  readonly status: "ok" | "disabled" | "failed";
+  readonly results: ReadonlyArray<{
+    readonly captainId: CaptainId;
+    readonly id: string;
+    readonly text: string;
+    readonly createdAt: string;
+  }>;
+};
+
 const escapeHonchoPart = (value: string) => {
   let escaped = "";
   for (const byte of Buffer.from(value, "utf8")) {
@@ -116,6 +135,19 @@ const honchoId = (prefix: string, value: string) => {
 
 const captainHonchoPeerId = (captainId: CaptainId) => honchoId("duet_", captainId);
 const captainHonchoSessionId = (threadId: ThreadId) => honchoId("conversation_", threadId);
+
+const captainsByHonchoSession = (captains: ReadonlyArray<Captain>) => {
+  const sessions = new Map(
+    captains.map((captain) => [captainHonchoSessionId(captain.primaryThreadId), captain.id]),
+  );
+  for (const captain of captains) {
+    for (const threadId of captain.earlierThreadIds) {
+      const sessionId = captainHonchoSessionId(threadId);
+      if (!sessions.has(sessionId)) sessions.set(sessionId, captain.id);
+    }
+  }
+  return sessions;
+};
 
 const trimHonchoMessage = (text: string) =>
   text.length <= HONCHO_MESSAGE_MAX_LENGTH
@@ -207,6 +239,10 @@ export class CaptainHonchoMemory extends Context.Service<
       captain: Captain,
       query: string | undefined,
     ) => Effect.Effect<ReadonlyArray<string>>;
+    readonly searchAcrossDuets: (
+      captains: ReadonlyArray<Captain>,
+      query: string | undefined,
+    ) => Effect.Effect<CrossDuetMemorySearch>;
     readonly drain: Effect.Effect<void>;
   }
 >()("t3/captains/CaptainHonchoMemory") {}
@@ -578,13 +614,28 @@ const make = Effect.gen(function* () {
   ) {
     if (!enabled()) return Option.none<string>();
     const peerId = captainHonchoPeerId(captain.id);
+    const captains =
+      captain.kind === "chorus" && Option.isSome(captainStore)
+        ? yield* captainStore.value.snapshot({}).pipe(
+            Effect.map(({ captains }) => captains),
+            Effect.orElseSucceed(() => []),
+          )
+        : [];
+    const sessions = [...captainsByHonchoSession(captains).keys()].slice(
+      0,
+      HONCHO_REPRESENTATION_SESSION_LIMIT,
+    );
+    // Honcho keeps the path peer as the observer for multi-scope reads. The user
+    // observes their own messages across sessions, so filter that representation.
+    const pathPeer = sessions.length === 0 ? peerId : USER_PEER_ID;
+    const body =
+      sessions.length === 0
+        ? { target: USER_PEER_ID, scope: peerId }
+        : { filters: { session_id: { in: sessions } } };
     return yield* requestJson(
       "read duet long-term memory",
-      HttpClientRequest.post(endpoint(`/peers/${peerId}/representation`)).pipe(
-        HttpClientRequest.bodyJsonUnsafe({
-          target: USER_PEER_ID,
-          scope: peerId,
-        }),
+      HttpClientRequest.post(endpoint(`/peers/${pathPeer}/representation`)).pipe(
+        HttpClientRequest.bodyJsonUnsafe(body),
       ),
       RepresentationResponse,
     ).pipe(
@@ -625,6 +676,53 @@ const make = Effect.gen(function* () {
     );
   });
 
+  const searchAcrossDuets = Effect.fn("CaptainHonchoMemory.searchAcrossDuets")(function* (
+    captains: ReadonlyArray<Captain>,
+    query: string | undefined,
+  ): Effect.fn.Return<CrossDuetMemorySearch> {
+    if (!enabled()) {
+      return { status: "disabled", results: [] } satisfies CrossDuetMemorySearch;
+    }
+    const duetBySession = captainsByHonchoSession(captains);
+    if (duetBySession.size === 0) {
+      return { status: "ok", results: [] } satisfies CrossDuetMemorySearch;
+    }
+
+    const failed = Effect.logWarning("Duet Honcho memory request failed.", {
+      operation: "search cross-Duet long-term memory",
+    }).pipe(Effect.as({ status: "failed", results: [] } satisfies CrossDuetMemorySearch));
+    return yield* requestJson(
+      "search cross-Duet long-term memory",
+      HttpClientRequest.post(endpoint("/search")).pipe(
+        HttpClientRequest.bodyJsonUnsafe({
+          query: query ?? "important durable facts, preferences, decisions, and open loops",
+          limit: 10,
+          filters: { session_id: { in: [...duetBySession.keys()] } },
+        }),
+      ),
+      CrossDuetMessageSearchResponse,
+    ).pipe(
+      Effect.map((messages): CrossDuetMemorySearch => ({
+        status: "ok",
+        results: messages
+          .flatMap(({ content, session_id, id, created_at }) => {
+            const captainId = session_id === undefined ? undefined : duetBySession.get(session_id);
+            const text = content.trim();
+            return captainId === undefined || text === ""
+              ? []
+              : [{ captainId, text, id, createdAt: created_at }];
+          })
+          .slice(0, 10),
+      })),
+      Effect.catch((error): Effect.Effect<CrossDuetMemorySearch> => {
+        if (error.reason === "unavailable") {
+          return Effect.succeed({ status: "disabled", results: [] });
+        }
+        return failed;
+      }),
+    );
+  });
+
   const drain = Effect.gen(function* () {
     const barrier = yield* Deferred.make<void>();
     yield* Queue.offer(jobs, { type: "barrier", deferred: barrier });
@@ -637,6 +735,7 @@ const make = Effect.gen(function* () {
     },
     longTermMemory,
     search,
+    searchAcrossDuets,
     drain,
   });
 });
