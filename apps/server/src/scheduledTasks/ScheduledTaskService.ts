@@ -1172,7 +1172,7 @@ export const layer = Layer.effect(
             return Effect.fail(
               new CaptainError({
                 code: "invalid_request",
-                message: "The morning brief is not bound to a Duet conversation.",
+                message: "The recap is not bound to a Duet conversation.",
               }),
             );
           }
@@ -1180,7 +1180,7 @@ export const layer = Layer.effect(
             return Effect.fail(
               new CaptainError({
                 code: "unavailable",
-                message: "Morning brief generation is unavailable.",
+                message: "Recap generation is unavailable.",
               }),
             );
           }

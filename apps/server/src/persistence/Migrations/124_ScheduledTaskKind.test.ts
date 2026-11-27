@@ -7,7 +7,7 @@ import { it } from "@effect/vitest";
 
 import migration from "./124_ScheduledTaskKind.ts";
 
-it.effect("backfills existing captain morning brief task kinds", () =>
+it.effect("backfills existing captain recap task kinds", () =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     yield* sql`CREATE TABLE scheduled_tasks (task_id TEXT PRIMARY KEY)`;

@@ -104,7 +104,7 @@ it("adds a missing New section after the digest title", () => {
   );
 });
 
-it.effect("generates with the brief model and retries once after a revision conflict", () =>
+it.effect("generates with the recap model and retries once after a revision conflict", () =>
   Effect.gen(function* () {
     const textModel = createModelSelection(ProviderInstanceId.make("codex"), "gpt-6-luna");
     const briefModel = createModelSelection(ProviderInstanceId.make("claudeAgent"), "claude-haiku");
@@ -197,6 +197,7 @@ it.effect("generates with the brief model and retries once after a revision conf
       assert.isTrue(written.content.includes("- migration finished"));
       assert.isTrue(generationPrompts[0]?.includes("Review the migration") === true);
       assert.isTrue(generationPrompts[0]?.includes("Migration review passed") === true);
+      assert.isTrue(generationPrompts[0]?.includes("DIGEST.md recap") === true);
       assert.isTrue(generationPrompts[0]?.includes("Cover progress, open work, blockers") === true);
       assert.isFalse(generationPrompts[0]?.includes("Group items by Duet"));
       assert.isBelow(generationPrompts[0]!.length, 16_000);
@@ -224,7 +225,7 @@ it.effect("generates with the brief model and retries once after a revision conf
   }),
 );
 
-it.effect("builds a Chorus brief from every active Duet without writing their documents", () =>
+it.effect("builds a Chorus recap from every active Duet without writing their documents", () =>
   Effect.gen(function* () {
     const chorus = makeCaptain(CaptainId.make("chorus"), "Chorus", {
       kind: "chorus",
@@ -380,6 +381,7 @@ it.effect("builds a Chorus brief from every active Duet without writing their do
       assert.isTrue(written.content.includes("- **Alpha:** Alpha digest item due tomorrow"));
 
       const prompt = generationPrompts[0]!;
+      assert.include(prompt, "DIGEST.md recap");
       assert.include(prompt, "Group items by Duet");
       assert.include(prompt, "nearest deadline first");
       assert.include(prompt, "### Duet: Alpha");

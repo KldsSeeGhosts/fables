@@ -156,9 +156,9 @@ interface BriefPromptInput {
 
 const duetBriefPrompt = (
   input: BriefPromptInput,
-) => `Write the next "## New" section of ${input.captain.name}'s DIGEST.md morning brief.
+) => `Write the next "## New" section of ${input.captain.name}'s DIGEST.md recap.
 
-The brief should contain up to 8 Markdown bullets, one line per item that needs the user's attention or decision. Leave out the "## New" heading, code fences, and commentary. Use plain language. Cover progress, open work, blockers, and decisions that need the user. Use the existing digest for continuity. If nothing needs attention, leave the brief empty.
+The recap should contain up to 8 Markdown bullets, one line per item that needs the user's attention or decision. Leave out the "## New" heading, code fences, and commentary. Use plain language. Cover progress, open work, blockers, and decisions that need the user. Use the existing digest for continuity. If nothing needs attention, leave the recap empty.
 
 ## NOTES.md
 ${excerpt(input.notes.trim(), BRIEF_DOCUMENT_CONTEXT_LIMIT) || "(empty)"}
@@ -171,9 +171,9 @@ ${excerpt(input.activity, BRIEF_ACTIVITY_LIMIT)}`;
 
 const chorusBriefPrompt = (
   input: BriefPromptInput,
-) => `Write the next "## New" section of ${input.captain.name}'s DIGEST.md morning brief.
+) => `Write the next "## New" section of ${input.captain.name}'s DIGEST.md recap.
 
-${input.captain.name} is a Chorus covering the user's fleet of Duets. The brief should contain up to 8 Markdown bullets, one line per item that needs the user's attention or decision. Group items by Duet; when the activity includes multiple machines, group first by machine and then by Duet. Put items with the nearest deadline first. Keep every item on one bullet line and use bold labels instead of section headings. Leave out the "## New" heading, code fences, and commentary. Use plain language. Use the existing digest for continuity. If nothing needs attention, leave the brief empty.
+${input.captain.name} is a Chorus covering the user's fleet of Duets. The recap should contain up to 8 Markdown bullets, one line per item that needs the user's attention or decision. Group items by Duet; when the activity includes multiple machines, group first by machine and then by Duet. Put items with the nearest deadline first. Keep every item on one bullet line and use bold labels instead of section headings. Leave out the "## New" heading, code fences, and commentary. Use plain language. Use the existing digest for continuity. If nothing needs attention, leave the recap empty.
 
 ## NOTES.md
 ${excerpt(input.notes.trim(), BRIEF_DOCUMENT_CONTEXT_LIMIT) || "(empty)"}
@@ -388,7 +388,7 @@ const make = Effect.gen(function* () {
         () =>
           new CaptainError({
             code: "unavailable",
-            message: "Could not read brief model settings.",
+            message: "Could not read recap model settings.",
           }),
       ),
     );
@@ -410,7 +410,7 @@ const make = Effect.gen(function* () {
     if (/^\s*(?:#{1,2}(?:\s|$)|`{3,}|~{3,}|=+[ \t]*$)/m.test(section)) {
       return yield* new TextGenerationError({
         operation: "generateBriefText",
-        detail: "The brief model returned headings or code fences instead of a brief.",
+        detail: "The recap model returned headings or code fences instead of a recap.",
       });
     }
 
@@ -421,7 +421,7 @@ const make = Effect.gen(function* () {
       if (!isDocumentContent(content)) {
         return yield* new CaptainError({
           code: "invalid_request",
-          message: "The generated brief would exceed the DIGEST.md size limit.",
+          message: "The generated recap would exceed the DIGEST.md size limit.",
         });
       }
       return yield* store.updateDocument({

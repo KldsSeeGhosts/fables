@@ -424,7 +424,7 @@ it.effect("thread cleanup notifies subscribers and a finishing run cannot recrea
   }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
 );
 
-it.effect("dispatches morning briefs to the generator while ordinary tasks start turns", () =>
+it.effect("dispatches recaps to the generator while ordinary tasks start turns", () =>
   Effect.gen(function* () {
     const beforeBrief = DateTime.makeZonedUnsafe("2026-11-02T07:59:55Z", {
       timeZone: DateTime.zoneMakeLocal(),
@@ -487,8 +487,8 @@ it.effect("dispatches morning briefs to the generator while ordinary tasks start
       const brief = yield* service.upsert({
         id: ScheduledTaskId.make("captain-morning-brief:maria"),
         kind: "captain_morning_brief",
-        title: "Morning brief",
-        prompt: "Generate the morning brief.",
+        title: "Recap",
+        prompt: "Generate the recap.",
         enabled: true,
         schedule: { type: "fixed_time", timeOfDay: "08:00" },
         projectId: ProjectId.make("project:test"),
@@ -501,8 +501,8 @@ it.effect("dispatches morning briefs to the generator while ordinary tasks start
       });
       const preserved = yield* service.upsert({
         id: brief.task.id,
-        title: "Morning brief",
-        prompt: "Generate the morning brief.",
+        title: "Recap",
+        prompt: "Generate the recap.",
         enabled: true,
         schedule: { type: "fixed_time", timeOfDay: "08:00" },
         projectId: ProjectId.make("project:test"),
