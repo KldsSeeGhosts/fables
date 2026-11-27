@@ -13,7 +13,9 @@ import * as DateTime from "effect/DateTime";
 import { expect, it } from "vite-plus/test";
 
 import {
-  activeChoruses,
+  fleetChorusCaptain,
+  selectFleetChorus,
+  withoutStoredChoruses,
   captainAttentionTotal,
   captainConversationKeys,
   captainDelegatedLocalTasks,
@@ -78,23 +80,42 @@ const maria = {
   archivedAt: null,
 } satisfies Pick<Captain, "id" | "primaryThreadId" | "earlierThreadIds" | "archivedAt">;
 
-it("detects active Choruses across machines without conflating their local IDs", () => {
-  const chorus = { ...maria, name: "Chorus", kind: "chorus" as const };
-  const archived = { ...chorus, id: CaptainId.make("archived"), archivedAt: earlierAt };
-  const duet = { ...maria, name: "Maria", kind: "duet" as const };
-  const local = { environmentId, label: "Local", captains: [chorus, archived, duet] };
-  const remote = { environmentId: remoteId, label: "Remote", captains: [chorus] };
+it("chooses the useful fleet Chorus projection and hides stored Chorus rows", () => {
+  const homeThreadId = ThreadId.make("captain:chorus:0");
+  const status = {
+    home: { environmentId: remoteId, label: "Studio", threadId: homeThreadId },
+    localHome: false,
+    conflictingHomes: [],
+    updatedAt: laterAt,
+  };
+  const unconfigured = {
+    ...status,
+    state: "unconfigured" as const,
+    home: null,
+  };
+  const offline = { ...status, state: "offline" as const };
+  const ready = { ...status, state: "ready" as const };
 
   expect(
-    activeChoruses([local, remote]).map(({ environmentId, captain }) => [
-      environmentId,
-      captain.id,
+    selectFleetChorus([
+      { environmentId, status: unconfigured },
+      { environmentId: remoteId, status: offline },
+    ])?.status.state,
+  ).toBe("offline");
+  expect(
+    selectFleetChorus([
+      { environmentId, status: unconfigured },
+      { environmentId: remoteId, status: ready },
     ]),
-  ).toEqual([
-    [environmentId, chorus.id],
-    [remoteId, chorus.id],
+  ).toEqual({ viaEnvironmentId: remoteId, status: ready });
+  expect(fleetChorusCaptain(ready)).toMatchObject({
+    id: "chorus",
+    kind: "chorus",
+    primaryThreadId: homeThreadId,
+  });
+  expect(withoutStoredChoruses([{ kind: "chorus" as const }, { kind: "duet" as const }])).toEqual([
+    { kind: "duet" },
   ]);
-  expect(activeChoruses([{ ...local, captains: [archived, duet] }])).toEqual([]);
 });
 
 it("collects pending attention from current Captain conversations and active children", () => {

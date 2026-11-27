@@ -1,6 +1,5 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
-  activeChoruses,
   captainInboxItems,
   captainThreadActivity,
   type CaptainInboxItem,
@@ -240,7 +239,6 @@ export function CaptainsInbox({
   const nowMs = now.getTime();
   const hello = useTimeOfDayGreeting();
   const items = captainInboxItems(environments, shells);
-  const fleetChoruses = activeChoruses(environments);
   const captainOf = (environmentId: EnvironmentId, captainId: Captain["id"]) =>
     environments
       .find((environment) => environment.environmentId === environmentId)
@@ -248,7 +246,7 @@ export function CaptainsInbox({
   const active = environments
     .flatMap(({ environmentId, label, captains }) =>
       captains.flatMap((captain) =>
-        captain.archivedAt === null
+        captain.archivedAt === null && captain.kind !== "chorus"
           ? [
               {
                 environmentId,
@@ -306,18 +304,6 @@ export function CaptainsInbox({
         ) : null}
       </header>
 
-      {fleetChoruses.length > 1 ? (
-        <div
-          role="alert"
-          className="rounded-lg border border-warning bg-warning/10 px-4 py-3 text-body text-warning-foreground"
-        >
-          <T>
-            More than one Chorus is active. This can happen after simultaneous creation or a restore
-            while another machine was offline. Archive all but one.
-          </T>
-        </div>
-      ) : null}
-
       {active.length > 0 ? (
         <ul className="grid grid-cols-1 gap-3 @lg:grid-cols-2 @3xl:grid-cols-3">
           {active.map(({ environmentId, label, captain, children, attention, working }, index) => (
@@ -339,16 +325,6 @@ export function CaptainsInbox({
           <T>No Duets yet. Create one to delegate work and get recaps.</T>
         </Text>
       )}
-
-      {fleetChoruses.length > 0 ? (
-        <Text variant="meta" tone="muted" render={<p />}>
-          <T>
-            Routing to a Duet on another machine requires a full-access link. A confirmed route can
-            show an unknown status while that machine is offline. Routed results appear the next
-            time you message Chorus.
-          </T>
-        </Text>
-      ) : null}
 
       <DuetSection title=<T>Needs you</T> count={items.length}>
         {items.length === 0 ? (
@@ -407,14 +383,6 @@ export function CaptainsInbox({
       </DuetSection>
 
       <DuetSection title=<T>Recaps</T>>
-        {fleetChoruses.length > 0 ? (
-          <Text variant="meta" tone="muted" render={<p />}>
-            <T>
-              Chorus recaps can be incomplete when a linked machine is offline or running an older
-              version.
-            </T>
-          </Text>
-        ) : null}
         {active.length > 0 ? (
           <MorningBriefs duets={active} now={now} onOpenCaptain={onOpenCaptain} />
         ) : (
