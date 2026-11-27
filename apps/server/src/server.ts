@@ -99,6 +99,7 @@ import * as TerminalManager from "./terminal/Manager.ts";
 import * as McpHttpServer from "./mcp/McpHttpServer.ts";
 import * as PeerForwarding from "./peer/PeerForwarding.ts";
 import * as RemoteDelegation from "./peer/RemoteDelegation.ts";
+import * as RemoteChorusRoutes from "./captains/remoteChorusRoutes.ts";
 import * as PeerClientPairing from "./peer/PeerClientPairing.ts";
 import * as PeerClientPairingHttp from "./peer/http.ts";
 import * as PeerLinkRequests from "./peer/PeerLinkRequests.ts";
@@ -933,6 +934,7 @@ const layerMakeRoutes = Layer.mergeAll(
     Layer.provide(McpOAuth.layerMcpClientAuthenticator),
     Layer.provide(ProjectionStoreV2.layer),
   ),
+  RemoteChorusRoutes.layer,
   // Follows delegated tasks running in linked environments, including after a restart.
   Layer.effectDiscard(
     RemoteDelegation.RemoteDelegation.pipe(Effect.flatMap((remote) => remote.start())),

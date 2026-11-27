@@ -1,6 +1,7 @@
 import {
   type AgentFeedbackMode,
   type AuthMcpClientAccess,
+  type CaptainKind,
   type EnvironmentId,
   McpCapabilityUnavailableError,
   OrchestratorMcpFailure,
@@ -54,6 +55,8 @@ export interface McpClientCaller {
   readonly narrowedTo?: ClientModes | undefined;
   /** A linked environment's thread this request is made for (`T3-Sender-Thread`). */
   readonly senderThread?: OrchestrationV2LinkedSender | undefined;
+  /** The linked environment's verified captain kind for `senderThread`. */
+  readonly senderCaptainKind?: CaptainKind | undefined;
   /** An outside client's thread links go through this hosted app, as Copy thread's do. */
   readonly hostedAppUrl?: string | undefined;
 }
@@ -78,6 +81,13 @@ export const LINK_EXPIRES_AT_HEADER = "t3-link-expires-at";
  * it. Read only from a linked client.
  */
 export const SENDER_THREAD_HEADER = "t3-sender-thread";
+
+/**
+ * `T3-Sender-Captain-Kind: chorus` attests that the sender thread named by a
+ * linked environment is its Chorus. Read only from a linked client; it grants
+ * scoped fleet operations there, never local Chorus ownership.
+ */
+export const SENDER_CAPTAIN_KIND_HEADER = "t3-sender-captain-kind";
 
 export interface ClientModes {
   readonly runtimeMode: RuntimeMode;
@@ -226,6 +236,11 @@ export const captainOnly = (): boolean => {
   const scope = fiber && Context.getOrUndefined(fiber.context, McpInvocationContext);
   return Boolean(scope?.captain);
 };
+
+export const forwardedChorus = (scope: McpInvocationScope | undefined) =>
+  scope?.client?.linked === true && scope.client.senderCaptainKind === "chorus"
+    ? scope.client.senderThread
+    : undefined;
 
 export const chorusOnly = (scope: McpInvocationScope | undefined): boolean =>
   scope?.thread !== undefined && scope.thread.subagent !== true && scope.chorus === true;

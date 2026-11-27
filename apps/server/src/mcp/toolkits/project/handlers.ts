@@ -37,6 +37,8 @@ import {
   resolveProjectSettings,
 } from "@t3tools/shared/projectSettings";
 import { resolveProjectScripts } from "@t3tools/shared/projectScripts";
+import * as CaptainStore from "../../../captains/CaptainStore.ts";
+import { assertChorusProjectUncovered } from "../../../captains/captainDelegation.ts";
 import { parseT3ProjectFile } from "@t3tools/shared/t3ProjectFile";
 import {
   providerOptionDescriptors,
@@ -227,21 +229,38 @@ const withSavedProjectSettingsAfterCreate = withSavedProjectSettings.pipe(
   Effect.orElseSucceed(() => (project: ProjectRecord) => project),
 );
 
-export const layer = McpToolAccess.toLayer(ProjectToolkit, {
-  t3_thread_launch: McpToolAccess.startsThreads(
-    (input) => input,
+const launchThread = (requiresChorus: boolean) =>
+  McpToolAccess.startsThreads(
+    (input: typeof ProjectToolkit.tools.t3_thread_launch.parametersSchema.Type) => input,
     (input, { runtimeMode, interactionMode, linkOrigin }) =>
       Effect.gen(function* () {
         const scope = yield* McpInvocationContext.McpInvocationContext;
         const context = yield* readCaller();
         const { caller } = context;
+        const chorus = McpInvocationContext.forwardedChorus(scope);
+        if (
+          chorus !== undefined &&
+          (input.delegatedFrom?.environmentId !== chorus.environmentId ||
+            input.delegatedFrom.threadId !== chorus.threadId ||
+            input.projectId === undefined ||
+            input.scratch === true ||
+            input.workspaceStrategy?.type !== "worktree")
+        ) {
+          return yield* new OrchestratorMcpFailure({
+            code: "capability_denied",
+            message: "A linked Chorus must start its Solos with delegate_task.",
+          });
+        }
         // A retry with the same key replays the first launch: the ids derive
         // from the caller and the key, and the launch service replays a
         // command it already accepted.
         const commandId =
           input.clientRequestId === undefined
             ? yield* newCommandId()
-            : yield* launchCommandId(scope.requestNamespace, input.clientRequestId);
+            : yield* launchCommandId(
+                requiresChorus ? `${scope.requestNamespace}:chorus-solo` : scope.requestNamespace,
+                input.clientRequestId,
+              );
         const threadId = ThreadId.make(commandId);
         const messageId = MessageId.make(commandId);
         const attachments = input.attachments ?? [];
@@ -304,6 +323,26 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
             code: "invalid_request",
             message: "A launch retry must use the original project.",
           });
+        const chorusStore =
+          chorus === undefined || replaying
+            ? undefined
+            : Option.getOrUndefined(yield* Effect.serviceOption(CaptainStore.CaptainStore));
+        if (chorus !== undefined && !replaying && chorusStore === undefined) {
+          return yield* new OrchestratorMcpFailure({
+            code: "orchestration_error",
+            message: "Duet coverage is unavailable on the linked machine.",
+          });
+        }
+        if (chorusStore !== undefined) {
+          const folders = yield* ManagedProjectFolders.ManagedProjectFolders;
+          if (yield* folders.isScratchProject(projectId)) {
+            return yield* new OrchestratorMcpFailure({
+              code: "invalid_request",
+              message: "A linked Chorus Solo requires a project that can run in a worktree.",
+            });
+          }
+        }
+        if (chorusStore !== undefined) yield* assertChorusProjectUncovered(chorusStore, projectId);
         const project =
           replaying && input.workspaceStrategy?.type !== "existing_worktree"
             ? undefined
@@ -475,7 +514,7 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
             )?.supportedRuntimeModes,
           });
         }
-        const result = yield* ThreadMessageIntake.launchThread({
+        const launch = ThreadMessageIntake.launchThread({
           commandId,
           threadId,
           projectId,
@@ -530,6 +569,11 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
             return unavailable();
           }),
         );
+        const result = yield* chorusStore === undefined
+          ? launch
+          : chorusStore.withProfileLock(
+              assertChorusProjectUncovered(chorusStore, projectId).pipe(Effect.andThen(launch)),
+            );
         const thread = result.projection.thread;
         const run = result.projection.runs.find((run) => run.userMessageId === messageId);
         return {
@@ -543,8 +587,22 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
       }),
     // The launched thread carries the caller's link, if it has one.
     "stamped",
-    assertChorusUsesDelegateTask,
-  ),
+    requiresChorus
+      ? (scope) =>
+          McpInvocationContext.forwardedChorus(scope) === undefined
+            ? Effect.fail(
+                new OrchestratorMcpFailure({
+                  code: "capability_denied",
+                  message: "This tool belongs to the active primary thread of a linked Chorus.",
+                }),
+              )
+            : Effect.void
+      : assertChorusUsesDelegateTask,
+  );
+
+export const layer = McpToolAccess.toLayer(ProjectToolkit, {
+  t3_thread_launch: launchThread(false),
+  chorus_solo_launch: launchThread(true),
   t3_project_list: McpToolAccess.reads((input) =>
     Effect.gen(function* () {
       const projects = yield* access;

@@ -121,8 +121,8 @@ describe("formatCaptainBriefing", () => {
     expect(text).toContain(
       "offer the user the choice of widening an existing Duet's scope or creating a dedicated Duet",
     );
-    expect(text).toContain("Do not inspect or edit the project first");
-    expect(text).toContain("Start the Solo only if the user says to go ahead anyway");
+    expect(text).toContain("Wait for that approval before inspecting or editing the project");
+    expect(text).toContain("you can still start a one-off Solo if they say to go ahead");
     expect(text).toContain("Repeat Solo projects:");
     expect(text).toContain("Workspace [project]: 2 finished Solos");
     expect(text).toContain("creating a dedicated Duet before starting another Solo");

@@ -8,6 +8,7 @@ import {
   ProviderInstanceId,
   ThreadId,
   type Captain,
+  OrchestratorMcpFailure,
 } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
@@ -28,6 +29,8 @@ import * as McpHttpServer from "../../McpHttpServer.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as OrchestratorMcp from "../../OrchestratorMcpService.ts";
 import { liveThreadShell } from "../../McpToolAccess.testkit.ts";
+import * as PeerForwarding from "../../../peer/PeerForwarding.ts";
+import * as PeerLinks from "../../../peer/PeerLinks.ts";
 import * as CaptainHandlers from "./handlers.ts";
 import { CaptainToolkit } from "./tools.ts";
 
@@ -104,6 +107,24 @@ const honchoRecall = Layer.mock(CaptainHonchoMemory.CaptainHonchoMemory)({
   drain: Effect.void,
 });
 
+const remoteEnvironmentId = EnvironmentId.make("remote-mac");
+const fleetState = {
+  names: [] as Array<{ environmentId: EnvironmentId; label: string }>,
+  call: ((_input: unknown) =>
+    Effect.fail(
+      new OrchestratorMcpFailure({ code: "orchestration_error", message: "unreachable" }),
+    )) as (input: unknown) => Effect.Effect<unknown, OrchestratorMcpFailure>,
+};
+
+const fleetLayers = Layer.mergeAll(
+  Layer.mock(PeerLinks.PeerLinks)({
+    names: () => Effect.succeed(fleetState.names),
+  }),
+  Layer.mock(PeerForwarding.PeerForwarding)({
+    call: ((...input: Array<unknown>) => fleetState.call(input)) as never,
+  }),
+);
+
 const layers = (honcho: Layer.Layer<CaptainHonchoMemory.CaptainHonchoMemory> = honchoRecall) =>
   McpHttpServer.toolkitRegistration(CaptainToolkit, CaptainHandlers.layer).pipe(
     Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
@@ -141,6 +162,7 @@ const layers = (honcho: Layer.Layer<CaptainHonchoMemory.CaptainHonchoMemory> = h
       }),
     ),
     Layer.provideMerge(honcho),
+    Layer.provideMerge(fleetLayers),
     Layer.provide(Sqlite.layerMemory),
     Layer.provide(NodeCrypto.layer),
   );
@@ -279,6 +301,193 @@ it.effect("lets only the Chorus use the local cross-Duet read tools", () =>
         expect(JSON.stringify(result.content)).toContain("capability_denied");
       }
     }
+  }).pipe(Effect.provide(layers())),
+);
+
+it.effect(
+  "fans Chorus reads out in parallel, merges machine labels, and reports unreachable peers",
+  () =>
+    Effect.gen(function* () {
+      const store = yield* CaptainStore.CaptainStore;
+      const mcp = yield* McpServer.McpServer;
+      yield* store.save(chorus);
+      yield* store.save(captain);
+      const reachable = remoteEnvironmentId;
+      const oldCall = fleetState.call;
+      const unreachable = EnvironmentId.make("away-mac");
+      fleetState.names = [
+        { environmentId: reachable, label: "Remote Mac" },
+        { environmentId: unreachable, label: "Away Mac" },
+      ];
+      const remoteDuet = {
+        ...captain,
+        id: CaptainId.make("remote-duet"),
+        primaryThreadId: ThreadId.make("captain:remote-duet:0"),
+        name: "Remote Duet",
+      } satisfies Captain;
+      const remoteMemory = {
+        id: CaptainMemoryId.make("remote-memory"),
+        captainId: remoteDuet.id,
+        text: "Remote deploy fact",
+        essential: false,
+        userControlled: false,
+        createdAt: captain.createdAt,
+        updatedAt: captain.updatedAt,
+      };
+      fleetState.call = (input) => {
+        const [, tool, target, params] = input as Array<never>;
+        if (target === unreachable) {
+          return Effect.fail(
+            new OrchestratorMcpFailure({ code: "orchestration_error", message: "did not answer" }),
+          );
+        }
+        if (tool === CaptainToolkit.tools.duet_list) {
+          return Effect.succeed({
+            duets: [
+              {
+                environmentId: reachable,
+                environmentLabel: "Remote Mac",
+                id: remoteDuet.id,
+                name: remoteDuet.name,
+                role: remoteDuet.role,
+                kind: remoteDuet.kind,
+                scopedProjectTitles: [],
+                archived: false,
+                primaryThreadId: remoteDuet.primaryThreadId,
+                digestNew: [],
+              },
+            ],
+          });
+        }
+        if (tool === CaptainToolkit.tools.duet_read) {
+          return Effect.succeed({ profile: remoteDuet });
+        }
+        if (tool === CaptainToolkit.tools.duet_memory_search) {
+          return Effect.succeed({
+            matches: [
+              {
+                environmentId: reachable,
+                environmentLabel: "Remote Mac",
+                source: "local",
+                duet: { id: remoteDuet.id, name: remoteDuet.name },
+                memory: remoteMemory,
+              },
+            ],
+          });
+        }
+        return Effect.fail(
+          new OrchestratorMcpFailure({
+            code: "invalid_request",
+            message: `unexpected ${String(params)}`,
+          }),
+        );
+      };
+      const call = callAs(mcp, createCaller(chorus.primaryThreadId));
+
+      const listed = (yield* call("duet_list")).structuredContent as {
+        duets: Array<{ environmentLabel: string; id: CaptainId }>;
+        unreachableMachines: Array<{ environmentId: EnvironmentId; environmentLabel: string }>;
+      };
+      expect(
+        listed.duets.some(
+          (duet) => duet.environmentLabel === "Local Mac" && duet.id === captain.id,
+        ),
+      ).toBe(true);
+      expect(
+        listed.duets.some(
+          (duet) => duet.environmentLabel === "Remote Mac" && duet.id === remoteDuet.id,
+        ),
+      ).toBe(true);
+      expect(listed.unreachableMachines).toEqual([
+        { environmentId: unreachable, environmentLabel: "Away Mac", reason: "did not answer" },
+      ]);
+
+      const read = (yield* call("duet_read", { duetId: remoteDuet.id })).structuredContent;
+      expect(read).toMatchObject({
+        results: [
+          {
+            environmentId: reachable,
+            environmentLabel: "Remote Mac",
+            result: { profile: { id: remoteDuet.id } },
+          },
+        ],
+        unreachableMachines: [{ environmentId: unreachable }],
+      });
+
+      const memories = (yield* call("duet_memory_search", { query: "deploy" }))
+        .structuredContent as {
+        matches: Array<{ environmentLabel: string; memory: { text: string } }>;
+        unreachableMachines?: Array<{ environmentId: EnvironmentId }>;
+      };
+      expect(
+        memories.matches.some(
+          (match) =>
+            match.environmentLabel === "Remote Mac" && match.memory.text === "Remote deploy fact",
+        ),
+      ).toBe(true);
+      expect(
+        memories.unreachableMachines?.some((machine) => machine.environmentId === unreachable),
+      ).toBe(true);
+      fleetState.names = [];
+      fleetState.call = oldCall;
+    }).pipe(Effect.provide(layers())),
+);
+
+it.effect("allows cross-Duet reads on a read-only linked Chorus session", () =>
+  Effect.gen(function* () {
+    const store = yield* CaptainStore.CaptainStore;
+    const mcp = yield* McpServer.McpServer;
+    yield* store.save(chorus);
+    yield* store.save(captain);
+    const forwarded = {
+      ...createCaller(),
+      client: {
+        sessionId: "peer",
+        label: "Peer",
+        access: "read-only",
+        linked: true,
+        senderThread: {
+          environmentId: EnvironmentId.make("origin"),
+          threadId: chorus.primaryThreadId,
+          title: "Chorus",
+        },
+        senderCaptainKind: "chorus",
+      },
+    } as const;
+    const result = yield* callAs(mcp, forwarded)("duet_list");
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({ duets: expect.any(Array) });
+
+    const write = yield* callAs(mcp, forwarded)("duet_send", {
+      duetId: captain.id,
+      message: "write",
+    });
+    expect(write.isError).toBe(true);
+    expect(JSON.stringify(write.content)).toContain("approved for read-only access");
+    const ownDocument = yield* Effect.result(
+      callAs(mcp, forwarded)("captain_document_write", {
+        name: "NOTES.md",
+        content: "write",
+        expectedRevision: 0,
+      }),
+    );
+    expect(ownDocument._tag).toBe("Failure");
+  }).pipe(Effect.provide(layers())),
+);
+
+it.effect("returns a remote send failure without recording a receipt", () =>
+  Effect.gen(function* () {
+    const store = yield* CaptainStore.CaptainStore;
+    yield* store.save(chorus);
+    const mcp = yield* McpServer.McpServer;
+    const result = yield* callAs(mcp, createCaller(chorus.primaryThreadId))("duet_send", {
+      duetId: captain.id,
+      environmentId: remoteEnvironmentId,
+      message: "Fix the checkout test.",
+    });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("unreachable");
+    expect(yield* store.pendingRemoteChorusRoutes(4)).toEqual([]);
   }).pipe(Effect.provide(layers())),
 );
 

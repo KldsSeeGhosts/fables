@@ -279,9 +279,23 @@ const withSenderThread = (
   } catch {
     return invocation;
   }
-  return Option.isNone(decoded)
-    ? invocation
-    : { ...invocation, client: { ...invocation.client, senderThread: decoded.value } };
+  if (Option.isNone(decoded)) return invocation;
+  // Only an authenticated linked environment may carry this attestation. The
+  // forwarding server adds it after its own captain lookup; it never makes the
+  // forwarded caller a local Chorus here.
+  const senderCaptainKind =
+    /^captain:.+:(?:0|[1-9][0-9]*)$/su.test(decoded.value.threadId) &&
+    request.headers[McpInvocationContext.SENDER_CAPTAIN_KIND_HEADER] === "chorus"
+      ? ("chorus" as const)
+      : undefined;
+  return {
+    ...invocation,
+    client: {
+      ...invocation.client,
+      senderThread: decoded.value,
+      ...(senderCaptainKind === undefined ? {} : { senderCaptainKind }),
+    },
+  };
 };
 
 // The Linked environments beta is off here: links wait until it is on again.

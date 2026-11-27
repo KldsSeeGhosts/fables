@@ -2,6 +2,8 @@ import { assert, it } from "@effect/vitest";
 import {
   CaptainError,
   CaptainId,
+  EnvironmentId,
+  OrchestratorMcpFailure,
   captainPrimaryThreadId,
   ProviderInstanceId,
   type Captain,
@@ -12,8 +14,12 @@ import { createModelSelection } from "@t3tools/shared/model";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 
+import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
+import * as PeerLinks from "../peer/PeerLinks.ts";
+import * as PeerMcpClient from "../peer/PeerMcpClient.ts";
 import * as Sqlite from "../persistence/Sqlite.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
@@ -252,10 +258,60 @@ it.effect("builds a Chorus recap from every active Duet without writing their do
           return { text: "- **Alpha:** Alpha digest item due tomorrow" };
         }),
     });
+    const origin = EnvironmentId.make("recap-origin");
+    const studio = EnvironmentId.make("studio");
+    const asleep = EnvironmentId.make("asleep");
+    let peersLinked = false;
+    const fleet = Layer.mergeAll(
+      Layer.mock(ServerEnvironment.ServerEnvironment)({
+        getEnvironmentId: Effect.succeed(origin),
+      }),
+      Layer.mock(PeerLinks.PeerLinks)({
+        enabled: Effect.succeed(true),
+        names: () =>
+          Effect.sync(() =>
+            peersLinked
+              ? [
+                  { environmentId: studio, label: "Studio" },
+                  { environmentId: asleep, label: "Sleeping Mac" },
+                ]
+              : [],
+          ),
+      }),
+      Layer.mock(PeerMcpClient.PeerMcpClient)({
+        call: ({ environmentId, tool, sender, senderCaptainKind, success }) => {
+          assert.equal(tool, "chorus_machine_activity");
+          assert.equal(sender?.threadId, chorus.primaryThreadId);
+          assert.equal(senderCaptainKind, "chorus");
+          if (environmentId === asleep) {
+            return Effect.fail(
+              new OrchestratorMcpFailure({
+                code: "orchestration_error",
+                message: "Peer did not answer.",
+              }),
+            );
+          }
+          return Effect.succeed(
+            Schema.decodeSync(success)({
+              label: "Peer-local label",
+              duets: [
+                {
+                  name: "Studio Duet",
+                  digestNew: "- Studio release ready",
+                  activeTasks: [{ title: "Studio task", status: "running" }],
+                  pendingRequests: [{ kind: "user_input", detail: "Approve studio release" }],
+                },
+              ],
+            }),
+          );
+        },
+      }),
+    );
     const layer = CaptainBriefService.layer.pipe(
       Layer.provideMerge(
         Layer.mergeAll(
           CaptainStore.layer,
+          fleet,
           textGenerationLayer,
           ServerSettings.layerTest({
             textGenerationModelSelection: createModelSelection(
@@ -428,6 +484,19 @@ it.effect("builds a Chorus recap from every active Duet without writing their do
       assert.include(rosterCappedPrompt, "Additional active Duets omitted.");
       assert.include(rosterCappedPrompt, "Approve the alpha release");
       assert.include(rosterCappedPrompt, "Answer the beta question");
+      peersLinked = true;
+      yield* service.generate({ captainId: chorus.id });
+      const fleetPrompt = generationPrompts[2]!;
+      assert.include(fleetPrompt, "## Machine: This machine");
+      assert.include(fleetPrompt, "## Machine: Studio");
+      assert.include(fleetPrompt, "### Duet: Studio Duet");
+      assert.include(fleetPrompt, "Studio release ready");
+      assert.include(fleetPrompt, "Approve studio release");
+      assert.include(
+        fleetPrompt,
+        "## Machine: Sleeping Mac\n\n- Machine unreachable: Peer did not answer.",
+      );
+      assert.notInclude(fleetPrompt, "Peer-local label");
     }).pipe(Effect.provide(layer));
   }),
 );

@@ -33,7 +33,7 @@ import * as Stream from "effect/Stream";
 import * as Tool from "effect/ai/Tool";
 import { withExecutedModelNote } from "@t3tools/provider-core/server/subagentProjection";
 
-import type * as McpInvocationContext from "../mcp/McpInvocationContext.ts";
+import * as McpInvocationContext from "../mcp/McpInvocationContext.ts";
 import { ProjectToolkit } from "../mcp/toolkits/project/tools.ts";
 import {
   providerOptionDescriptors,
@@ -292,9 +292,14 @@ const make = Effect.gen(function* () {
       }
       const parentNodeId = parentRun.rootNodeId;
       const { target } = input;
-      // A worktree there would branch from a commit this checkout has and the
-      // other may not, so a remote task runs in that project's checkout.
-      if (input.isolation === "worktree") {
+      const chorusSolo = McpInvocationContext.chorusOnly(scope);
+      if (chorusSolo && (input.isolation !== "worktree" || target.projectId === undefined)) {
+        return yield* new OrchestratorMcpFailure({
+          code: "invalid_request",
+          message: 'A linked Chorus Solo requires isolation "worktree" and target.projectId.',
+        });
+      }
+      if (!chorusSolo && input.isolation === "worktree") {
         return yield* new OrchestratorMcpFailure({
           code: "invalid_request",
           message:
@@ -368,7 +373,9 @@ const make = Effect.gen(function* () {
       const title = input.title ?? parent.thread.title;
       const launched = yield* forwarding.call(
         scope,
-        ProjectToolkit.tools.t3_thread_launch,
+        chorusSolo
+          ? ProjectToolkit.tools.chorus_solo_launch
+          : ProjectToolkit.tools.t3_thread_launch,
         target.environmentId,
         {
           projectId,
@@ -377,6 +384,18 @@ const make = Effect.gen(function* () {
           ...(runtimeMode === undefined ? {} : { runtimeMode }),
           ...(interactionMode === undefined ? {} : { interactionMode }),
           message: task,
+          ...(chorusSolo
+            ? {
+                workspaceStrategy: {
+                  type: "worktree" as const,
+                  baseRef: "HEAD",
+                  startFromOrigin: false,
+                  ...(input.repositories === undefined
+                    ? {}
+                    : { repositories: input.repositories.map((path) => ({ path })) }),
+                },
+              }
+            : {}),
           clientRequestId: `delegate:${scope.thread.threadId}:${key}`,
           // The thread there shows it is this thread's subagent, with a way back.
           delegatedFrom: {
@@ -396,6 +415,7 @@ const make = Effect.gen(function* () {
       const remoteChild: OrchestrationV2RemoteTaskChild = {
         environmentId: target.environmentId,
         threadId: launched.threadId,
+        ...(chorusSolo ? { projectId: launched.projectId } : {}),
         label: link?.label ?? target.environmentId,
         title,
         ...(launched.runId === null ? {} : { runId: launched.runId }),

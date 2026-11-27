@@ -101,14 +101,24 @@ const isActiveChorusUniqueViolation = (cause: unknown) =>
   cause.reason._tag === "UniqueViolation" &&
   cause.reason.constraint === "captains.kind";
 
+export type ChorusRouteSource =
+  | {
+      readonly source: "local";
+      readonly environmentId: EnvironmentId;
+      readonly sourceCaptainId: CaptainId;
+      readonly sourceThreadId: ThreadId;
+    }
+  | {
+      readonly source: "linked";
+      readonly sender: OrchestrationV2LinkedSender;
+      readonly senderSessionId: string;
+    };
+
 export class ChorusRouteDispatch extends Context.Service<
   ChorusRouteDispatch,
-  {
+  ChorusRouteSource & {
     readonly commandId: CommandId;
     readonly messageId: MessageId;
-    readonly environmentId: EnvironmentId;
-    readonly sourceCaptainId: CaptainId;
-    readonly sourceThreadId: ThreadId;
     readonly duetId: CaptainId;
   }
 >()("t3/captains/CaptainStore/ChorusRouteDispatch") {}
@@ -119,7 +129,19 @@ export const commitChorusRoute = Effect.fn("CaptainStore.commitChorusRoute")(fun
   sentAt: string,
 ) {
   const sql = yield* SqlClient.SqlClient;
-  const inserted = yield* sql`
+  const inserted = yield* route.source === "linked"
+    ? sql`
+      INSERT INTO chorus_incoming_routes (receipt_message_id, sender_session_id, message_id, run_id, thread_id)
+      SELECT m.message_id, ${route.senderSessionId}, m.message_id, r.run_id, r.thread_id
+      FROM orchestration_v2_projection_messages AS m
+      JOIN orchestration_v2_projection_runs AS r ON r.run_id = m.run_id
+      JOIN captains AS destination ON destination.id = ${route.duetId}
+      WHERE m.message_id = ${route.messageId} AND r.thread_id = ${threadId}
+        AND destination.kind = 'duet' AND destination.archived_at IS NULL
+        AND destination.primary_thread_id = r.thread_id
+      RETURNING message_id
+    `
+    : sql`
     INSERT INTO chorus_routes (
       message_id, run_id, environment_id, source_captain_id, source_thread_id, duet_id,
       thread_id, sent_at, last_seen_status
@@ -145,6 +167,15 @@ export const commitChorusRoute = Effect.fn("CaptainStore.commitChorusRoute")(fun
     });
   }
 });
+
+export interface RemoteChorusRouteUpdate {
+  readonly messageId: MessageId;
+  readonly threadId: ThreadId;
+  readonly runId: RunId;
+  readonly status: OrchestrationV2RunStatus | "unknown";
+  readonly terminal: boolean;
+  readonly result: string | null;
+}
 
 export interface ChorusRoute {
   readonly messageId: MessageId;
@@ -284,25 +315,30 @@ const make = Effect.gen(function* () {
         ...captain.earlierThreadIds,
       ]);
       return yield* sql<{
+        readonly environmentId: EnvironmentId | null;
+        readonly environmentLabel: string | null;
         readonly projectId: ProjectId;
         readonly count: number;
         readonly latestCompletedAt: string;
       }>`
         WITH recent AS (
-          SELECT child.project_id AS projectId, count(*) AS count,
-            max(COALESCE(task.completed_at, task.updated_at)) AS latestCompletedAt
+          SELECT json_extract(task.payload_json, '$.remoteChild.environmentId') AS environmentId,
+            max(json_extract(task.payload_json, '$.remoteChild.label')) AS environmentLabel,
+            COALESCE(child.project_id, json_extract(task.payload_json, '$.remoteChild.projectId')) AS projectId,
+            count(*) AS count, max(COALESCE(task.completed_at, task.updated_at)) AS latestCompletedAt
           FROM orchestration_v2_projection_subagents AS task
-          INNER JOIN orchestration_v2_projection_threads AS child
+          LEFT JOIN orchestration_v2_projection_threads AS child
             ON child.thread_id = task.child_thread_id
           WHERE task.thread_id IN (SELECT value FROM json_each(${conversationIds}))
             AND task.origin = 'app_owned'
             AND task.status IN ('completed', 'failed', 'cancelled', 'interrupted')
             AND COALESCE(task.completed_at, task.updated_at) >= ${cutoff}
-          GROUP BY child.project_id
+          GROUP BY environmentId, projectId
         )
-        SELECT projectId, count, latestCompletedAt FROM recent
-        WHERE NOT EXISTS (SELECT 1 ${activeDuetCoverage(sql`recent.projectId`)})
-        ORDER BY latestCompletedAt DESC, projectId LIMIT 5
+        SELECT environmentId, environmentLabel, projectId, count, latestCompletedAt FROM recent
+        WHERE projectId IS NOT NULL
+          AND (environmentId IS NOT NULL OR NOT EXISTS (SELECT 1 ${activeDuetCoverage(sql`recent.projectId`)}))
+        ORDER BY latestCompletedAt DESC, environmentId, projectId LIMIT 5
       `;
     },
     Effect.catchTags({ SqlError: captainUnavailable, SchemaError: captainUnavailable }),
@@ -337,12 +373,16 @@ const make = Effect.gen(function* () {
       readonly messageId: MessageId;
       readonly threadId: ThreadId;
       readonly duetName: string | null;
+      readonly environmentId: EnvironmentId;
+      readonly remote: 0 | 1;
       readonly runId: RunId;
       readonly status: ChorusRoute["lastSeenStatus"];
       readonly result: string | null;
       readonly terminal: 0 | 1;
+      readonly sentAt: string;
     }>`
       SELECT route.message_id AS messageId, route.thread_id AS threadId, duet.name AS duetName,
+        route.environment_id AS environmentId, 0 AS remote,
         COALESCE(run.run_id, route.run_id) AS runId, COALESCE(run.status, 'unknown') AS status,
         CASE WHEN ${terminalChorusRouteRun}
           THEN COALESCE((
@@ -353,7 +393,7 @@ const make = Effect.gen(function* () {
           ), route.result)
         END AS result,
         COALESCE(${terminalChorusRouteRun}, 0)
-          AS terminal
+          AS terminal, route.sent_at AS sentAt
       FROM chorus_routes AS route
       LEFT JOIN orchestration_v2_projection_messages AS prompt ON prompt.message_id = route.message_id
       LEFT JOIN orchestration_v2_projection_runs AS run
@@ -364,37 +404,130 @@ const make = Effect.gen(function* () {
           THEN route.settled_run_id = run.run_id
           ELSE COALESCE(run.status, 'unknown') <> route.last_seen_status
         END
-      ORDER BY route.sent_at, route.message_id
+      UNION ALL
+      SELECT route.message_id, route.thread_id, route.duet_name, route.environment_id, 1,
+        route.run_id, route.status, route.result, route.terminal, route.sent_at
+      FROM chorus_remote_routes AS route
+      WHERE route.source_captain_id = ${sourceCaptainId}
+        AND route.delivered = 0 AND (route.terminal = 1 OR route.status <> route.last_seen_status)
+      ORDER BY sentAt, messageId
       LIMIT ${limit}
     `;
   }, Effect.catch(captainUnavailable));
 
-  const settleChorusRouteRun = Effect.fn("CaptainStore.settleChorusRouteRun")(function* (
-    threadId: ThreadId,
-    runId: RunId,
+  const recordRemoteChorusRoute = Effect.fn("CaptainStore.recordRemoteChorusRoute")(function* (
+    sourceCaptainId: CaptainId,
+    route: {
+      readonly environmentId: EnvironmentId;
+      readonly messageId: MessageId;
+      readonly threadId: ThreadId;
+      readonly runId: RunId;
+      readonly duetName: string;
+      readonly status: OrchestrationV2RunStatus;
+    },
   ) {
+    const sentAt = DateTime.formatIso(yield* DateTime.now);
     yield* sql`
-      UPDATE chorus_routes SET settled_run_id = ${runId}, run_id = ${runId}
-      WHERE thread_id = ${threadId} AND settled_run_id IS NOT ${runId}
-        AND EXISTS (
-          SELECT 1 FROM orchestration_v2_projection_messages AS prompt
-          WHERE prompt.message_id = chorus_routes.message_id AND prompt.run_id = ${runId}
-        )
+      INSERT INTO chorus_remote_routes (
+        environment_id, message_id, source_captain_id, thread_id, duet_name, run_id,
+        status, last_seen_status, sent_at
+      ) VALUES (
+        ${route.environmentId}, ${route.messageId}, ${sourceCaptainId}, ${route.threadId},
+        ${route.duetName}, ${route.runId}, ${route.status}, ${route.status}, ${sentAt}
+      ) ON CONFLICT DO NOTHING
     `;
   }, Effect.catch(captainUnavailable));
 
+  const pendingRemoteChorusRoutes = Effect.fn("CaptainStore.pendingRemoteChorusRoutes")(function* (
+    limit: number,
+  ) {
+    return yield* sql<{
+      readonly environmentId: EnvironmentId;
+      readonly messageId: MessageId;
+    }>`
+      SELECT route.environment_id AS environmentId, route.message_id AS messageId
+      FROM chorus_remote_routes AS route
+      JOIN captains ON captains.id = route.source_captain_id AND captains.archived_at IS NULL
+      WHERE route.terminal = 0
+      ORDER BY route.checked_at, route.sent_at LIMIT ${limit}
+    `;
+  }, Effect.catch(captainUnavailable));
+
+  const readIncomingChorusRoute = Effect.fn("CaptainStore.readIncomingChorusRoute")(function* (
+    senderSessionId: string,
+    receiptMessageId: MessageId,
+  ) {
+    const [row] = yield* sql<Omit<RemoteChorusRouteUpdate, "terminal"> & { terminal: 0 | 1 }>`
+      SELECT route.receipt_message_id AS messageId, route.thread_id AS threadId,
+        COALESCE(run.run_id, route.run_id) AS runId,
+        CASE WHEN run.status IS NULL THEN 'queued'
+          WHEN ${terminalChorusRouteRun} AND route.settled_run_id IS NULL THEN 'running'
+          ELSE run.status END AS status,
+        COALESCE(${terminalChorusRouteRun} AND route.settled_run_id = run.run_id, 0) AS terminal,
+        CASE WHEN route.settled_run_id = run.run_id THEN (
+          SELECT substr(json_extract(answer.payload_json, '$.text'), 1, 1000)
+          FROM orchestration_v2_projection_messages AS answer
+          WHERE answer.run_id = run.run_id AND answer.role = 'assistant' AND answer.streaming = 0
+          ORDER BY answer.created_at DESC, answer.message_id DESC LIMIT 1
+        ) END AS result
+      FROM chorus_incoming_routes AS route
+      LEFT JOIN orchestration_v2_projection_messages AS prompt ON prompt.message_id = route.message_id
+      LEFT JOIN orchestration_v2_projection_runs AS run ON run.run_id = prompt.run_id AND run.thread_id = route.thread_id
+      WHERE route.receipt_message_id = ${receiptMessageId} AND route.sender_session_id = ${senderSessionId}
+    `;
+    return row === undefined ? null : { ...row, terminal: row.terminal === 1 };
+  }, Effect.catch(captainUnavailable));
+
+  const updateRemoteChorusRoute = Effect.fn("CaptainStore.updateRemoteChorusRoute")(function* (
+    route: { readonly environmentId: EnvironmentId; readonly messageId: MessageId },
+    update: RemoteChorusRouteUpdate | null,
+  ) {
+    const checkedAt = DateTime.formatIso(yield* DateTime.now);
+    yield* sql`
+      UPDATE chorus_remote_routes SET
+        checked_at = ${checkedAt},
+        thread_id = COALESCE(${update?.threadId ?? null}, thread_id),
+        run_id = COALESCE(${update?.runId ?? null}, run_id),
+        status = ${update?.status ?? "unknown"},
+        terminal = ${update?.terminal === true ? 1 : 0},
+        result = ${update?.result ?? null}
+      WHERE environment_id = ${route.environmentId} AND message_id = ${route.messageId}
+        AND terminal = 0
+    `;
+  }, Effect.catch(captainUnavailable));
+
+  const settleChorusRouteRun = Effect.fn("CaptainStore.settleChorusRouteRun")(
+    function* (threadId: ThreadId, runId: RunId) {
+      for (const table of ["chorus_routes", "chorus_incoming_routes"]) {
+        const name = sql(table);
+        yield* sql`
+        UPDATE ${name} SET settled_run_id = ${runId}, run_id = ${runId}
+        WHERE thread_id = ${threadId} AND settled_run_id IS NOT ${runId}
+          AND EXISTS (
+            SELECT 1 FROM orchestration_v2_projection_messages AS prompt
+            WHERE prompt.message_id = ${name}.message_id AND prompt.run_id = ${runId}
+          )
+      `;
+      }
+    },
+    transact,
+    Effect.catch(captainUnavailable),
+  );
+
   const restoreChorusRouteSettlements = Effect.fn("CaptainStore.restoreChorusRouteSettlements")(
     function* () {
-      yield* sql`
-        UPDATE chorus_routes AS route
-        SET settled_run_id = run.run_id, run_id = run.run_id
-        FROM orchestration_v2_projection_messages AS prompt
-        JOIN orchestration_v2_projection_runs AS run ON run.run_id = prompt.run_id
-        WHERE prompt.message_id = route.message_id AND run.thread_id = route.thread_id
-          AND route.settled_run_id IS NOT run.run_id
-          AND ${terminalChorusRouteRun}
-      `;
+      for (const table of ["chorus_routes", "chorus_incoming_routes"]) {
+        yield* sql`
+          UPDATE ${sql(table)} AS route SET settled_run_id = run.run_id, run_id = run.run_id
+          FROM orchestration_v2_projection_messages AS prompt
+          JOIN orchestration_v2_projection_runs AS run ON run.run_id = prompt.run_id
+          WHERE prompt.message_id = route.message_id AND run.thread_id = route.thread_id
+            AND route.settled_run_id IS NOT run.run_id
+            AND ${terminalChorusRouteRun}
+        `;
+      }
     },
+    transact,
     Effect.catch(captainUnavailable),
   );
 
@@ -413,12 +546,20 @@ const make = Effect.gen(function* () {
     function* (
       updates: ReadonlyArray<{
         readonly messageId: MessageId;
+        readonly remoteEnvironmentId?: EnvironmentId;
         readonly status: ChorusRoute["lastSeenStatus"];
         readonly terminal: boolean;
       }>,
     ) {
-      for (const { messageId, status, terminal } of updates) {
-        if (terminal) {
+      for (const { messageId, remoteEnvironmentId, status, terminal } of updates) {
+        if (remoteEnvironmentId !== undefined) {
+          const routeKey = sql`environment_id = ${remoteEnvironmentId} AND message_id = ${messageId}`;
+          if (terminal) {
+            yield* sql`UPDATE chorus_remote_routes SET delivered = 1, result = NULL WHERE ${routeKey}`;
+          } else {
+            yield* sql`UPDATE chorus_remote_routes SET last_seen_status = ${status} WHERE ${routeKey}`;
+          }
+        } else if (terminal) {
           yield* sql`DELETE FROM chorus_routes WHERE message_id = ${messageId}`;
         } else {
           yield* sql`UPDATE chorus_routes SET last_seen_status = ${status} WHERE message_id = ${messageId}`;
@@ -501,6 +642,11 @@ const make = Effect.gen(function* () {
         UPDATE chorus_routes
         SET message_id = ${send.messageId}, thread_id = ${send.threadId},
             last_seen_status = 'unknown', result = NULL, settled_run_id = NULL
+        WHERE message_id = ${sourceMessageId}
+      `;
+    yield* sql`
+        UPDATE chorus_incoming_routes
+        SET message_id = ${send.messageId}, thread_id = ${send.threadId}, settled_run_id = NULL
         WHERE message_id = ${sourceMessageId}
       `;
   }, Effect.catch(captainUnavailable));
@@ -727,6 +873,10 @@ const make = Effect.gen(function* () {
     repeatSoloProjects,
     withProfileLock,
     listChorusRoutes,
+    recordRemoteChorusRoute,
+    pendingRemoteChorusRoutes,
+    readIncomingChorusRoute,
+    updateRemoteChorusRoute,
     listChorusRouteUpdates,
     settleChorusRouteRun,
     restoreChorusRouteSettlements,

@@ -159,6 +159,7 @@ export const OrchestrationV2LinkedSender = Schema.Struct({
   environmentId: EnvironmentId,
   threadId: ThreadId,
   title: Schema.String,
+  captainKind: Schema.optionalKey(Schema.Literal("chorus")),
 });
 export type OrchestrationV2LinkedSender = typeof OrchestrationV2LinkedSender.Type;
 
@@ -1016,6 +1017,7 @@ const DedupedBodyMarker = Schema.optionalKey(Schema.Literal(true));
 export const OrchestrationV2RemoteTaskChild = Schema.Struct({
   environmentId: EnvironmentId,
   threadId: ThreadId,
+  projectId: Schema.optionalKey(ProjectId),
   label: Schema.String,
   /** The title it launched with there; absent on tasks recorded before it was kept. */
   title: Schema.optional(Schema.String),

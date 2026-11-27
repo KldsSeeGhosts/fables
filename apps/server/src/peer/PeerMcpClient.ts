@@ -3,6 +3,7 @@ import {
   OrchestratorMcpFailure,
   type PeerLinkError,
   type ProviderInteractionMode,
+  type CaptainKind,
   type OrchestrationV2LinkedSender,
   type RuntimeMode,
 } from "@t3tools/contracts";
@@ -49,6 +50,8 @@ export class PeerMcpClient extends Context.Service<
       readonly limits: PeerCallLimits;
       /** The thread here the call is made for, sent as `T3-Sender-Thread`. */
       readonly sender?: OrchestrationV2LinkedSender;
+      /** This server's verified captain kind for that sender, when it has one. */
+      readonly senderCaptainKind?: CaptainKind | undefined;
       readonly success: S;
     }) => Effect.Effect<S["Type"], OrchestratorMcpFailure>;
   }
@@ -211,6 +214,10 @@ const make = Effect.gen(function* () {
                 .map((part) => encodeURIComponent(part.toWellFormed()))
                 .join("/"),
             };
+      const captainKindHeader =
+        input.senderCaptainKind === undefined
+          ? {}
+          : { [McpInvocationContext.SENDER_CAPTAIN_KIND_HEADER]: input.senderCaptainKind };
       const sessionKey = `${input.environmentId} ${resolved.url}`;
       const callOnce = (sessionId: string) =>
         post(
@@ -225,6 +232,7 @@ const make = Effect.gen(function* () {
           {
             ...limitHeader,
             ...senderHeader,
+            ...captainKindHeader,
             "mcp-session-id": sessionId,
             "mcp-protocol-version": PROTOCOL_VERSION,
           },
