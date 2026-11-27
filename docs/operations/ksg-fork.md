@@ -105,18 +105,19 @@ Pushing `ksg/dev` can publish a release; it is not just a source backup.
 
 ## Versions and update feeds
 
-Releases use `X.Y.Z-nightly.YYYYMMDD.N`. The base version and date come from
-the included upstream nightly, and `N = upstream run * 100 + fork counter`,
-where the counter is 1 through 99. Upstream `.3093` becomes fork `.309301`,
-then `.309302` for a fork-only rebuild. Successive fork releases sort correctly;
-do not compare the fork's larger run number directly with an upstream version.
+Fables releases use plain semver starting at `0.2.0`.
+[The release series](../../.github/fables-release-series) sets `MAJOR.MINOR`.
+The release workflow reads the fork's tags and uses the next patch in that
+series, starting at zero. A fork-only release leaves the series file alone.
+When integrating a new upstream nightly, change the one line in that file to
+the next minor, for example `0.2` to `0.3`, before publishing `ksg/dev`.
+Change the major only when the owner approves it.
 
 The release workflow embeds the exact included upstream tag in the web bundle
-as `VITE_KSG_UPSTREAM_TAG`. Settings compares that tag with upstream releases,
-with the encoded fork version as a fallback for manual builds. Fork-only
-rebuilds do not advance this baseline. Integrating and publishing a new nightly
-advances it automatically, including multiple upstream nightlies on one day.
-Unversioned development builds without metadata report an unknown baseline.
+as `VITE_KSG_UPSTREAM_TAG` and records it in every release's notes. Settings
+compares that tag with published upstream nightlies. Plain-version builds
+without the embedded tag show an unknown baseline. Older encoded builds can
+still derive their included upstream nightly from the version.
 
 CLI archives and the release-availability check use this fork's GitHub
 releases. For desktop release builds, GitHub Actions supplies
