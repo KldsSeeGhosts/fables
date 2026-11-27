@@ -9,19 +9,32 @@ export const SOCKET_HEARTBEAT_INTERVAL = Duration.seconds(20);
 // RPC clients count any decoded frame as liveness and ignore unsolicited pongs.
 export const SOCKET_HEARTBEAT_FRAME = '{"_tag":"Pong"}';
 
-/** Server side: writes a heartbeat frame on an interval for as long as the writer is open. */
+/** Server side: keeps the upstream active when the server has nothing else to send. */
 export function withSocketHeartbeat(socket: Socket.Socket): Socket.Socket {
   return Socket.make({
     reader: socket.reader,
-    writer: Effect.tap(socket.writer, (writer) =>
-      writer
-        .write(SOCKET_HEARTBEAT_FRAME)
-        .pipe(
-          Effect.delay(SOCKET_HEARTBEAT_INTERVAL),
-          Effect.forever,
-          Effect.ignore,
-          Effect.forkScoped,
-        ),
-    ),
+    writer: Effect.flatMap(socket.writer, (writer) => {
+      let sentSinceTick = false;
+      const markSent = Effect.sync(() => {
+        sentSinceTick = true;
+      });
+      const heartbeat = writer.write(SOCKET_HEARTBEAT_FRAME);
+      // One skipped tick leaves at most 40 seconds between writes, below the proxy timeout.
+      const tick = Effect.suspend(() => {
+        if (!sentSinceTick) return heartbeat;
+        sentSinceTick = false;
+        return Effect.void;
+      });
+      return tick.pipe(
+        Effect.delay(SOCKET_HEARTBEAT_INTERVAL),
+        Effect.forever,
+        Effect.ignore,
+        Effect.forkScoped,
+        Effect.as({
+          write: (chunk) => writer.write(chunk).pipe(Effect.tap(markSent)),
+          writeAll: (chunks) => writer.writeAll(chunks).pipe(Effect.tap(markSent)),
+        } satisfies Socket.Writer),
+      );
+    }),
   });
 }
