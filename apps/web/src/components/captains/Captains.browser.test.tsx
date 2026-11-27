@@ -29,6 +29,7 @@ const captain = {
   scopedProjectIds: [],
   reportPolicy: "context",
   coordinatorOnly: false,
+  kind: "duet",
   createdAt: DateTime.formatIso(DateTime.makeUnsafe("2026-11-24")),
   updatedAt: DateTime.formatIso(DateTime.makeUnsafe("2026-11-24")),
   archivedAt: null,

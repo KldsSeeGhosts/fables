@@ -102,6 +102,7 @@ it("follows a live rollover on a plain route and allows explicit navigation back
     scopedProjectIds: [],
     reportPolicy: "context",
     coordinatorOnly: false,
+    kind: "duet",
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     archivedAt: null,

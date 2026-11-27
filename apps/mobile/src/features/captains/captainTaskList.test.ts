@@ -16,6 +16,7 @@ const captain = (id: string, archivedAt: string | null = null): Captain => ({
   scopedProjectIds: [],
   reportPolicy: "react",
   coordinatorOnly: false,
+  kind: "duet",
   primaryThreadId: ThreadId.make(`captain:${id}:1`),
   earlierThreadIds: [ThreadId.make(`captain:${id}:0`)],
   createdAt: "2026-11-01T00:00:00.000Z",
