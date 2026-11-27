@@ -21,11 +21,14 @@ const olderServerCaptain = {
 };
 
 describe("Captain", () => {
-  it("decodes a Captain from a server without the coordinator setting as not coordinating", () => {
-    expect(decodeCaptain(olderServerCaptain).coordinatorOnly).toBe(false);
+  it("decodes a Captain from a server before Chorus as a non-coordinating Duet", () => {
+    const decoded = decodeCaptain(olderServerCaptain);
+    expect(decoded.coordinatorOnly).toBe(false);
+    expect(decoded.kind).toBe("duet");
     expect(decodeCaptain({ ...olderServerCaptain, coordinatorOnly: true }).coordinatorOnly).toBe(
       true,
     );
+    expect(decodeCaptain({ ...olderServerCaptain, kind: "chorus" }).kind).toBe("chorus");
   });
 
   it("decodes Captains without end reasons and derives manual endings", () => {

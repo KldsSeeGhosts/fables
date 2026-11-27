@@ -80,6 +80,9 @@ export type CaptainAvatar = typeof CaptainAvatar.Type;
 export const CaptainReportPolicy = Schema.Literals(["react", "context", "ignore"]);
 export type CaptainReportPolicy = typeof CaptainReportPolicy.Type;
 
+export const CaptainKind = Schema.Literals(["duet", "chorus"]);
+export type CaptainKind = typeof CaptainKind.Type;
+
 export const CaptainConversationEndReason = Schema.Literals([
   "manual",
   "context_overflow",
@@ -110,6 +113,8 @@ export const Captain = Schema.Struct({
   ...CaptainProfile.fields,
   // Absent from servers older than the coordinator setting.
   coordinatorOnly: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
+  // Absent from servers older than Chorus.
+  kind: CaptainKind.pipe(Schema.withDecodingDefaultKey(Effect.succeed("duet"))),
   id: CaptainId,
   primaryThreadId: ThreadId,
   earlierThreadIds: Schema.Array(ThreadId),
@@ -168,6 +173,7 @@ export const CaptainKey = Schema.Struct({ captainId: CaptainId });
 export const CaptainCreateInput = Schema.Struct({
   ...CaptainProfile.fields,
   coordinatorOnly: Schema.optional(Schema.Boolean),
+  kind: Schema.optional(CaptainKind),
   captainId: CaptainId,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
