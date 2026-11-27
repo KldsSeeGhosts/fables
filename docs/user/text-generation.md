@@ -1,10 +1,10 @@
 # Text generation models
 
 Fables writes some text for you: thread titles, commit messages, pull request titles and
-descriptions, branch names, Duet morning briefs, and voice transcript cleanup. Pick the model for this in
+descriptions, branch names, Duet recaps, and voice transcript cleanup. Pick the model for this in
 **Settings → Threads → Text generation model**. **Settings → Source control & issues** and
-**Settings → Voice** can each pick a different one. To choose a model for scheduled Duet morning
-briefs, use **Settings → Threads → Brief model**.
+**Settings → Voice** can each pick a different one. To choose a model for scheduled Duet
+recaps, use **Settings → Threads → Recap model**.
 
 By default, a coding agent handles these tasks by starting a session per request. Adding a dedicated **text generator** API is usually much faster and cheaper.
 
@@ -20,7 +20,7 @@ Click **Test** beside a model picker to verify the key works, or **Show models**
 
 ## Limitations
 
-Each request sends the API what the task needs. For a scheduled Duet morning brief, the request
+Each request sends the API what the task needs. For a scheduled Duet recap, the request
 includes excerpts from NOTES.md and DIGEST.md, open requests, and recent delegated work.
 
 Turning a generator off or removing it sends its work back to the environment's text generation

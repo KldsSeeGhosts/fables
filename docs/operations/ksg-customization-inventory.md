@@ -36,7 +36,7 @@ git grep -n '\[112, "Captains"' -- apps/server/src/persistence/Migrations.ts
 
 Owners: `apps/web/src/components/captains/`, `apps/web/src/components/chat/Captain*`, `apps/web/src/components/chat/Duet*`, `apps/web/src/components/chat/duet*`, `apps/web/src/hooks/useDuetShell.ts`, `apps/web/src/routes/_chat.captains.tsx`, and the Captain entries in `apps/web/src/components/Sidebar.tsx` and the command palette.
 
-Must survive: the Captains shelf and inbox, Captain editor, tasks drawer, Morning briefs, details cards, Duet header chrome and status, earlier conversation stitching in the timeline, approval redirects from ended conversations, Duet-specific tool-call visibility, and the right-panel launcher in Captain tasks.
+Must survive: the Captains shelf and inbox, Captain editor, tasks drawer, Recaps, details cards, Duet header chrome and status, earlier conversation stitching in the timeline, approval redirects from ended conversations, Duet-specific tool-call visibility, and the right-panel launcher in Captain tasks.
 
 Checks:
 
