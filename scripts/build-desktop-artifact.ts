@@ -2798,7 +2798,7 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 }
 
 const DESKTOP_PRODUCT_NAME = "Fables";
-// The macOS bundle, Windows executable, and Debian install path ship under this name.
+// The Windows executable and Debian install path ship under this name.
 export const DESKTOP_INSTALL_NAME = "KSG Code";
 
 // Personal builds use an external keychain without distribution provisioning
@@ -2888,7 +2888,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     const repoRoot = yield* RepoRoot;
     buildConfig.mac = {
       target: target === "dmg" ? [target, "zip"] : [target],
-      executableName: DESKTOP_INSTALL_NAME,
+      executableName: DESKTOP_PRODUCT_NAME,
       icon: "icon.icns",
       category: "public.app-category.developer-tools",
       extendInfo: {
