@@ -301,14 +301,18 @@ it.effect("merges Chorus local and Honcho memories with labels, dedupe, and the 
         return {
           status: "ok" as const,
           results: [
-            { captainId: captain.id, text: "Shared deployment fact" },
+            { captainId: captain.id, text: " shared DEPLOYMENT  fact " },
             { captainId: captain.id, text: "Recall beyond local" },
             { captainId: jordan.id, text: "Jordan recall" },
             ...Array.from({ length: 7 }, (_, index) => ({
               captainId: jordan.id,
               text: `Extra recall ${index}`,
             })),
-          ],
+          ].map((hit, index) => ({
+            ...hit,
+            id: `message-${index}`,
+            createdAt: "2026-11-24T12:00:00Z",
+          })),
         };
       }),
     drain: Effect.void,
@@ -347,10 +351,27 @@ it.effect("merges Chorus local and Honcho memories with labels, dedupe, and the 
         [jordan.id, jordan.name],
       ],
     );
+    assert.equal(recalled[0]?.memory.id, "honcho-message-1");
+    assert.equal(recalled[0]?.memory.createdAt, "2026-11-24T12:00:00Z");
     assert.deepStrictEqual(calls[0]?.query, "fact");
     assert.deepStrictEqual(calls[0]?.captainIds.slice().sort(), [chorus.id, jordan.id, captain.id]);
 
-    yield* call("duet_memory_search", { query: "fact", duetId: captain.id });
+    for (let index = 0; index < 5; index++) {
+      yield* store.upsertMemory({
+        captainId: captain.id,
+        id: CaptainMemoryId.make(`long-${index}`),
+        text: `Long ${index} ${"😀".repeat(1_996)}`,
+        essential: false,
+      });
+    }
+    const long = yield* decodeDuetMemorySearch(
+      (yield* call("duet_memory_search", { query: "long", duetId: captain.id })).structuredContent,
+    );
+    assert.lengthOf(long.matches, 4);
+    assert.isAtMost(
+      long.matches.reduce((size, { memory }) => size + memory.text.length, 0),
+      16_000,
+    );
     assert.lengthOf(calls, 2);
     assert.deepStrictEqual(calls[1]?.captainIds, [captain.id]);
   }).pipe(Effect.provide(layers(honcho)));

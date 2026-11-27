@@ -48,6 +48,7 @@ const requireChorus = Effect.gen(function* () {
 
 const DUET_READ_CONTENT_LIMIT = 16_000;
 const DUET_READ_TRUNCATION_MARKER = "\n\n[truncated: content exceeds 16,000 characters]";
+const DUET_MEMORY_SEARCH_TEXT_LIMIT = 16_000;
 const HONCHO_RECALL_NOTE = "Honcho recall unavailable; showing local memories only.";
 
 const normalizeMemoryText = (text: string) => text.trim().replace(/\s+/g, " ").toLowerCase();
@@ -192,7 +193,7 @@ export const layer = McpToolAccess.toLayer(
                   },
                 ];
           });
-          const recalledMatches = recall.results.flatMap((hit, index) => {
+          const recalledMatches = recall.results.flatMap((hit) => {
             const captain = byId.get(hit.captainId);
             const text = hit.text.trim();
             return captain === undefined || !remember(text)
@@ -203,19 +204,30 @@ export const layer = McpToolAccess.toLayer(
                     source: "honcho" as const,
                     duet: { id: captain.id, name: captain.name },
                     memory: {
-                      id: CaptainMemoryId.make(`honcho-recall-${index + 1}`),
+                      id: CaptainMemoryId.make(`honcho-${hit.id}`),
                       captainId: captain.id,
-                      text: `Recalled: ${text}`.slice(0, 4_000),
+                      text: `Recalled: ${text}`
+                        .slice(0, 4_000)
+                        .replace(/[\uD800-\uDBFF]$/u, "")
+                        .trimEnd(),
                       essential: false,
                       userControlled: false,
-                      createdAt: captain.createdAt,
-                      updatedAt: captain.createdAt,
+                      createdAt: hit.createdAt,
+                      updatedAt: hit.createdAt,
                     },
                   },
                 ];
           });
+          let remainingText = DUET_MEMORY_SEARCH_TEXT_LIMIT;
+          const matches = [];
+          for (const match of [...localMatches, ...recalledMatches]) {
+            if (matches.length === 20 || remainingText === 0) break;
+            if (match.memory.text.length > remainingText) continue;
+            remainingText -= match.memory.text.length;
+            matches.push(match);
+          }
           return {
-            matches: [...localMatches, ...recalledMatches].slice(0, 20),
+            matches,
             ...(recall.status === "failed" ? { note: HONCHO_RECALL_NOTE } : {}),
           };
         }),

@@ -732,6 +732,8 @@ it.effect(
     const secondSession = "conversation_captain_3ajordan_3a0";
     const foreignSession = "conversation_captain_3aforeign_3a0";
     const hit = (content: string, session_id?: string) => ({
+      id: content.trim() || "blank",
+      created_at: "2026-11-24T12:00:00Z",
       content,
       ...(session_id === undefined ? {} : { session_id }),
     });
@@ -753,9 +755,24 @@ it.effect(
       assert.deepStrictEqual(yield* service.searchAcrossDuets([captain, secondCaptain], "facts"), {
         status: "ok",
         results: [
-          { captainId: captain.id, text: "Maria's current fact" },
-          { captainId: secondCaptain.id, text: "Jordan's fact" },
-          { captainId: captain.id, text: "Maria's earlier fact" },
+          {
+            captainId: captain.id,
+            text: "Maria's current fact",
+            id: "Maria's current fact",
+            createdAt: "2026-11-24T12:00:00Z",
+          },
+          {
+            captainId: secondCaptain.id,
+            text: "Jordan's fact",
+            id: "Jordan's fact",
+            createdAt: "2026-11-24T12:00:00Z",
+          },
+          {
+            captainId: captain.id,
+            text: "Maria's earlier fact",
+            id: "Maria's earlier fact",
+            createdAt: "2026-11-24T12:00:00Z",
+          },
         ],
       });
       assert.deepStrictEqual(yield* service.searchAcrossDuets([], "facts"), {
@@ -764,7 +781,13 @@ it.effect(
       });
       assert.deepStrictEqual(
         requests.map(({ body }) => JSON.parse(body)),
-        [{ query: "facts", limit: 10 }],
+        [
+          {
+            query: "facts",
+            limit: 10,
+            filters: { session_id: { in: [firstSession, secondSession, earlierSession] } },
+          },
+        ],
       );
     }).pipe(Effect.provide(layer));
   },
@@ -855,14 +878,34 @@ it.effect("propagates interruption from long-term memory and search", () =>
   }),
 );
 
-it.effect("reads Chorus long-term memory across every Duet scope", () => {
-  const { layer, requests } = fixture({ captains: [chorusCaptain, captain, secondCaptain] });
+it.effect("reads the user representation for only local Captain sessions", () => {
+  const { layer, requests } = fixture({
+    captains: [chorusCaptain, captain, secondCaptain],
+    response: (request) =>
+      Effect.succeed(
+        request.url.endsWith("/peers/user/representation")
+          ? Response.json({ representation: "Cross-Duet user conclusions" })
+          : Response.json({}, { status: 404 }),
+      ),
+  });
   return Effect.gen(function* () {
     const service = yield* CaptainHonchoMemory.CaptainHonchoMemory;
-    assert.isTrue(Option.isSome(yield* service.longTermMemory(chorusCaptain)));
+    assert.deepStrictEqual(
+      yield* service.longTermMemory(chorusCaptain),
+      Option.some("Cross-Duet user conclusions"),
+    );
+    assert.lengthOf(requests, 1);
     assert.deepStrictEqual(JSON.parse(requests[0]!.body), {
-      target: "user",
-      scope: ["duet_chorus", "duet_maria", "duet_jordan"],
+      filters: {
+        session_id: {
+          in: [
+            "conversation_captain_3achorus_3a0",
+            "conversation_captain_3amaria_3a0",
+            "conversation_captain_3ajordan_3a0",
+            "conversation_captain_3amaria_3aold",
+          ],
+        },
+      },
     });
   }).pipe(Effect.provide(layer));
 });
@@ -924,11 +967,11 @@ it.effect("treats missing representation and search scopes as empty, without a w
     const service = yield* CaptainHonchoMemory.CaptainHonchoMemory;
     assert.isTrue(Option.isNone(yield* service.longTermMemory(captain)));
     assert.deepStrictEqual(yield* service.search(captain, "pnpm"), []);
+    assert.deepStrictEqual(warnings, []);
     assert.deepStrictEqual(yield* service.searchAcrossDuets([captain], "pnpm"), {
-      status: "ok",
+      status: "failed",
       results: [],
     });
-    assert.deepStrictEqual(warnings, []);
   }).pipe(
     Effect.provide(layer),
     Effect.withLogger(Logger.make(({ message }) => warnings.push(message))),
