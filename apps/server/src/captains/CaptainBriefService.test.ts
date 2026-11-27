@@ -246,11 +246,7 @@ it.effect("builds a Chorus brief from every active Duet without writing their do
       "DIGEST.md",
       "# Alpha digest\n\n## New\n\n- Alpha digest item due tomorrow\n\n## Projects\n\nAlpha project detail that stays out.\n",
     );
-    putDocument(
-      beta,
-      "DIGEST.md",
-      `# Beta digest\n\n## New\n\n- Beta digest item\n- ${"x".repeat(5_000)}\n`,
-    );
+    putDocument(beta, "DIGEST.md", "# Beta digest\n\n## New\n\n- Beta digest item\n");
     putDocument(archived, "DIGEST.md", "# Archived digest\n\n## New\n\n- Archived digest item\n");
 
     const generationPrompts: string[] = [];
@@ -372,8 +368,21 @@ it.effect("builds a Chorus brief from every active Duet without writing their do
       assert.notInclude(prompt, "Archived digest item");
       assert.notInclude(prompt, "Archived active solo");
       assert.notInclude(prompt, "Alpha project detail that stays out");
-      assert.isBelow(prompt.length, 13_000);
-      assert.notInclude(prompt, "x".repeat(5_000));
+
+      documents.set(
+        `${beta.id}:DIGEST.md`,
+        documentFor(
+          beta,
+          "DIGEST.md",
+          `# Beta digest\n\n## New\n\n- Beta digest item\n- ${"x".repeat(5_000)}\n`,
+        ),
+      );
+      generationPrompts.length = 0;
+      yield* service.generate({ captainId: chorus.id });
+      const cappedPrompt = generationPrompts[0]!;
+      assert.include(cappedPrompt, "Beta digest item");
+      assert.notInclude(cappedPrompt, "x".repeat(5_000));
+      assert.isBelow(cappedPrompt.length, 13_000);
     }).pipe(Effect.provide(layer));
   }),
 );

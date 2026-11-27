@@ -56,7 +56,7 @@ const compactLine = (value: string | null | undefined) => value?.replace(/\s+/g,
 const excerpt = (value: string, limit: number) =>
   value.length <= limit ? value : `${value.slice(0, limit - 1)}…`;
 
-const formatActivity = (activity: {
+interface BriefActivity {
   readonly activeTasks: ReadonlyArray<{
     readonly title: string;
     readonly status: string;
@@ -72,7 +72,31 @@ const formatActivity = (activity: {
     readonly result?: string | undefined;
     readonly completedAt: string;
   }>;
-}) => {
+}
+
+interface ChorusDuetActivity {
+  readonly duet: Captain;
+  readonly digestNew: string;
+  readonly activeTasks: BriefActivity["activeTasks"];
+  readonly pendingRequests: BriefActivity["pendingRequests"];
+}
+
+interface ChorusMachineActivity {
+  readonly label: string;
+  readonly duets: ReadonlyArray<ChorusDuetActivity>;
+  readonly unreachableReason?: string | undefined;
+}
+
+const captainDigestNewSection = (content: string) => {
+  const lines = content.split("\n");
+  const start = lines.findIndex((line) => /^##\s+New\s*$/i.test(line.trim()));
+  if (start === -1) return "";
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => /^#{1,2}\s/.test(line.trim()));
+  return (end === -1 ? rest : rest.slice(0, end)).join("\n").trim();
+};
+
+const formatActivity = (activity: BriefActivity) => {
   const lines: string[] = [];
   for (const request of activity.pendingRequests.slice(0, 8)) {
     lines.push(`- pending ${request.kind}: ${compactLine(request.detail) ?? "Needs an answer"}`);
@@ -90,12 +114,40 @@ const formatActivity = (activity: {
   return lines.length === 0 ? "- No recent delegated activity." : lines.join("\n");
 };
 
-const briefPrompt = (input: {
+const formatChorusActivity = (machines: ReadonlyArray<ChorusMachineActivity>) => {
+  const machineSections = machines.map((machine) => {
+    if (machine.unreachableReason !== undefined) {
+      const reason = compactLine(machine.unreachableReason) || "No response";
+      return `## Machine: ${machine.label}\n\n- Machine unreachable: ${excerpt(reason, 200)}`;
+    }
+    const duetSections = machine.duets.map((activity) => {
+      const digestNew = excerpt(activity.digestNew, BRIEF_DOCUMENT_CONTEXT_LIMIT);
+      return `### Duet: ${activity.duet.name}\n\nDIGEST.md New:\n${digestNew || "(empty)"}\n\nOpen activity:\n${formatActivity(
+        {
+          activeTasks: activity.activeTasks,
+          pendingRequests: activity.pendingRequests,
+          completedTasks: [],
+        },
+      )}`;
+    });
+    return [
+      `## Machine: ${machine.label}`,
+      ...(duetSections.length === 0 ? ["- No active Duets."] : duetSections),
+    ].join("\n\n");
+  });
+  return machineSections.length === 0 ? "- No machine activity." : machineSections.join("\n\n");
+};
+
+interface BriefPromptInput {
   readonly captain: Captain;
   readonly notes: string;
   readonly digest: string;
   readonly activity: string;
-}) => `Write the next "## New" section of ${input.captain.name}'s DIGEST.md morning brief.
+}
+
+const duetBriefPrompt = (
+  input: BriefPromptInput,
+) => `Write the next "## New" section of ${input.captain.name}'s DIGEST.md morning brief.
 
 The brief should contain up to 8 Markdown bullets, one line per item that needs the user's attention or decision. Leave out the "## New" heading, code fences, and commentary. Use plain language. Cover progress, open work, blockers, and decisions that need the user. Use the existing digest for continuity. If nothing needs attention, leave the brief empty.
 
@@ -107,6 +159,24 @@ ${excerpt(input.digest.trim(), BRIEF_DOCUMENT_CONTEXT_LIMIT) || "(empty)"}
 
 ## Recent activity
 ${excerpt(input.activity, BRIEF_ACTIVITY_LIMIT)}`;
+
+const chorusBriefPrompt = (
+  input: BriefPromptInput,
+) => `Write the next "## New" section of ${input.captain.name}'s DIGEST.md morning brief.
+
+${input.captain.name} is the Chorus for the user's fleet of Duets. The brief should contain up to 8 Markdown bullets, one line per item that needs the user's attention or decision. Group items by Duet; when the activity includes multiple machines, group first by machine and then by Duet. Put items with the nearest deadline first. Leave out the "## New" heading, code fences, and commentary. Use plain language. Use the existing digest for continuity. If nothing needs attention, leave the brief empty.
+
+## NOTES.md
+${excerpt(input.notes.trim(), BRIEF_DOCUMENT_CONTEXT_LIMIT) || "(empty)"}
+
+## Current DIGEST.md
+${excerpt(input.digest.trim(), BRIEF_DOCUMENT_CONTEXT_LIMIT) || "(empty)"}
+
+## Duet activity by machine
+${excerpt(input.activity, BRIEF_ACTIVITY_LIMIT)}`;
+
+const briefPrompt = (input: BriefPromptInput) =>
+  input.captain.kind === "chorus" ? chorusBriefPrompt(input) : duetBriefPrompt(input);
 
 export class CaptainBriefService extends Context.Service<
   CaptainBriefService,
@@ -171,6 +241,148 @@ const make = Effect.gen(function* () {
     ),
   );
 
+  const readOpenLoops = Effect.fn("CaptainBriefService.readOpenLoops")(
+    function* (captain: Captain) {
+      return yield* CaptainHandoff.readOpenLoops({
+        captain,
+        threadId: captain.primaryThreadId,
+      }).pipe(Effect.provideService(SqlClient.SqlClient, sql));
+    },
+    Effect.mapError(
+      () =>
+        new CaptainError({
+          code: "unavailable",
+          message: "Could not read open Duet work.",
+        }),
+    ),
+  );
+
+  const readMachineOpenLoops = Effect.fn("CaptainBriefService.readMachineOpenLoops")(
+    function* (duets: ReadonlyArray<Captain>) {
+      const loopsByDuet = new Map<
+        CaptainId,
+        {
+          activeTasks: CaptainHandoff.CaptainHandoffTask[];
+          pendingRequests: CaptainHandoff.CaptainHandoffRequest[];
+        }
+      >();
+      const ownerByConversation = new Map<string, Captain>();
+      for (const duet of duets) {
+        loopsByDuet.set(duet.id, { activeTasks: [], pendingRequests: [] });
+        for (const threadId of [duet.primaryThreadId, ...duet.earlierThreadIds]) {
+          ownerByConversation.set(threadId, duet);
+        }
+      }
+      const conversationIds = [...ownerByConversation.keys()];
+      if (conversationIds.length === 0) return loopsByDuet;
+
+      const activeTaskRows = yield* sql<{
+        readonly id: string;
+        readonly threadId: string;
+        readonly status: string;
+        readonly childThreadId: string | null;
+        readonly remoteLabel: string | null;
+        readonly title: string | null;
+        readonly progress: string | null;
+      }>`
+        SELECT subagent_id AS id, thread_id AS threadId, status, child_thread_id AS childThreadId,
+          substr(json_extract(payload_json, '$.remoteChild.label'), 1, 121) AS remoteLabel,
+          substr(json_extract(payload_json, '$.title'), 1, 91) AS title,
+          substr(json_extract(payload_json, '$.progress'), 1, 121) AS progress
+        FROM orchestration_v2_projection_subagents
+        WHERE thread_id IN ${sql.in(conversationIds)}
+          AND origin = 'app_owned'
+          AND status IN ('idle', 'pending', 'running', 'waiting')
+        ORDER BY COALESCE(started_at, updated_at), subagent_id
+      `;
+
+      const ownerByChildThread = new Map<string, Captain>();
+      for (const row of activeTaskRows) {
+        const owner = ownerByConversation.get(row.threadId);
+        if (owner === undefined) continue;
+        if (row.childThreadId !== null) ownerByChildThread.set(row.childThreadId, owner);
+        loopsByDuet.get(owner.id)?.activeTasks.push({
+          id: row.id,
+          title: row.title ?? row.id,
+          status: row.status,
+          progress: row.progress ?? undefined,
+          followId: row.childThreadId ?? row.remoteLabel ?? row.id,
+        });
+      }
+
+      const requestThreadIds = [...new Set([...conversationIds, ...ownerByChildThread.keys()])];
+      const pendingRequestRows = yield* sql<{
+        readonly id: string;
+        readonly threadId: string;
+        readonly kind: string;
+        readonly detail: string | null;
+      }>`
+        SELECT DISTINCT requests.runtime_request_id AS id, requests.thread_id AS threadId,
+          requests.kind,
+          COALESCE(
+            substr(json_extract(item.payload_json, '$.prompt'), 1, 141),
+            substr(json_extract(item.payload_json, '$.questions[0].question'), 1, 141),
+            substr(json_extract(item.payload_json, '$.reason'), 1, 141)
+          ) AS detail
+        FROM orchestration_v2_projection_runtime_requests AS requests
+        LEFT JOIN orchestration_v2_projection_turn_items AS item
+          ON item.thread_id = requests.thread_id
+          AND item.type IN ('approval_request', 'user_input_request')
+          AND json_extract(item.payload_json, '$.requestId') = requests.runtime_request_id
+        WHERE requests.thread_id IN ${sql.in(requestThreadIds)}
+          AND requests.status = 'pending'
+          AND requests.kind IN ('command', 'file-read', 'file-change', 'mcp-elicitation', 'permission', 'user_input')
+        ORDER BY requests.created_at, requests.runtime_request_id
+      `;
+      for (const row of pendingRequestRows) {
+        const owner = ownerByConversation.get(row.threadId) ?? ownerByChildThread.get(row.threadId);
+        if (owner === undefined) continue;
+        loopsByDuet.get(owner.id)?.pendingRequests.push({
+          kind: row.kind,
+          threadId: row.threadId,
+          requestId: row.id,
+          detail: row.detail ?? undefined,
+        });
+      }
+      return loopsByDuet;
+    },
+    Effect.mapError(
+      () =>
+        new CaptainError({
+          code: "unavailable",
+          message: "Could not read open Duet work.",
+        }),
+    ),
+  );
+
+  const readLocalChorusMachineActivity = Effect.fn(
+    "CaptainBriefService.readLocalChorusMachineActivity",
+  )(function* () {
+    const snapshot = yield* store.snapshot({});
+    const duets = snapshot.captains.filter(
+      (captain) => captain.kind === "duet" && captain.archivedAt === null,
+    );
+    const openLoopsByDuet = yield* readMachineOpenLoops(duets);
+    return {
+      label: "This machine",
+      duets: yield* Effect.forEach(duets, (duet) =>
+        Effect.gen(function* () {
+          const digest = yield* store.document(duet, "DIGEST.md");
+          const openLoops = openLoopsByDuet.get(duet.id) ?? {
+            activeTasks: [],
+            pendingRequests: [],
+          };
+          return {
+            duet,
+            digestNew: captainDigestNewSection(digest.content),
+            activeTasks: openLoops.activeTasks,
+            pendingRequests: openLoops.pendingRequests,
+          };
+        }),
+      ),
+    } satisfies ChorusMachineActivity;
+  });
+
   const generateForCaptain = Effect.fn("CaptainBriefService.generate")(function* (input: {
     readonly captain: Captain;
     readonly projectId?: ProjectId | undefined;
@@ -179,20 +391,17 @@ const make = Effect.gen(function* () {
     const { captain } = input;
     const notes = yield* store.document(captain, "NOTES.md");
     const digestBeforeGeneration = yield* store.document(captain, "DIGEST.md");
-    const openLoops = yield* CaptainHandoff.readOpenLoops({
-      captain,
-      threadId: captain.primaryThreadId,
-    }).pipe(
-      Effect.provideService(SqlClient.SqlClient, sql),
-      Effect.mapError(
-        () =>
-          new CaptainError({
-            code: "unavailable",
-            message: "Could not read open Duet work.",
-          }),
-      ),
-    );
-    const completedTasks = yield* recentCompletedTasks(captain);
+    const activity =
+      captain.kind === "chorus"
+        ? formatChorusActivity([
+            // Linked machines can be appended here; each machine already formats as its own group.
+            yield* readLocalChorusMachineActivity(),
+          ])
+        : yield* Effect.gen(function* () {
+            const openLoops = yield* readOpenLoops(captain);
+            const completedTasks = yield* recentCompletedTasks(captain);
+            return formatActivity({ ...openLoops, completedTasks });
+          });
     const settings = yield* serverSettings.getSettings.pipe(
       Effect.mapError(
         () =>
@@ -210,7 +419,7 @@ const make = Effect.gen(function* () {
         captain,
         notes: notes.content,
         digest: digestBeforeGeneration.content,
-        activity: formatActivity({ ...openLoops, completedTasks }),
+        activity,
       }),
     });
     const section = generated.text
