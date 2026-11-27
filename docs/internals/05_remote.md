@@ -39,6 +39,12 @@ side lists and revokes it in Sharing & access like any other session, and owns i
   layout command still runs only with a person's approval of its text, and for an agent only from
   a thread in Full access, both checked in
   [`TaskFolders`](../../apps/server/src/workspace/TaskFolders.ts) at every run.
+- **Chorus identity comes from the sending host.** An authenticated linked operator attests
+  which of its threads is its active primary Chorus. The receiver checks the header format and
+  trusts the sending server to verify the current profile. Fleet reads, routing to a Duet and
+  launching an uncovered-project Solo use that attestation. The receiver keeps its link and mode
+  checks and checks coverage itself. The Solo launch has its own peer tool so a server that
+  predates coverage checks rejects it.
 - **Namespace idempotency keys.** All callers on the linking side share one session on the receiving
   side, so idempotency keys must be hashed with the caller's namespace before forwarding.
 - **Clients read linked threads as standard thread streams.**

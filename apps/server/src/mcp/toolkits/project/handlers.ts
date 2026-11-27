@@ -229,9 +229,9 @@ const withSavedProjectSettingsAfterCreate = withSavedProjectSettings.pipe(
   Effect.orElseSucceed(() => (project: ProjectRecord) => project),
 );
 
-export const layer = McpToolAccess.toLayer(ProjectToolkit, {
-  t3_thread_launch: McpToolAccess.startsThreads(
-    (input) => input,
+const launchThread = (requiresChorus: boolean) =>
+  McpToolAccess.startsThreads(
+    (input: typeof ProjectToolkit.tools.t3_thread_launch.parametersSchema.Type) => input,
     (input, { runtimeMode, interactionMode, linkOrigin }) =>
       Effect.gen(function* () {
         const scope = yield* McpInvocationContext.McpInvocationContext;
@@ -257,7 +257,10 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
         const commandId =
           input.clientRequestId === undefined
             ? yield* newCommandId()
-            : yield* launchCommandId(scope.requestNamespace, input.clientRequestId);
+            : yield* launchCommandId(
+                requiresChorus ? `${scope.requestNamespace}:chorus-solo` : scope.requestNamespace,
+                input.clientRequestId,
+              );
         const threadId = ThreadId.make(commandId);
         const messageId = MessageId.make(commandId);
         const attachments = input.attachments ?? [];
@@ -584,11 +587,22 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
       }),
     // The launched thread carries the caller's link, if it has one.
     "stamped",
-    (scope) =>
-      McpInvocationContext.forwardedChorus(scope) === undefined
-        ? assertChorusUsesDelegateTask(scope)
-        : Effect.void,
-  ),
+    requiresChorus
+      ? (scope) =>
+          McpInvocationContext.forwardedChorus(scope) === undefined
+            ? Effect.fail(
+                new OrchestratorMcpFailure({
+                  code: "capability_denied",
+                  message: "This tool belongs to the active primary thread of a linked Chorus.",
+                }),
+              )
+            : Effect.void
+      : assertChorusUsesDelegateTask,
+  );
+
+export const layer = McpToolAccess.toLayer(ProjectToolkit, {
+  t3_thread_launch: launchThread(false),
+  chorus_solo_launch: launchThread(true),
   t3_project_list: McpToolAccess.reads((input) =>
     Effect.gen(function* () {
       const projects = yield* access;

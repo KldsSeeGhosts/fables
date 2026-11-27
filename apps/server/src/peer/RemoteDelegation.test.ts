@@ -268,10 +268,17 @@ it.effect(
           threadId: ThreadId.make("captain:chorus:0"),
           title: "Chorus",
         };
-        const launch = (arguments_: Record<string, unknown>) =>
+        const launch = (
+          arguments_: Record<string, unknown>,
+          tool: "chorus_solo_launch" | "t3_thread_launch" = "chorus_solo_launch",
+          attestation: Pick<Parameters<typeof peer.call>[0], "sender" | "senderCaptainKind"> = {
+            sender,
+            senderCaptainKind: "chorus",
+          },
+        ) =>
           peer.call({
             environmentId: box.environmentId,
-            tool: "t3_thread_launch",
+            tool,
             arguments: {
               projectId: boxProject,
               title: "One-off Solo",
@@ -280,8 +287,7 @@ it.effect(
               ...arguments_,
             },
             limits: { runtimeMode: "full-access", interactionMode: "default" },
-            sender,
-            senderCaptainKind: "chorus",
+            ...attestation,
             success: ProjectToolkit.tools.t3_thread_launch.successSchema,
           });
         const direct = yield* launch({}).pipe(Effect.flip);
@@ -293,6 +299,19 @@ it.effect(
           delegatedFrom: sender,
           clientRequestId: "solo",
         };
+        expect((yield* launch(namedTask, "t3_thread_launch").pipe(Effect.flip)).code).toBe(
+          "capability_denied",
+        );
+        expect(
+          (yield* launch(namedTask, "chorus_solo_launch", { sender }).pipe(Effect.flip)).code,
+        ).toBe("capability_denied");
+        const malformedSender = { ...sender, threadId: ThreadId.make("captain:chorus") };
+        const malformed = yield* launch(
+          { ...namedTask, delegatedFrom: malformedSender },
+          "chorus_solo_launch",
+          { sender: malformedSender, senderCaptainKind: "chorus" },
+        ).pipe(Effect.flip);
+        expect(malformed.code).toBe("capability_denied");
         const covered = yield* launch(namedTask).pipe(Effect.flip);
         expect(covered.code).toBe("invalid_request");
         expect(covered.message).toContain("Route this with duet_send to Maria");

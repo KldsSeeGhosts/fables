@@ -373,7 +373,9 @@ const make = Effect.gen(function* () {
       const title = input.title ?? parent.thread.title;
       const launched = yield* forwarding.call(
         scope,
-        ProjectToolkit.tools.t3_thread_launch,
+        chorusSolo
+          ? ProjectToolkit.tools.chorus_solo_launch
+          : ProjectToolkit.tools.t3_thread_launch,
         target.environmentId,
         {
           projectId,

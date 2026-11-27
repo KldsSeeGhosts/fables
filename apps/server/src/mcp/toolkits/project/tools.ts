@@ -128,7 +128,7 @@ const ProjectCloneTool = Tool.make("t3_project_clone", {
 })
   .annotate(Tool.Destructive, true)
   .annotate(Tool.OpenWorld, true);
-const ThreadLaunchTool = Tool.make("t3_thread_launch", {
+const threadLaunchOptions = {
   ...shared,
   description:
     "Create a top-level thread in its workspace before starting. Task in `message`. Omit `projectId`, model and modes to inherit yours (outside a thread, pass `projectId` or `scratch`); modes cannot exceed yours. On error or lost reply, reuse `clientRequestId`. Follow it with `t3_thread_read` or `t3_thread_wait`. Mention it with its `link`.",
@@ -189,12 +189,22 @@ const ThreadLaunchTool = Tool.make("t3_thread_launch", {
     DocumentText.DocumentText,
     Digest.Digest,
   ],
-})
+};
+
+const ThreadLaunchTool = Tool.make("t3_thread_launch", threadLaunchOptions)
   .annotate(Tool.Destructive, true)
   .annotate(Tool.OpenWorld, true);
+const ChorusSoloLaunchTool = Tool.make("chorus_solo_launch", {
+  ...threadLaunchOptions,
+  description: "Launch a linked Chorus Solo after checking local Duet coverage.",
+})
+  .annotate(Tool.Destructive, true)
+  .annotate(Tool.OpenWorld, true)
+  .annotate(McpInvocationContext.ListedWhen, () => false);
 
 export const ProjectToolkit = Toolkit.make(
   ThreadLaunchTool,
+  ChorusSoloLaunchTool,
   ProjectListTool,
   ProjectReadTool,
   ProjectCreateTool,
