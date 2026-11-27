@@ -14,6 +14,10 @@ export default Effect.gen(function* () {
     )
   `;
   yield* sql`
+    CREATE INDEX chorus_incoming_routes_thread_idx
+    ON chorus_incoming_routes(thread_id)
+  `;
+  yield* sql`
     CREATE TABLE chorus_remote_routes (
       environment_id TEXT NOT NULL,
       message_id TEXT NOT NULL,

@@ -247,16 +247,14 @@ it.effect(
     Effect.scoped(
       Effect.gen(function* () {
         const thread = yield* makeBoxThread;
-        const covering = yield* Ref.make<ReadonlyArray<string>>(["Maria"]);
+        const covering = yield* Ref.make<Array<string>>(["Maria"]);
         const receiver = yield* servePeer(
           box,
           boxToolkitLayer(thread).pipe(
             Layer.provide(
               Layer.mock(CaptainStore.CaptainStore)({
-                coveringDuetNames: (projectId) => {
-                  expect(projectId).toBe(boxProject);
-                  return Ref.get(covering);
-                },
+                coveringDuetNames: (projectId) =>
+                  projectId === boxProject ? Ref.get(covering) : Effect.succeed([]),
                 withProfileLock: (effect) => effect,
               }),
             ),

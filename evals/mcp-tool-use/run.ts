@@ -373,6 +373,8 @@ export const McpToolUseCase = Schema.Struct({
         Schema.Struct({
           id: Contracts.ProjectId,
           title: Schema.String,
+          environmentId: Schema.optionalKey(Contracts.EnvironmentId),
+          environmentLabel: Schema.optionalKey(Schema.String),
           count: Schema.Int,
           latestCompletedAt: Schema.String,
         }),
@@ -503,6 +505,8 @@ const chorusCaptainBriefing = (
   repeatSoloProjects: ReadonlyArray<{
     readonly id: Contracts.ProjectId;
     readonly title: string;
+    readonly environmentId?: Contracts.EnvironmentId;
+    readonly environmentLabel?: string;
     readonly count: number;
     readonly latestCompletedAt: string;
   }> = [],

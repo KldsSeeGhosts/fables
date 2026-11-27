@@ -129,6 +129,8 @@ export const formatCaptainBriefing = (input: {
   const repeatSoloProjects = input.repeatSoloProjects ?? [];
   return [
     `Duet profile: ${captain.name}${captain.role ? ` (${captain.role})` : ""}`,
+    captain.kind === "duet" &&
+      "Only Chorus routes work to another Duet. If the user asks you to hand work to another Duet, direct them to Chorus and end the turn.",
     captain.instructions && `Instructions:\n${prefix(captain.instructions, 4_000)}`,
     captain.kind === "chorus"
       ? chorusBriefing(captain)
@@ -153,7 +155,7 @@ export const formatCaptainBriefing = (input: {
     notesBody && `NOTES.md:\n${prefix(notesBody, 6_000)}`,
     captain.kind === "chorus"
       ? "Use captain_document_read for your Duet's NOTES.md, AGENTS.md, CREW.md, and DIGEST.md stored in T3. Use captain_memory_search for your Duet's memory."
-      : "Use captain_document_read and captain_memory_search to look up more Duet context. When the user asks another Duet to do work, tell them you cannot route that request and direct them to Chorus.",
+      : "Use captain_document_read and captain_memory_search to look up more Duet context.",
   ]
     .filter(Boolean)
     .join("\n\n");
