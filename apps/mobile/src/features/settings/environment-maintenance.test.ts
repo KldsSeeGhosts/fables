@@ -93,7 +93,7 @@ describe("environment release checks", () => {
   const signal = new AbortController().signal;
   const feed = (...tags: ReadonlyArray<string>) =>
     new Response(
-      `<feed><id>tag:github.com,2008:https://github.com/KldsSeeGhosts/ksgcode/releases</id>${tags
+      `<feed><id>tag:github.com,2008:https://github.com/KldsSeeGhosts/fables/releases</id>${tags
         .map((tag) => `<entry><id>tag:github.com,2008:Repository/1/${tag}</id></entry>`)
         .join("")}</feed>`,
     );
@@ -102,7 +102,7 @@ describe("environment release checks", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) =>
-        url === "https://github.com/KldsSeeGhosts/ksgcode/releases.atom"
+        url === "https://github.com/KldsSeeGhosts/fables/releases.atom"
           ? feed(
               "desktop-preview",
               "v1.0.0-preview.20260924.3",
@@ -128,15 +128,15 @@ describe("environment release checks", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
-        if (url === "https://github.com/KldsSeeGhosts/ksgcode/releases.atom")
+        if (url === "https://github.com/KldsSeeGhosts/fables/releases.atom")
           return feed(...nightlies);
         if (
-          url === "https://api.github.com/repos/KldsSeeGhosts/ksgcode/releases?per_page=100&page=1"
+          url === "https://api.github.com/repos/KldsSeeGhosts/fables/releases?per_page=100&page=1"
         ) {
           return Response.json(Array.from({ length: 100 }, () => ({ tag_name: "v2.0.0" })));
         }
         if (
-          url === "https://api.github.com/repos/KldsSeeGhosts/ksgcode/releases?per_page=100&page=2"
+          url === "https://api.github.com/repos/KldsSeeGhosts/fables/releases?per_page=100&page=2"
         ) {
           return Response.json([
             { tag_name: "v1.0.0-preview.20260925.1", draft: true },

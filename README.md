@@ -9,7 +9,7 @@ Fables is a desktop, web, and mobile workspace for running coding agents on your
 - **Duets.** Long-running agent leads that delegate work to Solo threads across scoped projects, maintain structured documents (`NOTES.md`, `AGENTS.md`, `CREW.md`, `DIGEST.md`) and local memories, and automatically roll over long conversations when context fills up while stitching earlier conversations into the timeline.
 - **Optional Honcho memory.** Off by default. When [configured on the server](./docs/user/captain-honcho-memory.md), Fables mirrors user messages and final Duet answers to a Honcho server and includes recalled context in briefings and memory search.
 - **Duet interface.** Ships with the `ksg-salon` light and dark shell as the default across desktop, web, and mobile, including adaptive split-view and reading-width layouts for foldable phones and tablets.
-- **Independent release channel.** Nightly desktop builds and CLI archives publish from this repository's [GitHub Releases](https://github.com/KldsSeeGhosts/ksgcode/releases) on their own update feed, and mobile preview builds receive over-the-air updates from this fork's Expo project.
+- **Independent release channel.** Nightly desktop builds and CLI archives publish from this repository's [GitHub Releases](https://github.com/KldsSeeGhosts/fables/releases) on their own update feed, and mobile preview builds receive over-the-air updates from this fork's Expo project.
 
 | Folded                                                                                                  | Unfolded                                                                                              |
 | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -26,7 +26,7 @@ Fables is a desktop, web, and mobile workspace for running coding agents on your
 
 ### Desktop and CLI
 
-Download builds from [GitHub Releases](https://github.com/KldsSeeGhosts/ksgcode/releases):
+Download builds from [GitHub Releases](https://github.com/KldsSeeGhosts/fables/releases):
 
 - **macOS arm64.** `.dmg` installer. Builds are not notarized for public distribution, so first launch may require opening the app from Finder.
 - **Linux x64.** `.AppImage` desktop package.

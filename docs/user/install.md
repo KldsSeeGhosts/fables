@@ -10,7 +10,7 @@ You need at least one installed, authenticated coding agent (provider) before st
 
 Fables does not run an install script. Download the CLI archive for your
 platform from
-[Fables releases](https://github.com/KldsSeeGhosts/ksgcode/releases) and put
+[Fables releases](https://github.com/KldsSeeGhosts/fables/releases) and put
 the `t3` binary inside on your `PATH`, such as `~/.local/bin`. Archives are
 published for macOS (Apple silicon), Linux x64, and Windows x64 as
 `t3-<version>-<platform>-<arch>.tar.gz`, with a `.zip` on Windows. The
@@ -45,7 +45,7 @@ run a server there, build it from source with `vp`, which provides the Node vers
 ([Install vp](../operations/00_development.md#first-checkout)):
 
 ```bash
-git clone https://github.com/KldsSeeGhosts/ksgcode
+git clone https://github.com/KldsSeeGhosts/fables ksgcode
 cd ksgcode && vp i && vp run build:desktop
 node apps/server/dist/bin.mjs
 ```
@@ -53,7 +53,7 @@ node apps/server/dist/bin.mjs
 ## Desktop app
 
 Download a release from
-[Fables releases](https://github.com/KldsSeeGhosts/ksgcode/releases). Every
+[Fables releases](https://github.com/KldsSeeGhosts/fables/releases). Every
 release publishes desktop installers for macOS (Apple silicon), Linux x64, and
 Windows x64, and the installed apps update themselves from that feed. The
 Windows installer is not code-signed, so SmartScreen may ask you to confirm

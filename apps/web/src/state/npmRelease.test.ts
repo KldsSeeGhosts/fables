@@ -43,7 +43,7 @@ describe("cliReleasePublishedAtom", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const request = new Request(fetchMock.mock.calls[0]?.[0] ?? "", fetchMock.mock.calls[0]?.[1]);
     expect(request.url).toBe(
-      `https://api.github.com/repos/KldsSeeGhosts/ksgcode/releases/tags/v${version}`,
+      `https://api.github.com/repos/KldsSeeGhosts/fables/releases/tags/v${version}`,
     );
     expect(request.headers.get("traceparent")).toBeNull();
     expect(request.headers.get("b3")).toBeNull();
@@ -91,7 +91,7 @@ describe("cliReleasePublishedAtom", () => {
     });
     for (const [input, init] of fetchMock.mock.calls) {
       expect(new Request(input, init).url).toBe(
-        "https://api.github.com/repos/KldsSeeGhosts/ksgcode/releases?per_page=100&page=1",
+        "https://api.github.com/repos/KldsSeeGhosts/fables/releases?per_page=100&page=1",
       );
     }
   });

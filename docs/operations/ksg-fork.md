@@ -117,11 +117,13 @@ rebuilds do not advance this baseline. Integrating and publishing a new nightly
 advances it automatically, including multiple upstream nightlies on one day.
 Unversioned development builds without metadata report an unknown baseline.
 
-CLI archives and the release-availability check must use this fork's GitHub
-releases, not npm. The desktop feed comes from `GITHUB_REPOSITORY` or
-`T3CODE_DESKTOP_UPDATE_REPOSITORY` at build time. The sidebar updater updates
-providers, connected servers, then the local desktop last. Upstream merge
-checks must never replace the KSG installation with an upstream artifact.
+CLI archives and the release-availability check use this fork's GitHub
+releases. For desktop release builds, GitHub Actions supplies
+`GITHUB_REPOSITORY=KldsSeeGhosts/fables`. Set
+`T3CODE_DESKTOP_UPDATE_REPOSITORY` to override it or to configure the feed for
+a local package build. The sidebar updater updates providers, connected
+servers, then the local desktop last. Upstream merge checks must never replace
+the KSG installation with an upstream artifact.
 
 ## Mobile updates
 
@@ -212,7 +214,7 @@ not the launcher, downloads its replacement from its compiled release repository
 
 - The first hop from upstream to KSG needs the fork's `t3 update <version>`
   locally, or the service download override
-  `T3CODE_RELEASE_BASE_URL=https://github.com/KldsSeeGhosts/ksgcode/releases/download`.
+  `T3CODE_RELEASE_BASE_URL=https://github.com/KldsSeeGhosts/fables/releases/download`.
   After cutover, the KSG runtime uses this fork's feed.
 - Replace upstream or npm-installed `t3` commands on `PATH` with the fork's
   archive, or local update and service commands will still use upstream.

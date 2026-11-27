@@ -170,13 +170,13 @@ git grep -n 'mcpToolListJsonBytes' -- apps/server/src/provider/agentContextBudge
 
 Owners: `packages/shared/src/forkUpstream.ts`, `apps/web/src/state/upstreamNightly.ts`, `apps/web/src/components/settings/UpstreamNightlySettings.tsx`, `apps/web/src/components/sidebar/SidebarUpstreamUpdatePill.tsx`, `packages/shared/src/cliRelease.ts`, `apps/web/src/state/npmRelease.ts`, `apps/web/src/components/sidebar/useUpdateEverything.ts`, `apps/web/src/components/settings/UpdateTrackSwitchDialog.tsx`, `apps/web/src/components/desktopUpdate.logic.ts`, `scripts/build-desktop-artifact.ts`, and KSG text and screenshots in `README.md` and `.github/readme/`.
 
-Must survive: KSG product naming, the exact included upstream baseline embedded as `VITE_KSG_UPSTREAM_TAG`, comparison against upstream rather than the encoded fork run number, the review link and copyable merge prompt, CLI release lookups in `KldsSeeGhosts/ksgcode` rather than npm, verification that a server update target is published before updating, provider updates before server updates and desktop last, and update feeds from the fork repository.
+Must survive: KSG product naming, the exact included upstream baseline embedded as `VITE_KSG_UPSTREAM_TAG`, comparison against upstream rather than the encoded fork run number, the review link and copyable merge prompt, CLI release lookups in `KldsSeeGhosts/fables` rather than npm, verification that a server update target is published before updating, provider updates before server updates and desktop last, and update feeds from the fork repository.
 
 Checks:
 
 ```sh
 git grep -n 'T3_UPSTREAM_REPOSITORY = "pingdotgg/t3code"' -- packages/shared/src/forkUpstream.ts
-git grep -n 'KldsSeeGhosts/ksgcode' -- packages/shared/src/cliRelease.ts apps/web/src/state/npmRelease.test.ts
+git grep -n 'KldsSeeGhosts/fables' -- packages/shared/src/cliRelease.ts apps/web/src/state/npmRelease.test.ts
 git grep -n 'upstreamMergePrompt' -- packages/shared/src/forkUpstream.ts apps/web/src/components/settings/UpstreamNightlySettings.tsx apps/web/src/components/sidebar/SidebarUpstreamUpdatePill.tsx
 git grep -n 'useCliReleasePublished' -- apps/web/src/components/sidebar/useUpdateEverything.ts apps/web/src/state/npmRelease.ts
 ```
