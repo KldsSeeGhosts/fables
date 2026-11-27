@@ -35,11 +35,10 @@ vi.mock("react-native-screens", () => ({
 import { V5StackHeader } from "./V5StackHeader.ios";
 
 it.each([
-  ["duo-unfolded", { width: 951, height: 669 }, "onScrollUpWhenFolded", "never"],
-  ["duo-unfolded", { width: 669, height: 951 }, "onScrollUpWhenFolded", "never"],
-  ["duo-folded", { width: 393, height: 852 }, "onScrollUpWhenFolded", "onScrollUp"],
   ["duo-unfolded", { width: 951, height: 669 }, "onScrollUp", "onScrollUp"],
-  ["phone", null, "onScrollUpWhenFolded", undefined],
+  ["duo-unfolded", { width: 669, height: 951 }, "onScrollUp", "never"],
+  ["duo-folded", { width: 393, height: 852 }, "onScrollUp", "onScrollUp"],
+  ["phone", null, "onScrollUp", undefined],
 ] as const)("configures %s on %j with %s", (deviceType, metrics, behavior, expected) => {
   bridge.deviceType = deviceType;
   bridge.metrics = metrics;

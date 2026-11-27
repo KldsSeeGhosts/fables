@@ -35,9 +35,7 @@ type ToolbarItem =
   | HeaderBarButtonSearchBarPlacementItem;
 type Options = NativeStackNavigationOptions & {
   readonly unstable_navigationItemStyle?: "editor" | "navigator";
-  readonly unstable_headerMinimizationBehavior?:
-    | StackHeaderMinimizationBehaviorIOS
-    | "onScrollUpWhenFolded";
+  readonly unstable_headerMinimizationBehavior?: StackHeaderMinimizationBehaviorIOS;
   readonly headerSubtitle?: string;
   readonly unstable_headerSubtitle?: string;
   readonly headerSubtitleStyle?: { color?: string; fontSize?: number; fontFamily?: string };
@@ -322,20 +320,6 @@ export function V5StackHeader(props: {
     );
   const titleStyle = StyleSheet.flatten(options.headerTitleStyle);
   const headerStyle = StyleSheet.flatten(options.headerStyle);
-  const requestedMinimization = options.unstable_headerMinimizationBehavior;
-  // UIKit's automatic mode can minimize on the Duo. On the tall inner display, always keep the
-  // full bar. The thread route keeps it on both inner orientations to prevent safe-area reflow.
-  const keepFullBar =
-    deviceType === "duo-unfolded" &&
-    (requestedMinimization === "onScrollUpWhenFolded" ||
-      (nativeMetrics !== null && nativeMetrics.height > nativeMetrics.width));
-  const minimizationBehavior = !isDuoDevice(deviceType)
-    ? undefined
-    : keepFullBar
-      ? "never"
-      : requestedMinimization === "onScrollUpWhenFolded"
-        ? "onScrollUp"
-        : requestedMinimization;
   const appearance = {
     // Clear colors remove UIKit material; let translucent bars supply their own blur background.
     backgroundColor: options.headerTransparent
@@ -359,7 +343,15 @@ export function V5StackHeader(props: {
         backButtonHidden={options.headerBackVisible === false}
         ios={{
           navigationItemStyle: options.unstable_navigationItemStyle,
-          minimizationBehavior,
+          // Opt-ins apply only where the Duo is short: folded, or held landscape. The Duo
+          // resolves `automatic` to minimize on scroll, so the tall unfolded display opts out.
+          minimizationBehavior: !isDuoDevice(deviceType)
+            ? undefined
+            : deviceType === "duo-unfolded" &&
+                nativeMetrics &&
+                nativeMetrics.height > nativeMetrics.width
+              ? "never"
+              : options.unstable_headerMinimizationBehavior,
           tintColor: options.headerTintColor,
           searchBar:
             mailSearch || searchOptions ? (

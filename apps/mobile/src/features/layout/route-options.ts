@@ -46,9 +46,9 @@ export interface PageRouteOptions {
   readonly itemStyle?: "editor" | "standard";
   /**
    * How the Duo minimizes the bar while scrolling. "never" for lists that stutter against the
-   * default on hardware. "onScrollUpWhenFolded" keeps the bar stable on the unfolded display.
+   * default on hardware; "onScrollUp" for conversations read backwards, like Messages.
    */
-  readonly duoMinimize?: AppScreenOptions["unstable_headerMinimizationBehavior"];
+  readonly duoMinimize?: "never" | "onScrollUp";
   /** The page is the root of its column, so it never shows Back. */
   readonly root?: boolean;
 }

@@ -6,7 +6,7 @@ import { nativeHeaderScrollEdgeEffects } from "./scrollEdgeEffects";
 
 export type AppScreenOptions = NativeStackNavigationOptions & {
   readonly unstable_navigationItemStyle?: "editor";
-  readonly unstable_headerMinimizationBehavior?: "onScrollUp" | "onScrollUpWhenFolded" | "never";
+  readonly unstable_headerMinimizationBehavior?: "onScrollUp" | "never";
 };
 
 /** A transparent bar that content scrolls under, with UIKit's scroll-edge blur where it has one. */
