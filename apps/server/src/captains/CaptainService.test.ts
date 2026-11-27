@@ -216,25 +216,30 @@ it.effect("forces Chorus fields and rejects a second active Chorus", () =>
     yield* Effect.gen(function* () {
       const service = yield* CaptainService.CaptainService;
       const store = yield* CaptainStore.CaptainStore;
-      const chorus = yield* service.create({
-        ...input,
-        captainId: CaptainId.make("chorus"),
-        kind: "chorus",
-        scopedProjectIds: [ProjectId.make("missing")],
-        coordinatorOnly: false,
-        reportPolicy: "context",
-      });
+      const [created, failures] = yield* Effect.partition(
+        [CaptainId.make("chorus"), CaptainId.make("second-chorus")],
+        (captainId) =>
+          service.create({
+            ...input,
+            captainId,
+            kind: "chorus",
+            scopedProjectIds: [ProjectId.make("missing")],
+            coordinatorOnly: false,
+            reportPolicy: "context",
+          }),
+        { concurrency: 2 },
+      );
+      assert.lengthOf(created, 1);
+      assert.deepStrictEqual(
+        failures.map(({ code }) => code),
+        ["conflict"],
+      );
+      const chorus = created[0]!;
       assert.equal(chorus.kind, "chorus");
       assert.deepStrictEqual(chorus.scopedProjectIds, []);
       assert.isTrue(chorus.coordinatorOnly);
       assert.equal(chorus.reportPolicy, "react");
       assert.equal(launches.get(chorus.primaryThreadId)?.projectId, scratch);
-      assert.equal(launches.size, 1);
-
-      const activeConflict = yield* Effect.flip(
-        service.create({ ...input, captainId: CaptainId.make("second-chorus"), kind: "chorus" }),
-      );
-      assert.equal(activeConflict.code, "conflict");
       assert.equal(launches.size, 1);
 
       yield* service.archive({ captainId: chorus.id });
@@ -259,11 +264,15 @@ it.effect("forces Chorus fields and rejects a second active Chorus", () =>
         }),
       );
       assert.equal(backstopConflict.code, "conflict");
+
+      yield* service.archive({ captainId: replacement.id });
+      assert.isNull((yield* service.unarchive({ captainId: chorus.id })).archivedAt);
+      assert.equal(launches.size, 2);
     }).pipe(Effect.provide(layer));
   }),
 );
 
-it.effect("rejects scope and report policy changes for a Chorus", () =>
+it.effect("keeps a Chorus unscoped, coordinator-only, and on the react report policy", () =>
   Effect.gen(function* () {
     const { layer } = fixture();
     yield* Effect.gen(function* () {
@@ -278,10 +287,12 @@ it.effect("rejects scope and report policy changes for a Chorus", () =>
         captainId: chorus.id,
         name: "Fleet",
         scopedProjectIds: [],
+        coordinatorOnly: true,
         reportPolicy: "react",
       });
       assert.equal(unchanged.name, "Fleet");
       assert.deepStrictEqual(unchanged.scopedProjectIds, []);
+      assert.isTrue(unchanged.coordinatorOnly);
       assert.equal(unchanged.reportPolicy, "react");
 
       const scoped = yield* Effect.flip(
@@ -292,11 +303,15 @@ it.effect("rejects scope and report policy changes for a Chorus", () =>
         const failure = yield* Effect.flip(service.update({ captainId: chorus.id, reportPolicy }));
         assert.equal(failure.code, "invalid_request");
       }
+      const coordination = yield* Effect.flip(
+        service.update({ captainId: chorus.id, coordinatorOnly: false }),
+      );
+      assert.equal(coordination.code, "invalid_request");
     }).pipe(Effect.provide(layer));
   }),
 );
 
-it.effect("asks for a scoped project when the environment has no Scratch", () =>
+it.effect("explains the project requirements for each kind when Scratch is unavailable", () =>
   Effect.gen(function* () {
     const { layer, launches } = fixture({ scratchUnavailable: true });
     yield* Effect.gen(function* () {
@@ -304,6 +319,11 @@ it.effect("asks for a scoped project when the environment has no Scratch", () =>
       const error = yield* Effect.flip(service.create(input));
       assert.equal(error.code, "invalid_request");
       assert.include(error.message, "workspace scope");
+      const chorusError = yield* Effect.flip(
+        service.create({ ...input, kind: "chorus", scopedProjectIds: [project] }),
+      );
+      assert.equal(chorusError.code, "invalid_request");
+      assert.include(chorusError.message, "Chorus requires a scratch folder");
       assert.equal(launches.size, 0);
     }).pipe(Effect.provide(layer));
   }),

@@ -113,13 +113,16 @@ const make = Effect.gen(function* () {
       const projectId =
         scopedProjectIds[0] ??
         (yield* folders.ensureScratchProject.pipe(
-          Effect.catch((cause) =>
-            cause._tag === "ScratchUnavailableError"
-              ? invalid(
-                  "This environment has no scratch folder. Add a project to the Duet's workspace scope.",
-                )
-              : CaptainStore.captainUnavailable(cause),
-          ),
+          Effect.catchTags({
+            ScratchUnavailableError: () =>
+              invalid(
+                kind === "chorus"
+                  ? "A Chorus requires a scratch folder, which is unavailable in this environment."
+                  : "This environment has no scratch folder. Add a project to the Duet's workspace scope.",
+              ),
+            ScratchFolderError: CaptainStore.captainUnavailable,
+            ScratchProjectError: CaptainStore.captainUnavailable,
+          }),
         )).projectId;
       const { name, role, instructions, avatar } = input;
       const reportPolicy = kind === "chorus" ? "react" : input.reportPolicy;
@@ -164,6 +167,9 @@ const make = Effect.gen(function* () {
         }
         if (input.reportPolicy !== undefined && input.reportPolicy !== "react") {
           return yield* invalid("A Chorus must use the react report policy.");
+        }
+        if (input.coordinatorOnly === false) {
+          return yield* invalid("A Chorus must be coordinator-only.");
         }
       }
       const captain = yield* store.save({
