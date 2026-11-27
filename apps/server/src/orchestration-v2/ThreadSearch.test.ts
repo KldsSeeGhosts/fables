@@ -1504,6 +1504,15 @@ it.layer(layerTest)("ThreadSearch.searchThreads", (it) => {
           [messageOnly, "user"],
         ],
       );
+      const visible = yield* search.searchThreads({
+        query: "auth",
+        projectId: project,
+        excludedThreadIds: new Set([wordStart, messageOnly]),
+      });
+      assert.deepEqual(
+        visible.matches.map((match) => match.threadId),
+        [midWord],
+      );
       // With one slot, an exact title keeps it.
       assert.deepEqual(
         (yield* search.searchThreads({ query: "auth", projectId: project, limit: 1 })).matches.map(

@@ -158,6 +158,22 @@ const make = Effect.gen(function* () {
     return row === undefined ? undefined : yield* decodeCaptain(row);
   }, Effect.catch(captainUnavailable));
 
+  const privateChorusConversationIds = Effect.fn("CaptainStore.privateChorusConversationIds")(
+    function* (callerId: ThreadId | undefined) {
+      const rows = yield* sql<{ readonly id: ThreadId }>`
+        WITH private_choruses AS (
+          SELECT primary_thread_id, earlier_thread_ids FROM captains
+          WHERE kind = 'chorus' AND (archived_at IS NOT NULL OR primary_thread_id <> ${callerId ?? ""})
+        )
+        SELECT primary_thread_id AS id FROM private_choruses
+        UNION ALL
+        SELECT earlier.value AS id FROM private_choruses, json_each(earlier_thread_ids) AS earlier
+      `;
+      return new Set(rows.map(({ id }) => id));
+    },
+    Effect.catchTags({ SqlError: captainUnavailable }),
+  );
+
   const requireOwner = Effect.fn("CaptainStore.requireOwner")(function* (
     id: CaptainId,
     threadId: ThreadId | undefined,
@@ -443,6 +459,7 @@ const make = Effect.gen(function* () {
     find,
     requireCaptain,
     findActiveChorus,
+    privateChorusConversationIds,
     save,
     latestCompletedCompactionAt,
     saveRolloverResend,

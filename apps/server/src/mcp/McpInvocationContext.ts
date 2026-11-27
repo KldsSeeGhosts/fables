@@ -228,7 +228,7 @@ export const captainOnly = (): boolean => {
 };
 
 export const chorusOnly = (scope: McpInvocationScope | undefined): boolean =>
-  scope?.thread !== undefined && scope.chorus === true;
+  scope?.thread !== undefined && scope.thread.subagent !== true && scope.chorus === true;
 
 /** `hiddenFromOutsideClients`, and hidden from a thread whose provider cannot hold for background work. */
 export const hiddenWithoutBackgroundWait = (): boolean => {

@@ -2040,6 +2040,7 @@ it.effect("uses the authenticated Duet profile to list Chorus read tools and hid
         ["childToken", scopeFor("childToken", true)],
         ["noForgeToken", scopeFor("noForgeToken", false)],
         ["chorusToken", scopeFor("chorusToken", false, chorus.primaryThreadId)],
+        ["chorusChildToken", scopeFor("chorusChildToken", true, chorus.primaryThreadId)],
         ["duetToken", scopeFor("duetToken", false, duet.primaryThreadId)],
       ]);
       const serverLayer = McpHttpServer.layerMcpTransport(
@@ -2049,7 +2050,7 @@ it.effect("uses the authenticated Duet profile to list Chorus read tools and hid
           McpHttpServer.layerToolSearch,
         ),
       ).pipe(
-        Layer.provide(ServerSettings.layerTest()),
+        Layer.provide(ServerSettings.layerTest({ linkedEnvironmentsEnabled: true })),
         Layer.provide(Layer.succeedContext(captainLayer)),
         Layer.provide(
           Layer.mock(McpSessionRegistry.McpSessionRegistry)({
@@ -2171,10 +2172,12 @@ it.effect("uses the authenticated Duet profile to list Chorus read tools and hid
       ).toEqual([]);
 
       const chorusSession = yield* session("chorusToken");
+      const chorusChild = yield* session("chorusChildToken");
       const duetSession = yield* session("duetToken");
       const readTools = ["duet_list", "duet_read", "duet_memory_search"];
       const chorusTools = yield* chorusSession.listed;
       const duetTools = yield* duetSession.listed;
+      const chorusChildTools = yield* chorusChild.listed;
       expect(chorusTools).toEqual(expect.arrayContaining(readTools));
       expect(chorusTools).not.toContain("watch_pull_request");
       expect(duetTools).toContain("watch_pull_request");
@@ -2182,10 +2185,30 @@ it.effect("uses the authenticated Duet profile to list Chorus read tools and hid
       for (const name of readTools) {
         expect(duetTools).not.toContain(name);
         expect(parentTools).not.toContain(name);
+        expect(chorusChildTools).not.toContain(name);
       }
+      expect(yield* chorusChild.call("duet_list")).toMatchObject({ isError: true });
 
       expect(yield* chorusSession.call("duet_list")).toMatchObject({ isError: false });
       expect(yield* chorusSession.call("watch_pull_request", { number: 1 })).toMatchObject({
+        isError: true,
+        content: [{ text: expect.stringContaining("A Chorus cannot watch pull requests") }],
+      });
+      expect(
+        yield* chorusSession.call("watch_pull_request", {
+          number: 1,
+          environmentId: "linked-mac",
+        }),
+      ).toMatchObject({
+        isError: true,
+        content: [{ text: expect.stringContaining("A Chorus cannot watch pull requests") }],
+      });
+      expect(
+        yield* duetSession.call("watch_pull_request", {
+          number: 1,
+          threadId: chorus.primaryThreadId,
+        }),
+      ).toMatchObject({
         isError: true,
         content: [{ text: expect.stringContaining("A Chorus cannot watch pull requests") }],
       });
@@ -2196,6 +2219,10 @@ it.effect("uses the authenticated Duet profile to list Chorus read tools and hid
       expect(yield* duetSession.call("tool_search", findDuetRead)).toMatchObject({
         structuredContent: { tools: [] },
       });
+
+      yield* store.save({ ...chorus, archivedAt: chorus.createdAt });
+      expect(yield* chorusSession.listed).not.toContain("duet_list");
+      expect(yield* chorusSession.call("duet_list")).toMatchObject({ isError: true });
 
       yield* store.save({
         ...chorus,

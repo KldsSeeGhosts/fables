@@ -223,11 +223,18 @@ export const writesWithCapability = <P, A, E, R>(handle: (params: P) => Effect.E
 export const writesThreads = <P, A, E, R>(
   threads: (params: P) => ReadonlyArray<ThreadId | undefined>,
   handle: (params: P) => Effect.Effect<A, E, R>,
-) =>
-  declare(
+  checkCaller?: (
+    scope: McpInvocationContext.McpInvocationScope,
+  ) => Effect.Effect<void, OrchestratorMcpFailure>,
+) => {
+  const checkedCaller =
+    checkCaller === undefined
+      ? writingCaller
+      : writingCaller.pipe(Effect.tap(({ scope }) => checkCaller(scope)));
+  return declare(
     (params: P) =>
       Effect.gen(function* () {
-        const caller = yield* writingCaller;
+        const caller = yield* checkedCaller;
         for (const threadId of threads(params)) {
           if (threadId === undefined || threadId === caller.scope.thread?.threadId) continue;
           const target = yield* caller.threads
@@ -251,8 +258,9 @@ export const writesThreads = <P, A, E, R>(
           ),
         );
       }),
-    () => writingCaller,
+    () => checkedCaller,
   );
+};
 
 const escalationDenied = (refusal: DispatchModeRefusal) =>
   new OrchestratorMcpFailure({

@@ -5,6 +5,7 @@ import type {
 import {
   CommandId,
   type EnvironmentId,
+  isCaptainThreadId,
   isRuntimeModeAbove,
   OrchestratorMcpFailure,
   type ProjectId,
@@ -23,7 +24,9 @@ import {
 import { hasPendingBackgroundSubagent } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
+import * as CaptainStore from "../captains/CaptainStore.ts";
 import type { OrchestratorV2Error } from "../orchestration-v2/Orchestrator.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import { resolveInteractionMode, resolveRuntimeMode } from "./delegatedTaskModes.ts";
@@ -250,6 +253,41 @@ export const resolveProjectId = (context: Caller, projectId: ProjectId | undefin
           }),
         );
 
+const chorusOwnerThreadId = (scope: McpInvocationContext.McpInvocationScope) =>
+  scope.thread?.subagent === true ? undefined : scope.thread?.threadId;
+
+export const privateChorusConversationIds = Effect.fn("mcp.privateChorusConversationIds")(
+  function* (scope: McpInvocationContext.McpInvocationScope) {
+    const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
+    return Option.isSome(store)
+      ? yield* store.value
+          .privateChorusConversationIds(chorusOwnerThreadId(scope))
+          .pipe(Effect.mapError(unavailable))
+      : undefined;
+  },
+);
+
+export const assertReadableConversation = Effect.fn("mcp.assertReadableConversation")(function* (
+  scope: McpInvocationContext.McpInvocationScope,
+  threadId: ThreadId,
+) {
+  if (!isCaptainThreadId(threadId)) return;
+  const store = yield* Effect.serviceOption(CaptainStore.CaptainStore);
+  if (Option.isNone(store)) return;
+  const captain = yield* store.value
+    .findByConversation(threadId)
+    .pipe(Effect.mapError(unavailable));
+  if (
+    captain?.kind === "chorus" &&
+    (captain.archivedAt !== null || captain.primaryThreadId !== chorusOwnerThreadId(scope))
+  ) {
+    return yield* new OrchestratorMcpFailure({
+      code: "thread_not_found",
+      message: "The thread was not found.",
+    });
+  }
+});
+
 const resolveThreadId = (context: Caller, threadId: ThreadId | undefined) =>
   threadId !== undefined
     ? Effect.succeed(threadId)
@@ -267,6 +305,7 @@ export const readThread = Effect.fn("mcp.readThread")(function* <
 >(threadId?: ThreadId, fields: ReadonlyArray<K> = [], filter?: ProjectionRecordFilter) {
   const context = yield* readCaller();
   const targetId = yield* resolveThreadId(context, threadId);
+  yield* assertReadableConversation(context.scope, targetId);
   const shell = yield* context.threads.getThreadShell(targetId).pipe(Effect.mapError(unavailable));
   if (shell === null || shell.deletedAt !== null) {
     return yield* threadNotFound(

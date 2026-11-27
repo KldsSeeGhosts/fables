@@ -1,4 +1,5 @@
 import {
+  CaptainId,
   EnvironmentId,
   MessageId,
   NodeId,
@@ -35,6 +36,8 @@ import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import { layerNoTaskFolders } from "../orchestration-v2/ProviderTurnStartService.testkit.ts";
 import * as RemoteDelegation from "../peer/RemoteDelegation.ts";
+import * as CaptainStore from "../captains/CaptainStore.ts";
+import * as Sqlite from "../persistence/Sqlite.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import type * as McpInvocationContext from "./McpInvocationContext.ts";
@@ -982,7 +985,7 @@ it("readThread and sendToThread reach threads in other projects", async () => {
     makeRun({ id: RunId.make("run-parent-live"), ordinal: 1, status: "running" }),
   ];
   const foreignProjectId = ProjectId.make("project-mcp-orchestrator-foreign");
-  const foreignThreadId = ThreadId.make("thread-mcp-orchestrator-foreign");
+  const foreignThreadId = ThreadId.make("captain:foreign:0");
   const parentProjection = {
     thread: baseThread({
       threadId: parentThreadId,
@@ -1040,7 +1043,7 @@ it("readThread and sendToThread reach threads in other projects", async () => {
     }) as unknown as OrchestrationV2ThreadProjection;
 
   const layer = layerOrchestratorService.pipe(
-    Layer.provide(
+    Layer.provideMerge(
       Layer.mergeAll(
         Layer.mock(ThreadManagementService.ThreadManagementService)({
           getThreadRecords: (threadId) => {
@@ -1064,6 +1067,8 @@ it("readThread and sendToThread reach threads in other projects", async () => {
               hasEarlier: false,
             }),
           getRunCount: (threadId) => Effect.succeed(foreignProjection(threadId).runs.length),
+          listProjectThreads: () =>
+            Effect.succeed([{ ...liveThreadShell(foreignThreadId), projectId: foreignProjectId }]),
           getProjectThreadRecords: (input) =>
             input.threadId === foreignThreadId && input.projectId === foreignProjectId
               ? Effect.succeed(foreignProjection(input.threadId))
@@ -1102,6 +1107,7 @@ it("readThread and sendToThread reach threads in other projects", async () => {
         Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({
           list: () => Effect.succeed([]),
         } satisfies Partial<ProviderAdapterRegistry.ProviderAdapterRegistryV2["Service"]>),
+        CaptainStore.layer.pipe(Layer.provide(Sqlite.layerMemory)),
         NodeCrypto.layer,
       ),
     ),
@@ -1113,6 +1119,30 @@ it("readThread and sendToThread reach threads in other projects", async () => {
     expect(foreign.thread.threadId).toBe(foreignThreadId);
     expect(foreign.thread.projectId).toBe(foreignProjectId);
     expect(foreign.items.map((item) => item.text)).toEqual(["Foreign thread said hello"]);
+
+    const store = yield* CaptainStore.CaptainStore;
+    yield* store.save({
+      id: CaptainId.make("foreign"),
+      primaryThreadId: ThreadId.make("captain:foreign:1"),
+      earlierThreadIds: [foreignThreadId],
+      name: "Chorus",
+      role: "",
+      instructions: "",
+      avatar: { preset: "compass", color: "violet" },
+      scopedProjectIds: [],
+      kind: "chorus",
+      coordinatorOnly: true,
+      reportPolicy: "react",
+      createdAt: "2026-11-24T00:00:00.000Z",
+      updatedAt: "2026-11-24T00:00:00.000Z",
+      archivedAt: null,
+    });
+    const privateRead = yield* service
+      .readThread(makeScope(), { threadId: foreignThreadId })
+      .pipe(Effect.flip);
+    expect(privateRead.code).toBe("thread_not_found");
+    expect((yield* service.listThreads(makeScope(), { allProjects: true })).total).toBe(0);
+    yield* store.remove(CaptainId.make("foreign"));
 
     const sent = yield* service.sendToThread(makeScope(), {
       threadId: foreignThreadId,
