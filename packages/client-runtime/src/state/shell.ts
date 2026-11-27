@@ -339,11 +339,14 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
               removedAt.set(delta.threadId, delta.sequence);
               break;
             case "thread.updated":
+            case "thread.progress":
               // Replayed catch-up deltas may predate a backward host clock correction.
               if (!waiting) {
                 observeServerTime(
                   environmentId,
-                  DateTime.toEpochMillis(delta.thread.updatedAt),
+                  DateTime.toEpochMillis(
+                    delta.kind === "thread.updated" ? delta.thread.updatedAt : delta.updatedAt,
+                  ),
                   receivedAtMs,
                 );
               }
@@ -705,8 +708,13 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
           ...(omitIdleSubagents ? { omitIdleSubagents: true as const } : {}),
           ...(omitOlderSettled ? { omitOlderSettled: true as const } : {}),
         };
+        const subscription = {
+          ...omission,
+          requestCompletionMarker: true as const,
+          acceptThreadProgress: true as const,
+        };
         if (Option.isNone(current.snapshot) || !(resumingHeldRows || loaded?.kind === "snapshot")) {
-          return { ...omission, requestCompletionMarker: true as const };
+          return subscription;
         }
         return {
           afterSequence: current.snapshot.value.snapshotSequence,
@@ -717,8 +725,7 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
           ...(loaded?.kind === "snapshot" && loaded.projectIdentities !== undefined
             ? { knownProjectIdentities: loaded.projectIdentities }
             : {}),
-          ...omission,
-          requestCompletionMarker: true as const,
+          ...subscription,
         };
       }),
       {
