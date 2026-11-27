@@ -122,7 +122,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { useBarOverlap } from "../../components/ui/useBarInset";
+import { useBarOverlap, useExpandedBarOverlap } from "../../components/ui/useBarInset";
 import {
   useWorkspaceContentWidth,
   WorkspaceSettledContentWidthContext,
@@ -304,6 +304,7 @@ export interface ThreadDetailScreenProps {
   readonly serverConfig: T3ServerConfig | null;
   readonly layoutVariant?: LayoutVariant;
   readonly usesAutomaticContentInsets?: boolean;
+  readonly scrollUnderHeader?: boolean;
   readonly topOverlayInset?: number;
   readonly onHeaderMaterialVisibilityChange?: (visible: boolean) => void;
   readonly onOpenConnectionEditor: () => void;
@@ -512,6 +513,10 @@ function ThreadDetailBody(
   };
   const windowHeight = useWindowDimensions().height;
   const navigationHeaderHeight = useBarOverlap();
+  const expandedHeaderOverlap = useExpandedBarOverlap(navigationHeaderHeight);
+  const promptTopInset =
+    (props.scrollUnderHeader ? expandedHeaderOverlap : navigationHeaderHeight) +
+    (props.topOverlayInset ?? 0);
   const [screenMetrics, setScreenMetrics] = useState<NativeLayoutMetrics | null>(null);
   const columnMetrics = useNativeColumnLayoutMetrics();
   const nativeMetrics = usesNativeWorkspaceColumns ? columnMetrics : screenMetrics;
@@ -1124,7 +1129,7 @@ function ThreadDetailBody(
     derivePendingUserInputMaxHeight({
       windowHeight: screenAreaHeight,
       keyboardHeight: keyboardStickyEnabled ? -keyboardTranslation.value : 0,
-      navigationHeaderHeight,
+      topInset: promptTopInset,
       // An in-flow question shares the room above it with the floating control.
       composerOverlapHeight:
         composerBottomInset +
@@ -1142,7 +1147,7 @@ function ThreadDetailBody(
     maxHeight: derivePendingUserInputMaxHeight({
       windowHeight: screenAreaHeight,
       keyboardHeight: keyboardStickyEnabled ? -keyboardTranslation.value : 0,
-      navigationHeaderHeight,
+      topInset: navigationHeaderHeight,
       composerOverlapHeight,
     }),
     flexGrow: 0,
@@ -1627,6 +1632,9 @@ function ThreadDetailBody(
                   contentSideInsets={deriveContentSideInsets(nativeMetrics)}
                   layoutVariant={layoutVariant}
                   usesAutomaticContentInsets={props.usesAutomaticContentInsets}
+                  expandedHeaderOverlap={
+                    props.scrollUnderHeader ? expandedHeaderOverlap : undefined
+                  }
                   onHeaderMaterialVisibilityChange={props.onHeaderMaterialVisibilityChange}
                   onIsAtEndChange={setIsAtEnd}
                   skills={selectedProviderSkills}
@@ -1640,6 +1648,17 @@ function ThreadDetailBody(
       ) : (
         <View className="flex-1" />
       )}
+
+      {props.scrollUnderHeader && (props.topOverlayInset ?? 0) > 0 ? (
+        // UIKit removes its material when the bar minimizes. Keep the area above the orb's fade covered.
+        <View
+          pointerEvents="none"
+          className="absolute inset-x-0 top-0 bg-screen"
+          style={{
+            height: navigationHeaderHeight < expandedHeaderOverlap ? navigationHeaderHeight : 0,
+          }}
+        />
+      ) : null}
 
       {showContent ? (
         <ThreadBrowserFloat

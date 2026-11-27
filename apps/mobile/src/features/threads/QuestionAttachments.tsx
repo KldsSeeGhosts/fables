@@ -160,14 +160,39 @@ export function QuestionAttachments(props: {
   };
   return (
     <View className="gap-2">
-      {canAttach ? (
-        <ComposerAttachmentButton
-          disabled={props.disabled}
-          supportsFiles
-          onPickMedia={() => pick("media")}
-          onPickFiles={() => pick("files")}
-        />
-      ) : null}
+      <View className="flex-row items-center gap-1">
+        <TextInputWrapper onPaste={paste} style={{ flex: 1 }}>
+          <TextInput
+            ref={inputRef}
+            defaultValue={initialText}
+            multiline={props.question.initialAnswer !== undefined}
+            submitBehavior={props.question.initialAnswer !== undefined ? "newline" : undefined}
+            editable={!props.disabled}
+            onChangeText={(text) => {
+              nativeText.current = text;
+              props.onChangeText(text);
+            }}
+            onFocus={() => {
+              focusedRef.current = true;
+              onInputFocusChange?.(true);
+            }}
+            onBlur={() => {
+              focusedRef.current = false;
+              onInputFocusChange?.(false);
+            }}
+            placeholder={gt("Or type a custom answer")}
+            className="min-h-[44px] rounded-xl border border-input-border bg-input px-3 py-2 font-sans text-sm text-foreground"
+          />
+        </TextInputWrapper>
+        {canAttach ? (
+          <ComposerAttachmentButton
+            disabled={props.disabled}
+            supportsFiles
+            onPickMedia={() => pick("media")}
+            onPickFiles={() => pick("files")}
+          />
+        ) : null}
+      </View>
       <ComposerAttachmentStrip
         environmentId={environmentId}
         attachments={attachments}
@@ -192,29 +217,6 @@ export function QuestionAttachments(props: {
       />
       <FilePreviewModal source={previewFile} onRequestClose={() => setPreviewFile(null)} />
       <VideoPreviewModal source={previewVideo} onRequestClose={() => setPreviewVideo(null)} />
-      <TextInputWrapper onPaste={paste}>
-        <TextInput
-          ref={inputRef}
-          defaultValue={initialText}
-          multiline={props.question.initialAnswer !== undefined}
-          submitBehavior={props.question.initialAnswer !== undefined ? "newline" : undefined}
-          editable={!props.disabled}
-          onChangeText={(text) => {
-            nativeText.current = text;
-            props.onChangeText(text);
-          }}
-          onFocus={() => {
-            focusedRef.current = true;
-            onInputFocusChange?.(true);
-          }}
-          onBlur={() => {
-            focusedRef.current = false;
-            onInputFocusChange?.(false);
-          }}
-          placeholder={gt("Or type a custom answer")}
-          className="min-h-[54px] rounded-2xl border border-input-border bg-input px-3.5 py-3 font-sans text-base text-foreground"
-        />
-      </TextInputWrapper>
     </View>
   );
 }

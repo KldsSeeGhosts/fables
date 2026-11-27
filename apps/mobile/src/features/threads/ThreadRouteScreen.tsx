@@ -1222,7 +1222,7 @@ function ThreadRouteContent(
           }
           dispatchingMessageId={composer.dispatchingQueuedMessageId}
           layoutVariant={layout.variant}
-          usesAutomaticContentInsets={usesNativeHeaderGlass}
+          scrollUnderHeader={usesNativeHeaderGlass}
           topOverlayInset={showsDuetOrb ? DUET_CONVERSATION_ORB_INSET : 0}
           onOpenConnectionEditor={handleOpenConnectionEditor}
           onChangeDraftMessage={composer.onChangeDraftMessage}
