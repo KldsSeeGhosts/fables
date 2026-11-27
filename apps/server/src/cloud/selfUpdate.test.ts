@@ -25,6 +25,8 @@ import * as ServerSelfUpdate from "./selfUpdate.ts";
 
 interface HarnessOptions {
   readonly mode?: "web" | "desktop";
+  readonly currentVersion?: string;
+  readonly targetVersion?: string;
   readonly managed?: boolean;
   readonly launcherProtocol?: 3 | typeof SERVICE_LAUNCHER_PROTOCOL;
   readonly preflight?: "ready" | "blocked";
@@ -38,7 +40,12 @@ interface HarnessOptions {
 }
 
 const archiveBytes = new TextEncoder().encode("not really a tarball");
-const releaseHttpClient = (order: string[], urls: string[], beforeDownload?: Effect.Effect<void>) =>
+const releaseHttpClient = (
+  order: string[],
+  urls: string[],
+  beforeDownload?: Effect.Effect<void>,
+  targetVersion = "1.1.0",
+) =>
   HttpClient.make((request) =>
     Effect.gen(function* () {
       urls.push(request.url);
@@ -49,7 +56,7 @@ const releaseHttpClient = (order: string[], urls: string[], beforeDownload?: Eff
         ).join("");
         return HttpClientResponse.fromWeb(
           request,
-          new Response(`${hex}  t3-1.1.0-linux-x64.tar.gz\n`),
+          new Response(`${hex}  t3-${targetVersion}-linux-x64.tar.gz\n`),
         );
       }
       if (beforeDownload) yield* beforeDownload;
@@ -67,6 +74,7 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
   const order: string[] = [];
   const urls: string[] = [];
   const preflightProtocols: Array<string | undefined> = [];
+  const targetVersion = options.targetVersion ?? "1.1.0";
   const runner = ProcessRunner.ProcessRunner.of({
     run: (input) =>
       Effect.gen(function* () {
@@ -120,8 +128,8 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
         preflightProtocols.push(named);
         const result =
           options.preflight === "blocked"
-            ? { status: "blocked", version: "1.1.0", reason: "local update required" }
-            : { status: "ready", version: "1.1.0", launcherProtocol: Number(named) };
+            ? { status: "blocked", version: targetVersion, reason: "local update required" }
+            : { status: "ready", version: targetVersion, launcherProtocol: Number(named) };
         return {
           stdout: JSON.stringify(result),
           stderr: "",
@@ -150,7 +158,7 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
   const config = yield* ServerConfig.ServerConfig.pipe(
     Effect.provide(ServerConfig.layerTest(process.cwd(), baseDir)),
   );
-  const selfUpdate = yield* ServerSelfUpdate.make().pipe(
+  const selfUpdate = yield* ServerSelfUpdate.make(options.currentVersion).pipe(
     Effect.provideService(ProcessRunner.ProcessRunner, runner),
     Effect.provideService(ServiceLauncherClient.ServiceLauncherClient, launcher),
     Effect.provideService(
@@ -162,7 +170,7 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
     ),
     Effect.provideService(
       HttpClient.HttpClient,
-      options.httpClient ?? releaseHttpClient(order, urls, options.beforeDownload),
+      options.httpClient ?? releaseHttpClient(order, urls, options.beforeDownload, targetVersion),
     ),
     Effect.provideService(HostProcess.Platform, "linux"),
     Effect.provideService(HostProcess.Architecture, "x64"),
@@ -177,6 +185,28 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
 });
 
 it.layer(NodeServices.layer)("server self update", (it) => {
+  it.effect.each([
+    { currentVersion: "0.1.13-nightly.20261126.530505", targetVersion: "0.2.0" },
+    { currentVersion: "0.2.0", targetVersion: "0.2.1" },
+  ])(
+    "stages and hands off $currentVersion to $targetVersion",
+    ({ currentVersion, targetVersion }) =>
+      Effect.gen(function* () {
+        const { selfUpdate, order, urls } = yield* makeHarness({ currentVersion, targetVersion });
+        const result = yield* selfUpdate.update({ targetVersion });
+        expect(result).toMatchObject({
+          targetVersion,
+          method: "boot-service",
+          updateId: "launcher-id",
+        });
+        expect(order).toEqual(["download", "extract", "preflight", "accept"]);
+        expect(urls).toEqual([
+          `https://github.com/KldsSeeGhosts/fables/releases/download/v${targetVersion}/SHA256SUMS`,
+          `https://github.com/KldsSeeGhosts/fables/releases/download/v${targetVersion}/t3-${targetVersion}-linux-x64.tar.gz`,
+        ]);
+      }),
+  );
+
   it.effect.each([
     { asset: "checksums", status: 504 },
     { asset: "archive", status: 503 },
@@ -573,6 +603,8 @@ it("a host crosses tracks only to a release that knows its whole database", () =
   // A Stable tag can carry a migration the latest Nightly lacks.
   expect(cross("0.1.4", nightly, 72, 73)).toContain("does not support yet");
   expect(cross("0.1.3", "0.1.4", undefined)).toBeNull();
+  expect(cross("0.2.0", "0.2.1", undefined)).toBeNull();
+  expect(cross("0.1.13-nightly.20261126.530501", "0.2.0", undefined)).toContain("Cannot confirm");
   // A database that exists but cannot be read proves nothing.
   expect(
     ServerSelfUpdate.trackSwitchBlockReason({

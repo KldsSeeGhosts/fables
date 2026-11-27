@@ -1,9 +1,12 @@
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
+import { fablesBridgeVersion, isFablesBridgeVersion } from "./fablesReleaseBridge.ts";
 import { compareSemverVersions } from "./semver.ts";
 
-const CLI_RELEASE_REPOSITORY = "KldsSeeGhosts/fables";
+export { fablesBridgeVersion, isFablesBridgeVersion } from "./fablesReleaseBridge.ts";
+
+export const CLI_RELEASE_REPOSITORY = "KldsSeeGhosts/fables";
 export const CLI_RELEASES_PAGE_URL = `https://github.com/${CLI_RELEASE_REPOSITORY}/releases`;
 export const CLI_RELEASE_CHECKSUMS_FILE = "SHA256SUMS";
 export const CLI_RELEASE_BASE_URL_ENV = "T3CODE_RELEASE_BASE_URL";
@@ -86,8 +89,18 @@ export const CLI_RELEASE_CHANNELS: ReadonlyArray<CliReleaseChannel> = [
 ];
 
 export function cliReleaseChannelOf(version: string): CliReleaseChannel {
+  // Old clients see the encoded bridge as Nightly. It runs the new Stable updater.
+  if (isFablesBridgeVersion(version)) return "stable";
   const channel = /^[^-+]+-(nightly|preview)\.\d{8}\.\d+$/.exec(version)?.[1];
   return channel === "nightly" || channel === "preview" ? channel : "stable";
+}
+
+export function isFablesLegacyToBridge(fromVersion: string, toVersion: string): boolean {
+  return (
+    isFablesBridgeVersion(toVersion) &&
+    cliReleaseChannelOf(fromVersion) === "nightly" &&
+    compareSemverVersions(fromVersion, toVersion) < 0
+  );
 }
 
 /** Whether updating between these versions crosses Stable and Nightly. Preview builds cross nothing.
@@ -95,7 +108,20 @@ export function cliReleaseChannelOf(version: string): CliReleaseChannel {
 export function crossesReleaseTrack(fromVersion: string, toVersion: string): boolean {
   const from = cliReleaseChannelOf(fromVersion);
   const to = cliReleaseChannelOf(toVersion);
-  return from !== to && from !== "preview" && to !== "preview";
+  return (
+    from !== to &&
+    from !== "preview" &&
+    to !== "preview" &&
+    !isFablesLegacyToBridge(fromVersion, toVersion)
+  );
+}
+
+export function nextFablesUpdateTarget(fromVersion: string, targetVersion: string): string {
+  return /^\d+\.\d+\.\d+$/.test(targetVersion) &&
+    compareSemverVersions(targetVersion, "0.2.0") >= 0 &&
+    isFablesLegacyToBridge(fromVersion, fablesBridgeVersion)
+    ? fablesBridgeVersion
+    : targetVersion;
 }
 
 /** The desktop update track a build belongs to. Preview builds have no feed and read as Stable. */
@@ -148,14 +174,26 @@ export function newestCliReleaseVersion(
     readonly draft?: boolean | undefined;
   }>,
   channel: CliReleaseChannel,
+  currentVersion?: string,
 ): string | undefined {
+  let newest: string | undefined;
   for (const release of releases) {
     if (release.draft) continue;
-    const version = /^v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(release.tag_name)?.[1];
+    const version = /^v(\d+\.\d+\.\d+(?:-(?:nightly|preview)\.\d{8}\.\d+)?)$/.exec(
+      release.tag_name,
+    )?.[1];
     if (version === undefined) continue;
-    if (cliReleaseChannelOf(version) === channel) return version;
+    if (
+      (cliReleaseChannelOf(version) === channel ||
+        (channel === "nightly" &&
+          currentVersion !== undefined &&
+          isFablesLegacyToBridge(currentVersion, version))) &&
+      (newest === undefined || compareSemverVersions(version, newest) > 0)
+    ) {
+      newest = version;
+    }
   }
-  return undefined;
+  return newest;
 }
 
 const NpmReleaseMigrationManifest = Schema.Struct({

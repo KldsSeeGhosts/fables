@@ -16,6 +16,7 @@ import {
 } from "@electron/asar";
 
 import { fromYaml } from "@t3tools/shared/schemaYaml";
+import { CLI_RELEASE_REPOSITORY } from "@t3tools/shared/cliRelease";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { clerkFrontendApiHostnameFromPublishableKey } from "@t3tools/shared/relayAuth";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
@@ -2745,12 +2746,14 @@ export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig"
   const [owner, repo, ...rest] = rawRepo.split("/");
   if (!owner || !repo || rest.length > 0) return undefined;
 
+  const nightlyFeed =
+    updateChannel === "nightly" || rawRepo.toLowerCase() === CLI_RELEASE_REPOSITORY.toLowerCase();
   return {
     provider: "github",
     owner,
     repo,
-    releaseType: updateChannel === "nightly" ? "prerelease" : "release",
-    ...(updateChannel === "nightly" ? { channel: "nightly" as const } : {}),
+    releaseType: nightlyFeed ? ("prerelease" as const) : ("release" as const),
+    ...(nightlyFeed ? { channel: "nightly" as const } : {}),
   };
 });
 
@@ -2868,9 +2871,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   };
   const updateChannel = resolveDesktopUpdateChannel(version);
   // Missing publish config infers a GitHub feed from tokens; staging has no repository, so manifest generation would crash.
+  const preview = isDesktopPreviewVersion(version);
+  const publishConfig = preview ? undefined : yield* resolveGitHubPublishConfig(updateChannel);
   buildConfig.publish = null;
-  if (!isDesktopPreviewVersion(version)) {
-    const publishConfig = yield* resolveGitHubPublishConfig(updateChannel);
+  if (!preview) {
     if (publishConfig) {
       buildConfig.publish = [publishConfig];
     } else if (mockUpdates) {
@@ -2996,7 +3000,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     if (buildConfig.publish) {
       buildConfig.appImage = {
         artifactName:
-          updateChannel === "nightly" ? "T3-Code-Nightly-${arch}.${ext}" : "T3-Code-${arch}.${ext}",
+          (publishConfig?.channel ?? updateChannel) === "nightly"
+            ? "T3-Code-Nightly-${arch}.${ext}"
+            : "T3-Code-${arch}.${ext}",
       };
     }
     buildConfig.deb = {

@@ -68,7 +68,7 @@ test("uses a published KSG Code release as the baseline for the first Fables rel
   assert.match(body, /Fix: providers: preserve custom model options/);
   assert.ok(body.includes(`https://github.com/example/ksgcode/commit/${sha}`));
   assert.ok(body.includes(`/compare/${fork1}...${fork2}`));
-  assert.doesNotMatch(body, /existing (KSG|upstream) feature|### Upstream/);
+  assert.doesNotMatch(body, /existing (KSG|upstream) feature|Compare: upstream changes/);
 });
 
 test("includes feature-branch commits merged locally, not generic merge plumbing", (t) => {
@@ -173,7 +173,7 @@ test("rebuilds report no new KSG changes instead of a comparison-only changelog"
   const { notes } = fixture(t);
   const body = notes();
   assert.match(body, /Rebuilt Fables; no new application changes/);
-  assert.doesNotMatch(body, /existing KSG feature|### Upstream/);
+  assert.doesNotMatch(body, /existing KSG feature|Compare: upstream changes/);
 });
 
 test("omits docs and tests, preserves maintenance and nonconventional summaries, and escapes Markdown", (t) => {
@@ -241,5 +241,45 @@ test("rejects inconsistent version metadata and an upstream tag not merged into 
   assert.throws(
     () => notes({ tag: nextFork, upstreamTag: upstream2 }),
     /not contained in the release commit/,
+  );
+});
+
+test("transitions from the encoded nightly to plain semver and records the same upstream baseline", (t) => {
+  const { git, commit, notes } = fixture(t);
+  commit("fix(web): prepare the Fables release");
+  const body = notes({ tag: "v0.2.0" });
+  assert.ok(body.includes(`/compare/${fork1}...v0.2.0`));
+  assert.ok(body.includes(`Includes upstream T3 Code [${upstream1}]`));
+  git("tag", "v0.2.0");
+  commit("fix(web): support plain versions");
+  const patchBody = notes({
+    tag: "v0.2.1",
+    releases: [published(fork1), published("v0.2.0", { body })],
+  });
+  assert.match(patchBody, /support plain versions/);
+  assert.doesNotMatch(patchBody, /prepare the Fables release|Compare: upstream changes/);
+  assert.ok(patchBody.includes(`Includes upstream T3 Code [${upstream1}]`));
+  assert.ok(patchBody.includes("/compare/v0.2.0...v0.2.1"));
+
+  git("switch", "upstream");
+  commit("fix(server): sync upstream");
+  git("tag", `upstream/${upstream2}`);
+  git("switch", "ksg/dev");
+  git("merge", "--no-ff", "-m", "Sync upstream nightly", "upstream");
+  const syncBody = notes({
+    tag: "v0.3.0",
+    upstreamTag: upstream2,
+    releases: [published(fork1), published("v0.2.0", { body })],
+  });
+  assert.ok(syncBody.includes(`/compare/${upstream1}...${upstream2}`));
+  assert.match(syncBody.split("### Fables")[0], /sync upstream/);
+});
+
+test("fails when a prior plain release lacks its upstream baseline", (t) => {
+  const { git, notes } = fixture(t);
+  git("tag", "v0.2.0");
+  assert.throws(
+    () => notes({ tag: "v0.2.1", releases: [published("v0.2.0")] }),
+    /Missing included upstream nightly/,
   );
 });

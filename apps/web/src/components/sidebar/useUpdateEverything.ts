@@ -2,6 +2,7 @@ import { msg, useMessages } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
 import { connectionErrorText } from "@t3tools/client-runtime/connection";
 import { PROVIDER_DISPLAY_NAMES } from "@t3tools/contracts";
+import { fablesBridgeVersion } from "@t3tools/shared/cliRelease";
 
 import { APP_VERSION } from "~/branding";
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
@@ -80,10 +81,20 @@ export function useUpdateEverything(
   const unverified = channelSwitch
     ? []
     : behindServers.filter((server) => server.selfUpdate !== "desktop-managed");
-  const published = useCliReleasePublished(unverified.length > 0 ? targetVersion : null);
-  const servers = published
-    ? behindServers
-    : behindServers.filter((server) => !unverified.includes(server));
+  const published = useCliReleasePublished(
+    unverified.some((server) => server.targetVersion === targetVersion) ? targetVersion : null,
+  );
+  const bridgePublished = useCliReleasePublished(
+    targetVersion !== fablesBridgeVersion &&
+      unverified.some((server) => server.targetVersion === fablesBridgeVersion)
+      ? fablesBridgeVersion
+      : null,
+  );
+  const servers = behindServers.filter(
+    (server) =>
+      !unverified.includes(server) ||
+      (server.targetVersion === targetVersion ? published : bridgePublished),
+  );
   const skipped: ReadonlyArray<SkippedMachine> = [
     ...unreachable,
     ...behindServers
@@ -92,7 +103,7 @@ export function useUpdateEverything(
         environmentId: server.environmentId,
         label: server.serverLabel,
         reason: resolve(msg("KSG {targetVersion} is not published or could not be verified yet"), {
-          targetVersion,
+          targetVersion: server.targetVersion,
         }),
       })),
   ];

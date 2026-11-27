@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import { compareSemverVersions } from "./semver.ts";
+
 import {
+  cliArchiveFileName,
   cliArchiveTarCommand,
   cliReleaseDownloadBaseUrl,
   cliReleaseIndexPageUrl,
+  crossesReleaseTrack,
   newestCliReleaseVersion,
   parseChecksums,
 } from "./cliRelease.ts";
@@ -53,6 +57,26 @@ describe("cliRelease", () => {
     expect(newestCliReleaseVersion(releases, "nightly")).toBe("1.2.4-nightly.20260912.7");
     expect(newestCliReleaseVersion(releases, "stable")).toBe("1.2.3");
     expect(newestCliReleaseVersion([{ tag_name: "v1.2.3" }], "preview")).toBeUndefined();
+  });
+
+  it("resolves published plain versions for CLI updates and archive downloads", () => {
+    const current = "0.1.13-nightly.20261126.530501";
+    expect(compareSemverVersions("0.2.0", current)).toBeGreaterThan(0);
+    expect(crossesReleaseTrack("0.2.0", "0.2.1")).toBe(false);
+    expect(
+      newestCliReleaseVersion(
+        [
+          { tag_name: `v${current}` },
+          { tag_name: "v0.2.0" },
+          { tag_name: "v0.2.1" },
+          { tag_name: "v0.2.2-beta.1" },
+          { tag_name: "v0.2.3", draft: true },
+        ],
+        "stable",
+      ),
+    ).toBe("0.2.1");
+    expect(cliArchiveFileName("0.2.0", "linux-x64")).toBe("t3-0.2.0-linux-x64.tar.gz");
+    expect(cliArchiveFileName("0.2.0", "win32-x64")).toBe("t3-0.2.0-win32-x64.zip");
   });
 
   it("pages through the release index at the largest page GitHub allows", () => {

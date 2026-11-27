@@ -170,7 +170,7 @@ git grep -n 'mcpToolListJsonBytes' -- apps/server/src/provider/agentContextBudge
 
 Owners: `packages/shared/src/forkUpstream.ts`, `apps/web/src/state/upstreamNightly.ts`, `apps/web/src/components/settings/UpstreamNightlySettings.tsx`, `apps/web/src/components/sidebar/SidebarUpstreamUpdatePill.tsx`, `packages/shared/src/cliRelease.ts`, `apps/web/src/state/npmRelease.ts`, `apps/web/src/components/sidebar/useUpdateEverything.ts`, `apps/web/src/components/settings/UpdateTrackSwitchDialog.tsx`, `apps/web/src/components/desktopUpdate.logic.ts`, `scripts/build-desktop-artifact.ts`, and KSG text and screenshots in `README.md` and `.github/readme/`.
 
-Must survive: KSG product naming, the exact included upstream baseline embedded as `VITE_KSG_UPSTREAM_TAG`, comparison against upstream rather than the encoded fork run number, the review link and copyable merge prompt, CLI release lookups in `KldsSeeGhosts/fables` rather than npm, verification that a server update target is published before updating, provider updates before server updates and desktop last, and update feeds from the fork repository.
+Must survive: KSG product naming, the exact included upstream baseline embedded as `VITE_KSG_UPSTREAM_TAG`, comparison against the exact included upstream nightly, the review link and copyable merge prompt, CLI release lookups in `KldsSeeGhosts/fables` rather than npm, verification that a server update target is published before updating, provider updates before server updates and desktop last, and update feeds from the fork repository.
 
 Checks:
 
@@ -185,14 +185,14 @@ git grep -n 'useCliReleasePublished' -- apps/web/src/components/sidebar/useUpdat
 
 Owners: `.github/workflows/ksg-release.yml`, `.github/workflows/release-desktop.yml`, `.github/scripts/ksg-release-notes.cjs`, `scripts/build-desktop-artifact.ts`, `scripts/sign-macos.ts`, `apps/mobile/app.config.ts`, `apps/mobile/eas.json`, and the release sections of `docs/operations/ksg-fork.md`.
 
-Must survive: publication from pushes to `ksg/dev`, the encoded version `upstream run * 100 + fork counter`, embedded upstream provenance, staging of the web asset manifest before artifact upload, macOS artifact reuse and signing on the KSG runner, unsigned Windows NSIS with the Linux CLI archive for WSL, renaming the Windows updater manifest to `nightly.yml`, descriptive release notes that separate KSG and upstream changes, KSG macOS signing fallbacks failing closed, and mobile updates owned by the `kidsseeghosts/ksg-code` EAS project with preview channel routing.
+Must survive: publication from pushes to `ksg/dev`, plain semver with the series in `.github/fables-release-series` and the patch derived from fork tags, embedded upstream provenance, staging of the web asset manifest before artifact upload, macOS artifact reuse and signing on the KSG runner, unsigned Windows NSIS with the Linux CLI archive for WSL, renaming the Windows updater manifest to `nightly.yml`, descriptive release notes that separate KSG and upstream changes, KSG macOS signing fallbacks failing closed, and mobile updates owned by the `kidsseeghosts/ksg-code` EAS project with preview channel routing.
 
 Checks:
 
 ```sh
 git grep -n 'name: KSG Release' -- .github/workflows/ksg-release.yml
 git grep -n 'Stage web asset manifest' -- .github/workflows/ksg-release.yml
-git grep -n 'upstream run \* 100 + fork counter\|run \* 100 + counter' -- docs/operations/ksg-fork.md .github/workflows/ksg-release.yml
+node --test .github/scripts/ksg-release-version.test.cjs
 git grep -n 'kidsseeghosts\|0db5bfe2-75db-4fa0-a957-e2ef19fac1d8' -- apps/mobile/app.config.ts apps/mobile/app.config.test.ts
 ```
 

@@ -7,6 +7,8 @@ import {
 } from "@t3tools/contracts";
 import {
   CLI_RELEASES_PAGE_URL,
+  fablesBridgeVersion,
+  isFablesLegacyToBridge,
   cliReleaseChannelOf,
   cliReleaseIndexPageUrl,
   newestCliReleaseVersion,
@@ -70,22 +72,33 @@ export async function findEnvironmentUpdate(currentVersion: string, signal: Abor
   const channel = cliReleaseChannelOf(currentVersion);
   // Public release pages avoid the anonymous API quota shared by devices on the same network.
   const response = await fetchReleases(
-    channel === "stable" ? `${CLI_RELEASES_PAGE_URL}/latest` : `${CLI_RELEASES_PAGE_URL}.atom`,
-    channel === "stable" ? "application/json" : "application/atom+xml",
+    `${CLI_RELEASES_PAGE_URL}.atom`,
+    "application/atom+xml",
     signal,
   );
-  const releases =
-    channel === "stable"
-      ? [decodeRelease(await response.json())]
-      : Array.from(
-          (await response.text()).matchAll(
-            /<id>tag:github\.com,2008:Repository\/\d+\/([^<]+)<\/id>/g,
-          ),
-          ([, tag_name = ""]) => ({ tag_name }),
-        );
-  let version = newestCliReleaseVersion(releases, channel);
+  const releases = Array.from(
+    (await response.text()).matchAll(/<id>tag:github\.com,2008:Repository\/\d+\/([^<]+)<\/id>/g),
+    ([, tag_name = ""]) => ({ tag_name }),
+  );
+  let version = newestCliReleaseVersion(releases, channel, currentVersion);
+  if (
+    isFablesLegacyToBridge(currentVersion, fablesBridgeVersion) &&
+    (version === undefined || compareSemverVersions(version, fablesBridgeVersion) < 0)
+  ) {
+    const pointer = await fetchReleases(
+      `${CLI_RELEASES_PAGE_URL}/download/update-feed/nightly.json`,
+      "application/json",
+      signal,
+    )
+      .then(async (response) => decodeRelease(await response.json()))
+      .catch((error: unknown) => {
+        if (signal.aborted) throw error;
+        return undefined;
+      });
+    if (pointer?.tag_name === `v${fablesBridgeVersion}`) version = fablesBridgeVersion;
+  }
 
-  // The feed only includes ten releases, so later nightlies can displace a published preview.
+  // Other releases can displace the requested channel from the ten-entry feed.
   for (let page = 1; version === undefined; page++) {
     const response = await fetchReleases(
       cliReleaseIndexPageUrl(page),
@@ -93,7 +106,7 @@ export async function findEnvironmentUpdate(currentVersion: string, signal: Abor
       signal,
     );
     const releases = decodeReleases(await response.json());
-    version = newestCliReleaseVersion(releases, channel);
+    version = newestCliReleaseVersion(releases, channel, currentVersion);
     if (releases.length < 100) break;
   }
 

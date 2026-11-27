@@ -195,6 +195,11 @@ function UpdateEverythingDialogContent({
                 </span>
                 <span role="cell">
                   {row.app !== null ? m(APP_LABELS[row.app]) : null}
+                  {row.version !== undefined ? (
+                    <span className="block font-mono text-muted-foreground text-meta">
+                      {row.version}
+                    </span>
+                  ) : null}
                   {row.app === null && row.skipped !== null ? (
                     <span className="text-muted-foreground">
                       <T>Skipped</T>

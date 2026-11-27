@@ -632,6 +632,45 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ),
   );
 
+  it.effect("generates nightly GitHub metadata for the plain Fables version", () =>
+    Effect.gen(function* () {
+      for (const [platform, target] of [
+        ["mac", "dmg"],
+        ["win", "nsis"],
+        ["linux", "AppImage"],
+      ] as const) {
+        const config = yield* createBuildConfig(
+          platform,
+          target,
+          "0.2.0",
+          false,
+          false,
+          undefined,
+          undefined,
+        );
+        assert.deepEqual(config.publish, [
+          {
+            provider: "github",
+            owner: "KldsSeeGhosts",
+            repo: "fables",
+            releaseType: "prerelease",
+            channel: "nightly",
+          },
+        ]);
+        assert.equal(config.artifactName, "KSG-Code-${version}-${arch}.${ext}");
+        if (platform === "linux") {
+          assert.deepEqual(config.appImage, { artifactName: "T3-Code-Nightly-${arch}.${ext}" });
+        }
+      }
+    }).pipe(
+      Effect.provide(
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({ env: { GITHUB_REPOSITORY: "KldsSeeGhosts/fables" } }),
+        ),
+      ),
+    ),
+  );
+
   it.effect("declares Calendar and Apple Events access for hosted commands in macOS builds", () =>
     Effect.gen(function* () {
       for (const version of ["0.1.0", "0.1.1-nightly.20261019.1"]) {

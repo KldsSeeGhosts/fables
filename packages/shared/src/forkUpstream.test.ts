@@ -19,13 +19,18 @@ describe("fork upstream baseline", () => {
     );
   });
 
-  it.each(["0.0.45", "0.0.46-preview.20261014.311801", "dev", "0.0.46-nightly.20261014.311800"])(
-    "does not invent a baseline for %s",
-    (version) => expect(upstreamVersionFromFork(version)).toBeNull(),
+  it.each([
+    "0.2.0",
+    "0.0.45",
+    "0.0.46-preview.20261014.311801",
+    "dev",
+    "0.0.46-nightly.20261014.311800",
+  ])("does not invent a baseline for %s", (version) =>
+    expect(upstreamVersionFromFork(version)).toBeNull(),
   );
 
   it("prefers explicit build provenance, including for development builds", () => {
-    expect(resolveForkUpstreamVersion("0.0.45", "v0.0.46-nightly.20261014.3118")).toBe(
+    expect(resolveForkUpstreamVersion("0.2.0", "v0.0.46-nightly.20261014.3118")).toBe(
       "0.0.46-nightly.20261014.3118",
     );
     expect(resolveForkUpstreamVersion("0.0.46-nightly.20261014.311802", "")).toBe(
