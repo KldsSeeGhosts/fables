@@ -164,7 +164,7 @@ const chorusBriefPrompt = (
   input: BriefPromptInput,
 ) => `Write the next "## New" section of ${input.captain.name}'s DIGEST.md morning brief.
 
-${input.captain.name} is the Chorus for the user's fleet of Duets. The brief should contain up to 8 Markdown bullets, one line per item that needs the user's attention or decision. Group items by Duet; when the activity includes multiple machines, group first by machine and then by Duet. Put items with the nearest deadline first. Leave out the "## New" heading, code fences, and commentary. Use plain language. Use the existing digest for continuity. If nothing needs attention, leave the brief empty.
+${input.captain.name} is a Chorus covering the user's fleet of Duets. The brief should contain up to 8 Markdown bullets, one line per item that needs the user's attention or decision. Group items by Duet; when the activity includes multiple machines, group first by machine and then by Duet. Put items with the nearest deadline first. Keep every item on one bullet line and use bold labels instead of section headings. Leave out the "## New" heading, code fences, and commentary. Use plain language. Use the existing digest for continuity. If nothing needs attention, leave the brief empty.
 
 ## NOTES.md
 ${excerpt(input.notes.trim(), BRIEF_DOCUMENT_CONTEXT_LIMIT) || "(empty)"}
