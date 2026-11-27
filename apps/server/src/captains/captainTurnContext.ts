@@ -129,7 +129,9 @@ export const formatCaptainBriefing = (input: {
     handoffSplit.handoff &&
       `Conversation handoff:\n${prefix(handoffSplit.handoff, CAPTAIN_HANDOFF_MAX_LENGTH)}`,
     notesBody && `NOTES.md:\n${prefix(notesBody, 6_000)}`,
-    "Use captain_document_read for your Duet's NOTES.md, AGENTS.md, CREW.md, and DIGEST.md stored in T3. Use captain_memory_search for your Duet's memory.",
+    captain.kind === "chorus"
+      ? "Use captain_document_read for your Duet's NOTES.md, AGENTS.md, CREW.md, and DIGEST.md stored in T3. Use captain_memory_search for your Duet's memory."
+      : "Use captain_document_read and captain_memory_search to look up more Duet context.",
   ]
     .filter(Boolean)
     .join("\n\n");
