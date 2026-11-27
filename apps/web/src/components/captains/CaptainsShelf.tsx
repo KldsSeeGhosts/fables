@@ -648,6 +648,7 @@ export function CaptainShelfList({
   activeThread,
   attention: attentionTotal,
   overviewActive = false,
+  fleetMachineCount,
   onOpen,
   onOpenOverview,
   onCreate,
@@ -666,6 +667,7 @@ export function CaptainShelfList({
   /** Captains waiting on the user, counting their delegated threads; defaults to the rows'. */
   attention?: number | undefined;
   overviewActive?: boolean;
+  fleetMachineCount: number;
   onOpen: (threadRef: ScopedThreadRef) => void;
   onOpenOverview?: (() => void) | undefined;
   onCreate?: (() => void) | undefined;
@@ -698,10 +700,13 @@ export function CaptainShelfList({
   const chorusRowEntries = rowEntries.filter(({ row }) => row.captain.kind === "chorus");
   const duetRowEntries = rowEntries.filter(({ row }) => row.captain.kind !== "chorus");
   const orderedDuetEntries = isDuet ? orderDuets(duetRowEntries, savedDuetOrder) : duetRowEntries;
-  const orderedRowEntries = [...chorusRowEntries, ...orderedDuetEntries];
+  const orderedRowEntries = [
+    ...chorusRowEntries.filter((entry) => !entry.archived),
+    ...orderedDuetEntries,
+    ...chorusRowEntries.filter((entry) => entry.archived),
+  ];
   const orderedRows = orderedRowEntries.map(({ row }) => row);
   const orderedKeys = orderedDuetEntries.map(({ key }) => key);
-  const fleetMachineCount = new Set(rows.map((row) => row.environmentId)).size;
   const activeRowEntries = orderedDuetEntries.filter((entry) => !entry.archived);
   const activeCount = activeRowEntries.length;
   const activeIndexByKey = new Map(activeRowEntries.map((entry, index) => [entry.key, index]));
@@ -865,13 +870,7 @@ export function CaptainsShelf({
     .toSorted(
       (a, b) => Number(a.captain.archivedAt !== null) - Number(b.captain.archivedAt !== null),
     );
-  const fleetChoruses = activeChoruses(
-    supporting.map(({ environmentId, label }, index) => ({
-      environmentId,
-      label,
-      captains: environments[index]!.captains,
-    })),
-  );
+  const fleetChoruses = activeChoruses(environments);
 
   return (
     <>
@@ -880,6 +879,7 @@ export function CaptainsShelf({
         activeThread={activeThread}
         attention={captainAttentionTotal(environments, shells)}
         overviewActive={overviewActive}
+        fleetMachineCount={supporting.length}
         onOpen={onOpen}
         onOpenOverview={onOpenOverview}
         onCreate={destination ? () => setCreating(true) : undefined}

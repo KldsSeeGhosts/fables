@@ -121,6 +121,7 @@ function blocked(thread: EnvironmentThreadShell) {
 function DuetOverviewCard({
   environmentId,
   captain,
+  chorusHost,
   activeThreads,
   attention,
   working,
@@ -129,6 +130,7 @@ function DuetOverviewCard({
 }: {
   readonly environmentId: EnvironmentId;
   readonly captain: Captain;
+  readonly chorusHost?: string | undefined;
   readonly activeThreads: ReadonlyArray<EnvironmentThreadShell>;
   readonly attention: number;
   readonly working: boolean;
@@ -157,7 +159,11 @@ function DuetOverviewCard({
         variant="selection-card"
         data-duet-overview-card=""
         aria-label={
-          captain.kind === "chorus" ? gt("Open Chorus") : gt("Open {name}", { name: captain.name })
+          chorusHost !== undefined
+            ? gt("Open Chorus {name} on {machine}", { name: captain.name, machine: chorusHost })
+            : captain.kind === "chorus"
+              ? gt("Open Chorus")
+              : gt("Open {name}", { name: captain.name })
         }
         onClick={onOpen}
         className="h-full w-full"
@@ -178,6 +184,11 @@ function DuetOverviewCard({
                   </span>
                 ) : null}
               </span>
+              {chorusHost !== undefined ? (
+                <Text variant="meta" tone="muted" truncate>
+                  {chorusHost}
+                </Text>
+              ) : null}
               {captain.role ? (
                 <Text variant="meta" tone="muted" truncate>
                   {captain.role}
@@ -235,10 +246,17 @@ export function CaptainsInbox({
       .find((environment) => environment.environmentId === environmentId)
       ?.captains.find((captain) => captain.id === captainId);
   const active = environments
-    .flatMap(({ environmentId, captains }) =>
+    .flatMap(({ environmentId, label, captains }) =>
       captains.flatMap((captain) =>
         captain.archivedAt === null
-          ? [{ environmentId, captain, ...captainThreadActivity(environmentId, captain, shells) }]
+          ? [
+              {
+                environmentId,
+                label,
+                captain,
+                ...captainThreadActivity(environmentId, captain, shells),
+              },
+            ]
           : [],
       ),
     )
@@ -294,19 +312,20 @@ export function CaptainsInbox({
           className="rounded-lg border border-warning bg-warning/10 px-4 py-3 text-body text-warning-foreground"
         >
           <T>
-            More than one active Chorus is visible. This can happen when machines are offline or two
-            are created at once; archive all but one.
+            More than one Chorus is active. This can happen after simultaneous creation or a restore
+            while another machine was offline. Archive all but one.
           </T>
         </div>
       ) : null}
 
       {active.length > 0 ? (
         <ul className="grid grid-cols-1 gap-3 @lg:grid-cols-2 @3xl:grid-cols-3">
-          {active.map(({ environmentId, captain, children, attention, working }, index) => (
+          {active.map(({ environmentId, label, captain, children, attention, working }, index) => (
             <DuetOverviewCard
               key={`${environmentId}:${captain.id}`}
               environmentId={environmentId}
               captain={captain}
+              chorusHost={captain.kind === "chorus" && environments.length > 1 ? label : undefined}
               activeThreads={children}
               attention={attention}
               working={working}
@@ -320,6 +339,16 @@ export function CaptainsInbox({
           <T>No Duets yet. Create one to delegate work and get recaps.</T>
         </Text>
       )}
+
+      {fleetChoruses.length > 0 ? (
+        <Text variant="meta" tone="muted" render={<p />}>
+          <T>
+            Routing to a Duet on another machine requires a full-access link. A confirmed route can
+            show an unknown status while that machine is offline. Routed results appear the next
+            time you message Chorus.
+          </T>
+        </Text>
+      ) : null}
 
       <DuetSection title=<T>Needs you</T> count={items.length}>
         {items.length === 0 ? (
@@ -378,6 +407,14 @@ export function CaptainsInbox({
       </DuetSection>
 
       <DuetSection title=<T>Recaps</T>>
+        {fleetChoruses.length > 0 ? (
+          <Text variant="meta" tone="muted" render={<p />}>
+            <T>
+              Chorus recaps can be incomplete when a linked machine is offline or running an older
+              version.
+            </T>
+          </Text>
+        ) : null}
         {active.length > 0 ? (
           <MorningBriefs duets={active} now={now} onOpenCaptain={onOpenCaptain} />
         ) : (

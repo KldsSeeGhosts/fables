@@ -116,6 +116,7 @@ function renderList(
   options: {
     rows?: Parameters<typeof CaptainShelfList>[0]["rows"];
     projects?: ReturnType<typeof useProjects>;
+    fleetMachineCount?: number;
   } = {},
 ) {
   window.localStorage.removeItem(duetOrderStorageKey);
@@ -123,6 +124,7 @@ function renderList(
   return render(
     <ul>
       <CaptainShelfList
+        fleetMachineCount={options.fleetMachineCount ?? 1}
         rows={
           options.rows ?? [
             { environmentId, captain, attention: 0, working: false, primary, ...row },
@@ -360,6 +362,7 @@ it("opens the Duets page from the section label, which counts Duets needing inpu
   await using screen = await render(
     <ul>
       <CaptainShelfList
+        fleetMachineCount={1}
         rows={[{ environmentId, captain, attention: 1, working: false, primary }]}
         activeThread={null}
         onOpen={() => {}}
@@ -518,21 +521,36 @@ it("opens the Duet row menu from the keyboard without a three-dot button", async
   expect(show.mock.lastCall?.[2]).toBe("keyboard");
 });
 
-it("pins the Chorus first with its fleet line and keeps it out of Duet ordering", async () => {
+it("pins only the active Chorus and offers restore without reorder actions", async () => {
+  const show = stubContextMenu();
   const chorus = {
     ...captainNamed("chorus", "Chorus"),
     kind: "chorus" as const,
     avatar: { preset: "circle" as const, color: "orange" as const },
   };
-  const alpha = captainNamed("alpha", "Alpha");
-  const rows = [
-    { environmentId, captain: alpha, attention: 0, working: false, primary },
-    { environmentId, captain: chorus, attention: 0, working: false, primary },
-  ];
-  await using screen = await renderList({}, { rows });
+  const archived = {
+    ...chorus,
+    ...captainNamed("archived-chorus", "Old Chorus"),
+    kind: "chorus" as const,
+    archivedAt: captain.createdAt,
+  };
+  const rows = [archived, captainNamed("alpha", "Alpha"), chorus].map((captain) => ({
+    environmentId,
+    captain,
+    attention: 0,
+    working: false,
+  }));
+  await using screen = await renderList({}, { rows, fleetMachineCount: 2 });
   const ordered = rowOrder(screen.container);
-  expect(ordered[0]).toContain("Chorus");
-  expect(ordered[0]).toContain("All Duets across 1 machine");
+  expect(ordered[0]).toContain("All Duets across 2 machines");
   expect(ordered[1]).toContain("Alpha");
-  expect(screen.container.textContent).toContain("Chorus");
+  expect(ordered[2]).toContain("Old Chorus");
+
+  await userEvent.click(screen.getByRole("button", { name: /^Old Chorus, Archived/ }), {
+    button: "right",
+  });
+  await vi.waitFor(() => expect(show).toHaveBeenCalledOnce());
+  const menu = show.mock.lastCall?.[0] ?? [];
+  expect(menu.find((item) => item.id === "archive")?.label).toBe("Restore");
+  expect(menu.some((item) => item.id === "move-up" || item.id === "move-down")).toBe(false);
 });

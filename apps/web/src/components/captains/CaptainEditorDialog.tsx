@@ -80,12 +80,17 @@ export function CaptainEditorDialog({
   const [environmentId, setEnvironmentId] = useState(destination.id);
   const [captainId] = useState(() => CaptainId.make(randomUUID()));
   const [kind, setKind] = useState<CaptainKind>(captain?.kind ?? "duet");
-  const [name, setName] = useState(captain?.name ?? "");
+  const isChorus = kind === "chorus";
+  const [nameDraft, setName] = useState(captain?.name);
+  const name = nameDraft ?? (isChorus ? "Chorus" : "");
   const [role, setRole] = useState(captain?.role ?? "");
   const [instructions, setInstructions] = useState(captain?.instructions ?? "");
-  const [avatar, setAvatar] = useState<Avatar>(() =>
-    normalizeCaptainAvatar(captain?.avatar ?? randomCaptainAvatar()),
+  const [duetAvatar] = useState(() => normalizeCaptainAvatar(randomCaptainAvatar()));
+  const [avatarDraft, setAvatar] = useState<Avatar | undefined>(() =>
+    captain ? normalizeCaptainAvatar(captain.avatar) : undefined,
   );
+  const avatar: Avatar =
+    avatarDraft ?? (isChorus ? { preset: "circle", color: "orange" } : duetAvatar);
   const [reportPolicy, setReportPolicy] = useState<CaptainReportPolicy>(
     captain?.reportPolicy ?? "react",
   );
@@ -102,20 +107,20 @@ export function CaptainEditorDialog({
   const create = useAtomCommand(serverEnvironment.createCaptain, { reportFailure: false });
   const update = useAtomCommand(serverEnvironment.updateCaptain, { reportFailure: false });
   const projects = useProjects().filter((project) => project.environmentId === environmentId);
-  const canSave = captain === undefined ? canCreate : canUpdate;
+  const chorusBlocked = captain === undefined && isChorus && !canCreateChorus;
+  const canSave = captain === undefined ? canCreate && !chorusBlocked : canUpdate;
   const { emblems: emblemLabels, palettes: paletteLabels } = useCaptainAvatarLabels();
 
   const save = async () => {
     if (!canSave || saving || !name.trim()) return;
-    const chorus = kind === "chorus";
     const profile = {
       name: name.trim(),
       role: role.trim(),
       instructions,
       avatar,
-      scopedProjectIds: chorus ? [] : scopedProjectIds,
-      coordinatorOnly: chorus ? true : coordinatorOnly,
-      reportPolicy: chorus ? ("react" as const) : reportPolicy,
+      scopedProjectIds: isChorus ? [] : scopedProjectIds,
+      coordinatorOnly: isChorus ? true : coordinatorOnly,
+      reportPolicy: isChorus ? ("react" as const) : reportPolicy,
     };
     setError(null);
     setSaving(true);
@@ -123,7 +128,7 @@ export function CaptainEditorDialog({
       if (captain !== undefined) {
         return update({ environmentId, input: { captainId: captain.id, ...profile } });
       }
-      const project = projects.find(({ id }) => id === scopedProjectIds[0]) ?? null;
+      const project = projects.find(({ id }) => id === profile.scopedProjectIds[0]) ?? null;
       const settings = config?.settings ?? DEFAULT_SERVER_SETTINGS;
       const defaults = resolveProjectSettings(settings, project?.id ?? null, project).settings;
       const modelSelection =
@@ -163,6 +168,8 @@ export function CaptainEditorDialog({
           kind === "chorus" ? gt("Could not save Chorus.") : gt("Could not save Duet."),
         ),
       );
+    } else if (captain === undefined && isChorus && result.value.kind !== "chorus") {
+      setError(gt("This machine created a Duet. Update it before creating a Chorus."));
     } else {
       onSave(environmentId, result.value);
     }
@@ -251,32 +258,26 @@ export function CaptainEditorDialog({
                   </Select>
                 </div>
               ) : null}
-              {captain === undefined && canCreateChorus ? (
+              {captain === undefined && (canCreateChorus || isChorus) ? (
                 <div className="grid gap-1.5">
                   <span className="text-label">
-                    <T>Kind</T>
+                    <T>Type</T>
                   </span>
                   <ToggleGroup
-                    aria-label={gt("Captain kind")}
+                    aria-label={gt("Duet type")}
                     value={[kind]}
                     disabled={saving}
                     onValueChange={(value) => {
                       const next = value[0];
                       if (next !== "duet" && next !== "chorus") return;
                       setKind(next);
-                      if (next === "chorus") {
-                        if (!name.trim()) setName("Chorus");
-                        setAvatar({ preset: "circle", color: "orange" });
-                        setScope([]);
-                        setCoordinatorOnly(true);
-                        setReportPolicy("react");
-                      }
+                      setError(null);
                     }}
                   >
                     <Toggle value="duet">
                       <T>Duet</T>
                     </Toggle>
-                    <Toggle value="chorus">
+                    <Toggle value="chorus" disabled={!canCreateChorus}>
                       <T>Chorus</T>
                     </Toggle>
                   </ToggleGroup>
@@ -285,9 +286,9 @@ export function CaptainEditorDialog({
               {kind === "chorus" ? (
                 <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-meta text-muted-foreground">
                   <T>
-                    Chorus always has no workspace scope, delegates project work, and uses the react
-                    report policy. The server checks every linked machine that answers before
-                    creating or restoring it.
+                    Fables checks reachable linked machines before creating or restoring a Chorus.
+                    Fleet results can be incomplete while a machine is offline or running an older
+                    version.
                   </T>
                 </div>
               ) : null}
@@ -350,10 +351,10 @@ export function CaptainEditorDialog({
                         (entry) => DUET_PICKER.emblems[entry] === value[0],
                       );
                       if (emblem) {
-                        setAvatar((current) => ({
-                          ...current,
+                        setAvatar({
+                          ...avatar,
                           preset: DUET_PICKER.emblems[emblem],
-                        }));
+                        });
                       }
                     }}
                   >
@@ -389,10 +390,10 @@ export function CaptainEditorDialog({
                         (entry) => DUET_PICKER.palettes[entry] === value[0],
                       );
                       if (palette) {
-                        setAvatar((current) => ({
-                          ...current,
+                        setAvatar({
+                          ...avatar,
                           color: DUET_PICKER.palettes[palette],
-                        }));
+                        });
                       }
                     }}
                   >
@@ -469,6 +470,11 @@ export function CaptainEditorDialog({
                   </div>
                 </>
               )}
+              {chorusBlocked ? (
+                <p role="alert" className="text-body text-destructive-foreground">
+                  <T>A Chorus is already active. Archive it before creating another.</T>
+                </p>
+              ) : null}
               {error !== null ? (
                 <p role="alert" className="text-body text-destructive-foreground">
                   {error}

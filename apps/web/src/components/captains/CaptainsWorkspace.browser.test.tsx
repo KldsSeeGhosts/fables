@@ -301,7 +301,7 @@ it("labels machine and Duet groups in a Chorus recap", async () => {
       {
         ...document(
           "DIGEST.md",
-          "## New\n\n### Mac Studio\n\n#### Maria\n- Review the release.\n\n### Build box\n- Machine unreachable: offline",
+          "## New\n\n**Mac Studio**\n\n**Maria**\n- Review the release.\n\n**Build box**\n- Machine unreachable: offline",
         ),
         captainId: chorus.id,
       },
@@ -331,5 +331,5 @@ it("warns when two active Choruses are visible", async () => {
   } satisfies Captain;
   using _fixture = useFixture([chorus, other], new Map());
   await using screen = await render(<CaptainsWorkspace />, { router: "/captains" });
-  await expect.element(screen.getByText(/More than one active Chorus is visible/)).toBeVisible();
+  await expect.element(screen.getByText(/More than one Chorus is active/)).toBeVisible();
 });

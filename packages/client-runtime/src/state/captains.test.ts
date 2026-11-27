@@ -13,6 +13,7 @@ import * as DateTime from "effect/DateTime";
 import { expect, it } from "vite-plus/test";
 
 import {
+  activeChoruses,
   captainAttentionTotal,
   captainConversationKeys,
   captainDelegatedLocalTasks,
@@ -76,6 +77,25 @@ const maria = {
   earlierThreadIds: [ThreadId.make("captain:maria:0")],
   archivedAt: null,
 } satisfies Pick<Captain, "id" | "primaryThreadId" | "earlierThreadIds" | "archivedAt">;
+
+it("detects active Choruses across machines without conflating their local IDs", () => {
+  const chorus = { ...maria, name: "Chorus", kind: "chorus" as const };
+  const archived = { ...chorus, id: CaptainId.make("archived"), archivedAt: earlierAt };
+  const duet = { ...maria, name: "Maria", kind: "duet" as const };
+  const local = { environmentId, label: "Local", captains: [chorus, archived, duet] };
+  const remote = { environmentId: remoteId, label: "Remote", captains: [chorus] };
+
+  expect(
+    activeChoruses([local, remote]).map(({ environmentId, captain }) => [
+      environmentId,
+      captain.id,
+    ]),
+  ).toEqual([
+    [environmentId, chorus.id],
+    [remoteId, chorus.id],
+  ]);
+  expect(activeChoruses([{ ...local, captains: [archived, duet] }])).toEqual([]);
+});
 
 it("collects pending attention from current Captain conversations and active children", () => {
   const archived = {

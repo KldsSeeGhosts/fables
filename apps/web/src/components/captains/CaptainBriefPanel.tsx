@@ -423,7 +423,11 @@ export function CaptainProfileDialogs({ profile }: { profile: CaptainProfile }) 
           <AlertDialogPopup>
             <AlertDialogHeader>
               <AlertDialogTitle>
-                <T>Could not update Duet</T>
+                {profile.current.kind === "chorus" ? (
+                  <T>Could not update Chorus</T>
+                ) : (
+                  <T>Could not update Duet</T>
+                )}
               </AlertDialogTitle>
               <AlertDialogDescription>{error}</AlertDialogDescription>
             </AlertDialogHeader>

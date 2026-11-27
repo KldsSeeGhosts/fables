@@ -58,6 +58,7 @@ const BRIEF_COLLAPSED_ITEMS = 3;
 const FENCE = /^\s*(```|~~~)/;
 const THEMATIC_BREAK = /^\s*([-*_])(\s*\1){2,}\s*$/;
 const HEADING = /^#{1,6}\s+(.+?)\s*#*\s*$/;
+const BOLD_LABEL = /^\*\*([^*]+?)\*\*:?\s*$/;
 const LIST_MARKER = /^([-*+]|\d+[.)])\s+/;
 const TRAILING_LINKS = /(?:[\s,;·|]*(?<!!)\[[^\]\n]*\]\([^)\s]+\))+[\s.,;]*$/u;
 const LINK = /(?<!!)\[[^\]\n]*\]\([^)\s]+\)/gu;
@@ -71,7 +72,10 @@ function liftReferences(text: string): { markdown: string; references: ReadonlyA
 }
 
 /** Splits a brief into top-level items and subheading labels, lifting each item's trailing links out of its text. */
-export function captainBriefItems(markdown: string): ReadonlyArray<CaptainBriefEntry> {
+export function captainBriefItems(
+  markdown: string,
+  options?: { readonly boldLabels?: boolean },
+): ReadonlyArray<CaptainBriefEntry> {
   const raw: Array<{ label: string } | { body: string[] }> = [];
   let current = null as string[] | null;
   let kind = "paragraph" as "paragraph" | "list";
@@ -118,11 +122,13 @@ export function captainBriefItems(markdown: string): ReadonlyArray<CaptainBriefE
       continue;
     }
     const indented = /^[ \t]/.test(line);
+    const label =
+      HEADING.exec(line)?.[1] ?? (options?.boldLabels ? BOLD_LABEL.exec(line)?.[1] : undefined);
     if (!indented && THEMATIC_BREAK.test(line)) {
       close();
-    } else if (!indented && HEADING.test(line)) {
+    } else if (!indented && label !== undefined) {
       close();
-      raw.push({ label: HEADING.exec(line)![1]! });
+      raw.push({ label });
     } else if (!indented && LIST_MARKER.test(line)) {
       const marker = LIST_MARKER.exec(line)![0];
       start(line.slice(marker.length), "list", marker.length);
