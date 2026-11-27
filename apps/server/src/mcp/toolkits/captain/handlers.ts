@@ -48,6 +48,9 @@ const requireChorus = Effect.gen(function* () {
 
 const DUET_READ_CONTENT_LIMIT = 16_000;
 const DUET_READ_TRUNCATION_MARKER = "\n\n[truncated: content exceeds 16,000 characters]";
+const HONCHO_RECALL_NOTE = "Honcho recall unavailable; showing local memories only.";
+
+const normalizeMemoryText = (text: string) => text.trim().replace(/\s+/g, " ").toLowerCase();
 
 const capDuetReadContent = <Document extends { readonly content: string }>(document: Document) => {
   if (document.content.length <= DUET_READ_CONTENT_LIMIT) return { document, truncated: false };
@@ -153,28 +156,67 @@ export const layer = McpToolAccess.toLayer(
             duetId === undefined
               ? (yield* store.snapshot({}).pipe(Effect.mapError(failed))).captains
               : [yield* store.requireCaptain(duetId).pipe(Effect.mapError(failed))];
-          const byId = new Map(captains.map((captain) => [captain.id, captain.name]));
+          const byId = new Map(captains.map((captain) => [captain.id, captain]));
           const machine = yield* localEnvironment;
-          const memories = yield* store
-            .listMemories(duetId, {
-              ...(query === undefined ? {} : { query }),
-              limit: 20,
-            })
-            .pipe(Effect.mapError(failed));
-          return {
-            matches: memories.flatMap((memory) => {
-              const name = byId.get(memory.captainId);
-              return name === undefined
-                ? []
-                : [
-                    {
-                      ...machine,
-                      source: "local" as const,
-                      duet: { id: memory.captainId, name },
-                      memory,
+          const [memories, recall] = yield* Effect.all(
+            [
+              store
+                .listMemories(duetId, {
+                  ...(query === undefined ? {} : { query }),
+                  limit: 20,
+                })
+                .pipe(Effect.mapError(failed)),
+              Option.isSome(honcho) && honcho.value.enabled
+                ? honcho.value.searchAcrossDuets(captains, query)
+                : Effect.succeed({ status: "disabled" as const, results: [] }),
+            ],
+            { concurrency: 2 },
+          );
+          const seen = new Set<string>();
+          const remember = (text: string) => {
+            const key = normalizeMemoryText(text);
+            if (key === "" || seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          };
+          const localMatches = memories.flatMap((memory) => {
+            const captain = byId.get(memory.captainId);
+            return captain === undefined || !remember(memory.text)
+              ? []
+              : [
+                  {
+                    ...machine,
+                    source: "local" as const,
+                    duet: { id: captain.id, name: captain.name },
+                    memory,
+                  },
+                ];
+          });
+          const recalledMatches = recall.results.flatMap((hit, index) => {
+            const captain = byId.get(hit.captainId);
+            const text = hit.text.trim();
+            return captain === undefined || !remember(text)
+              ? []
+              : [
+                  {
+                    ...machine,
+                    source: "honcho" as const,
+                    duet: { id: captain.id, name: captain.name },
+                    memory: {
+                      id: CaptainMemoryId.make(`honcho-recall-${index + 1}`),
+                      captainId: captain.id,
+                      text: `Recalled: ${text}`.slice(0, 4_000),
+                      essential: false,
+                      userControlled: false,
+                      createdAt: captain.createdAt,
+                      updatedAt: captain.createdAt,
                     },
-                  ];
-            }),
+                  },
+                ];
+          });
+          return {
+            matches: [...localMatches, ...recalledMatches].slice(0, 20),
+            ...(recall.status === "failed" ? { note: HONCHO_RECALL_NOTE } : {}),
           };
         }),
       ),

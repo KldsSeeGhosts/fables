@@ -248,7 +248,7 @@ it.effect("lets only the Chorus use the local cross-Duet read tools", () =>
       yield* store.upsertMemory({
         captainId: archived.id,
         id: CaptainMemoryId.make(`extra-${index}`),
-        text: "Deploy after CI",
+        text: `Deploy after CI ${index}`,
         essential: false,
       });
     }
@@ -279,6 +279,175 @@ it.effect("lets only the Chorus use the local cross-Duet read tools", () =>
     }
   }).pipe(Effect.provide(layers())),
 );
+
+it.effect("merges Chorus local and Honcho memories with labels, dedupe, and the result cap", () => {
+  const jordan = {
+    ...captain,
+    id: CaptainId.make("jordan"),
+    primaryThreadId: ThreadId.make("captain:jordan:0"),
+    name: "Jordan",
+  } satisfies Captain;
+  const calls: Array<{
+    readonly captainIds: ReadonlyArray<CaptainId>;
+    readonly query: string | undefined;
+  }> = [];
+  const honcho = Layer.mock(CaptainHonchoMemory.CaptainHonchoMemory)({
+    enabled: true,
+    longTermMemory: () => Effect.succeedNone,
+    search: () => Effect.succeed([]),
+    searchAcrossDuets: (captains, query) =>
+      Effect.sync(() => {
+        calls.push({ captainIds: captains.map(({ id }) => id), query });
+        return {
+          status: "ok" as const,
+          results: [
+            { captainId: captain.id, text: "Shared deployment fact" },
+            { captainId: captain.id, text: "Recall beyond local" },
+            { captainId: jordan.id, text: "Jordan recall" },
+            ...Array.from({ length: 7 }, (_, index) => ({
+              captainId: jordan.id,
+              text: `Extra recall ${index}`,
+            })),
+          ],
+        };
+      }),
+    drain: Effect.void,
+  });
+  return Effect.gen(function* () {
+    const store = yield* CaptainStore.CaptainStore;
+    const mcp = yield* McpServer.McpServer;
+    for (const profile of [captain, chorus, jordan]) yield* store.save(profile);
+    for (let index = 0; index < 18; index++) {
+      yield* store.upsertMemory({
+        captainId: captain.id,
+        id: CaptainMemoryId.make(`fact-${index}`),
+        text: index === 0 ? "Shared deployment fact" : `Local fact ${index}`,
+        essential: false,
+      });
+    }
+    const call = callAs(mcp, createCaller(chorus.primaryThreadId));
+    const search = yield* decodeDuetMemorySearch(
+      (yield* call("duet_memory_search", { query: "fact" })).structuredContent,
+    );
+
+    assert.lengthOf(search.matches, 20);
+    assert.isFalse("note" in search);
+    const shared = search.matches.filter(({ memory }) => memory.text === "Shared deployment fact");
+    assert.lengthOf(shared, 1);
+    assert.equal(shared[0]?.source, "local");
+    const recalled = search.matches.filter(({ source }) => source === "honcho");
+    assert.deepStrictEqual(
+      recalled.map(({ memory }) => memory.text),
+      ["Recalled: Recall beyond local", "Recalled: Jordan recall"],
+    );
+    assert.deepStrictEqual(
+      recalled.map(({ duet }) => [duet.id, duet.name]),
+      [
+        [captain.id, captain.name],
+        [jordan.id, jordan.name],
+      ],
+    );
+    assert.deepStrictEqual(calls[0]?.query, "fact");
+    assert.deepStrictEqual(calls[0]?.captainIds.slice().sort(), [chorus.id, jordan.id, captain.id]);
+
+    yield* call("duet_memory_search", { query: "fact", duetId: captain.id });
+    assert.lengthOf(calls, 2);
+    assert.deepStrictEqual(calls[1]?.captainIds, [captain.id]);
+  }).pipe(Effect.provide(layers(honcho)));
+});
+
+it.effect("returns local Chorus memories with a note when Honcho fails or is unconfigured", () => {
+  const failingHoncho = Layer.mock(CaptainHonchoMemory.CaptainHonchoMemory)({
+    enabled: true,
+    longTermMemory: () => Effect.succeedNone,
+    search: () => Effect.succeed([]),
+    searchAcrossDuets: () => Effect.succeed({ status: "failed" as const, results: [] }),
+    drain: Effect.void,
+  });
+  let disabledCrossCalls = 0;
+  const disabledHoncho = Layer.mock(CaptainHonchoMemory.CaptainHonchoMemory)({
+    enabled: false,
+    longTermMemory: () => Effect.die("Honcho is disabled"),
+    search: () => Effect.die("Honcho is disabled"),
+    searchAcrossDuets: () =>
+      Effect.sync(() => {
+        disabledCrossCalls++;
+        return { status: "disabled" as const, results: [] };
+      }),
+    drain: Effect.void,
+  });
+  return Effect.forEach(
+    [
+      { honcho: failingHoncho, note: "Honcho recall unavailable; showing local memories only." },
+      { honcho: disabledHoncho, note: undefined },
+    ],
+    ({ honcho, note }) =>
+      Effect.gen(function* () {
+        const store = yield* CaptainStore.CaptainStore;
+        const mcp = yield* McpServer.McpServer;
+        yield* store.save(chorus);
+        yield* store.upsertMemory({
+          captainId: chorus.id,
+          id: CaptainMemoryId.make("local-only"),
+          text: "Local only fact",
+          essential: false,
+        });
+        const result = yield* callAs(mcp, createCaller(chorus.primaryThreadId))(
+          "duet_memory_search",
+          { query: "local" },
+        );
+        assert.isFalse(result.isError);
+        const search = yield* decodeDuetMemorySearch(result.structuredContent);
+        assert.lengthOf(search.matches, 1);
+        assert.equal(search.matches[0]?.source, "local");
+        assert.equal(search.matches[0]?.memory.text, "Local only fact");
+        if (note === undefined) assert.isFalse("note" in search);
+        else assert.equal(search.note, note);
+      }).pipe(Effect.provide(layers(honcho))),
+    { discard: true },
+  ).pipe(
+    Effect.tap(() =>
+      Effect.sync(() => {
+        assert.equal(disabledCrossCalls, 0);
+      }),
+    ),
+  );
+});
+
+it.effect("keeps a normal Duet on its scoped Honcho search", () => {
+  let crossCalls = 0;
+  let scopedCalls = 0;
+  const honcho = Layer.mock(CaptainHonchoMemory.CaptainHonchoMemory)({
+    enabled: true,
+    longTermMemory: () => Effect.succeedNone,
+    search: (duet, query) =>
+      Effect.sync(() => {
+        scopedCalls++;
+        assert.equal(duet.id, captain.id);
+        assert.equal(query, "fact");
+        return ["Uses pnpm"];
+      }),
+    searchAcrossDuets: () =>
+      Effect.sync(() => {
+        crossCalls++;
+        return { status: "ok" as const, results: [] };
+      }),
+    drain: Effect.void,
+  });
+  return Effect.gen(function* () {
+    const store = yield* CaptainStore.CaptainStore;
+    const mcp = yield* McpServer.McpServer;
+    yield* store.save(captain);
+    const search = yield* callAs(mcp, createCaller(captain.primaryThreadId))(
+      "captain_memory_search",
+      { query: "fact" },
+    );
+    assert.isFalse(search.isError);
+    assert.include(JSON.stringify(search.structuredContent), "Recalled: Uses pnpm");
+    assert.equal(scopedCalls, 1);
+    assert.equal(crossCalls, 0);
+  }).pipe(Effect.provide(layers(honcho)));
+});
 
 it.effect("keeps Chorus document writes and memory operations in its own rows", () =>
   Effect.gen(function* () {

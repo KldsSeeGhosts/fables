@@ -56,11 +56,12 @@ const DuetMemorySearchResult = Schema.Struct({
   matches: Schema.Array(
     Schema.Struct({
       ...DuetEnvironment.fields,
-      source: Schema.Literals(["local"]),
+      source: Schema.Literals(["local", "honcho"]),
       duet: Schema.Struct({ id: CaptainId, name: Schema.String }),
       memory: CaptainMemory,
     }),
   ),
+  note: Schema.optional(Schema.String.check(Schema.isMaxLength(160))),
 });
 
 export const CaptainToolkit = Toolkit.make(
@@ -87,7 +88,7 @@ export const CaptainToolkit = Toolkit.make(
   Tool.make("duet_memory_search", {
     ...options,
     description:
-      "Search local durable memories across every Duet on this machine, or omit query to list recent memories. Narrow with duetId when one Duet is named. Results are labelled by Duet. Read-only: it changes nothing and sends nothing.",
+      "Search local memories and long-term recall across every Duet on this machine, or omit query for recent memories. Narrow with duetId. Results are labelled by Duet and source. Read-only: it changes nothing and sends nothing.",
     parameters: Schema.Struct({
       query: Schema.optional(Schema.String.check(Schema.isMaxLength(500))),
       duetId: Schema.optional(CaptainId),
