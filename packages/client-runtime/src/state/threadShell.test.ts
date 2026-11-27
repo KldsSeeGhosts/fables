@@ -195,6 +195,59 @@ describe("v2 thread shell lists", () => {
     registry.dispose();
   });
 
+  it("indexes child relationships once per shell change across mounted rows", () => {
+    const { registry, threads, snapshotAtom } = makeHarness();
+    let parentReads = 0;
+    const roots = Array.from({ length: 20 }, (_, index) => ({
+      ...v2ThreadShell,
+      id: ThreadId.make(`root-${index}`),
+      lineage: {
+        ...v2ThreadShell.lineage,
+        get parentThreadId() {
+          parentReads++;
+          return null;
+        },
+      },
+    }));
+    const child = {
+      ...v2ThreadShell,
+      id: ThreadId.make("child-with-question"),
+      status: "running" as const,
+      lineage: {
+        ...v2ThreadShell.lineage,
+        parentThreadId: roots[0]!.id,
+        relationshipToParent: "subagent" as const,
+      },
+      pendingRuntimeRequest: {
+        id: RuntimeRequestId.make("question"),
+        kind: "user_input" as const,
+        createdAt: v2Now,
+      },
+    };
+    const rows = roots.map(({ id }) =>
+      threads.childThreadInputsAtom({ environmentId, threadId: id }),
+    );
+    registry.set(snapshotAtom(environmentId), { ...v2ShellSnapshot, threads: [...roots, child] });
+    const disposers = rows.map(registry.mount.bind(registry));
+    const before = rows.map((row) => registry.get(row));
+    parentReads = 0;
+
+    const nextRoots = roots.map((root, index) =>
+      index === roots.length - 1 ? { ...root, title: "Renamed" } : root,
+    );
+    registry.set(snapshotAtom(environmentId), {
+      ...v2ShellSnapshot,
+      threads: [...nextRoots, child],
+    });
+    expect(parentReads).toBeLessThanOrEqual(2 * roots.length);
+    expect(before[0]?.map((thread) => thread.id)).toEqual([child.id]);
+    for (const [index, row] of rows.entries()) {
+      expect(registry.get(row)).toBe(before[index]);
+    }
+    for (const dispose of disposers) dispose();
+    registry.dispose();
+  });
+
   it("flags the parent while a live subagent waits on a secret card", () => {
     const { registry, threads, snapshotAtom } = makeHarness();
     const root = v2ThreadShell;

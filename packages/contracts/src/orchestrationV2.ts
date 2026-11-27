@@ -2640,6 +2640,14 @@ export const OrchestrationV2ShellStreamItem = Schema.Union([
     thread: OrchestrationV2ThreadShell,
   }),
   Schema.Struct({
+    kind: Schema.Literal("thread.progress"),
+    sequence: NonNegativeInt,
+    threadId: ThreadId,
+    itemCount: OrchestrationV2ThreadShell.fields.itemCount,
+    visibleItemCount: OrchestrationV2ThreadShell.fields.visibleItemCount,
+    updatedAt: OrchestrationV2ThreadShell.fields.updatedAt,
+  }),
+  Schema.Struct({
     kind: Schema.Literal("thread.removed"),
     sequence: NonNegativeInt,
     location: Schema.Literals(["active", "archive"]),
@@ -4258,6 +4266,8 @@ export const OrchestrationV2SubscribeShellInput = Schema.Struct({
    */
   knownProjectIdentities: Schema.optionalKey(Schema.String),
   requestCompletionMarker: Schema.optionalKey(Schema.Boolean),
+  /** After a full row on this subscription, accept its count and timestamp changes separately. */
+  acceptThreadProgress: Schema.optionalKey(Schema.Boolean),
   /**
    * Snapshots leave out idle subagent children; read them with `getThreadFamily`. Send only to
    * servers that advertise `shellThreadFamilies`.

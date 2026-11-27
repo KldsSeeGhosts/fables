@@ -38,7 +38,10 @@ import type * as OrchestrationEventStore from "../persistence/OrchestrationEvent
 import { bufferLatestLiveStream } from "./LiveStreamBudget.ts";
 import type { ActiveShellIndexEntry } from "./ProjectionStore.ts";
 
-type ShellDelta = Extract<OrchestrationV2ShellStreamItem, { readonly sequence: number }>;
+type ShellDelta = Exclude<
+  Extract<OrchestrationV2ShellStreamItem, { readonly sequence: number }>,
+  { readonly kind: "thread.progress" }
+>;
 
 // Replaying each intervening event costs a shell refetch; past this gap a
 // single O(active-threads) snapshot is cheaper and bounded.
@@ -749,6 +752,50 @@ export function shellStreamItemsFromResumeSnapshot(input: {
 }
 
 const sameThreadShell = Schema.toEquivalence(ThreadShellSchema);
+
+const SHELL_PROGRESS_BASE_LIMIT = 256;
+
+export function compactShellThreadProgress<E, R>(
+  stream: Stream.Stream<OrchestrationV2ShellStreamItem, E, R>,
+): Stream.Stream<OrchestrationV2ShellStreamItem, E, R> {
+  return Stream.suspend(() => {
+    const recent = new Map<ThreadId, OrchestrationV2ThreadShell>();
+    // Run after coalescing. The client must receive the full row before its first progress item.
+    return stream.pipe(
+      Stream.map((item): OrchestrationV2ShellStreamItem => {
+        if (item.kind === "thread.removed") recent.delete(item.threadId);
+        if (item.kind === "snapshot" && item.resolvedRepositoryIdentityRoots === undefined) {
+          recent.clear();
+        }
+        if (item.kind !== "thread.updated") return item;
+
+        const { id, itemCount, visibleItemCount, updatedAt } = item.thread;
+        const base = recent.get(id);
+        recent.delete(id);
+        if (item.location !== "active") return item;
+
+        recent.set(id, item.thread);
+        if (recent.size > SHELL_PROGRESS_BASE_LIMIT) recent.delete(recent.keys().next().value!);
+        return base !== undefined &&
+          sameThreadShell(base, {
+            ...item.thread,
+            itemCount: base.itemCount,
+            visibleItemCount: base.visibleItemCount,
+            updatedAt: base.updatedAt,
+          })
+          ? {
+              kind: "thread.progress",
+              sequence: item.sequence,
+              threadId: id,
+              itemCount,
+              visibleItemCount,
+              updatedAt,
+            }
+          : item;
+      }),
+    );
+  });
+}
 
 const UNCHANGED_THREAD_SHELL_RESEND_MS = 5_000;
 

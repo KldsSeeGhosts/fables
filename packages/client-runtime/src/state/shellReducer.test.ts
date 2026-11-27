@@ -274,7 +274,38 @@ describe("applyShellStreamEvent", () => {
       thread: v2ThreadShell,
     });
     expect(active.threads).toHaveLength(1);
-    expect(active.archivedThreads).toEqual([]);
+    expect(active.archivedThreads).toBe(archived.archivedThreads);
+  });
+
+  it("applies progress to its existing active row in single and batched deliveries", () => {
+    const neighbor = { ...v2ThreadShell, id: ThreadId.make("neighbor") };
+    const initial = { ...v2ShellSnapshot, threads: [v2ThreadShell, neighbor] };
+    const updated = { ...v2ThreadShell, title: "Renamed" };
+    const events = [
+      { kind: "thread.updated", location: "active", sequence: 3, thread: updated },
+      {
+        kind: "thread.progress",
+        sequence: 4,
+        threadId: updated.id,
+        itemCount: updated.itemCount + 1,
+        visibleItemCount: updated.visibleItemCount + 1,
+        updatedAt: updated.updatedAt,
+      },
+    ] as const satisfies ReadonlyArray<ShellStreamEvent>;
+    const batch = applyShellStreamEvents(initial, events);
+    expect(batch).toEqual(events.reduce(applyShellStreamEvent, initial));
+    expect(batch.snapshotSequence).toBe(4);
+    expect(batch.threads[0]).toEqual({
+      ...updated,
+      itemCount: events[1].itemCount,
+      visibleItemCount: events[1].visibleItemCount,
+    });
+    expect(batch.threads[1]).toBe(neighbor);
+    expect(batch.archivedThreads).toBe(initial.archivedThreads);
+    expect(applyShellStreamEvent(batch, { ...events[1], sequence: 5 }).threads).toBe(batch.threads);
+
+    const withoutBase = { ...initial, threads: [neighbor] };
+    expect(applyShellStreamEvent(withoutBase, events[1]).threads).toBe(withoutBase.threads);
   });
 
   it("leaves unknown future events unchanged", () => {

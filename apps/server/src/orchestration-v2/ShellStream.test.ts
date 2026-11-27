@@ -2,10 +2,14 @@ import { describe, expect, it } from "@effect/vitest";
 import type {
   ApplicationStoredEvent,
   OrchestrationV2ShellSnapshot,
-  OrchestrationV2ShellStreamItem,
   OrchestrationV2ThreadShell,
 } from "@t3tools/contracts";
-import { ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  OrchestrationV2ShellStreamItem,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
 import type * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -13,12 +17,14 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as PubSub from "effect/PubSub";
 import * as Queue from "effect/Queue";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
 import {
   activeShellRowsForSubscriber,
   bufferShellLiveStream,
+  compactShellThreadProgress,
   composeShellStreamWithEnrichment,
   dedupeShellEnrichment,
   omitIdleSubagentShells,
@@ -90,10 +96,6 @@ describe("subagent shell events", () => {
 
 it.effect("coalesces a slow shell subscriber by identity and location in sequence order", () =>
   Effect.gen(function* () {
-    const input = yield* Queue.unbounded<
-      Extract<OrchestrationV2ShellStreamItem, { readonly sequence: number }>,
-      Cause.Done
-    >();
     const drained = yield* Deferred.make<void>();
     const shell = shellFixture({ id: ThreadId.make("same"), title: "Before" });
     const project = {
@@ -128,6 +130,7 @@ it.effect("coalesces a slow shell subscriber by identity and location in sequenc
       { ...initial, sequence: 10, thread: { ...shell, title: "Recreated" } },
       { kind: "thread.removed", sequence: 11, location: "archive", threadId: shell.id },
     ] satisfies Array<Extract<OrchestrationV2ShellStreamItem, { readonly sequence: number }>>;
+    const input = yield* Queue.unbounded<(typeof updates)[number], Cause.Done>();
     const pull = yield* Stream.toPull(
       bufferShellLiveStream(
         Stream.fromQueue(input).pipe(Stream.ensuring(Deferred.succeed(drained, undefined))),
@@ -624,7 +627,7 @@ describe("dedupeShellEnrichment", () => {
   );
 });
 
-describe("skipUnchangedThreadShells", () => {
+describe("thread shell delivery", () => {
   const at = (ms: number) => DateTime.makeUnsafe(Date.parse("2026-10-01T00:00:00.000Z") + ms);
   const shell = (
     id: string,
@@ -665,7 +668,10 @@ describe("skipUnchangedThreadShells", () => {
   type Step =
     | { readonly advanceMs: number }
     | Exclude<OrchestrationV2ShellStreamItem, { readonly kind: "snapshot" | "synchronized" }>;
-  const updated = (sequence: number, thread: OrchestrationV2ThreadShell): Step => ({
+  const updated = (
+    sequence: number,
+    thread: OrchestrationV2ThreadShell,
+  ): Extract<OrchestrationV2ShellStreamItem, { kind: "thread.updated" }> => ({
     kind: "thread.updated",
     sequence,
     location: "active",
@@ -692,6 +698,48 @@ describe("skipUnchangedThreadShells", () => {
         updated(3, shell("a")),
       ]);
       expect(sent).toEqual([1, 2, 3]);
+    }),
+  );
+
+  it.effect("sends compact progress only after a full row in the same subscription", () =>
+    Effect.gen(function* () {
+      const first = shell("a");
+      const progress = { ...first, itemCount: 2, visibleItemCount: 2, updatedAt: at(1) };
+      const renamed = { ...progress, title: "Renamed" };
+      const removed = {
+        kind: "thread.removed",
+        sequence: 4,
+        location: "active",
+        threadId: first.id,
+      } as const;
+      const input = [
+        updated(1, first),
+        updated(2, progress),
+        updated(3, renamed),
+        removed,
+        updated(5, renamed),
+      ];
+      const stream = Stream.fromIterable(input).pipe(compactShellThreadProgress);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const delivered = yield* Stream.runCollect(stream);
+        expect(delivered).toEqual([
+          input[0],
+          {
+            kind: "thread.progress",
+            sequence: 2,
+            threadId: first.id,
+            itemCount: 2,
+            visibleItemCount: 2,
+            updatedAt: at(1),
+          },
+          input[2],
+          removed,
+          input[4],
+        ]);
+        const encode = Schema.encodeEffect(Schema.fromJsonString(OrchestrationV2ShellStreamItem));
+        expect(Buffer.byteLength(yield* encode(delivered[1]!))).toBeLessThan(200);
+        expect(Buffer.byteLength(yield* encode(input[1]!))).toBeGreaterThan(800);
+      }
     }),
   );
 });

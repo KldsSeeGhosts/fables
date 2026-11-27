@@ -121,6 +121,7 @@ const CLIENT_THREAD_SUBSCRIPTION = {
 type ShellResumeField = "afterSequence" | "httpSnapshotFallback" | "knownProjectIdentities";
 const CLIENT_SHELL_SUBSCRIPTION = {
   requestCompletionMarker: true,
+  acceptThreadProgress: true,
   omitIdleSubagents: true,
   omitOlderSettled: true,
 } satisfies Required<Omit<OrchestrationV2SubscribeShellInput, ShellResumeField>>;

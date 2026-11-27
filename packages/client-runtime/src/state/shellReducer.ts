@@ -6,6 +6,7 @@ import {
   type OrchestrationV2ShellSnapshot,
   type OrchestrationV2ShellStreamItem,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 
 const sameThreadShell = Schema.toEquivalence(OrchestrationV2ThreadShell);
@@ -53,7 +54,22 @@ function upsertById<T extends { readonly id: unknown }>(
 ): ReadonlyArray<T> {
   const index = items.findIndex((candidate) => candidate.id === item.id);
   if (index === -1) return [...items, item];
-  return items.map((candidate, candidateIndex) => (candidateIndex === index ? item : candidate));
+  return replaceAt(items, index, item);
+}
+
+function replaceAt<T>(items: ReadonlyArray<T>, index: number, item: T): ReadonlyArray<T> {
+  const next = items.slice();
+  next[index] = item;
+  return next;
+}
+
+function removeThread(
+  threads: OrchestrationV2ShellSnapshot["threads"],
+  threadId: OrchestrationV2ThreadShell["id"],
+) {
+  return threads.some((thread) => thread.id === threadId)
+    ? threads.filter((thread) => thread.id !== threadId)
+    : threads;
 }
 
 function retainRepositoryIdentity(
@@ -163,26 +179,37 @@ export function applyShellStreamEvent(
       if (existing !== undefined && sameThreadShell(existing, event.thread)) {
         return { ...snapshot, snapshotSequence: event.sequence };
       }
-      const withoutThread = (threads: OrchestrationV2ShellSnapshot["threads"]) =>
-        threads.filter((thread) => thread.id !== event.thread.id);
       return {
         ...snapshot,
         threads:
           event.location === "active"
             ? upsertById(snapshot.threads, event.thread)
-            : withoutThread(snapshot.threads),
+            : removeThread(snapshot.threads, event.thread.id),
         // The archive has its own bounded query/subscription. Older servers may
         // still send archive-located deltas here; remove them from the normal
         // shell instead of growing its persisted cache again.
-        archivedThreads: withoutThread(snapshot.archivedThreads),
+        archivedThreads: removeThread(snapshot.archivedThreads, event.thread.id),
+        snapshotSequence: event.sequence,
+      };
+    }
+    case "thread.progress": {
+      const index = snapshot.threads.findIndex((thread) => thread.id === event.threadId);
+      const before = snapshot.threads[index];
+      const after = before === undefined ? undefined : applyThreadProgress(before, event);
+      return {
+        ...snapshot,
+        threads:
+          after === undefined || before === after
+            ? snapshot.threads
+            : replaceAt(snapshot.threads, index, after),
         snapshotSequence: event.sequence,
       };
     }
     case "thread.removed":
       return {
         ...snapshot,
-        threads: snapshot.threads.filter((thread) => thread.id !== event.threadId),
-        archivedThreads: snapshot.archivedThreads.filter((thread) => thread.id !== event.threadId),
+        threads: removeThread(snapshot.threads, event.threadId),
+        archivedThreads: removeThread(snapshot.archivedThreads, event.threadId),
         snapshotSequence: event.sequence,
       };
     default:
@@ -219,6 +246,21 @@ export type ShellStreamEvent = Extract<
   { readonly sequence: number }
 >;
 
+function applyThreadProgress(
+  thread: OrchestrationV2ThreadShell,
+  {
+    itemCount,
+    visibleItemCount,
+    updatedAt,
+  }: Extract<ShellStreamEvent, { kind: "thread.progress" }>,
+) {
+  return thread.itemCount === itemCount &&
+    thread.visibleItemCount === visibleItemCount &&
+    DateTime.toEpochMillis(thread.updatedAt) === DateTime.toEpochMillis(updatedAt)
+    ? thread
+    : { ...thread, itemCount, visibleItemCount, updatedAt };
+}
+
 /** Apply ordered deltas with one index and at most one new array per collection. */
 export function applyShellStreamEvents(
   snapshot: OrchestrationV2ShellSnapshot,
@@ -250,6 +292,14 @@ export function applyShellStreamEvents(
         }
         // Legacy archive deltas remove rows from the shell; the archive is queried separately.
         archivedThreads.remove(id);
+        break;
+      }
+      case "thread.progress": {
+        const thread = threads.get(event.threadId);
+        if (thread !== undefined) {
+          const next = applyThreadProgress(thread, event);
+          if (next !== thread) threads.set(next);
+        }
         break;
       }
       case "thread.removed":

@@ -102,6 +102,41 @@ describe("sameThreadStructure", () => {
     expect(sameThreadStructure(before, next)).toBe(true);
   });
 
+  it("compares only the replaced message when the latest reply streams", () => {
+    let rowReads = 0;
+    let idReads = 0;
+    const count = 100;
+    const messages = Array.from({ length: count }, (_, index) => ({
+      ...assistantMessage,
+      get id() {
+        idReads++;
+        return index === count - 1 ? assistantMessage.id : MessageId.make(`older-${index}`);
+      },
+    }));
+    for (const [index, message] of messages.entries()) {
+      Object.defineProperty(messages, index, {
+        get() {
+          rowReads++;
+          return message;
+        },
+      });
+    }
+    const initial = { ...before, messages };
+    const next = applyOrchestrationV2ProjectionEvent(initial, {
+      id: EventId.make("message-stream"),
+      type: "message.updated",
+      threadId: v2ThreadId,
+      occurredAt: later,
+      payload: { ...assistantMessage, text: "Hello", updatedAt: later },
+    })!;
+    expect(idReads).toBe(1);
+    expect(next.messages.at(-1)?.text).toBe("Hello");
+
+    rowReads = 0;
+    expect(sameThreadStructure(initial, next)).toBe(true);
+    expect(rowReads).toBe(1);
+  });
+
   it("sees the item finish streaming", () => {
     const next = withItem({ ...assistant, text: "Hello", streaming: false, status: "completed" });
     expect(sameThreadStructure(before, next)).toBe(false);

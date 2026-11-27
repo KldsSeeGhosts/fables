@@ -425,8 +425,16 @@ export function applyOrchestrationV2ProjectionEvent(
       };
     case "runtime-request.updated":
       return { ...base, runtimeRequests: upsertEntity(base.runtimeRequests, event.payload) };
-    case "message.updated":
-      return { ...base, messages: upsertEntity(base.messages, event.payload) };
+    case "message.updated": {
+      const index = base.messages.findLastIndex((message) => message.id === event.payload.id);
+      return {
+        ...base,
+        messages:
+          index === -1
+            ? [...base.messages, event.payload]
+            : replaceProjectionArrayItem(base.messages, index, event.payload),
+      };
+    }
     case "plan.updated":
       return { ...base, plans: upsertEntity(base.plans, event.payload) };
     case "turn-item.updated": {

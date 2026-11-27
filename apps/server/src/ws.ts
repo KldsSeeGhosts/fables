@@ -148,6 +148,7 @@ import * as GuestShareService from "./guest/GuestShareService.ts";
 import {
   bufferShellLiveStream,
   coalesceShellApplicationEvents,
+  compactShellThreadProgress,
   composeShellStreamWithEnrichment,
   dedupeShellEnrichment,
   loadOlderSettledThreadsPage,
@@ -1175,6 +1176,7 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
     readonly httpSnapshotFallback?: true;
     readonly knownProjectIdentities?: string;
     readonly requestCompletionMarker?: boolean;
+    readonly acceptThreadProgress?: boolean;
     readonly omitIdleSubagents?: boolean;
     readonly omitOlderSettled?: boolean;
   }) {
@@ -1447,8 +1449,10 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
       ),
     );
 
-    return stream.pipe(
-      dedupeShellEnrichment,
+    const enriched = stream.pipe(dedupeShellEnrichment);
+    return (
+      input.acceptThreadProgress === true ? compactShellThreadProgress(enriched) : enriched
+    ).pipe(
       Stream.mapError(
         (cause) =>
           new OrchestrationV2GetShellSnapshotError({
@@ -1466,6 +1470,7 @@ export const layerWsRpc = (
   serverBrowser: ServerBrowser.ServerBrowser["Service"],
   reportProfiles: ServerBrowser.ProfileReporter,
   settingsClient: ServerSettings.SettingsClient,
+  usesWebSocketDeflate = false,
 ) =>
   Layer.effectContext(
     Effect.gen(function* () {
@@ -2409,7 +2414,14 @@ export const layerWsRpc = (
             ),
           ),
         [ORCHESTRATION_V2_WS_METHODS.subscribeShell]: (input) =>
-          Stream.unwrap(subscribeOrchestrationV2Shell(input)),
+          // Repeated full rows share the deflate dictionary and cost fewer bytes than progress frames.
+          Stream.unwrap(
+            subscribeOrchestrationV2Shell(
+              usesWebSocketDeflate && input.acceptThreadProgress === true
+                ? { ...input, acceptThreadProgress: false }
+                : input,
+            ),
+          ),
         [ORCHESTRATION_V2_WS_METHODS.subscribeThread]: (input) =>
           Stream.unwrap(
             Effect.annotateCurrentSpan({ "orchestration_v2.thread_id": input.threadId }).pipe(
@@ -3944,6 +3956,7 @@ export const layer = Layer.unwrap(
               serverBrowser,
               reportProfiles,
               readSettingsClient(url.value),
+              request.headers["sec-websocket-extensions"]?.includes("permessage-deflate") ?? false,
             ).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
               // Handler-context reporters see only request defects, not server-wide defects.
