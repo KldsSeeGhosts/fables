@@ -159,9 +159,10 @@ function fixture(input: {
       Effect.sync(() => {
         settings = { ...settings, chorusHome };
       }),
-    failPeer: Effect.sync(() => {
-      peerFailure = true;
-    }),
+    setPeerOffline: (offline: boolean) =>
+      Effect.sync(() => {
+        peerFailure = offline;
+      }),
   };
 }
 
@@ -228,20 +229,24 @@ it.effect("reports the learned home as ready and visible from a non-home machine
   }),
 );
 
-it.effect("keeps a learned home visible as offline when the peer cannot be reached", () =>
+it.effect("rechecks a learned home when the client reconnects or refreshes", () =>
   Effect.gen(function* () {
     const remote = fixture({
       chorusHome: false,
       linksEnabled: true,
       learnedThreadId: chorusThreadId,
     });
-    const status = yield* Effect.gen(function* () {
+    yield* Effect.gen(function* () {
       const service = yield* FleetChorusService.FleetChorusService;
-      yield* remote.failPeer;
-      return yield* service.refresh;
+      const open = service.subscribe.pipe(Stream.runHead, Effect.flatMap(Effect.fromOption));
+      assert.equal((yield* open).state, "ready");
+      yield* remote.setPeerOffline(true);
+      const offline = yield* open;
+      assert.equal(offline.state, "offline");
+      assert.equal(offline.home?.threadId, chorusThreadId);
+      yield* remote.setPeerOffline(false);
+      assert.equal((yield* open).state, "ready");
     }).pipe(Effect.provide(remote.layer));
-    assert.equal(status.state, "offline");
-    assert.equal(status.home?.threadId, chorusThreadId);
   }),
 );
 
@@ -277,11 +282,15 @@ it.effect("warns about both home claims even before either Chorus exists", () =>
       linksEnabled: true,
       peerThreadId: null,
     });
-    const status = yield* Effect.gen(function* () {
+    yield* Effect.gen(function* () {
       const service = yield* FleetChorusService.FleetChorusService;
-      return yield* service.refresh;
+      const status = yield* service.refresh;
+      assert.equal(status.state, "conflict");
+      assert.deepEqual(status.conflictingHomes, ["Local", "Studio"]);
+      yield* conflict.setHome(false);
+      const resolved = yield* service.refresh;
+      assert.equal(resolved.state, "setting_up");
+      assert.deepEqual(resolved.conflictingHomes, []);
     }).pipe(Effect.provide(conflict.layer));
-    assert.equal(status.state, "conflict");
-    assert.deepEqual(status.conflictingHomes, ["Local", "Studio"]);
   }),
 );

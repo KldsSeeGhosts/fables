@@ -12,7 +12,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
-import * as Schedule from "effect/Schedule";
+import * as Result from "effect/Result";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
@@ -26,7 +26,7 @@ import * as CaptainStore from "./CaptainStore.ts";
 import { chorusHomeTool, ChorusHomeResult } from "./chorusFleet.ts";
 
 const HOME_CAPTAIN_ID = CaptainId.make("chorus");
-const REFRESH_INTERVAL = Schedule.spaced("15 seconds");
+const PEER_LOOKUP_TIMEOUT = "5 seconds";
 
 type HomeClaim = {
   readonly environmentId: EnvironmentId;
@@ -158,7 +158,9 @@ const make = Effect.gen(function* () {
         (link) =>
           Effect.gen(function* () {
             const stored = learnedByEnvironment.get(link.environmentId);
-            const resolved = yield* links.resolve(link.environmentId).pipe(Effect.option);
+            const resolved = yield* links
+              .resolve(link.environmentId)
+              .pipe(Effect.timeout(PEER_LOOKUP_TIMEOUT), Effect.result);
             const unavailable = (reachability: "offline" | "too_old"): HomeClaim | null =>
               stored === undefined
                 ? null
@@ -168,8 +170,16 @@ const make = Effect.gen(function* () {
                     threadId: stored.threadId,
                     reachability,
                   };
-            if (resolved._tag === "None") return unavailable("offline");
-            if (resolved.value.capabilities.fleetChorus !== true) return unavailable("too_old");
+            if (Result.isFailure(resolved)) {
+              return unavailable(
+                "_tag" in resolved.failure &&
+                  resolved.failure._tag === "PeerLinkError" &&
+                  resolved.failure.reason === "incompatible"
+                  ? "too_old"
+                  : "offline",
+              );
+            }
+            if (resolved.success.capabilities.fleetChorus !== true) return unavailable("too_old");
             const answer = yield* peers
               .call({
                 environmentId: link.environmentId,
@@ -178,7 +188,7 @@ const make = Effect.gen(function* () {
                 limits: { runtimeMode: "approval-required", interactionMode: "default" },
                 success: ChorusHomeResult,
               })
-              .pipe(Effect.timeout("4 seconds"), Effect.option);
+              .pipe(Effect.timeout(PEER_LOOKUP_TIMEOUT), Effect.option);
             if (answer._tag === "None") return unavailable("offline");
             const claim = answer.value.home ? { threadId: answer.value.threadId } : null;
             if (
@@ -242,10 +252,13 @@ const make = Effect.gen(function* () {
   const subscribe = Stream.unwrap(
     Effect.gen(function* () {
       const subscription = yield* PubSub.subscribe(changes);
-      const first = yield* status;
-      return Stream.concat(Stream.succeed(first), Stream.fromSubscription(subscription)).pipe(
-        Stream.changesWith(sameStatus),
-      );
+      const first = yield* refresh();
+      return Stream.concat(
+        Stream.succeed(first),
+        Stream.fromSubscription(subscription).pipe(
+          Stream.mapEffect(() => Ref.get(current).pipe(Effect.map((latest) => latest ?? first))),
+        ),
+      ).pipe(Stream.changesWith(sameStatus));
     }),
   );
 
@@ -259,14 +272,30 @@ const make = Effect.gen(function* () {
 
 export const layer = Layer.effect(FleetChorusService, make);
 
-/** Startup reconciliation plus the slow peer re-check loop. Kept separate so tests can drive one step. */
 export const worker = Layer.effectDiscard(
   Effect.gen(function* () {
     const service = yield* FleetChorusService;
     const settings = yield* ServerSettings.ServerSettingsService;
+    const providers = yield* ProviderRegistry.ProviderRegistry;
+    const store = yield* CaptainStore.CaptainStore;
+    const links = yield* PeerLinks.PeerLinks;
     const settingsChanges = yield* settings.subscribeChanges;
+    const profileChanges = yield* store.subscribeChorusThreadChanges;
+    const linkChanges = yield* links.subscribeChanges;
     yield* service.ensureHome;
-    yield* Stream.runForEach(settingsChanges, () => service.refresh).pipe(Effect.forkScoped);
-    yield* service.refresh.pipe(Effect.repeat(REFRESH_INTERVAL), Effect.forkScoped);
+    yield* Stream.runForEach(
+      Stream.mergeAll(
+        [
+          settingsChanges.pipe(Stream.as(undefined)),
+          profileChanges.pipe(Stream.as(undefined)),
+          linkChanges,
+        ],
+        { concurrency: "unbounded" },
+      ).pipe(Stream.buffer({ capacity: 1, strategy: "sliding" })),
+      () => service.refresh,
+    ).pipe(Effect.forkScoped);
+    yield* Stream.runForEach(providers.streamChanges, () => service.ensureHome).pipe(
+      Effect.forkScoped,
+    );
   }),
 );

@@ -389,7 +389,9 @@ const layerFleetChorusService = FleetChorusService.layer.pipe(
 );
 const layerFleetChorusProvided = Layer.mergeAll(
   layerFleetChorusService,
-  FleetChorusService.worker.pipe(Layer.provide(layerFleetChorusService)),
+  FleetChorusService.worker.pipe(
+    Layer.provide(Layer.mergeAll(layerFleetChorusService, CaptainStore.layer, layerChorusPeers)),
+  ),
 );
 
 const layerCaptainRolloverWorkerProvided = CaptainRolloverWorker.layer.pipe(

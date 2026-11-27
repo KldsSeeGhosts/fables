@@ -26,10 +26,13 @@ import * as Hex from "effect/encoding/Hex";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
+import * as PubSub from "effect/PubSub";
 import * as Redacted from "effect/Redacted";
 import * as Result from "effect/Result";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpClient from "effect/http/HttpClient";
@@ -135,6 +138,7 @@ export class PeerLinks extends Context.Service<
       environmentId: EnvironmentId,
       expiresAt: DateTime.Utc,
     ) => Effect.Effect<void>;
+    readonly subscribeChanges: Effect.Effect<Stream.Stream<void>, never, Scope.Scope>;
     /** Chorus home facts learned from this peer over the authenticated link. */
     readonly chorusHomeRecords: Effect.Effect<
       ReadonlyArray<{
@@ -264,6 +268,7 @@ const make = Effect.gen(function* () {
   const environment = yield* ServerEnvironment.ServerEnvironment;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const isOwnLoopback = yield* LoopbackHost;
+  const changes = yield* PubSub.sliding<void>(1);
   const enabled = serverSettings.getSettings.pipe(
     Effect.map((settings) => settings.linkedEnvironmentsEnabled),
     Effect.orElseSucceed(() => false),
@@ -619,6 +624,7 @@ const make = Effect.gen(function* () {
     if (Option.isSome(previous) && previous.value.secret_name !== secretName) {
       yield* secrets.remove(previous.value.secret_name).pipe(Effect.ignore);
     }
+    yield* PubSub.publish(changes, undefined);
     return { link: linked, alreadyLinked: false };
   });
 
@@ -739,6 +745,7 @@ const make = Effect.gen(function* () {
           );
         }
       }
+      if (deleted.length > 0) yield* PubSub.publish(changes, undefined);
       return { removed: deleted.length > 0, endedThere };
     },
   );
@@ -871,6 +878,7 @@ const make = Effect.gen(function* () {
     resolve,
     recordOutcome,
     recordExpiry,
+    subscribeChanges: PubSub.subscribe(changes).pipe(Effect.map(Stream.fromSubscription)),
     chorusHomeRecords,
     recordChorusHome,
   });

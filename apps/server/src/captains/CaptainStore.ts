@@ -850,6 +850,27 @@ const make = Effect.gen(function* () {
     Effect.catchTags({ SqlError: captainUnavailable, SchemaError: captainUnavailable }),
   );
 
+  const subscribeChorusThreadChanges = Effect.gen(function* () {
+    const subscription = yield* PubSub.subscribe(changes);
+    const chorusThread = findActiveChorus().pipe(
+      Effect.map((captain) => captain?.primaryThreadId ?? null),
+    );
+    return Stream.concat(
+      Stream.fromEffect(chorusThread),
+      Stream.fromSubscription(subscription).pipe(
+        Stream.filter(({ kind }) => kind === "profile"),
+        Stream.buffer({ capacity: 1, strategy: "sliding" }),
+        Stream.mapEffect(() => chorusThread),
+      ),
+    ).pipe(
+      Stream.changes,
+      Stream.drop(1),
+      Stream.catch((error) =>
+        Stream.fromEffect(Effect.logWarning("Could not read the Chorus thread.", { error })),
+      ),
+    );
+  });
+
   const subscribe = (input: CaptainSubscribeInput) =>
     Stream.unwrap(
       Effect.gen(function* () {
@@ -904,6 +925,7 @@ const make = Effect.gen(function* () {
     deleteMemory,
     snapshot,
     subscribe,
+    subscribeChorusThreadChanges,
     notify,
   };
 });

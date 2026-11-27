@@ -610,9 +610,9 @@ export const layer = McpToolAccess.toLayer(
             return yield* duetStateUnavailable();
           }
           const settings = yield* serverSettings.value.getSettings.pipe(
-            Effect.orElseSucceed(() => null),
+            Effect.mapError(duetStateUnavailable),
           );
-          const home = settings?.chorusHome === true;
+          const home = settings.chorusHome;
           const active = home
             ? yield* store.value.findActiveChorus().pipe(Effect.mapError(failed))
             : undefined;
