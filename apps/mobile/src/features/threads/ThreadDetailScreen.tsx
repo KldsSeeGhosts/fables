@@ -1649,6 +1649,17 @@ function ThreadDetailBody(
         <View className="flex-1" />
       )}
 
+      {props.scrollUnderHeader && (props.topOverlayInset ?? 0) > 0 ? (
+        // UIKit removes its material when the bar minimizes. Keep the area above the orb's fade covered.
+        <View
+          pointerEvents="none"
+          className="absolute inset-x-0 top-0 bg-screen"
+          style={{
+            height: navigationHeaderHeight < expandedHeaderOverlap ? navigationHeaderHeight : 0,
+          }}
+        />
+      ) : null}
+
       {showContent ? (
         <ThreadBrowserFloat
           key={selectedThreadKey}

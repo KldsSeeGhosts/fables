@@ -181,7 +181,7 @@ export function QuestionAttachments(props: {
               onInputFocusChange?.(false);
             }}
             placeholder={gt("Or type a custom answer")}
-            className="min-h-11 rounded-xl border border-input-border bg-input px-3 py-2 font-sans text-sm text-foreground"
+            className="min-h-[44px] rounded-xl border border-input-border bg-input px-3 py-2 font-sans text-sm text-foreground"
           />
         </TextInputWrapper>
         {canAttach ? (

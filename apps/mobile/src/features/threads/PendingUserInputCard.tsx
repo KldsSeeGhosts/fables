@@ -197,7 +197,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
           { count: questionCount },
         )}
         onPress={props.onToggleCollapsed}
-        className="min-h-11 flex-1 flex-row items-center gap-2 active:opacity-70"
+        className="min-h-[44px] flex-1 flex-row items-center gap-2 active:opacity-70"
       >
         <Text className="font-t3-bold text-2xs text-foreground-secondary">
           <T>User input needed</T>
@@ -244,7 +244,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
           accessibilityRole="button"
           accessibilityLabel={gt("Collapse user input")}
           onPress={props.onToggleCollapsed}
-          className="min-h-11 flex-1 flex-row items-center gap-2 active:opacity-70"
+          className="min-h-[44px] flex-1 flex-row items-center gap-2 active:opacity-70"
         >
           <Text className="min-w-0 flex-1 font-t3-bold text-sm text-foreground">
             <T>User input needed</T>
@@ -308,7 +308,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
                         accessibilityState={{ checked: selected, disabled: responseDisabled }}
                         disabled={responseDisabled}
                         className={cn(
-                          "min-h-11 w-full flex-row items-center gap-2.5 rounded-xl border px-3 py-2 active:bg-subtle-strong",
+                          "min-h-[44px] w-full flex-row items-center gap-2.5 rounded-xl border px-3 py-2 active:bg-subtle-strong",
                           selected
                             ? "border-primary bg-primary/10"
                             : "border-input-border bg-input",
