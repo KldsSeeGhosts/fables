@@ -178,7 +178,6 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
       accessibilityLabel={gt("Stop", { $context: "verb, stops the thread" })}
       icon="stop.fill"
       variant="danger"
-      className="h-9 w-9"
       disabled={!props.canOperateThread}
       onPress={props.onStopThread}
     />
@@ -198,7 +197,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
           { count: questionCount },
         )}
         onPress={props.onToggleCollapsed}
-        className="min-h-10 flex-1 flex-row items-center gap-2 active:opacity-70"
+        className="min-h-11 flex-1 flex-row items-center gap-2 active:opacity-70"
       >
         <Text className="font-t3-bold text-2xs text-foreground-secondary">
           <T>User input needed</T>
@@ -245,7 +244,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
           accessibilityRole="button"
           accessibilityLabel={gt("Collapse user input")}
           onPress={props.onToggleCollapsed}
-          className="min-h-10 flex-1 flex-row items-center gap-2 active:opacity-70"
+          className="min-h-11 flex-1 flex-row items-center gap-2 active:opacity-70"
         >
           <Text className="min-w-0 flex-1 font-t3-bold text-sm text-foreground">
             <T>User input needed</T>
@@ -396,7 +395,6 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
           {props.pendingUserInput.dismissible ? (
             <Button
               label={gt("Dismiss without answering")}
-              size="compact"
               tone="text"
               disabled={isResponding}
               onPress={() => void props.onDismiss()}
@@ -404,7 +402,6 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
           ) : null}
           <Button
             label={gt("Submit answers")}
-            size="compact"
             tone="primary"
             disabled={!props.canOperateThread || responseDisabled || props.answers === null}
             onPress={() => void props.onSubmit()}
