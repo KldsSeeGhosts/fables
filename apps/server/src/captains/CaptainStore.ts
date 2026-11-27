@@ -181,7 +181,7 @@ const make = Effect.gen(function* () {
         FROM (${profiles} WHERE kind = 'duet' AND archived_at IS NULL) AS active
         ORDER BY createdAt, id LIMIT ${limit}
       `;
-      const duets = yield* Effect.forEach(rows, decodeCaptain);
+      const duets = yield* Effect.forEach(rows, (row) => decodeCaptain(row));
       return { duets, total: rows[0]?.total ?? 0 };
     },
     Effect.catchTags({ SqlError: captainUnavailable, SchemaError: captainUnavailable }),

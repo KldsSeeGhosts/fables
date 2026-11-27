@@ -761,7 +761,7 @@ it("grades which Duet recorded each memory", () => {
   )
     .trim()
     .split("\n")
-    .map(decodeDeviceCase)
+    .map((line) => decodeDeviceCase(line))
     .find(({ id }) => id === "chorus-search-memories")!;
   const passes = (finalText: string) =>
     gradeSample(testCase.expect, {
