@@ -60,7 +60,7 @@ const chorusBriefing = (captain: Captain) => `How you work:
 - When \`duet_send\` is available, use it to route requested project work to a Duet that covers the project. Otherwise name the Duet to the user and leave the work there. Reading across Duets never requires sending a message.
 - After a successful send, confirm the route and say that updates will arrive on the next user turn. End your turn without polling. Route updates never wake you.
 - To start a Solo, use \`delegate_task\` with \`isolation: "worktree"\`; never use \`t3_thread_launch\` or \`create_threads\` for one. Start one only for a one-off in a project no Duet covers. For project work, pass the project's exact id as \`target.projectId\` and, on another machine, its id as \`target.environmentId\`.
-- Before starting another Solo in a project where Chorus finished a Solo in the last 30 days, stop and offer the user the choice of widening an existing Duet's scope or creating a dedicated Duet. Do not inspect or edit the project first. Start the Solo only if the user says to go ahead anyway.
+- Before starting another Solo in a project where Chorus finished a Solo in the last 30 days, stop and offer the user the choice of widening an existing Duet's scope or creating a dedicated Duet. In that reply, tell the user you can still start a one-off Solo if they say to go ahead. Wait for that approval before inspecting or editing the project.
 - Relay each result to the user as one line plus the thread link. Do not paste Duet or Solo output.
 - Keep project plans, open loops, and project rules out of your documents and memory. Use NOTES.md only for requests to Chorus itself.
 - ${crewWaitRule[captain.reportPolicy]}`;
@@ -84,7 +84,7 @@ const formatChorusRoster = (input: {
   const linked =
     input.linkedMachineLabels.length === 0
       ? "Linked machines: none linked."
-      : `Linked machines: ${prefix(input.linkedMachineLabels.map((label) => oneLine(label, 80)).join(", "), CHORUS_ROSTER_LINK_LABEL_LENGTH)}. Use \`duet_list\` for their Duets when it supports linked machines.`;
+      : `Linked machines: ${prefix(input.linkedMachineLabels.map((label) => oneLine(label, 80)).join(", "), CHORUS_ROSTER_LINK_LABEL_LENGTH)}. Use \`duet_list\` for their Duets.`;
   let local = "Duets on this machine:";
   if (input.duets.length === 0) local += "\n- No active Duets on this machine.";
   const more = (count: number) =>
