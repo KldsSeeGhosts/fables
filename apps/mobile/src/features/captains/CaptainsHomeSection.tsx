@@ -140,6 +140,7 @@ export function CaptainsHomeSection(props: {
   const overview = (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={gt("Duets overview")}
       onPress={openOverview}
       className="mx-4 min-h-11 flex-row items-center gap-2 rounded-lg active:bg-subtle"
     >
