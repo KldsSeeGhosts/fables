@@ -146,7 +146,7 @@ export const CaptainToolkit = Toolkit.make(
   Tool.make("duet_send", {
     ...options,
     description:
-      "Route the user's work request to a Duet's current conversation on its machine. For questions, use duet_list or duet_read. Confirm the route with the returned thread link. The result appears the next time the user messages Chorus.",
+      "Route the user's work request to a Duet's current conversation on its machine. Pass environmentId for a linked Duet. For questions, use duet_list or duet_read. Confirm the route with the returned thread link. The result appears the next time the user messages Chorus.",
     parameters: Schema.Struct({
       duetId: CaptainId,
       environmentId: DuetEnvironmentTarget,

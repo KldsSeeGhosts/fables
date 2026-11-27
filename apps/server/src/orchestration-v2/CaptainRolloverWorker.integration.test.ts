@@ -16,7 +16,7 @@ import {
   type OrchestrationV2ConversationMessage,
   type OrchestrationV2DomainEvent,
   type OrchestrationV2Run,
-  type ThreadId,
+  ThreadId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -1027,6 +1027,161 @@ it.effect(
         assert.equal(replayed.runId, queued.runId);
         assert.equal(replayed.threadId, queued.threadId);
         assert.deepEqual(yield* store.listChorusRoutes(source.id), [moved]);
+        const linkedSender = {
+          environmentId: EnvironmentId.make("chorus-host"),
+          threadId: ThreadId.make("captain:fleet:3"),
+          title: "Fleet Chorus",
+        };
+        const linkedScope = {
+          ...scope,
+          thread: undefined,
+          captain: false,
+          chorus: false,
+          requestNamespace: "peer-session",
+          client: {
+            sessionId: "peer-session",
+            label: "Chorus host",
+            access: "full-access",
+            linked: true,
+            senderCaptainKind: "chorus",
+            senderThread: linkedSender,
+          },
+        } as const;
+        const remoteRequest = {
+          ...request,
+          clientRequestId: "linked-route",
+          mode: "queue" as const,
+        };
+        assert.equal(
+          yield* errorCode(
+            service.sendToDuet(
+              {
+                ...linkedScope,
+                client: { ...linkedScope.client, access: "read-only" },
+              },
+              remoteRequest,
+            ),
+          ),
+          "capability_denied",
+        );
+        assert.equal(
+          yield* errorCode(
+            service.sendToDuet(
+              {
+                ...linkedScope,
+                client: {
+                  ...linkedScope.client,
+                  narrowedTo: { runtimeMode: "approval-required", interactionMode: "plan" },
+                },
+              },
+              remoteRequest,
+            ),
+          ),
+          "interaction_mode_escalation_denied",
+        );
+        assert.equal(
+          yield* errorCode(
+            service.sendToDuet(
+              {
+                ...linkedScope,
+                client: { ...linkedScope.client, access: "auto" },
+              },
+              remoteRequest,
+            ),
+          ),
+          "capability_denied",
+        );
+        const remote = yield* service.sendToDuet(linkedScope, remoteRequest);
+        assert.equal(remote.threadId, rolled.primaryThreadId);
+        assert.deepEqual(remote.linkedSender, { ...linkedSender, captainKind: "chorus" });
+        const remoteThread = yield* projections.getThreadRecords(remote.threadId, [
+          "messages",
+          "runs",
+        ]);
+        const remoteMessage = remoteThread.messages.find(({ id }) => id === remote.messageId)!;
+        assert.deepEqual(remoteMessage.linkedSender, remote.linkedSender);
+        assert.include(
+          (yield* readContext(remoteThread.thread, delivery, remoteMessage)).text,
+          "routed by Chorus Fleet Chorus",
+        );
+        const remoteRun = remoteThread.runs.find(({ id }) => id === remote.runId)!;
+        const failedRemote = { ...remoteRun, status: "failed" as const, completedAt: at(13) };
+        yield* sink.write({
+          events: [
+            {
+              id: EventId.make("linked-route:failed"),
+              type: "run.updated",
+              threadId: remote.threadId,
+              occurredAt: at(13),
+              payload: failedRemote,
+            },
+          ],
+        });
+        const rolledAgain = yield* captains.resetConversation(
+          { captainId: destination.id, expectedThreadId: remote.threadId },
+          { run: failedRemote, failedMessage: remoteMessage },
+        );
+        const remoteReplay = yield* service.sendToDuet(linkedScope, remoteRequest);
+        assert.equal(remoteReplay.threadId, remote.threadId);
+        assert.equal(remoteReplay.messageId, remote.messageId);
+        assert.equal(remoteReplay.runId, remote.runId);
+        if (rolledAgain.primaryThreadId === remote.threadId) {
+          assert.fail("The linked Duet should have rolled over.");
+        }
+        assert.equal(
+          yield* store.readIncomingChorusRoute("different-peer", remote.messageId),
+          null,
+        );
+        assert.equal(
+          (yield* store.readIncomingChorusRoute(linkedScope.client.sessionId, remote.messageId))
+            ?.threadId,
+          rolledAgain.primaryThreadId,
+        );
+        const routes = [EnvironmentId.make("same-id-a"), EnvironmentId.make("same-id-b")].map(
+          (environmentId) => ({
+            ...remote,
+            environmentId,
+            status: "queued" as const,
+            duetName: "Remote Duet",
+          }),
+        );
+        yield* Effect.forEach(routes, (route) => store.recordRemoteChorusRoute(source.id, route));
+        yield* Effect.forEach(routes, (route) => store.updateRemoteChorusRoute(route, null));
+        const offline = (yield* store.listChorusRouteUpdates(source.id, 6)).filter(
+          (route) => route.remote === 1,
+        );
+        assert.sameMembers(
+          offline.map(({ environmentId }) => environmentId),
+          routes.map(({ environmentId }) => environmentId),
+        );
+        assert.isTrue(
+          offline.every(({ status, terminal }) => status === "unknown" && terminal === 0),
+        );
+        const reachable = routes[0]!;
+        yield* store.updateRemoteChorusRoute(reachable, {
+          messageId: reachable.messageId,
+          threadId: rolledAgain.primaryThreadId,
+          runId: RunId.make("run:remote-after-rollover"),
+          status: "completed",
+          terminal: true,
+          result: "Remote checkout test passes.",
+        });
+        const remoteUpdate = yield* readContext(senderThread, delivery, userTurn);
+        assert.include(remoteUpdate.text, "Remote checkout test passes.");
+        assert.include(remoteUpdate.text, 'environmentId: "same-id-a"');
+        assert.include(remoteUpdate.text, 'environmentId: "same-id-b"');
+        yield* remoteUpdate.delivered;
+        yield* store.recordRemoteChorusRoute(source.id, reachable);
+        assert.notInclude(
+          (yield* readContext(senderThread, delivery, userTurn)).text,
+          "Remote checkout test passes.",
+        );
+        assert.deepEqual(yield* store.pendingRemoteChorusRoutes(6), [
+          {
+            environmentId: routes[1]!.environmentId,
+            messageId: remote.messageId,
+          },
+        ]);
       }).pipe(Effect.provide(mcp));
     }),
 );

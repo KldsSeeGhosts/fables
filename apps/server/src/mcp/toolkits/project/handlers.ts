@@ -330,6 +330,15 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
             message: "Duet coverage is unavailable on the linked machine.",
           });
         }
+        if (chorusStore !== undefined) {
+          const folders = yield* ManagedProjectFolders.ManagedProjectFolders;
+          if (yield* folders.isScratchProject(projectId)) {
+            return yield* new OrchestratorMcpFailure({
+              code: "invalid_request",
+              message: "A linked Chorus Solo requires a project that can run in a worktree.",
+            });
+          }
+        }
         if (chorusStore !== undefined) yield* assertChorusProjectUncovered(chorusStore, projectId);
         const project =
           replaying && input.workspaceStrategy?.type !== "existing_worktree"

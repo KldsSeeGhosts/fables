@@ -2092,11 +2092,12 @@ it.effect("uses the authenticated Duet profile to list Chorus read tools and hid
         Layer.build,
       );
       const httpClient = yield* HttpClient.HttpClient;
-      const session = (token: string) =>
+      const session = (token: string, extraHeaders: Record<string, string> = {}) =>
         Effect.gen(function* () {
           const headers = {
             accept: "application/json, text/event-stream",
             authorization: `Bearer ${token}`,
+            ...extraHeaders,
           };
           const initialize = yield* httpClient.post("/mcp", {
             headers,
@@ -2192,6 +2193,24 @@ it.effect("uses the authenticated Duet profile to list Chorus read tools and hid
         expect(chorusChildTools).not.toContain(name);
       }
       expect(yield* chorusChild.call("duet_list")).toMatchObject({ isError: true });
+      const forged = {
+        [McpInvocationContext.SENDER_CAPTAIN_KIND_HEADER]: "chorus",
+        [McpInvocationContext.SENDER_THREAD_HEADER]: `other/${chorus.primaryThreadId}/Chorus`,
+      };
+      const unauthenticated = yield* httpClient.post("/mcp", {
+        headers: { ...forged, accept: "application/json, text/event-stream" },
+        body: HttpBody.jsonUnsafe({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: { name: "duet_list", arguments: {} },
+        }),
+      });
+      expect(unauthenticated.status).toBe(401);
+      for (const token of ["duetToken", "chorusChildToken"]) {
+        const caller = yield* session(token, forged);
+        expect(yield* caller.call("duet_list")).toMatchObject({ isError: true });
+      }
 
       expect(yield* chorusSession.call("duet_list")).toMatchObject({ isError: false });
       expect(yield* chorusSession.call("watch_pull_request", { number: 1 })).toMatchObject({

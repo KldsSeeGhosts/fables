@@ -8,6 +8,7 @@ export default Effect.gen(function* () {
       receipt_message_id TEXT PRIMARY KEY NOT NULL,
       sender_session_id TEXT NOT NULL,
       message_id TEXT NOT NULL UNIQUE,
+      run_id TEXT NOT NULL,
       thread_id TEXT NOT NULL,
       settled_run_id TEXT
     )

@@ -5,6 +5,7 @@ import {
   CommandId,
   ContextTransferId,
   EnvironmentId,
+  OrchestratorMcpFailure,
   GitCommandError,
   isLiveSubagentShell,
   MessageId,
@@ -1692,6 +1693,7 @@ describe("OrchestratorMcpService provider resolution", () => {
       const earlierThreadId = ThreadId.make("captain:90d4dc16-f68d-4850-939c-a987a9256eee:1");
       const scratchProjectId = ProjectId.make("project:chorus-scratch");
       const uncoveredProjectId = ProjectId.make("project:uncovered");
+      const remoteEnvironmentId = EnvironmentId.make("remote");
       const chorus = {
         id: "90d4dc16-f68d-4850-939c-a987a9256eee",
         primaryThreadId: chorusThreadId,
@@ -1770,7 +1772,21 @@ describe("OrchestratorMcpService provider resolution", () => {
             Effect.succeedSome({ id, title: String(id), workspaceRoot: "/work/project" } as never),
         }),
         Layer.mock(SecretRequests.SecretRequests)({}),
-        Layer.mock(RemoteDelegation.RemoteDelegation)({}),
+        Layer.mock(RemoteDelegation.RemoteDelegation)({
+          delegate: (forwarded, input) => {
+            assert.isTrue(forwarded.chorus);
+            assert.equal(input.target.projectId, uncoveredProjectId);
+            assert.equal(input.target.environmentId, remoteEnvironmentId);
+            assert.equal(input.isolation, "worktree");
+            assert.include(input.task, "Rules for Solos from Duet Chorus");
+            return Effect.fail(
+              new OrchestratorMcpFailure({
+                code: "orchestration_error",
+                message: "The linked environment stopped answering.",
+              }),
+            );
+          },
+        }),
         Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
       );
 
@@ -1799,11 +1815,13 @@ describe("OrchestratorMcpService provider resolution", () => {
         const remoteError = yield* service
           .delegateTask(chorusScope, {
             task: "Fix the remote project.",
-            target: { projectId: uncoveredProjectId, environmentId: EnvironmentId.make("remote") },
+            target: { projectId: uncoveredProjectId, environmentId: remoteEnvironmentId },
+            isolation: "worktree",
             mode: "async",
           })
           .pipe(Effect.flip);
-        assert.equal(remoteError.code, "invalid_request");
+        assert.equal(remoteError.code, "orchestration_error");
+        assert.include(remoteError.message, "stopped answering");
         assert.lengthOf(commands, 1);
 
         const retiredError = yield* service

@@ -4,6 +4,7 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   CommandId,
+  OrchestratorMcpFailure,
   EventId,
   MessageId,
   type ModelSelection,
@@ -40,6 +41,9 @@ import * as TestClock from "effect/testing/TestClock";
 import * as SqlClient from "effect/sql/SqlClient";
 import { McpSchema, McpServer } from "effect/ai";
 
+import * as CaptainStore from "../captains/CaptainStore.ts";
+import { ProjectToolkit } from "../mcp/toolkits/project/tools.ts";
+import * as PeerMcpClient from "./PeerMcpClient.ts";
 import * as ServerConfig from "../config.ts";
 import * as McpHttpServer from "../mcp/McpHttpServer.ts";
 import * as McpInvocationContext from "../mcp/McpInvocationContext.ts";
@@ -236,6 +240,81 @@ const boxProjects: ReadonlyArray<Project> = [
 const serveBox = (thread: BoxThread) => {
   return servePeer(box, boxToolkitLayer(thread));
 };
+
+it.effect(
+  "a linked Chorus cannot launch a Solo in a covered project or bypass the guarded launch",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const thread = yield* makeBoxThread;
+        const covering = yield* Ref.make<ReadonlyArray<string>>(["Maria"]);
+        const receiver = yield* servePeer(
+          box,
+          boxToolkitLayer(thread).pipe(
+            Layer.provide(
+              Layer.mock(CaptainStore.CaptainStore)({
+                coveringDuetNames: (projectId) => {
+                  expect(projectId).toBe(boxProject);
+                  return Ref.get(covering);
+                },
+                withProfileLock: (effect) => effect,
+              }),
+            ),
+          ),
+        );
+        const linking = yield* Layer.build(layerLinkingEnvironment(laptop));
+        yield* linkTo(Context.get(linking, PeerLinks.PeerLinks), receiver, "auto");
+        const peer = Context.get(linking, PeerMcpClient.PeerMcpClient);
+        const sender = {
+          environmentId: laptop.environmentId,
+          threadId: ThreadId.make("captain:chorus:0"),
+          title: "Chorus",
+        };
+        const launch = (arguments_: Record<string, unknown>) =>
+          peer.call({
+            environmentId: box.environmentId,
+            tool: "t3_thread_launch",
+            arguments: {
+              projectId: boxProject,
+              title: "One-off Solo",
+              message: "Run a focused test.",
+              modelSelection: { instanceId: boxClaude.instanceId, model: "claude-sonnet-4-6" },
+              ...arguments_,
+            },
+            limits: { runtimeMode: "full-access", interactionMode: "default" },
+            sender,
+            senderCaptainKind: "chorus",
+            success: ProjectToolkit.tools.t3_thread_launch.successSchema,
+          });
+        const direct = yield* launch({}).pipe(Effect.flip);
+        expect(direct.code).toBe("capability_denied");
+        expect(direct.message).toContain("delegate_task");
+        const worktree = { type: "worktree", baseRef: "HEAD", startFromOrigin: false };
+        const namedTask = {
+          workspaceStrategy: worktree,
+          delegatedFrom: sender,
+          clientRequestId: "solo",
+        };
+        const covered = yield* launch(namedTask).pipe(Effect.flip);
+        expect(covered.code).toBe("invalid_request");
+        expect(covered.message).toContain("Route this with duet_send to Maria");
+        expect(yield* Ref.get(thread.launched)).toBeNull();
+
+        yield* Ref.set(covering, []);
+        const launched = yield* launch(namedTask);
+        expect(launched.threadId).toBe(yield* Ref.get(thread.launched));
+        expect(yield* Ref.get(thread.delegatedFrom)).toEqual(sender);
+        expect(yield* Ref.get(thread.launchedWith)).toMatchObject({ runtimeMode: "auto" });
+        const broader = yield* launch({
+          ...namedTask,
+          clientRequestId: "too-broad",
+          runtimeMode: "full-access",
+        }).pipe(Effect.flip);
+        expect(broader).toBeInstanceOf(OrchestratorMcpFailure);
+        expect(broader.code).toBe("runtime_mode_escalation_denied");
+      }),
+    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);
 
 const boxRunId = RunId.make("run:box");
 const boxLaterRunId = RunId.make("run:box-later");
@@ -531,6 +610,7 @@ const boxToolkitLayer = (thread: BoxThread) => {
       ),
   });
   const layerBoxLaunches = Layer.mock(ThreadLaunch.ThreadLaunchService)({
+    checkWorktreeBase: () => Effect.void,
     launch: (input) =>
       Ref.get(thread.runless).pipe(
         Effect.flatMap((runless) =>
@@ -585,7 +665,10 @@ const boxToolkitLayer = (thread: BoxThread) => {
     Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
     Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
     Layer.provide(
-      Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/p" }),
+      Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
+        namedProjectsRoot: "/p",
+        isScratchProject: () => Effect.succeed(false),
+      }),
     ),
     Layer.provide(Layer.merge(layerNoTaskFolders, Layer.mock(GitVcsDriver.GitVcsDriver)({}))),
     Layer.provide(Layer.mock(SourceControlRepositoryService.SourceControlRepositoryService)({})),

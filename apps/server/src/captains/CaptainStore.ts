@@ -131,8 +131,8 @@ export const commitChorusRoute = Effect.fn("CaptainStore.commitChorusRoute")(fun
   const sql = yield* SqlClient.SqlClient;
   const inserted = yield* route.source === "linked"
     ? sql`
-      INSERT INTO chorus_incoming_routes (receipt_message_id, sender_session_id, message_id, thread_id)
-      SELECT m.message_id, ${route.senderSessionId}, m.message_id, r.thread_id
+      INSERT INTO chorus_incoming_routes (receipt_message_id, sender_session_id, message_id, run_id, thread_id)
+      SELECT m.message_id, ${route.senderSessionId}, m.message_id, r.run_id, r.thread_id
       FROM orchestration_v2_projection_messages AS m
       JOIN orchestration_v2_projection_runs AS r ON r.run_id = m.run_id
       JOIN captains AS destination ON destination.id = ${route.duetId}
@@ -458,9 +458,11 @@ const make = Effect.gen(function* () {
     receiptMessageId: MessageId,
   ) {
     const [row] = yield* sql<Omit<RemoteChorusRouteUpdate, "terminal"> & { terminal: 0 | 1 }>`
-      SELECT route.receipt_message_id AS messageId, route.thread_id AS threadId, run.run_id AS runId,
-        CASE WHEN ${terminalChorusRouteRun} AND route.settled_run_id IS NULL
-          THEN 'running' ELSE run.status END AS status,
+      SELECT route.receipt_message_id AS messageId, route.thread_id AS threadId,
+        COALESCE(run.run_id, route.run_id) AS runId,
+        CASE WHEN run.status IS NULL THEN 'queued'
+          WHEN ${terminalChorusRouteRun} AND route.settled_run_id IS NULL THEN 'running'
+          ELSE run.status END AS status,
         COALESCE(${terminalChorusRouteRun} AND route.settled_run_id = run.run_id, 0) AS terminal,
         CASE WHEN route.settled_run_id = run.run_id THEN (
           SELECT substr(json_extract(answer.payload_json, '$.text'), 1, 1000)
@@ -469,8 +471,8 @@ const make = Effect.gen(function* () {
           ORDER BY answer.created_at DESC, answer.message_id DESC LIMIT 1
         ) END AS result
       FROM chorus_incoming_routes AS route
-      JOIN orchestration_v2_projection_messages AS prompt ON prompt.message_id = route.message_id
-      JOIN orchestration_v2_projection_runs AS run ON run.run_id = prompt.run_id AND run.thread_id = route.thread_id
+      LEFT JOIN orchestration_v2_projection_messages AS prompt ON prompt.message_id = route.message_id
+      LEFT JOIN orchestration_v2_projection_runs AS run ON run.run_id = prompt.run_id AND run.thread_id = route.thread_id
       WHERE route.receipt_message_id = ${receiptMessageId} AND route.sender_session_id = ${senderSessionId}
     `;
     return row === undefined ? null : { ...row, terminal: row.terminal === 1 };
@@ -499,8 +501,7 @@ const make = Effect.gen(function* () {
       for (const table of ["chorus_routes", "chorus_incoming_routes"]) {
         const name = sql(table);
         yield* sql`
-        UPDATE ${name} SET settled_run_id = ${runId}
-        ${table === "chorus_routes" ? sql`, run_id = ${runId}` : sql``}
+        UPDATE ${name} SET settled_run_id = ${runId}, run_id = ${runId}
         WHERE thread_id = ${threadId} AND settled_run_id IS NOT ${runId}
           AND EXISTS (
             SELECT 1 FROM orchestration_v2_projection_messages AS prompt
@@ -517,8 +518,7 @@ const make = Effect.gen(function* () {
     function* () {
       for (const table of ["chorus_routes", "chorus_incoming_routes"]) {
         yield* sql`
-          UPDATE ${sql(table)} AS route SET settled_run_id = run.run_id
-          ${table === "chorus_routes" ? sql`, run_id = run.run_id` : sql``}
+          UPDATE ${sql(table)} AS route SET settled_run_id = run.run_id, run_id = run.run_id
           FROM orchestration_v2_projection_messages AS prompt
           JOIN orchestration_v2_projection_runs AS run ON run.run_id = prompt.run_id
           WHERE prompt.message_id = route.message_id AND run.thread_id = route.thread_id

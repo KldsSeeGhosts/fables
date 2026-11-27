@@ -4,6 +4,7 @@ import {
   CaptainError,
   CaptainMemoryId,
   EnvironmentId,
+  OrchestratorMcpFailure,
   captainPrimaryThreadId,
   ProjectId,
   ProviderInstanceId,
@@ -29,6 +30,8 @@ import {
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as Sqlite from "../persistence/Sqlite.ts";
 import * as PeerLinks from "../peer/PeerLinks.ts";
+import * as PeerMcpClient from "../peer/PeerMcpClient.ts";
+import * as Schema from "effect/Schema";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ScheduledTasks from "../scheduledTasks/ScheduledTaskService.ts";
@@ -271,6 +274,53 @@ it.effect("forces Chorus fields and rejects a second active Chorus", () =>
       assert.isNull((yield* service.unarchive({ captainId: chorus.id })).archivedAt);
       assert.equal(launches.size, 2);
     }).pipe(Effect.provide(layer));
+  }),
+);
+
+it.effect("checks reachable linked machines on Chorus creation and restore", () =>
+  Effect.gen(function* () {
+    const { layer, launches } = fixture();
+    const studio = EnvironmentId.make("studio");
+    let active = true;
+    const peers = Layer.mergeAll(
+      Layer.mock(PeerLinks.PeerLinks)({
+        enabled: Effect.succeed(true),
+        names: () =>
+          Effect.succeed([
+            { environmentId: EnvironmentId.make("offline"), label: "Offline" },
+            { environmentId: studio, label: "Studio" },
+          ]),
+      }),
+      Layer.mock(PeerMcpClient.PeerMcpClient)({
+        call: ({ environmentId, tool, success }) => {
+          assert.equal(tool, "chorus_active");
+          return environmentId === studio
+            ? Schema.decodeEffect(success)({ active }).pipe(Effect.orDie)
+            : Effect.fail(
+                new OrchestratorMcpFailure({
+                  code: "orchestration_error",
+                  message: "Peer did not answer.",
+                }),
+              );
+        },
+      }),
+    );
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainService.CaptainService;
+      const chorusInput = { ...input, kind: "chorus" } as const;
+      const conflict = yield* service.create(chorusInput).pipe(Effect.flip);
+      assert.equal(conflict.code, "conflict");
+      assert.include(conflict.message, "Studio");
+      assert.equal(launches.size, 0);
+
+      active = false;
+      const local = yield* service.create(chorusInput);
+      yield* service.archive({ captainId: local.id });
+      active = true;
+      const restoreConflict = yield* service.unarchive({ captainId: local.id }).pipe(Effect.flip);
+      assert.equal(restoreConflict.code, "conflict");
+      assert.include(restoreConflict.message, "Studio");
+    }).pipe(Effect.provide(layer.pipe(Layer.provide(peers))));
   }),
 );
 

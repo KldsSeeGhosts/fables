@@ -68,6 +68,7 @@ export const makeReadChorusFleet = Effect.gen(function* () {
           })
           .pipe(
             Effect.timeout("5 seconds"),
+            Effect.interruptible,
             Effect.result,
             Effect.map((reply) => ({ ...machine, reply })),
           ),
