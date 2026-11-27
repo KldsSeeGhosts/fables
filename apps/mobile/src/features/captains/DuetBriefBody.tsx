@@ -96,7 +96,7 @@ export function DuetBriefBody(props: {
   return (
     <>
       <View className="flex-row items-center gap-3.5 px-4 pb-3.5 pt-2">
-        <DuetCreature captain={captain} size={56} disc />
+        <DuetCreature captain={captain} size={56} disc animateOnMount />
         <View className="min-w-0 flex-1">
           <Text
             style={{ fontSize: 20, lineHeight: 26, color: tokens.foreground }}

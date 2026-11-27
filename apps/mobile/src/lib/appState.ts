@@ -78,8 +78,8 @@ export function subscribeReduceMotion(onChange: Listener): () => void {
   };
 }
 
-export function readReduceMotionEnabled(): boolean {
-  return reduceMotionEnabled ?? true;
+export function readReduceMotionEnabled(fallback = true): boolean {
+  return reduceMotionEnabled ?? fallback;
 }
 
 export function useReduceMotionEnabled(): boolean {

@@ -103,6 +103,8 @@ import { useFabScroll } from "./FabScrollContext";
 import { holdLaunchSplashForHomeRows, settleLaunchSplashHomeRows } from "./home-launch-splash";
 import { useWorkspaceTabs } from "../layout/workspace/WorkspaceTabsContext";
 import { ThreadListFilters } from "./ThreadListFilters";
+import { createScrollVisibility } from "../../lib/scroll-visibility";
+import { STATUS_ROW_VIEWABILITY } from "../threads/thread-list-v2-items";
 import { CaptainsHomeSection } from "../captains/CaptainsHomeSection";
 import { useDuetShell } from "../captains/useDuetShell";
 import { DuetThreadsHeader } from "./DuetThreadsHeader";
@@ -278,6 +280,7 @@ export function HomeScreen(props: HomeScreenProps) {
     openThreadPullRequests(thread, pr);
   };
   const onFabScroll = useFabScroll();
+  const [captainViewport] = useState(createScrollVisibility);
   const listRef = useRef<LegendListRef>(null);
   const searchMode = workspace?.state.tabs.threads.searchMode;
   const restoredOffset = workspace?.state.tabs.threads.scrollOffset;
@@ -301,6 +304,10 @@ export function HomeScreen(props: HomeScreenProps) {
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears the row activation timer on unmount
   useEffect(() => () => clearTimeout(activationTimerRef.current), []);
   const handleListScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    captainViewport.update(
+      event.nativeEvent.contentOffset.y,
+      event.nativeEvent.layoutMeasurement.height,
+    );
     onFabScroll?.(event);
     if (workspace)
       workspace.recordScrollOffset(
@@ -534,6 +541,7 @@ export function HomeScreen(props: HomeScreenProps) {
     const thread = item.item.thread;
     return (
       <ThreadListV2Row
+        listVisible={props.visible}
         pane={sidebarSurface ? "sidebar" : "screen"}
         selected={scopedThreadKey(thread.environmentId, thread.id) === selectedThreadKey}
         fullSwipeWidth={fullSwipeWidth}
@@ -606,6 +614,7 @@ export function HomeScreen(props: HomeScreenProps) {
 
   // extraData changes invalidate every visible row; put the minute clock on items to limit updates.
   const v2ExtraData = {
+    listVisible: props.visible,
     activeNewTask,
     projectByKey,
     projectTitleByProjectKey: v2ProjectTitleByProjectKey,
@@ -707,6 +716,7 @@ export function HomeScreen(props: HomeScreenProps) {
         />
       ) : null}
       <CaptainsHomeSection
+        viewport={captainViewport}
         hidden={hasSearchQuery || v2ScopedProjectGroup !== null}
         environmentId={props.selectedEnvironmentId}
         projects={props.projects}
@@ -793,6 +803,14 @@ export function HomeScreen(props: HomeScreenProps) {
             <GestureDetector gesture={homeScrollGesture}>
               <AnimatedLegendList
                 itemLayoutAnimation={THREAD_LIST_ROW_LAYOUT}
+                viewabilityConfig={STATUS_ROW_VIEWABILITY}
+                onLayout={(event) =>
+                  captainViewport.layout(
+                    event.nativeEvent.layout.height,
+                    Math.max(initialScrollOffset, 0) -
+                      (Platform.OS === "ios" ? contentTopInset : 0),
+                  )
+                }
                 ref={listRef}
                 onLoad={() => {
                   settleLaunchSplashHomeRows();

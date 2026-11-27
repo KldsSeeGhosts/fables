@@ -1,15 +1,22 @@
-import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
+import { useIsFocused, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { msg, useGT, useMessages } from "gt-react-native";
 import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { WorkingStatusShine } from "../../components/WorkingStatusShine";
 import { RelativeTime } from "../../components/RelativeTime";
 import { AppText as Text } from "../../components/ui/AppText";
 import { ScreenContent } from "../../components/ui/ScreenContent";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { SheetHeader } from "../../components/ui/SheetHeader";
 import { useNowMinuteMs } from "../../lib/clock";
+import {
+  createScrollVisibility,
+  useScrollRowVisibility,
+  useScrollSectionOffset,
+  type ScrollVisibility,
+} from "../../lib/scroll-visibility";
 import { CAPTAIN_TASK_STATUS_LABELS } from "./captainLabels";
 import type { CaptainTaskStatus } from "@t3tools/client-runtime/state/captain-tasks";
 import { SymbolView } from "../../components/ui/AppSymbol";
@@ -42,18 +49,32 @@ const RANGES = [
   { value: "all", label: msg("All", { $context: "tab, every delegated task" }) },
 ] as const satisfies ReadonlyArray<{ readonly value: CaptainTaskRange; readonly label: string }>;
 
-function TaskRow(props: { readonly row: CaptainTaskRow; readonly onOpen: () => void }) {
+type TaskRowProps = {
+  readonly row: CaptainTaskRow;
+  readonly visible: boolean;
+  readonly viewport: ScrollVisibility;
+  readonly offset: number;
+  readonly onOpen: () => void;
+};
+
+function TaskRow(props: TaskRowProps) {
   const m = useMessages();
   const status = m(CAPTAIN_TASK_STATUS_LABELS[props.row.status]);
+  const visibility = useScrollRowVisibility(
+    props.viewport,
+    props.offset,
+    props.visible && props.row.status === "working",
+  );
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${props.row.thread.title}, ${status}`}
       onPress={props.onOpen}
+      onLayout={visibility.onLayout}
       className="flex-row items-start gap-3 rounded-xl px-3 py-2.5 active:bg-subtle"
     >
       <View className="pt-0.5">
-        <CaptainTaskRing status={props.row.status} />
+        <CaptainTaskRing status={props.row.status} visible={visibility.visible} />
       </View>
       <View className="min-w-0 flex-1 gap-0.5">
         <View className="flex-row items-center gap-2">
@@ -89,19 +110,21 @@ function statusColor(status: CaptainTaskStatus, tokens: DuetTokens) {
   }
 }
 
-function DuetTaskRow(props: {
-  readonly row: CaptainTaskRow;
-  readonly first: boolean;
-  readonly onOpen: () => void;
-}) {
+function DuetTaskRow(props: TaskRowProps & { readonly first: boolean }) {
   const m = useMessages();
   const tokens = useDuetTokens();
   const status = m(CAPTAIN_TASK_STATUS_LABELS[props.row.status]);
+  const visibility = useScrollRowVisibility(
+    props.viewport,
+    props.offset,
+    props.visible && props.row.status === "working",
+  );
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${props.row.thread.title}, ${status}`}
       onPress={props.onOpen}
+      onLayout={visibility.onLayout}
       className="min-h-16 flex-row items-start gap-3 py-[11px] pl-4 pr-2.5"
       style={({ pressed }) => ({ backgroundColor: pressed ? tokens.row : undefined })}
     >
@@ -112,7 +135,7 @@ function DuetTaskRow(props: {
         />
       )}
       <View className="pt-0.5">
-        <CaptainTaskRing status={props.row.status} />
+        <CaptainTaskRing status={props.row.status} visible={visibility.visible} />
       </View>
       <View className="min-w-0 flex-1">
         <View className="flex-row items-baseline gap-2">
@@ -129,10 +152,31 @@ function DuetTaskRow(props: {
             </Text>
           ) : null}
         </View>
-        <Text style={{ fontSize: 13, lineHeight: 18, color: tokens.meta }} numberOfLines={1}>
-          <Text style={{ color: statusColor(props.row.status, tokens) }}>{status}</Text>
-          {props.row.detail ? ` · ${props.row.detail}` : null}
-        </Text>
+        {props.row.status === "working" ? (
+          <View className="flex-row items-center">
+            <WorkingStatusShine
+              visible={visibility.visible}
+              style={{ fontSize: 13, lineHeight: 18, color: tokens.workingText }}
+              numberOfLines={1}
+            >
+              {status}
+            </WorkingStatusShine>
+            {props.row.detail ? (
+              <Text
+                className="min-w-0 flex-1"
+                style={{ fontSize: 13, lineHeight: 18, color: tokens.meta }}
+                numberOfLines={1}
+              >
+                {` · ${props.row.detail}`}
+              </Text>
+            ) : null}
+          </View>
+        ) : (
+          <Text style={{ fontSize: 13, lineHeight: 18, color: tokens.meta }} numberOfLines={1}>
+            <Text style={{ color: statusColor(props.row.status, tokens) }}>{status}</Text>
+            {props.row.detail ? ` · ${props.row.detail}` : null}
+          </Text>
+        )}
       </View>
       <View className="self-center">
         <SymbolView name="chevron.right" size={14} tintColor={tokens.icon} />
@@ -153,12 +197,14 @@ function DuetSectionHeading(props: { readonly children: string }) {
 /** Delegated tasks, grouped by Captain, or one Captain's when opened from its conversation. */
 export function CaptainTasksSheet({ route }: StaticScreenProps<CaptainTasksParams>) {
   const navigation = useNavigation();
+  const visible = useIsFocused();
   const insets = useSafeAreaInsets();
   const gt = useGT();
   const isDuet = useDuetShell();
   const m = useMessages();
   const nowMs = useNowMinuteMs();
   const [range, setRange] = useState<CaptainTaskRange>("today");
+  const [viewport] = useState(createScrollVisibility);
   const directory = useCaptainsDirectory();
   const environments = directory.environments.filter(
     ({ environmentId }) =>
@@ -179,7 +225,6 @@ export function CaptainTasksSheet({ route }: StaticScreenProps<CaptainTasksParam
     captainId: route.params?.captainId,
   });
   const single = route.params?.captainId !== undefined;
-  const tokens = useDuetTokens();
   const fallbackTitle = gt("Duet tasks");
   const title = single
     ? (listed.flatMap(({ captains }) => captains)[0]?.name ?? fallbackTitle)
@@ -206,6 +251,11 @@ export function CaptainTasksSheet({ route }: StaticScreenProps<CaptainTasksParam
         <ScrollView
           nestedScrollEnabled
           className="flex-1"
+          onScroll={({ nativeEvent }) =>
+            viewport.update(nativeEvent.contentOffset.y, nativeEvent.layoutMeasurement.height)
+          }
+          scrollEventThrottle={16}
+          onLayout={(event) => viewport.layout(event.nativeEvent.layout.height, 0)}
           contentInsetAdjustmentBehavior="automatic"
           contentContainerClassName="px-2 pt-2"
           contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) + 8 }}
@@ -231,70 +281,122 @@ export function CaptainTasksSheet({ route }: StaticScreenProps<CaptainTasksParam
                 {emptyText}
               </Text>
             )
-          ) : isDuet ? (
-            groups.map((group) => (
-              <View key={`${group.environmentId}:${group.captain.id}`} className="-mx-2 pb-3">
-                {single ? null : (
-                  <View className="flex-row items-center gap-2 px-4 pb-1 pt-3">
-                    <DuetCreature captain={group.captain} size={18} />
-                    <Text
-                      className="min-w-0 flex-1 font-t3-medium"
-                      style={{ fontSize: 13, color: tokens.foreground }}
-                    >
-                      {directory.showsEnvironment
-                        ? `${group.captain.name} · ${
-                            environments.find(
-                              ({ environmentId }) => environmentId === group.environmentId,
-                            )?.label ?? ""
-                          }`
-                        : group.captain.name}
-                    </Text>
-                  </View>
-                )}
-                {captainTaskSections(group.rows).map((section) => (
-                  <View key={section.kind}>
-                    <DuetSectionHeading>
-                      {section.kind === "running"
-                        ? gt("Running · {count}", { count: section.rows.length })
-                        : gt("Finished · {count}", { count: section.rows.length })}
-                    </DuetSectionHeading>
-                    {section.rows.map((row, index) => (
-                      <DuetTaskRow
-                        key={row.thread.id}
-                        row={row}
-                        first={index === 0}
-                        onOpen={() => openTask(row)}
-                      />
-                    ))}
-                  </View>
-                ))}
-              </View>
-            ))
           ) : (
             groups.map((group) => (
-              <View key={`${group.environmentId}:${group.captain.id}`} className="pb-3">
-                {single ? null : (
-                  <View className="flex-row items-center gap-2 px-3 pb-1 pt-2">
-                    <CaptainOrb captain={group.captain} size={20} />
-                    <Text className="min-w-0 flex-1 font-t3-medium text-xs text-foreground-muted">
-                      {directory.showsEnvironment
-                        ? `${group.captain.name} · ${
-                            environments.find(
-                              ({ environmentId }) => environmentId === group.environmentId,
-                            )?.label ?? ""
-                          }`
-                        : group.captain.name}
-                    </Text>
-                  </View>
-                )}
-                {group.rows.map((row) => (
-                  <TaskRow key={row.thread.id} row={row} onOpen={() => openTask(row)} />
-                ))}
-              </View>
+              <CaptainTaskGroup
+                key={`${group.environmentId}:${group.captain.id}`}
+                group={group}
+                single={single}
+                isDuet={isDuet}
+                visible={visible}
+                viewport={viewport}
+                environmentLabel={
+                  directory.showsEnvironment
+                    ? environments.find(
+                        ({ environmentId }) => environmentId === group.environmentId,
+                      )?.label
+                    : undefined
+                }
+                onOpen={openTask}
+              />
             ))
           )}
         </ScrollView>
       </ScreenContent>
+    </View>
+  );
+}
+
+type TaskGroupProps = {
+  readonly group: ReturnType<typeof captainTaskGroups>[number];
+  readonly single: boolean;
+  readonly isDuet: boolean;
+  readonly visible: boolean;
+  readonly viewport: ScrollVisibility;
+  readonly environmentLabel: string | undefined;
+  readonly onOpen: (row: CaptainTaskRow) => void;
+};
+
+function CaptainTaskGroup(props: TaskGroupProps) {
+  const { captain, rows } = props.group;
+  const layout = useScrollSectionOffset();
+  const tokens = useDuetTokens();
+  const name = props.environmentLabel
+    ? `${captain.name} · ${props.environmentLabel}`
+    : captain.name;
+  return (
+    <View className={props.isDuet ? "-mx-2 pb-3" : "pb-3"} onLayout={layout.onLayout}>
+      {props.single ? null : props.isDuet ? (
+        <View className="flex-row items-center gap-2 px-4 pb-1 pt-3">
+          <DuetCreature captain={captain} size={18} />
+          <Text
+            className="min-w-0 flex-1 font-t3-medium"
+            style={{ fontSize: 13, color: tokens.foreground }}
+          >
+            {name}
+          </Text>
+        </View>
+      ) : (
+        <View className="flex-row items-center gap-2 px-3 pb-1 pt-2">
+          <CaptainOrb captain={captain} size={20} />
+          <Text className="min-w-0 flex-1 font-t3-medium text-xs text-foreground-muted">
+            {name}
+          </Text>
+        </View>
+      )}
+      {props.isDuet
+        ? captainTaskSections(rows).map((section) => (
+            <DuetTaskSection
+              key={section.kind}
+              section={section}
+              offset={layout.offset}
+              visible={props.visible}
+              viewport={props.viewport}
+              onOpen={props.onOpen}
+            />
+          ))
+        : rows.map((row) => (
+            <TaskRow
+              key={row.thread.id}
+              row={row}
+              visible={props.visible}
+              viewport={props.viewport}
+              offset={layout.offset}
+              onOpen={() => props.onOpen(row)}
+            />
+          ))}
+    </View>
+  );
+}
+
+function DuetTaskSection(props: {
+  readonly section: ReturnType<typeof captainTaskSections>[number];
+  readonly offset: number;
+  readonly visible: boolean;
+  readonly viewport: ScrollVisibility;
+  readonly onOpen: (row: CaptainTaskRow) => void;
+}) {
+  const gt = useGT();
+  const layout = useScrollSectionOffset(props.offset);
+  const { section } = props;
+  return (
+    <View onLayout={layout.onLayout}>
+      <DuetSectionHeading>
+        {section.kind === "running"
+          ? gt("Running · {count}", { count: section.rows.length })
+          : gt("Finished · {count}", { count: section.rows.length })}
+      </DuetSectionHeading>
+      {section.rows.map((row, index) => (
+        <DuetTaskRow
+          key={row.thread.id}
+          row={row}
+          first={index === 0}
+          visible={props.visible}
+          viewport={props.viewport}
+          offset={layout.offset}
+          onOpen={() => props.onOpen(row)}
+        />
+      ))}
     </View>
   );
 }

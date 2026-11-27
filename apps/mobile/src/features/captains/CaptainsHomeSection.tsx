@@ -10,10 +10,13 @@ import type { Captain, EnvironmentId, FleetChorusState } from "@t3tools/contract
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { useNavigation } from "@react-navigation/native";
 import { useGT, useMessages } from "gt-react-native";
+import { useState } from "react";
 import { Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView } from "../../components/ui/AppSymbol";
+import type { ScrollVisibility } from "../../lib/scroll-visibility";
+import { useScrollRowVisibility } from "../../lib/scroll-visibility";
 import { cn } from "../../lib/cn";
 import { useHomeRouteVisible } from "../home/home-route-visibility";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
@@ -37,6 +40,7 @@ type CaptainHomeRow = {
 /** Captains above the thread list: who is working, who waits on you, and the way to each. */
 export function CaptainsHomeSection(props: {
   readonly hidden: boolean;
+  readonly viewport: ScrollVisibility;
   readonly environmentId: EnvironmentId | null;
   readonly projects: ReadonlyArray<EnvironmentProject>;
   readonly selectedThreadKey: string | null;
@@ -47,6 +51,7 @@ export function CaptainsHomeSection(props: {
   const navigation = useNavigation();
   const selectDetail = useSelectWorkspaceDetail();
   const visible = useHomeRouteVisible();
+  const [sectionTop, setSectionTop] = useState(0);
   const { environments, shells, showsEnvironment } = useCaptainsDirectory({
     visible: visible && !props.hidden,
   });
@@ -138,6 +143,8 @@ export function CaptainsHomeSection(props: {
   if (isDuet) {
     return (
       <DuetHomeSection
+        viewport={props.viewport}
+        visible={visible}
         rows={rows}
         waiting={duetInboxGroups(inbox).reduce((count, group) => count + group.items.length, 0)}
         showsEnvironment={showsEnvironment}
@@ -149,7 +156,10 @@ export function CaptainsHomeSection(props: {
   }
   const waiting = inbox.length;
   return (
-    <View className="gap-1 px-2 pb-3 pt-2">
+    <View
+      className="gap-1 px-2 pb-3 pt-2"
+      onLayout={(event) => setSectionTop(event.nativeEvent.layout.y)}
+    >
       <View className="flex-row items-center gap-2 px-2 pb-1">
         <Text className="min-w-0 flex-1 font-t3-medium text-xs text-foreground-muted">
           {gt("Duets")}
@@ -220,12 +230,22 @@ export function CaptainsHomeSection(props: {
             : state;
         const disabled = fleetState !== undefined && fleetState !== "ready";
         return (
-          <Pressable
+          <StandardCaptainRow
             key={`${environment.environmentId}:${captain.id}`}
-            accessibilityRole="button"
-            accessibilityState={{ disabled }}
+            viewport={props.viewport}
+            sectionTop={sectionTop}
+            visible={visible}
+            captain={captain}
+            completedRunId={
+              activity.primary?.latestRun?.status === "completed"
+                ? activity.primary.latestRun.runId
+                : undefined
+            }
+            working={activity.working}
+            attention={activity.attention}
+            detail={detail}
+            fleet={fleetState !== undefined}
             disabled={disabled}
-            accessibilityLabel={[captain.name, detail].filter(Boolean).join(", ")}
             onPress={() => {
               if (fleetState !== undefined) {
                 openFleet();
@@ -239,35 +259,77 @@ export function CaptainsHomeSection(props: {
                 },
               });
             }}
-            className={cn(
-              "flex-row items-center gap-3 rounded-xl px-2 py-2 active:bg-subtle",
-              fleetState !== undefined && "border-l-2 border-warning-border pl-1.5",
-            )}
-          >
-            <CaptainOrb
-              captain={captain}
-              working={activity.working}
-              attention={activity.attention}
-            />
-            <View className="min-w-0 flex-1">
-              <Text className="font-t3-medium text-base text-foreground" numberOfLines={1}>
-                {captain.name}
-              </Text>
-              {detail ? (
-                <Text
-                  className={cn(
-                    "text-xs",
-                    activity.attention > 0 ? "text-warning-foreground" : "text-foreground-muted",
-                  )}
-                  numberOfLines={1}
-                >
-                  {detail}
-                </Text>
-              ) : null}
-            </View>
-          </Pressable>
+          />
         );
       })}
     </View>
+  );
+}
+
+function StandardCaptainRow(props: {
+  readonly viewport: ScrollVisibility;
+  readonly sectionTop: number;
+  readonly visible: boolean;
+  readonly captain: Captain;
+  readonly completedRunId: string | undefined;
+  readonly working: boolean;
+  readonly attention: number;
+  readonly detail: string | null;
+  readonly fleet: boolean;
+  readonly disabled: boolean;
+  readonly onPress: () => void;
+}) {
+  const { captain, detail, working, attention, disabled } = props;
+  const visibility = useScrollRowVisibility(props.viewport, props.sectionTop, props.visible);
+  const [glance, setGlance] = useState(0);
+  const canGlance =
+    visibility.visible && !disabled && !working && attention === 0 && captain.archivedAt === null;
+  if (!canGlance && glance !== 0) setGlance(0);
+  const glanceOnce = () => {
+    if (canGlance) setGlance((previous) => previous + 1);
+  };
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      accessibilityLabel={[captain.name, detail].filter(Boolean).join(", ")}
+      onLayout={visibility.onLayout}
+      onPress={props.onPress}
+      onPressIn={glanceOnce}
+      onHoverIn={glanceOnce}
+      onFocus={glanceOnce}
+      className={cn(
+        "flex-row items-center gap-3 rounded-xl px-2 py-2 active:bg-subtle",
+        props.fleet && "border-l-2 border-warning-border pl-1.5",
+      )}
+    >
+      <CaptainOrb
+        captain={captain}
+        working={working}
+        attention={attention}
+        motion={{
+          visible: visibility.visible && !disabled && captain.archivedAt === null,
+          glance,
+          completedRunId: props.completedRunId,
+        }}
+      />
+      <View className="min-w-0 flex-1">
+        <Text className="font-t3-medium text-base text-foreground" numberOfLines={1}>
+          {captain.name}
+        </Text>
+        {detail ? (
+          <Text
+            className={cn(
+              "text-xs",
+              attention > 0 ? "text-warning-foreground" : "text-foreground-muted",
+            )}
+            numberOfLines={1}
+          >
+            {detail}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
   );
 }
