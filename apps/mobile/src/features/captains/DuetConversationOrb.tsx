@@ -4,7 +4,7 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/model
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
 import { useGT } from "gt-react-native";
-import { useId } from "react";
+import { useId, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 
@@ -37,6 +37,8 @@ export function DuetConversationOrb(props: {
     isDuet ? props.threadId : null,
   );
   const topInset = useContentTopInset();
+  // Percent sizes went stale when the pane resized (fold, split view), so the fade covered a part.
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   // Selected as a short key so streaming shells re-render the orb only when its state changes.
   const key = useAtomValue(
     captain === null ? NO_SHELLS_ATOM : environmentThreadShells.threadShellsAtom,
@@ -69,18 +71,26 @@ export function DuetConversationOrb(props: {
         paddingTop: ORB_TOP_GAP,
         zIndex: 3,
       }}
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        setSize((current) =>
+          current?.width === width && current.height === height ? current : { width, height },
+        );
+      }}
     >
       {/* Static fade: text scrolling up dissolves into the surface before it reaches the orb. */}
-      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
-        <Defs>
-          <LinearGradient id={fadeId} x1="0%" x2="0%" y1="0%" y2="100%">
-            <Stop offset="0%" stopColor={tokens.background} stopOpacity={1} />
-            <Stop offset="55%" stopColor={tokens.background} stopOpacity={1} />
-            <Stop offset="100%" stopColor={tokens.background} stopOpacity={0} />
-          </LinearGradient>
-        </Defs>
-        <Rect width="100%" height="100%" fill={`url(#${fadeId})`} />
-      </Svg>
+      {size === null ? null : (
+        <Svg style={StyleSheet.absoluteFill} width={size.width} height={size.height}>
+          <Defs>
+            <LinearGradient id={fadeId} x1="0%" x2="0%" y1="0%" y2="100%">
+              <Stop offset="0%" stopColor={tokens.background} stopOpacity={1} />
+              <Stop offset="55%" stopColor={tokens.background} stopOpacity={1} />
+              <Stop offset="100%" stopColor={tokens.background} stopOpacity={0} />
+            </LinearGradient>
+          </Defs>
+          <Rect width={size.width} height={size.height} fill={`url(#${fadeId})`} />
+        </Svg>
+      )}
       <DuetFloatingOrb captain={captain} state={state} live={live} />
     </View>
   );
