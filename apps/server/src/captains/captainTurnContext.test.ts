@@ -20,6 +20,7 @@ const captain = {
   scopedProjectIds: [],
   reportPolicy: "context",
   coordinatorOnly: false,
+  kind: "duet",
   createdAt: "2026-11-24T12:00:00.000Z",
   updatedAt: "2026-11-24T12:00:00.000Z",
   archivedAt: null,

@@ -210,6 +210,92 @@ it.effect("round-trips coordinatorOnly and decodes rows that omit it as false", 
   }),
 );
 
+it.effect("forces Chorus fields and rejects a second active Chorus", () =>
+  Effect.gen(function* () {
+    const { layer, launches } = fixture();
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainService.CaptainService;
+      const store = yield* CaptainStore.CaptainStore;
+      const chorus = yield* service.create({
+        ...input,
+        captainId: CaptainId.make("chorus"),
+        kind: "chorus",
+        scopedProjectIds: [ProjectId.make("missing")],
+        coordinatorOnly: false,
+        reportPolicy: "context",
+      });
+      assert.equal(chorus.kind, "chorus");
+      assert.deepStrictEqual(chorus.scopedProjectIds, []);
+      assert.isTrue(chorus.coordinatorOnly);
+      assert.equal(chorus.reportPolicy, "react");
+      assert.equal(launches.get(chorus.primaryThreadId)?.projectId, scratch);
+      assert.equal(launches.size, 1);
+
+      const activeConflict = yield* Effect.flip(
+        service.create({ ...input, captainId: CaptainId.make("second-chorus"), kind: "chorus" }),
+      );
+      assert.equal(activeConflict.code, "conflict");
+      assert.equal(launches.size, 1);
+
+      yield* service.archive({ captainId: chorus.id });
+      const replacement = yield* service.create({
+        ...input,
+        captainId: CaptainId.make("replacement-chorus"),
+        kind: "chorus",
+      });
+      assert.equal(replacement.kind, "chorus");
+      assert.equal(launches.size, 2);
+
+      const unarchiveConflict = yield* Effect.flip(service.unarchive({ captainId: chorus.id }));
+      assert.equal(unarchiveConflict.code, "conflict");
+      assert.isNotNull((yield* store.requireCaptain(chorus.id)).archivedAt);
+
+      const backstopId = CaptainId.make("backstop-chorus");
+      const backstopConflict = yield* Effect.flip(
+        store.save({
+          ...replacement,
+          id: backstopId,
+          primaryThreadId: captainPrimaryThreadId(backstopId, 0),
+        }),
+      );
+      assert.equal(backstopConflict.code, "conflict");
+    }).pipe(Effect.provide(layer));
+  }),
+);
+
+it.effect("rejects scope and report policy changes for a Chorus", () =>
+  Effect.gen(function* () {
+    const { layer } = fixture();
+    yield* Effect.gen(function* () {
+      const service = yield* CaptainService.CaptainService;
+      const chorus = yield* service.create({
+        ...input,
+        captainId: CaptainId.make("chorus"),
+        kind: "chorus",
+      });
+
+      const unchanged = yield* service.update({
+        captainId: chorus.id,
+        name: "Fleet",
+        scopedProjectIds: [],
+        reportPolicy: "react",
+      });
+      assert.equal(unchanged.name, "Fleet");
+      assert.deepStrictEqual(unchanged.scopedProjectIds, []);
+      assert.equal(unchanged.reportPolicy, "react");
+
+      const scoped = yield* Effect.flip(
+        service.update({ captainId: chorus.id, scopedProjectIds: [project] }),
+      );
+      assert.equal(scoped.code, "invalid_request");
+      for (const reportPolicy of ["context", "ignore"] as const) {
+        const failure = yield* Effect.flip(service.update({ captainId: chorus.id, reportPolicy }));
+        assert.equal(failure.code, "invalid_request");
+      }
+    }).pipe(Effect.provide(layer));
+  }),
+);
+
 it.effect("asks for a scoped project when the environment has no Scratch", () =>
   Effect.gen(function* () {
     const { layer, launches } = fixture({ scratchUnavailable: true });
@@ -549,6 +635,7 @@ it.effect("retries one stale NOTES.md revision when writing a handoff", () =>
       avatar: input.avatar,
       reportPolicy: input.reportPolicy,
       coordinatorOnly: false,
+      kind: "duet" as const,
       scopedProjectIds: input.scopedProjectIds,
       primaryThreadId: captainPrimaryThreadId(input.captainId, 0),
       earlierThreadIds: [],

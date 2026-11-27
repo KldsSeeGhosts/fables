@@ -32,6 +32,7 @@ import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
+import * as SqlError from "effect/sql/SqlError";
 
 const CaptainRow = Schema.Struct({
   ...Captain.fields,
@@ -83,6 +84,17 @@ export const captainUnavailable = (cause: unknown) =>
 
 const missing = () => new CaptainError({ code: "not_found", message: "Duet not found." });
 
+export const activeChorusConflict = () =>
+  new CaptainError({
+    code: "conflict",
+    message: "An active Chorus already exists on this machine.",
+  });
+
+const isActiveChorusUniqueViolation = (cause: unknown) =>
+  SqlError.isSqlError(cause) &&
+  cause.reason._tag === "UniqueViolation" &&
+  cause.reason.constraint === "captains.kind";
+
 /** `profile` changes the Captain list; `content` only that Captain's documents or memories. */
 type CaptainChange = { readonly captainId: CaptainId; readonly kind: "profile" | "content" };
 
@@ -97,7 +109,7 @@ const make = Effect.gen(function* () {
     primary_thread_id AS primaryThreadId, earlier_thread_ids AS earlierThreadIds,
     earlier_thread_end_reasons AS earlierThreadEndReasons,
     scoped_project_ids AS scopedProjectIds, report_policy AS reportPolicy,
-    coordinator_only AS coordinatorOnly,
+    coordinator_only AS coordinatorOnly, kind,
     created_at AS createdAt, updated_at AS updatedAt, archived_at AS archivedAt
     FROM captains`;
   const documents = sql`SELECT captain_id AS captainId, name, content, revision,
@@ -139,6 +151,13 @@ const make = Effect.gen(function* () {
     return captain;
   });
 
+  const findActiveChorus = Effect.fn("CaptainStore.findActiveChorus")(function* () {
+    const [row] = yield* sql`
+      ${profiles} WHERE kind = 'chorus' AND archived_at IS NULL LIMIT 1
+    `;
+    return row === undefined ? undefined : yield* decodeCaptain(row);
+  }, Effect.catch(captainUnavailable));
+
   const requireOwner = Effect.fn("CaptainStore.requireOwner")(function* (
     id: CaptainId,
     threadId: ThreadId | undefined,
@@ -148,20 +167,23 @@ const make = Effect.gen(function* () {
     return captain;
   });
 
-  const save = Effect.fn("CaptainStore.save")(function* (captain: Captain) {
-    const row = yield* encodeCaptain({
-      ...captain,
-      earlierThreadEndReasons: captain.earlierThreadEndReasons ?? [],
-    });
-    yield* sql`
+  const save = Effect.fn("CaptainStore.save")(
+    function* (captain: Captain) {
+      const row = yield* encodeCaptain({
+        ...captain,
+        earlierThreadEndReasons: captain.earlierThreadEndReasons ?? [],
+      });
+      yield* sql`
       INSERT INTO captains (
         id, name, role, instructions, avatar, primary_thread_id, earlier_thread_ids,
-        earlier_thread_end_reasons, scoped_project_ids, report_policy, coordinator_only, created_at, updated_at, archived_at
+        earlier_thread_end_reasons, scoped_project_ids, report_policy, coordinator_only, kind,
+        created_at, updated_at, archived_at
       ) VALUES (
         ${captain.id}, ${captain.name}, ${captain.role}, ${captain.instructions},
         ${row.avatar}, ${captain.primaryThreadId},
         ${row.earlierThreadIds}, ${row.earlierThreadEndReasons}, ${row.scopedProjectIds},
-        ${captain.reportPolicy}, ${row.coordinatorOnly}, ${captain.createdAt}, ${captain.updatedAt}, ${captain.archivedAt}
+        ${captain.reportPolicy}, ${row.coordinatorOnly}, ${captain.kind},
+        ${captain.createdAt}, ${captain.updatedAt}, ${captain.archivedAt}
       ) ON CONFLICT(id) DO UPDATE SET
         name = excluded.name, role = excluded.role, instructions = excluded.instructions,
         avatar = excluded.avatar, primary_thread_id = excluded.primary_thread_id,
@@ -169,10 +191,16 @@ const make = Effect.gen(function* () {
         earlier_thread_end_reasons = excluded.earlier_thread_end_reasons,
         scoped_project_ids = excluded.scoped_project_ids,
         report_policy = excluded.report_policy, coordinator_only = excluded.coordinator_only,
-        updated_at = excluded.updated_at, archived_at = excluded.archived_at
+        kind = excluded.kind, updated_at = excluded.updated_at, archived_at = excluded.archived_at
     `;
-    return captain;
-  }, Effect.catch(captainUnavailable));
+      return captain;
+    },
+    Effect.catch((cause) =>
+      isActiveChorusUniqueViolation(cause)
+        ? Effect.fail(activeChorusConflict())
+        : captainUnavailable(cause),
+    ),
+  );
 
   const latestCompletedCompactionAt = Effect.fn("CaptainStore.latestCompletedCompactionAt")(
     function* (threadId: ThreadId, providerThreadId: ProviderThreadId) {
@@ -413,6 +441,7 @@ const make = Effect.gen(function* () {
     findByConversation,
     find,
     requireCaptain,
+    findActiveChorus,
     save,
     latestCompletedCompactionAt,
     saveRolloverResend,

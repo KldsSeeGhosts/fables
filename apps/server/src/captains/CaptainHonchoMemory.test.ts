@@ -58,6 +58,7 @@ const captain = {
   instructions: "",
   reportPolicy: "context",
   coordinatorOnly: false,
+  kind: "duet",
   avatar: { preset: "compass", color: "violet" },
   earlierThreadIds: [earlier],
   scopedProjectIds: [],

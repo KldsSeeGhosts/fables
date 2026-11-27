@@ -29,6 +29,7 @@ const captain: Captain = {
   scopedProjectIds: [],
   reportPolicy: "context",
   coordinatorOnly: false,
+  kind: "duet",
   primaryThreadId: captainPrimaryThreadId(CaptainId.make("maria"), 0),
   earlierThreadIds: [],
   createdAt: "2026-11-25T08:00:00.000Z",

@@ -104,7 +104,12 @@ const make = Effect.gen(function* () {
     function* (input: CaptainCreateInput) {
       const existing = yield* store.find(input.captainId);
       if (existing !== undefined) return existing;
-      const scopedProjectIds = yield* validateScope(input.scopedProjectIds);
+      const kind = input.kind ?? "duet";
+      if (kind === "chorus" && (yield* store.findActiveChorus()) !== undefined) {
+        return yield* CaptainStore.activeChorusConflict();
+      }
+      const scopedProjectIds =
+        kind === "chorus" ? [] : yield* validateScope(input.scopedProjectIds);
       const projectId =
         scopedProjectIds[0] ??
         (yield* folders.ensureScratchProject.pipe(
@@ -116,8 +121,9 @@ const make = Effect.gen(function* () {
               : CaptainStore.captainUnavailable(cause),
           ),
         )).projectId;
-      const { name, role, instructions, avatar, reportPolicy } = input;
-      const coordinatorOnly = input.coordinatorOnly ?? false;
+      const { name, role, instructions, avatar } = input;
+      const reportPolicy = kind === "chorus" ? "react" : input.reportPolicy;
+      const coordinatorOnly = kind === "chorus" ? true : (input.coordinatorOnly ?? false);
       const now = yield* timestamp;
       const primaryThreadId = captainPrimaryThreadId(input.captainId, 0);
       yield* createPrimaryThread(primaryThreadId, projectId, name, {
@@ -132,6 +138,7 @@ const make = Effect.gen(function* () {
         avatar,
         reportPolicy,
         coordinatorOnly,
+        kind,
         scopedProjectIds,
         primaryThreadId,
         earlierThreadIds: [],
@@ -151,6 +158,14 @@ const make = Effect.gen(function* () {
     function* (input: CaptainUpdateInput) {
       const { captainId, scopedProjectIds } = input;
       const current = yield* store.requireCaptain(captainId);
+      if (current.kind === "chorus") {
+        if (scopedProjectIds !== undefined && scopedProjectIds.length > 0) {
+          return yield* invalid("A Chorus cannot have a workspace scope.");
+        }
+        if (input.reportPolicy !== undefined && input.reportPolicy !== "react") {
+          return yield* invalid("A Chorus must use the react report policy.");
+        }
+      }
       const captain = yield* store.save({
         ...current,
         name: input.name ?? current.name,
@@ -176,6 +191,13 @@ const make = Effect.gen(function* () {
     function* ({ captainId }: { readonly captainId: CaptainId }, archived: boolean) {
       const current = yield* store.requireCaptain(captainId);
       if ((current.archivedAt !== null) === archived) return current;
+      if (
+        !archived &&
+        current.kind === "chorus" &&
+        (yield* store.findActiveChorus()) !== undefined
+      ) {
+        return yield* CaptainStore.activeChorusConflict();
+      }
       const now = yield* timestamp;
       const captain = yield* store.save({
         ...current,
