@@ -53,7 +53,7 @@ it("selects the pinned valid Apple Development identity and disables provisionin
     stderr: "",
   });
   const options = {
-    app: "/tmp/KSG Code.app",
+    app: "/tmp/Fables.app",
     keychain: "/tmp/ksg-development.keychain-db",
     identity: "-",
     type: "distribution",
@@ -94,7 +94,7 @@ it.each([
   vi.stubEnv("T3CODE_MACOS_SIGNING_IDENTITY", fingerprint);
   execFile.mockResolvedValue({ stdout, stderr: "" });
 
-  await expect(sign({ app: "/tmp/KSG Code.app", keychain: "/tmp/ksg.keychain" })).rejects.toThrow(
+  await expect(sign({ app: "/tmp/Fables.app", keychain: "/tmp/ksg.keychain" })).rejects.toThrow(
     "pinned, valid Apple Development identity is missing",
   );
   expect(signApplication).not.toHaveBeenCalled();
@@ -110,7 +110,7 @@ it.each([
 
   await expect(
     sign({
-      app: "/tmp/KSG Code.app",
+      app: "/tmp/Fables.app",
       ...(config.keychain ? { keychain: config.keychain } : {}),
     }),
   ).rejects.toThrow("needs CSC_KEYCHAIN and T3CODE_MACOS_SIGNING_IDENTITY");
@@ -122,7 +122,7 @@ it("rejects conflicting personal signing modes", async () => {
   vi.stubEnv("T3CODE_MACOS_DEVELOPMENT", "true");
   vi.stubEnv("T3CODE_MACOS_SELF_SIGNED", "true");
 
-  await expect(sign({ app: "/tmp/KSG Code.app" })).rejects.toThrow("only one");
+  await expect(sign({ app: "/tmp/Fables.app" })).rejects.toThrow("only one");
   expect(signApplication).not.toHaveBeenCalled();
 });
 
@@ -130,10 +130,10 @@ it("preserves the legacy self-signed fallback", async () => {
   vi.stubEnv("T3CODE_MACOS_SELF_SIGNED", "true");
   execFile.mockResolvedValue({ stdout: `1) ${fingerprint} "KSG Code"`, stderr: "" });
 
-  await sign({ app: "/tmp/KSG Code.app", keychain: "/tmp/ksg.keychain" });
+  await sign({ app: "/tmp/Fables.app", keychain: "/tmp/ksg.keychain" });
 
   expect(signApplication).toHaveBeenCalledExactlyOnceWith({
-    app: "/tmp/KSG Code.app",
+    app: "/tmp/Fables.app",
     keychain: "/tmp/ksg.keychain",
     identity: fingerprint,
     batchCodesignCalls: true,

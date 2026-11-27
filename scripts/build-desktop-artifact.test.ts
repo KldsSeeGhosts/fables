@@ -651,7 +651,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }),
   );
 
-  it.effect("brands the macOS installer without renaming the installed bundle or executable", () =>
+  it.effect("names the macOS bundle and executable Fables while keeping the update artifacts", () =>
     Effect.gen(function* () {
       const mac = yield* createBuildConfig(
         "mac",
@@ -663,7 +663,9 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         undefined,
       );
       assert.equal(mac.productName, "Fables");
-      assert.propertyVal(mac.mac, "executableName", "KSG Code");
+      assert.equal(mac.appId, "com.t3tools.t3code");
+      assert.propertyVal(mac.mac, "executableName", "Fables");
+      assert.deepPropertyVal(mac.mac, "target", ["dmg", "zip"]);
       assert.equal(mac.artifactName, "KSG-Code-${version}-${arch}.${ext}");
       assert.propertyVal(mac.dmg, "title", "Fables 1.2.3 Installer");
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
