@@ -1,19 +1,19 @@
 import {
-  activeChoruses,
   captainInboxItems,
   captainThreadActivity,
+  fleetChorusCaptain,
+  withoutStoredChoruses,
 } from "@t3tools/client-runtime/state/captains";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/models";
-import { AuthOrchestrationOperateScope, type EnvironmentId } from "@t3tools/contracts";
+import type { Captain, EnvironmentId, FleetChorusState } from "@t3tools/contracts";
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { useNavigation } from "@react-navigation/native";
 import { useGT } from "gt-react-native";
 import { Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView } from "../../components/ui/AppSymbol";
-import { Button } from "../../components/ui/Button";
 import { cn } from "../../lib/cn";
-import { useEnvironmentsWithScope } from "../../state/session";
 import { useHomeRouteVisible } from "../home/home-route-visibility";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { CaptainOrb } from "./CaptainOrb";
@@ -21,8 +21,17 @@ import { orderCaptainHomeRows } from "./captainHomeOrder";
 import { captainShells, captainShellsByConversation } from "./captainShellIndex";
 import { duetInboxGroups } from "./captainInbox";
 import { DuetHomeSection } from "./DuetHomeSection";
-import { useCaptainsDirectory } from "./useCaptainsDirectory";
+import { useCaptainsDirectory, useFleetChorus } from "./useCaptainsDirectory";
+import { useOpenLinkedThreadRead } from "../threads/useOpenLinkedThread";
 import { useDuetShell } from "./useDuetShell";
+
+type CaptainHomeRow = {
+  readonly environment: { readonly environmentId: EnvironmentId; readonly label: string };
+  readonly captain: Captain;
+  readonly own: ReadonlyArray<EnvironmentThreadShell>;
+  readonly activity: ReturnType<typeof captainThreadActivity>;
+  readonly fleetState?: FleetChorusState | undefined;
+};
 
 /** Captains above the thread list: who is working, who waits on you, and the way to each. */
 export function CaptainsHomeSection(props: {
@@ -39,60 +48,92 @@ export function CaptainsHomeSection(props: {
   const { environments, shells, showsEnvironment } = useCaptainsDirectory({
     visible: visible && !props.hidden,
   });
-  const writable = useEnvironmentsWithScope(environments, AuthOrchestrationOperateScope);
-  const chorusCount = activeChoruses(environments).length;
-  const canCreateChorus =
-    chorusCount === 0 && environments.some(({ environmentId }) => writable.has(environmentId));
+  const fleet = useFleetChorus();
+  const openLinkedThreadRead = useOpenLinkedThreadRead();
   if (props.hidden) return null;
   const byConversation = captainShellsByConversation(shells);
-  const rows = orderCaptainHomeRows(
-    environments.flatMap((environment) =>
-      [...environment.captains, ...environment.archivedChoruses]
-        .filter(
-          (captain) =>
-            captain.kind === "chorus" ||
-            props.environmentId === null ||
-            environment.environmentId === props.environmentId,
-        )
-        .map((captain) => {
-          const own = captainShells(byConversation, environment.environmentId, captain);
-          return {
-            environment,
-            captain,
-            own,
-            activity: captainThreadActivity(environment.environmentId, captain, own),
-          };
-        }),
-    ),
+  const storedRows: CaptainHomeRow[] = environments.flatMap((environment) =>
+    withoutStoredChoruses(environment.captains)
+      .filter(
+        () => props.environmentId === null || environment.environmentId === props.environmentId,
+      )
+      .map((captain) => {
+        const own = captainShells(byConversation, environment.environmentId, captain);
+        return {
+          environment,
+          captain,
+          own,
+          activity: captainThreadActivity(environment.environmentId, captain, own),
+        };
+      }),
   );
-  if (rows.length === 0 && !canCreateChorus) return null;
+  const homeCaptain =
+    fleet?.status.home == null
+      ? undefined
+      : environments
+          .flatMap((environment) =>
+            environment.captains.map((captain) => ({
+              environment,
+              captain,
+              own: captainShells(byConversation, environment.environmentId, captain),
+            })),
+          )
+          .find(
+            ({ environment, captain }) =>
+              environment.environmentId === fleet.status.home?.environmentId &&
+              captain.primaryThreadId === fleet.status.home.threadId,
+          );
+  const homeEnvironmentId = fleet?.status.home?.environmentId ?? fleet?.viaEnvironmentId;
+  const fleetRow: CaptainHomeRow | null =
+    fleet === null || homeEnvironmentId === undefined
+      ? null
+      : {
+          environment: {
+            environmentId: homeEnvironmentId,
+            label: fleet.status.home?.label ?? "",
+          },
+          captain: homeCaptain?.captain ?? fleetChorusCaptain(fleet.status),
+          own: homeCaptain?.own ?? [],
+          activity:
+            homeCaptain === undefined
+              ? { primary: undefined, children: [], attention: 0, working: false }
+              : captainThreadActivity(
+                  homeCaptain.environment.environmentId,
+                  homeCaptain.captain,
+                  captainShells(
+                    byConversation,
+                    homeCaptain.environment.environmentId,
+                    homeCaptain.captain,
+                  ),
+                ),
+          fleetState: fleet.status.state,
+        };
+  const rows = orderCaptainHomeRows(fleetRow === null ? storedRows : [fleetRow, ...storedRows]);
+  const openFleet = () => {
+    const home = fleet?.status.home;
+    if (fleet === null || home?.threadId == null || fleet.status.state !== "ready") return;
+    if (environments.some(({ environmentId }) => environmentId === home.environmentId)) {
+      selectDetail({
+        name: "Thread",
+        params: {
+          environmentId: String(home.environmentId),
+          threadId: String(home.threadId),
+        },
+      });
+      return;
+    }
+    openLinkedThreadRead(
+      { environmentId: home.environmentId, threadId: home.threadId },
+      { viaEnvironmentId: fleet.viaEnvironmentId, label: home.label },
+      "Chorus",
+    );
+  };
+  if (rows.length === 0) return null;
   const inbox = captainInboxItems(
     environments,
     rows.flatMap(({ own }) => own),
   );
-  const chorusControls = (
-    <>
-      {canCreateChorus ? (
-        <View className="px-2 pb-1">
-          <Button
-            label={gt("New Chorus")}
-            tone="secondary"
-            onPress={() => navigation.navigate("ChorusNew")}
-          />
-        </View>
-      ) : null}
-      {chorusCount > 1 ? (
-        <Text
-          accessibilityLiveRegion="polite"
-          className="px-4 py-2 text-sm text-warning-foreground"
-        >
-          {gt(
-            "More than one Chorus is active. This can happen after simultaneous creation or a restore while another machine was offline. Archive all but one.",
-          )}
-        </Text>
-      ) : null}
-    </>
-  );
+  const chorusControls = null;
   if (isDuet) {
     return (
       <DuetHomeSection
@@ -103,6 +144,7 @@ export function CaptainsHomeSection(props: {
         showsEnvironment={showsEnvironment}
         projects={props.projects}
         selectedThreadKey={props.selectedThreadKey}
+        onOpenFleet={openFleet}
       />
     );
   }
@@ -153,38 +195,54 @@ export function CaptainsHomeSection(props: {
         </Pressable>
       </View>
       {chorusControls}
-      {rows.map(({ environment, captain, activity }) => {
+      {rows.map(({ environment, captain, activity, fleetState }) => {
         const state =
-          captain.archivedAt !== null
-            ? gt("Archived")
-            : captain.kind === "chorus"
-              ? gt("All Duets across {count, plural, =1 {1 machine} other {{count} machines}}", {
-                  count: environments.length,
-                })
-              : activity.attention > 0
-                ? gt(
-                    "{count, plural, one {{count} request waits on you} other {{count} requests wait on you}}",
-                    { count: activity.attention },
-                  )
-                : activity.children.length > 0
-                  ? gt(
-                      "{count, plural, one {Solos on {count} task} other {Solos on {count} tasks}}",
-                      {
-                        count: activity.children.length,
-                      },
-                    )
-                  : activity.working
-                    ? gt("Working", { $context: "Duet state" })
-                    : captain.role.trim() || null;
-        const detail = showsEnvironment
-          ? [state, environment.label].filter((part) => part !== null).join(" · ")
-          : state;
+          fleetState === "offline"
+            ? gt("Home machine offline")
+            : fleetState === "too_old"
+              ? gt("Home machine needs an update")
+              : fleetState === "unconfigured"
+                ? gt("Choose a home in Settings")
+                : fleetState === "conflict"
+                  ? gt("More than one Chorus home")
+                  : captain.archivedAt !== null
+                    ? gt("Archived")
+                    : captain.kind === "chorus"
+                      ? gt(
+                          "All Duets across {count, plural, =1 {1 machine} other {{count} machines}}",
+                          {
+                            count: environments.length,
+                          },
+                        )
+                      : activity.attention > 0
+                        ? gt(
+                            "{count, plural, one {{count} request waits on you} other {{count} requests wait on you}}",
+                            { count: activity.attention },
+                          )
+                        : activity.children.length > 0
+                          ? gt(
+                              "{count, plural, one {Solos on {count} task} other {Solos on {count} tasks}}",
+                              {
+                                count: activity.children.length,
+                              },
+                            )
+                          : activity.working
+                            ? gt("Working", { $context: "Duet state" })
+                            : captain.role.trim() || null;
+        const detail =
+          showsEnvironment && fleetState === undefined
+            ? [state, environment.label].filter((part) => part !== null).join(" · ")
+            : state;
         return (
           <Pressable
             key={`${environment.environmentId}:${captain.id}`}
             accessibilityRole="button"
             accessibilityLabel={[captain.name, detail].filter(Boolean).join(", ")}
             onPress={() => {
+              if (fleetState !== undefined) {
+                openFleet();
+                return;
+              }
               if (captain.kind === "chorus" && captain.archivedAt !== null) {
                 navigation.navigate("CaptainBrief", {
                   environmentId: String(environment.environmentId),
@@ -200,7 +258,10 @@ export function CaptainsHomeSection(props: {
                 },
               });
             }}
-            className="flex-row items-center gap-3 rounded-xl px-2 py-2 active:bg-subtle"
+            className={cn(
+              "flex-row items-center gap-3 rounded-xl px-2 py-2 active:bg-subtle",
+              fleetState !== undefined && "border-l-2 border-warning-border pl-1.5",
+            )}
           >
             <CaptainOrb
               captain={captain}

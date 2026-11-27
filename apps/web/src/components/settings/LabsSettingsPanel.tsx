@@ -32,6 +32,7 @@ import {
 } from "./useScopedSettings";
 import { useOptionalSettingsScope, useSettingsScope } from "./SettingsScopeContext";
 import { firstManagedDenial, usePrimaryManagedPolicy } from "~/state/managedPolicy";
+import { useFleetChorus } from "../captains/captainsDirectory";
 
 /** Features still settling in. */
 export function LabsSettingsPanel() {
@@ -43,6 +44,7 @@ export function LabsSettingsPanel() {
         {/* Clerk is only mounted when this build has T3 Connect. */}
         {hasCloudPublicConfig() ? <GuestLinksRowWithSignIn /> : <GuestLinksRow />}
         <LinkedEnvironmentsRow />
+        <ChorusHomeRow />
         <WorkflowsRow />
         <WorkflowSkippedRunsRow />
         <PromptSuggestionsRow />
@@ -256,6 +258,45 @@ function LinkedEnvironmentsRow() {
         />
       }
     />
+  );
+}
+
+function ChorusHomeRow() {
+  const searchableSetting = useSearchableSetting();
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  const fleet = useFleetChorus();
+  const gt = useGT();
+  return (
+    <SettingsRow
+      serverScoped
+      {...searchableSetting("chorus-home")}
+      settingKeys={["chorusHome"]}
+      description={gt(
+        "Keep the fleet's one Chorus on this machine. It appears in every connected app; turning this off archives the local row.",
+      )}
+      control={
+        <ScopedSwitch
+          settingKeys={["chorusHome"]}
+          checked={settings.chorusHome}
+          onCheckedChange={(checked) => updateSettings({ chorusHome: Boolean(checked) })}
+          aria-label={gt("Chorus home")}
+        />
+      }
+    >
+      {fleet?.status.state === "conflict" ? (
+        <p role="alert" className="mt-2 text-body text-warning-foreground">
+          {fleet.status.conflictingHomes.length > 0 ? (
+            <T>
+              More than one machine is set as the Chorus home:{" "}
+              {fleet.status.conflictingHomes.join(", ")}. Turn it off on all but one.
+            </T>
+          ) : (
+            <T>More than one machine is set as the Chorus home. Turn it off on all but one.</T>
+          )}
+        </p>
+      ) : null}
+    </SettingsRow>
   );
 }
 

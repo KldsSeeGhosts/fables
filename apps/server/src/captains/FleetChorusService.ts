@@ -68,8 +68,19 @@ const make = Effect.gen(function* () {
 
   const ensureHome = Effect.fn("FleetChorusService.ensureHome")(function* () {
     const server = yield* settings.getSettings.pipe(Effect.orElseSucceed(() => null));
-    if (server?.chorusHome !== true) return;
     const existing = yield* store.findChorus().pipe(Effect.orElseSucceed(() => undefined));
+    if (server?.chorusHome !== true) {
+      if (existing?.archivedAt === null) {
+        yield* captains.archive({ captainId: existing.id }).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("Could not archive the local Chorus after leaving the home role.", {
+              error,
+            }),
+          ),
+        );
+      }
+      return;
+    }
     if (existing?.archivedAt === null) return;
     if (existing !== undefined) {
       yield* captains
@@ -129,7 +140,7 @@ const make = Effect.gen(function* () {
       });
     }
 
-    if ((yield* links.enabled.pipe(Effect.orElseSucceed(() => false))) && !localHome) {
+    if (yield* links.enabled.pipe(Effect.orElseSucceed(() => false))) {
       const [names, learned] = yield* Effect.all([links.names(), links.chorusHomeRecords], {
         concurrency: 2,
       }).pipe(Effect.orElseSucceed(() => [[], []] as const));

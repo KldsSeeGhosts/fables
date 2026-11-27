@@ -676,6 +676,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("beta link another machine vps peer agents work there delegate")],
   },
   {
+    id: "chorus-home",
+    title: msg("Chorus home"),
+    to: "/settings/labs",
+    scope: "environment",
+    searchTerms: [msg("chorus home machine fleet duets automatic always on")],
+  },
+  {
     id: "workflows-beta",
     title: msg("Workflows"),
     to: "/settings/labs",

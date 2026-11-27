@@ -1,5 +1,4 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { activeChoruses } from "@t3tools/client-runtime/state/captains";
 import type { Captain, EnvironmentId } from "@t3tools/contracts";
 import { T, useGT } from "gt-react";
 import { CompassIcon } from "lucide-react";
@@ -21,7 +20,6 @@ export function CaptainsWorkspace() {
   const { destinations, destination } = useCaptainDestinations(usePrimaryEnvironmentId());
   const [creating, setCreating] = useState(false);
   const openThread = useOpenCaptainThread();
-  const fleetChoruses = activeChoruses(environments);
   const openCaptain = (environmentId: EnvironmentId, captain: Captain) =>
     openThread(scopeThreadRef(environmentId, captain.primaryThreadId));
 
@@ -56,7 +54,6 @@ export function CaptainsWorkspace() {
         <CaptainEditorDialog
           destination={destination}
           destinations={destinations}
-          canCreateChorus={fleetChoruses.length === 0}
           onClose={() => setCreating(false)}
           onSave={(environmentId, captain) => {
             setCreating(false);

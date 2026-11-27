@@ -60,7 +60,6 @@ export function CaptainEditorDialog({
   destinations,
   captain,
   initialSection = "profile",
-  canCreateChorus = false,
   onClose,
   onSave,
 }: {
@@ -69,8 +68,6 @@ export function CaptainEditorDialog({
   captain?: Captain;
   /** Which section an existing Duet's dialog opens on. */
   initialSection?: CaptainProfileSection;
-  /** No active Chorus is visible on any reachable machine. */
-  canCreateChorus?: boolean;
   onClose: () => void;
   onSave: (environmentId: EnvironmentId, captain: Captain) => void;
 }) {
@@ -79,7 +76,7 @@ export function CaptainEditorDialog({
   const fieldId = useId();
   const [environmentId, setEnvironmentId] = useState(destination.id);
   const [captainId] = useState(() => CaptainId.make(randomUUID()));
-  const [kind, setKind] = useState<CaptainKind>(captain?.kind ?? "duet");
+  const kind: CaptainKind = captain?.kind ?? "duet";
   const isChorus = kind === "chorus";
   const [nameDraft, setName] = useState(captain?.name);
   const name = nameDraft ?? (isChorus ? "Chorus" : "");
@@ -107,8 +104,7 @@ export function CaptainEditorDialog({
   const create = useAtomCommand(serverEnvironment.createCaptain, { reportFailure: false });
   const update = useAtomCommand(serverEnvironment.updateCaptain, { reportFailure: false });
   const projects = useProjects().filter((project) => project.environmentId === environmentId);
-  const chorusBlocked = captain === undefined && isChorus && !canCreateChorus;
-  const canSave = captain === undefined ? canCreate && !chorusBlocked : canUpdate;
+  const canSave = captain === undefined ? canCreate : canUpdate;
   const { emblems: emblemLabels, palettes: paletteLabels } = useCaptainAvatarLabels();
 
   const save = async () => {
@@ -256,40 +252,6 @@ export function CaptainEditorDialog({
                       ))}
                     </SelectPopup>
                   </Select>
-                </div>
-              ) : null}
-              {captain === undefined && (canCreateChorus || isChorus) ? (
-                <div className="grid gap-1.5">
-                  <span className="text-label">
-                    <T>Type</T>
-                  </span>
-                  <ToggleGroup
-                    aria-label={gt("Duet type")}
-                    value={[kind]}
-                    disabled={saving}
-                    onValueChange={(value) => {
-                      const next = value[0];
-                      if (next !== "duet" && next !== "chorus") return;
-                      setKind(next);
-                      setError(null);
-                    }}
-                  >
-                    <Toggle value="duet">
-                      <T>Duet</T>
-                    </Toggle>
-                    <Toggle value="chorus" disabled={!canCreateChorus}>
-                      <T>Chorus</T>
-                    </Toggle>
-                  </ToggleGroup>
-                </div>
-              ) : null}
-              {kind === "chorus" ? (
-                <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-meta text-muted-foreground">
-                  <T>
-                    Fables checks reachable linked machines before creating or restoring a Chorus.
-                    Fleet results can be incomplete while a machine is offline or running an older
-                    version.
-                  </T>
                 </div>
               ) : null}
               <div className="flex items-start gap-3">
@@ -470,11 +432,6 @@ export function CaptainEditorDialog({
                   </div>
                 </>
               )}
-              {chorusBlocked ? (
-                <p role="alert" className="text-body text-destructive-foreground">
-                  <T>A Chorus is already active. Archive it before creating another.</T>
-                </p>
-              ) : null}
               {error !== null ? (
                 <p role="alert" className="text-body text-destructive-foreground">
                   {error}
@@ -499,15 +456,7 @@ export function CaptainEditorDialog({
                 disabled={saving || !canSave || !name.trim()}
                 onClick={() => void save()}
               >
-                {captain === undefined ? (
-                  kind === "chorus" ? (
-                    <T>Create Chorus</T>
-                  ) : (
-                    <T>Create Duet</T>
-                  )
-                ) : (
-                  <T>Save changes</T>
-                )}
+                {captain === undefined ? <T>Create Duet</T> : <T>Save changes</T>}
               </Button>
             ) : null}
           </DialogFooter>

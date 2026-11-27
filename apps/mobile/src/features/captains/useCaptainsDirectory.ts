@@ -3,6 +3,8 @@ import {
   captainConversationKeys,
   captainForEarlierConversation,
   captainForThread,
+  selectFleetChorus,
+  type FleetChorusView,
 } from "@t3tools/client-runtime/state/captains";
 import {
   AuthOrchestrationReadScope,
@@ -11,6 +13,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
+import { AsyncResult } from "effect/reactivity";
 import { useEffect } from "react";
 
 import { useEnvironmentServerConfig } from "../../state/entities";
@@ -57,6 +60,28 @@ export function useCaptainEnvironments(environmentId?: EnvironmentId | null) {
   );
   const cached = useAtomValue(cachedCaptainsAtom, cachedCaptainsOf);
   return resolveCaptainEnvironments({ candidates, readable, denied, live, cached });
+}
+
+/** The one fleet Chorus projection, chosen from connected servers that understand it. */
+export function useFleetChorus(): FleetChorusView | null {
+  const { environments } = useEnvironments();
+  const readable = useEnvironmentsWithScope(environments, AuthOrchestrationReadScope);
+  const supporting = environments.filter(
+    (environment) =>
+      readable.has(environment.environmentId) &&
+      environment.serverConfig?.environment.capabilities.fleetChorus === true,
+  );
+  const live = useAtomValue(
+    serverEnvironment.fleetChorusLiveAcross(
+      JSON.stringify(supporting.map(({ environmentId }) => environmentId)),
+    ),
+  );
+  return selectFleetChorus(
+    live.map(({ environmentId, result }) => ({
+      environmentId,
+      status: AsyncResult.getOrElse(result, () => null),
+    })),
+  );
 }
 
 // Snapshots already handed to the cache; an unchanged live list keeps its snapshot object.
