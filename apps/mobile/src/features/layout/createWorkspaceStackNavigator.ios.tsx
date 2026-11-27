@@ -177,7 +177,10 @@ function ColumnScreen(props: {
             <ColumnContent
               primary={sidebar}
               column={props.primary ? "primary" : undefined}
-              insetTop={options.headerShown !== false}
+              insetTop={
+                options.headerShown !== false &&
+                !(descriptor.route.name === "Thread" && options.headerTransparent)
+              }
               insetHorizontally={
                 (options as AppNativeStackNavigationOptions).nativeContentInsetHorizontally
               }
