@@ -11,7 +11,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult, Atom } from "effect/reactivity";
 import * as Dialog from "../../components/ui/Dialog";
-import { useAtomMount, useAtomValue } from "@effect/atom-react";
+import { useAtomMount, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { environmentPresentations } from "../../state/presentation";
 import { mobilePreferencesAtom } from "../../state/preferences";
 import { parseThreadKey, threadKey } from "@t3tools/client-runtime/state/entities";
@@ -563,7 +563,9 @@ function ThreadDetailBody(
     }, COMPOSER_HEIGHT_SETTLE_MS);
   };
   const [anchorMessageId, setAnchorMessageId] = useState<MessageId | null>(null);
-  const [isAtEnd, setIsAtEnd] = useState(true);
+  const [isAtEndAtom] = useState(() => Atom.make(true));
+  useAtomMount(isAtEndAtom);
+  const setIsAtEnd = useAtomSet(isAtEndAtom);
   const [sendingWithKeyboard, setSendingWithKeyboard] = useState(false);
   if (sendingWithKeyboard && !isKeyboardVisible) setSendingWithKeyboard(false);
   const hasSidebarTabBar = useSidebarWorkspaceTabs() === "picker";
@@ -1504,7 +1506,6 @@ function ThreadDetailBody(
     });
   };
 
-  const showScrollToEndButton = !props.draftMode && contentPresentationKind === "ready" && !isAtEnd;
   const { themeAppearance } = useAppearancePreferences();
   const isDarkMode = themeAppearance === "dark";
 
@@ -1730,7 +1731,8 @@ function ThreadDetailBody(
                         ? { count: browserTabCount, onPress: () => openBrowserPreview() }
                         : null
                     }
-                    showScrollToEnd={showScrollToEndButton}
+                    canScrollToEnd={!props.draftMode && contentPresentationKind === "ready"}
+                    isAtEndAtom={isAtEndAtom}
                     onScrollToEnd={handleScrollToEnd}
                     agents={agentsSegment}
                     onOpenAgents={() => {

@@ -1,4 +1,6 @@
+import { useAtomValue } from "@effect/atom-react";
 import type { SubagentPillSegment } from "@t3tools/client-runtime/state/thread-subagents";
+import type { Atom } from "effect/reactivity";
 import { GlassContainer, GlassView } from "expo-glass-effect";
 import { useGT } from "gt-react-native";
 import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
@@ -65,7 +67,8 @@ export function FloatingWorkingControl(props: {
   readonly extensionStatus?: { readonly label: string; readonly onPress: () => void } | null;
   readonly devicePreview: { readonly count: number; readonly onPress: () => void } | null;
   readonly browserPreview: { readonly count: number; readonly onPress: () => void } | null;
-  readonly showScrollToEnd: boolean;
+  readonly canScrollToEnd: boolean;
+  readonly isAtEndAtom: Atom.Atom<boolean>;
   readonly onScrollToEnd: () => void;
   readonly agents: SubagentPillSegment | null;
   readonly onOpenAgents: () => void;
@@ -74,6 +77,8 @@ export function FloatingWorkingControl(props: {
   readonly lift?: SharedValue<number>;
 }) {
   const gt = useGT();
+  const isAtEnd = useAtomValue(props.isAtEndAtom);
+  const showScrollToEnd = props.canScrollToEnd && !isAtEnd;
   const { width: windowWidth } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const [overlayWidth, setOverlayWidth] = useState(windowWidth);
@@ -96,7 +101,7 @@ export function FloatingWorkingControl(props: {
   const agents = props.agents;
   const hasAgents = agents !== null;
   // Only reserve the scroll button's slot while it is visible.
-  const reservedWidth = props.showScrollToEnd ? CONTROL_HEIGHT + 32 : 16;
+  const reservedWidth = showScrollToEnd ? CONTROL_HEIGHT + 32 : 16;
   const availableLabelWidth = Math.max(
     0,
     Math.min(overlayWidth, windowWidth) -
@@ -110,12 +115,12 @@ export function FloatingWorkingControl(props: {
     0,
     availableLabelWidth - (extensionStatus === null ? 0 : extensionWidth),
   );
-  const separationProgress = useSharedValue(props.showScrollToEnd ? 1 : 0);
+  const separationProgress = useSharedValue(showScrollToEnd ? 1 : 0);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- animates the Reanimated separation value when scroll-to-end visibility changes
   useEffect(() => {
-    separationProgress.set(withTiming(props.showScrollToEnd ? 1 : 0, CONTROL_TIMING));
-  }, [props.showScrollToEnd, separationProgress]);
+    separationProgress.set(withTiming(showScrollToEnd ? 1 : 0, CONTROL_TIMING));
+  }, [showScrollToEnd, separationProgress]);
 
   const lift = props.lift;
   const liftStyle = useAnimatedStyle(() => ({
@@ -156,7 +161,7 @@ export function FloatingWorkingControl(props: {
     width: capsuleWidth.value ?? 0,
   }));
 
-  if (!hasCapsule && !props.showScrollToEnd) {
+  if (!hasCapsule && !showScrollToEnd) {
     return null;
   }
 
@@ -326,16 +331,16 @@ export function FloatingWorkingControl(props: {
 
           <AnimatedGlassView
             colorScheme={props.colorScheme}
-            glassEffectStyle={{ style: props.showScrollToEnd ? "regular" : "none", animate: true }}
+            glassEffectStyle={{ style: showScrollToEnd ? "regular" : "none", animate: true }}
             isInteractive
-            pointerEvents={props.showScrollToEnd ? "auto" : "none"}
-            accessibilityElementsHidden={!props.showScrollToEnd}
-            importantForAccessibility={props.showScrollToEnd ? "auto" : "no-hide-descendants"}
+            pointerEvents={showScrollToEnd ? "auto" : "none"}
+            accessibilityElementsHidden={!showScrollToEnd}
+            importantForAccessibility={showScrollToEnd ? "auto" : "no-hide-descendants"}
             className="h-11 w-11 items-center justify-center overflow-hidden rounded-full"
             style={arrowTransformStyle}
           >
             <Animated.View style={arrowContentStyle}>
-              <ScrollToEndButton disabled={!props.showScrollToEnd} onPress={props.onScrollToEnd} />
+              <ScrollToEndButton disabled={!showScrollToEnd} onPress={props.onScrollToEnd} />
             </Animated.View>
           </AnimatedGlassView>
         </UniwindGlassContainer>
@@ -350,16 +355,16 @@ export function FloatingWorkingControl(props: {
           </Animated.View>
 
           <Animated.View
-            pointerEvents={props.showScrollToEnd ? "auto" : "none"}
-            accessibilityElementsHidden={!props.showScrollToEnd}
-            importantForAccessibility={props.showScrollToEnd ? "auto" : "no-hide-descendants"}
+            pointerEvents={showScrollToEnd ? "auto" : "none"}
+            accessibilityElementsHidden={!showScrollToEnd}
+            importantForAccessibility={showScrollToEnd ? "auto" : "no-hide-descendants"}
             style={[arrowTransformStyle, arrowContentStyle]}
           >
             <ControlPill
               accessibilityLabel={gt("Scroll to end")}
               activateOnPressIn
               className="h-11 w-11 border border-border bg-glass-fallback shadow-md shadow-black/10"
-              disabled={!props.showScrollToEnd}
+              disabled={!showScrollToEnd}
               icon={{ ios: "chevron.down", android: "keyboard_arrow_down" }}
               onPress={props.onScrollToEnd}
             />
