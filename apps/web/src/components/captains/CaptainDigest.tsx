@@ -12,10 +12,12 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
 import { Text } from "../ui/text";
-import { captainMorningBriefTaskId, useCaptainMorningBrief } from "./captainMorningBrief";
+import {
+  captainMorningBriefDefaultTime,
+  captainMorningBriefTaskId,
+  useCaptainMorningBrief,
+} from "./captainMorningBrief";
 import { captainCommandError } from "./useCaptain";
-
-const DEFAULT_BRIEF_TIME = "08:00";
 
 export const captainMorningBriefTask = (
   tasks: ReadonlyArray<ScheduledTask>,
@@ -45,7 +47,7 @@ export function CaptainMorningBriefControl({
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const shownTime = time ?? scheduledTime ?? DEFAULT_BRIEF_TIME;
+  const shownTime = time ?? scheduledTime ?? captainMorningBriefDefaultTime(captain);
   const shownEnabled = enabled ?? task?.enabled ?? false;
   const canSave = morningBrief.canSave && thread !== undefined && captain.archivedAt === null;
 
